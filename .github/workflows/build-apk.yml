@@ -38,7 +38,7 @@ jobs:
         run: flutter test
 
       - name: Native Android tests
-        run: cd android && ./gradlew testDebugUnitTest
+        run: cd android && ./gradlew :app:testDebugUnitTest
 
       - name: Build release APK
         run: flutter build apk --release

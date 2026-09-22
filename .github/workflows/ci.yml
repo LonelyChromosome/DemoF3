@@ -49,7 +49,7 @@ jobs:
         run: flutter test --coverage
 
       - name: Native Android tests
-        run: cd android && ./gradlew testDebugUnitTest
+        run: cd android && ./gradlew :app:testDebugUnitTest
 
       - name: Build debug APK
         run: flutter build apk --debug
