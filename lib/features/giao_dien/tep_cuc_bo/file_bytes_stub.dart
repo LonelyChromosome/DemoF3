@@ -6,4 +6,4 @@ Future<Uint8List> readManagedFile(String path, {required int maximumBytes}) =>
       UnsupportedError('Đọc tệp cục bộ không được hỗ trợ trên nền tảng này.'),
     );
 
-Future<bool> managedFileExists(String path) async => false;
+Future<bool> managedFileExists(String path) => Future<bool>.value(false);

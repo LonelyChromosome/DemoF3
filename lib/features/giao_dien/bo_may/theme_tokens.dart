@@ -127,7 +127,7 @@ final class ThemeTokens {
     'radius': radius,
   };
 
-  static ThemeTokens lerp(ThemeTokens from, ThemeTokens to, double progress) {
+  factory ThemeTokens.lerp(ThemeTokens from, ThemeTokens to, double progress) {
     final t = progress.clamp(0.0, 1.0).toDouble();
     Color blend(Color a, Color b) => Color.lerp(a, b, t) ?? b;
     return ThemeTokens(

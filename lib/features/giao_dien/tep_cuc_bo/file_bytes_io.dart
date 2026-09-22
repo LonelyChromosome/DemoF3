@@ -14,7 +14,8 @@ Future<Uint8List> readManagedFile(
       '${(maximumBytes / (1024 * 1024)).floor()} MB.',
     );
   }
-  return file.readAsBytes();
+  return await file.readAsBytes();
 }
 
-Future<bool> managedFileExists(String path) => File(path).exists();
+Future<bool> managedFileExists(String path) =>
+    Future<bool>.value(File(path).existsSync());

@@ -547,7 +547,7 @@ class AppThemeController extends ChangeNotifier {
     required AppThemeId themeId,
     CustomThemeDefinition? customTheme,
     String? resolvedFontFamily,
-  }) async {
+  }) {
     final from = palette;
     final oldCustomFont = _activeCustomFontFamily;
     _activeCustomFontFamily = resolvedFontFamily;

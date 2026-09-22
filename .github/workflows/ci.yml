@@ -45,6 +45,17 @@ jobs:
       - name: Format sources
         run: dart format lib test
 
+      - name: Capture Dart fixes
+        run: |
+          mkdir -p build/ci
+          git diff --binary -- lib test > build/ci/dart-fix.patch
+
+      - name: Upload Dart fix patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: dart-fix-patch
+          path: build/ci/dart-fix.patch
+
       - name: Analyze
         run: flutter analyze
 

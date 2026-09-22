@@ -21,7 +21,7 @@ final class ThemeGenerator {
     ThemeGenerationSettings settings = const ThemeGenerationSettings(),
   }) {
     if (source.isEmpty) {
-      throw const ArgumentError('Bảng màu không được rỗng.');
+      throw ArgumentError('Bảng màu không được rỗng.');
     }
     final swatches = source.toList()
       ..sort((left, right) => right.population.compareTo(left.population));

@@ -6,7 +6,7 @@ final class ColorMixer {
 
   List<ExtractedSwatch> mix(List<Color> colors, List<double> weights) {
     if (colors.length < 2 || colors.length > 3) {
-      throw const ArgumentError('Cần chọn từ 2 đến 3 màu.');
+      throw ArgumentError('Cần chọn từ 2 đến 3 màu.');
     }
     final safeWeights = List<double>.generate(
       colors.length,
