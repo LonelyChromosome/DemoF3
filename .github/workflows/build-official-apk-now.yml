@@ -1,0 +1,112 @@
+name: Build Better Phenikaa App v1.0.3
+
+on:
+  push:
+    branches:
+      - feature/full-app-implementation
+    paths:
+      - '.github/workflows/build-official-apk-now.yml'
+      - 'tool/bootstrap.sh'
+      - 'lib/**'
+      - 'platform/android_widget/**'
+      - 'pubspec.yaml'
+      - 'analysis_options.yaml'
+      - 'test/**'
+
+permissions:
+  contents: read
+
+jobs:
+  official-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout official source
+        uses: actions/checkout@v4
+        with:
+          ref: feature/full-app-implementation
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Bootstrap Android SDK 37 and dependencies
+        run: bash tool/bootstrap.sh
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Verify official production source
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^version: 1.0.3+4$' pubspec.yaml
+          grep -q 'android:label="Better Phenikaa App"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:icon="@drawable/ic_launcher_better_phenikaa"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
+          grep -q 'compileSdk = 37' android/app/build.gradle.kts
+          grep -q 'com.android.application") version "9.1.1"' android/settings.gradle.kts
+          grep -q 'qldtbeta.phenikaa-uni.edu.vn' lib/features/qldt_intake/qldt_login_mobile.dart
+          grep -q '<StackView' platform/android_widget/app/src/main/res/layout/schedule_widget.xml
+          grep -q 'android:id="@+id/widget_list"' platform/android_widget/app/src/main/res/layout/schedule_widget.xml
+          grep -q 'android:loopViews="true"' platform/android_widget/app/src/main/res/layout/schedule_widget.xml
+          if grep -q 'android:rotation="90"' platform/android_widget/app/src/main/res/layout/schedule_widget.xml; then
+            echo 'Widget must use native vertical StackView so launcher paging does not compete with widget swipes.' >&2
+            exit 1
+          fi
+          grep -q 'setViewLayoutWidth' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt
+          grep -q 'setViewLayoutHeight' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt
+          grep -q 'R.id.widget_list' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt
+          grep -q 'LinearGradient' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetService.kt
+          grep -q 'drawRoundRect' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetService.kt
+          grep -q 'ScheduleWidgetService' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt
+          grep -q 'RemoteViewsService' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetService.kt
+          grep -q 'setPendingIntentTemplate' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt
+          grep -q 'android:updatePeriodMillis="0"' platform/android_widget/app/src/main/res/xml/schedule_widget_info.xml
+          if grep -RniE '<ListView|widget_previous|widget_next|WIDGET_PREVIOUS|WIDGET_NEXT' platform/android_widget; then
+            echo 'Legacy list/arrow navigation still exists in the widget.' >&2
+            exit 1
+          fi
+          if grep -RniE '\bdemo\b|mockup' lib --include='*.dart'; then
+            echo 'Production Dart still contains preview-only wording.' >&2
+            exit 1
+          fi
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Package official APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better_Phenikaa_App_v1.0.3.apk
+          sha256sum dist/Better_Phenikaa_App_v1.0.3.apk > dist/Better_Phenikaa_App_v1.0.3.sha256
+          test -s dist/Better_Phenikaa_App_v1.0.3.apk
+          ls -lh dist
+
+      - name: Upload Better Phenikaa App
+        uses: actions/upload-artifact@v4
+        with:
+          name: Better-Phenikaa-App-v1.0.3
+          path: |
+            dist/Better_Phenikaa_App_v1.0.3.apk
+            dist/Better_Phenikaa_App_v1.0.3.sha256
+          retention-days: 30
+          if-no-files-found: error

@@ -1,0 +1,125 @@
+name: Fix Better Phenikaa 2.0 UI and widget
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/fix-v2-ui-widget.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply repairs
+        run: python3 tool/fix_v2_ui_widget.py
+
+      - name: Complete widget reset wiring
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt')
+          source = path.read_text(encoding='utf-8')
+          pattern = re.compile(
+              r'(?m)^(?P<indent>\s*)visualHeightDp = (?P<value>[^,\n]+),\n(?P<close>\s*)\)$'
+          )
+
+          def add_reset(match):
+              indent = match.group('indent')
+              return (
+                  f"{indent}visualHeightDp = {match.group('value')},\n"
+                  f"{indent}resetPosition = resetPosition,\n"
+                  f"{match.group('close')})"
+              )
+
+          source, count = pattern.subn(add_reset, source)
+          if count < 1:
+              raise SystemExit('No missing buildWidgetViews resetPosition call was found.')
+          path.write_text(source, encoding='utf-8')
+          print(f'Completed resetPosition wiring for {count} remaining call(s).')
+          PY
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Bootstrap Android
+        run: bash tool/bootstrap.sh
+
+      - name: Format
+        run: dart format lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Verify repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '_themes.addListener(_onThemeChanged)' lib/app/app.dart
+          grep -q 'animation: controller' lib/theme/app_theme.dart
+          grep -q '^version: 2.0.1+6$' pubspec.yaml
+          grep -q 'android:targetCellWidth="6"' platform/android_widget/app/src/main/res/xml/schedule_widget_info.xml
+          grep -q 'resetPositionKey' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt
+          test "$(grep -c 'resetPosition = resetPosition' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt)" -ge 3
+          grep -q 'if (resetPosition)' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt
+          grep -q 'schedule_widget_background_minecraft' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetService.kt
+          grep -q 'fontScale = 0.84f' platform/android_widget/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetService.kt
+          grep -q 'qldtbeta.phenikaa-uni.edu.vn' lib/features/qldt_intake/qldt_login_mobile.dart
+          grep -q 'edu.system.makeRequest' lib/features/qldt_intake/qldt_login_mobile.dart
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Commit repaired source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'cooc'
+          git config user.email 'minhdaonguyenad@gmail.com'
+          git add lib pubspec.yaml platform/android_widget
+          git commit -m 'fix: synchronize themes and stabilize themed widget'
+          git push origin HEAD:main
+
+      - name: Package APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better_Phenikaa_App_v2.0.1.apk
+          sha256sum dist/Better_Phenikaa_App_v2.0.1.apk > dist/Better_Phenikaa_App_v2.0.1.sha256
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Better-Phenikaa-App-v2.0.1-ui-widget-fix
+          path: |
+            dist/Better_Phenikaa_App_v2.0.1.apk
+            dist/Better_Phenikaa_App_v2.0.1.sha256
+          retention-days: 30
+          if-no-files-found: error

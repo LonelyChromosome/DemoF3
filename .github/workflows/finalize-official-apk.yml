@@ -1,0 +1,269 @@
+name: Finalize Official APK
+
+on:
+  push:
+    branches:
+      - feature/full-app-implementation
+    paths:
+      - '.github/workflows/finalize-official-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/full-app-implementation
+          fetch-depth: 0
+
+      - name: Officialize production source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          def must_replace(text: str, old: str, new: str, label: str) -> str:
+              if old not in text:
+                  raise SystemExit(f'Missing expected block: {label}')
+              return text.replace(old, new, 1)
+
+          app_path = Path('lib/app/app.dart')
+          app = app_path.read_text(encoding='utf-8')
+
+          app = must_replace(
+              app,
+              """    final now = data.source == 'demo'\n        ? DateTime(2026, 8, 26, 6)\n        : DateTime.now();\n""",
+              """    final now = DateTime.now();\n""",
+              'demo-specific widget clock',
+          )
+
+          demo_method_start = app.find('  Future<void> _loadDemo() async {')
+          logout_start = app.find('  Future<void> _logout() async {', demo_method_start)
+          if demo_method_start == -1 or logout_start == -1:
+              raise SystemExit('Demo loader bounds not found')
+          app = app[:demo_method_start] + app[logout_start:]
+
+          app = must_replace(
+              app,
+              """  Future<void> _logout() async {\n    final prefs = await SharedPreferences.getInstance();\n""",
+              """  Future<void> _logout() async {\n    await clearQldtSession();\n    final prefs = await SharedPreferences.getInstance();\n""",
+              'logout session cleanup',
+          )
+
+          app = must_replace(
+              app,
+              """  DateTime _initialDateFor(ImportedScheduleData data) {\n    if (data.source == 'demo') {\n      return DateTime(2026, 8, 26);\n    }\n    final today = _dateOnly(DateTime.now());\n""",
+              """  DateTime _initialDateFor(ImportedScheduleData data) {\n    final today = _dateOnly(DateTime.now());\n""",
+              'demo initial date',
+          )
+
+          app = must_replace(
+              app,
+              """                          ? _LoginScreen(\n                              onLogin: _loginOrSync,\n                              onDemo: _loadDemo,\n                              supportsLive: supportsLiveQldtLogin,\n                            )\n""",
+              """                          ? _LoginScreen(\n                              onLogin: _loginOrSync,\n                              supportsLive: supportsLiveQldtLogin,\n                            )\n""",
+              'login widget demo callback',
+          )
+
+          app = must_replace(
+              app,
+              """  const new({\n    required this.onLogin,\n    required this.onDemo,\n    required this.supportsLive,\n  });\n\n  final VoidCallback onLogin;\n  final VoidCallback onDemo;\n  final bool supportsLive;\n""",
+              """  const new({\n    required this.onLogin,\n    required this.supportsLive,\n  });\n\n  final VoidCallback onLogin;\n  final bool supportsLive;\n""",
+              'login screen demo fields',
+          )
+
+          demo_button = """            const SizedBox(height: 12),\n            SizedBox(\n              width: double.infinity,\n              height: 48,\n              child: OutlinedButton.icon(\n                onPressed: onDemo,\n                icon: const Icon(Icons.preview_outlined),\n                label: const Text('Xem bản demo từ mockup'),\n              ),\n            ),\n"""
+          app = must_replace(app, demo_button, '', 'demo login button')
+
+          app = app.replace(
+              "badge: data.source == 'demo' ? 'DEMO' : null,",
+              'badge: null,',
+          )
+          app = re.sub(
+              r"value:\s*data\.source == 'demo'\s*\? 'Demo từ mockup'\s*:\s*'QLĐT Phenikaa',",
+              "value: 'QLĐT Phenikaa',",
+              app,
+              count=1,
+          )
+
+          demo_builder_start = app.find('ImportedScheduleData _buildDemoData() {')
+          accent_start = app.find('Color _accentFor(int index) {', demo_builder_start)
+          if demo_builder_start == -1 or accent_start == -1:
+              raise SystemExit('Demo data builder bounds not found')
+          app = app[:demo_builder_start] + app[accent_start:]
+
+          if re.search(r'(?i)\bdemo\b|mockup', app):
+              hits = [line for line in app.splitlines() if re.search(r'(?i)\bdemo\b|mockup', line)]
+              raise SystemExit('Release source still contains preview terms: ' + ' | '.join(hits[:8]))
+
+          app_path.write_text(app, encoding='utf-8')
+
+          smoke = Path('test/app_smoke_test.dart')
+          smoke.write_text(
+              """import 'package:better_phenikaa_schedule/app/app.dart';\nimport 'package:flutter_riverpod/flutter_riverpod.dart';\nimport 'package:flutter_test/flutter_test.dart';\nimport 'package:shared_preferences/shared_preferences.dart';\n\nvoid main() {\n  testWidgets('app boots into the official QLDT login flow', (tester) async {\n    SharedPreferences.setMockInitialValues(<String, Object>{});\n\n    await tester.pumpWidget(\n      const ProviderScope(child: BetterPhenikaaScheduleApp()),\n    );\n\n    expect(find.text('Better Phenikaa App'), findsOneWidget);\n    await tester.pump(const Duration(milliseconds: 700));\n    await tester.pumpAndSettle();\n\n    expect(find.text('Chào mừng bạn!'), findsOneWidget);\n    expect(find.textContaining('Đăng nhập QLĐT'), findsOneWidget);\n    expect(find.textContaining('demo'), findsNothing);\n    expect(find.textContaining('mockup'), findsNothing);\n  });\n}\n""",
+              encoding='utf-8',
+          )
+
+          pubspec = Path('pubspec.yaml')
+          pub = pubspec.read_text(encoding='utf-8')
+          pub = re.sub(
+              r'^description:.*$',
+              'description: Better Phenikaa App - lịch học và lịch thi cho sinh viên Phenikaa University.',
+              pub,
+              count=1,
+              flags=re.MULTILINE,
+          )
+          pub = re.sub(r'^version:.*$', 'version: 1.0.0+1', pub, count=1, flags=re.MULTILINE)
+          pubspec.write_text(pub, encoding='utf-8')
+
+          login_api = Path('lib/features/qldt_intake/qldt_login.dart')
+          api = login_api.read_text(encoding='utf-8')
+          if 'clearQldtSession' not in api:
+              api += "\nFuture<void> clearQldtSession() => implementation.clearQldtSession();\n"
+          login_api.write_text(api, encoding='utf-8')
+
+          mobile_path = Path('lib/features/qldt_intake/qldt_login_mobile.dart')
+          mobile = mobile_path.read_text(encoding='utf-8')
+          marker = 'const bool supportsLiveQldtLogin = true;\n'
+          if 'Future<void> clearQldtSession()' not in mobile:
+              if marker not in mobile:
+                  raise SystemExit('Mobile QLDT capability marker not found')
+              mobile = mobile.replace(
+                  marker,
+                  marker + "\nFuture<void> clearQldtSession() async {\n  await CookieManager.instance().deleteAllCookies();\n}\n",
+                  1,
+              )
+          mobile_path.write_text(mobile, encoding='utf-8')
+
+          web_path = Path('lib/features/qldt_intake/qldt_login_web.dart')
+          web = web_path.read_text(encoding='utf-8')
+          if 'Future<void> clearQldtSession()' not in web:
+              if marker not in web:
+                  raise SystemExit('Web QLĐT capability marker not found')
+              web = web.replace(
+                  marker,
+                  marker + "\nFuture<void> clearQldtSession() async {}\n",
+                  1,
+              )
+          web_path.write_text(web, encoding='utf-8')
+
+          bootstrap_path = Path('tool/bootstrap.sh')
+          bootstrap = bootstrap_path.read_text(encoding='utf-8')
+          if 'import re' not in bootstrap:
+              bootstrap = bootstrap.replace('from pathlib import Path\n', 'from pathlib import Path\nimport re\n', 1)
+          old_write = 'manifest.write_text(text)\n'
+          release_manifest_patch = """text = re.sub(\n    r'android:label=\"[^\"]*\"',\n    'android:label=\"Better Phenikaa App\"',\n    text,\n    count=1,\n)\ntext = re.sub(\n    r'android:icon=\"[^\"]*\"',\n    'android:icon=\"@drawable/ic_launcher_better_phenikaa\"',\n    text,\n    count=1,\n)\nif 'android:roundIcon=' not in text:\n    text = text.replace(\n        'android:icon=\"@drawable/ic_launcher_better_phenikaa\"',\n        'android:icon=\"@drawable/ic_launcher_better_phenikaa\"\\n        android:roundIcon=\"@drawable/ic_launcher_better_phenikaa\"',\n        1,\n    )\nif 'android:allowBackup=' not in text:\n    text = text.replace(\n        '<application\\n',\n        '<application\\n        android:allowBackup=\"false\"\\n',\n        1,\n    )\nmanifest.write_text(text)\n"""
+          if 'ic_launcher_better_phenikaa' not in bootstrap:
+              if old_write not in bootstrap:
+                  raise SystemExit('Android manifest write marker not found')
+              bootstrap = bootstrap.replace(old_write, release_manifest_patch, 1)
+          bootstrap_path.write_text(bootstrap, encoding='utf-8')
+
+          icon_path = Path(
+              'platform/android_widget/app/src/main/res/drawable/ic_launcher_better_phenikaa.xml'
+          )
+          icon_path.parent.mkdir(parents=True, exist_ok=True)
+          icon_path.write_text(
+              """<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<vector xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    android:width=\"108dp\"\n    android:height=\"108dp\"\n    android:viewportWidth=\"108\"\n    android:viewportHeight=\"108\">\n    <path\n        android:fillColor=\"#173A8E\"\n        android:pathData=\"M22,8 H86 A14,14 0,0 1,100 22 V86 A14,14 0,0 1,86 100 H22 A14,14 0,0 1,8 86 V22 A14,14 0,0 1,22 8 Z\" />\n    <path\n        android:fillColor=\"@android:color/transparent\"\n        android:strokeColor=\"#FFFFFF\"\n        android:strokeWidth=\"8\"\n        android:strokeLineCap=\"round\"\n        android:strokeLineJoin=\"round\"\n        android:pathData=\"M29,55 L45,70 L79,36\" />\n</vector>\n""",
+              encoding='utf-8',
+          )
+
+          production_hits = []
+          for path in Path('lib').rglob('*.dart'):
+              body = path.read_text(encoding='utf-8')
+              if re.search(r'(?i)\bdemo\b|mockup', body):
+                  production_hits.append(str(path))
+          if production_hits:
+              raise SystemExit('Preview terms remain in production Dart: ' + ', '.join(production_hits))
+          PY
+
+      - name: Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Bootstrap Android and dependencies
+        run: bash tool/bootstrap.sh
+
+      - name: Format
+        run: dart format lib test
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Verify production identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'android:label="Better Phenikaa App"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android:icon="@drawable/ic_launcher_better_phenikaa"' android/app/src/main/AndroidManifest.xml
+          grep -q 'android.permission.INTERNET' android/app/src/main/AndroidManifest.xml
+          grep -q 'qldtbeta.phenikaa-uni.edu.vn' lib/features/qldt_intake/qldt_login_mobile.dart
+          if grep -RniE '\bdemo\b|mockup' lib --include='*.dart'; then
+            echo 'Release source contains preview-only text.' >&2
+            exit 1
+          fi
+
+      - name: Persist official release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add lib test pubspec.yaml tool/bootstrap.sh platform/android_widget/app/src/main/res/drawable/ic_launcher_better_phenikaa.xml
+          if ! git diff --cached --quiet; then
+            git commit -m 'release: prepare Better Phenikaa App 1.0.0'
+            git push origin HEAD:feature/full-app-implementation
+          fi
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Package APK and checksum
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better_Phenikaa_App_v1.0.0.apk
+          sha256sum dist/Better_Phenikaa_App_v1.0.0.apk > dist/Better_Phenikaa_App_v1.0.0.sha256
+          ls -lh dist
+
+      - name: Upload official APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Better-Phenikaa-App-v1.0.0
+          path: |
+            dist/Better_Phenikaa_App_v1.0.0.apk
+            dist/Better_Phenikaa_App_v1.0.0.sha256
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Remove one-shot release workflow
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git pull --rebase origin feature/full-app-implementation
+          git rm .github/workflows/finalize-official-apk.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: remove one-shot release finalizer'
+          git push origin HEAD:feature/full-app-implementation
