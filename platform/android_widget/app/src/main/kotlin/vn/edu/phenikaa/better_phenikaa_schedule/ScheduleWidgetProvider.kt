@@ -55,6 +55,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         super.onDeleted(context, appWidgetIds)
         val renderState = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
         val selection = context.getSharedPreferences(WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE)
+        val visible = context.getSharedPreferences(
+            WIDGET_VISIBLE_POSITION_PREFS,
+            Context.MODE_PRIVATE,
+        )
         appWidgetIds.forEach { widgetId ->
             renderState.edit()
                 .remove(contentTokenKey(widgetId))
@@ -67,6 +71,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 .remove(selectedDateKey(widgetId))
                 .remove(resetChildKey(widgetId))
                 .apply()
+            visible.edit().remove(visiblePositionKey(widgetId)).apply()
         }
     }
 
@@ -156,6 +161,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                         visualHeightDp = size.height,
                         bindCollection = true,
                         showRefreshCover = showRefreshCover,
+                        resetPosition = collectionChanged,
                     )
                 }
                 RemoteViews(sizedViews)
@@ -168,6 +174,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                     visualHeightDp = fallback.height,
                     bindCollection = true,
                     showRefreshCover = showRefreshCover,
+                    resetPosition = collectionChanged,
                 )
             }
         } else {
@@ -179,6 +186,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 visualHeightDp = fallback.height,
                 bindCollection = true,
                 showRefreshCover = showRefreshCover,
+                resetPosition = collectionChanged,
             )
         }
 
@@ -205,6 +213,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         visualHeightDp: Float,
         bindCollection: Boolean,
         showRefreshCover: Boolean,
+        resetPosition: Boolean,
     ): RemoteViews {
         val widthDp = visualWidthDp.coerceAtLeast(1f)
         val heightDp = visualHeightDp.coerceAtLeast(1f)
@@ -304,11 +313,15 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 WIDGET_SELECTION_PREFS,
                 Context.MODE_PRIVATE,
             )
-            if (selectionPrefs.getBoolean(resetChildKey(widgetId), false)) {
+            if (
+                resetPosition ||
+                selectionPrefs.getBoolean(resetChildKey(widgetId), false)
+            ) {
                 // StackView is an AdapterViewAnimator. setScrollPosition is for list/grid
                 // widgets and can make launchers reject the RemoteViews update. Use the
                 // native StackView child selector instead.
-                views.setDisplayedChild(R.id.widget_list, 0)
+                val selectedIndex = WidgetSnapshotStore.read(context, widgetId).selectedIndex
+                views.setDisplayedChild(R.id.widget_list, selectedIndex)
                 selectionPrefs.edit().remove(resetChildKey(widgetId)).apply()
             }
         }
@@ -357,7 +370,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val size = legacyWidgetSize(options)
         val widthDp = size.width.roundToInt().coerceAtLeast(1)
         val heightDp = size.height.roundToInt().coerceAtLeast(1)
-        val targetTheme = themeColorsForKey(targetThemeKey)
+        val targetTheme = themeColorsForKey(context, targetThemeKey)
         val hiddenTarget = RemoteViews(context.packageName, R.layout.schedule_widget)
         hiddenTarget.setImageViewBitmap(
             R.id.widget_theme_background,
@@ -448,14 +461,42 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
     )
 
     private fun readThemeColors(context: Context): ThemeColors {
-        val key = context
-            .getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            .getString("flutter.appTheme", "classic")
-            ?: "classic"
-        return themeColorsForKey(key)
+        val prefs = context.getSharedPreferences(
+            "FlutterSharedPreferences",
+            Context.MODE_PRIVATE,
+        )
+        val theme = prefs.getString("flutter.appTheme", "classic") ?: "classic"
+        val token = prefs.getString(MainActivity.THEME_TOKEN_KEY, theme) ?: theme
+        return themeColorsForKey(context, token)
     }
 
-    private fun themeColorsForKey(key: String): ThemeColors = when (key) {
+    private fun themeColorsForKey(context: Context, key: String): ThemeColors {
+        if (key.startsWith("custom:")) {
+            val colors = key.split(':').drop(1).map(String::toIntOrNull)
+            if (colors.size == 5 && colors.all { it != null }) {
+                return ThemeColors(
+                    key,
+                    colors[0]!!,
+                    colors[1]!!,
+                    colors[2]!!,
+                    colors[4]!!,
+                )
+            }
+        }
+        if (key == "custom") {
+            val prefs = context.getSharedPreferences(
+                "FlutterSharedPreferences",
+                Context.MODE_PRIVATE,
+            )
+            return ThemeColors(
+                key,
+                prefs.getInt(MainActivity.CUSTOM_START_KEY, 0xFF173A8E.toInt()),
+                prefs.getInt(MainActivity.CUSTOM_END_KEY, 0xFF315AB5.toInt()),
+                prefs.getInt(MainActivity.CUSTOM_TEXT_KEY, 0xFFFFFFFF.toInt()),
+                prefs.getInt(MainActivity.CUSTOM_ICON_KEY, 0xFFFFFFFF.toInt()),
+            )
+        }
+        return when (key) {
         "lol" -> ThemeColors(key, 0xFF06131A.toInt(), 0xFF0B343A.toInt(), 0xFFF0E6D2.toInt(), 0xFFF0E6D2.toInt())
         "valorant" -> ThemeColors(key, 0xFF0F1923.toInt(), 0xFF24313B.toInt(), 0xFFECE8E1.toInt(), 0xFFECE8E1.toInt())
         "minecraft" -> ThemeColors(key, 0xFF3A2B20.toInt(), 0xFF6B4A2F.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
@@ -466,6 +507,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         "youtube" -> ThemeColors(key, 0xFF181818.toInt(), 0xFF2B0E14.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
         "steam" -> ThemeColors(key, 0xFF171D25.toInt(), 0xFF1B3D55.toInt(), 0xFFD6E9F8.toInt(), 0xFFD6E9F8.toInt())
         else -> ThemeColors("classic", 0xFF173A8E.toInt(), 0xFF315AB5.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
+        }
     }
 
     private fun renderThemeBackground(
@@ -498,10 +540,15 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         widgetId: Int,
         options: Bundle,
     ): String {
-        val snapshot = context
-            .getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            .getString("flutter.better_phenikaa_snapshot_v1", "")
-            .orEmpty()
+        val snapshotPreferences = context.getSharedPreferences(
+            "FlutterSharedPreferences",
+            Context.MODE_PRIVATE,
+        )
+        val snapshot = snapshotPreferences
+            .getString("flutter.better_phenikaa_widget_snapshot_v1", null)
+            ?: snapshotPreferences
+                .getString("flutter.better_phenikaa_snapshot_v1", "")
+                .orEmpty()
         val selectedDate = context
             .getSharedPreferences(WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE)
             .getString(selectedDateKey(widgetId), "")

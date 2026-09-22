@@ -27,4 +27,15 @@ abstract final class DailySync {
       debugPrint('Unable to cancel the 06:00 sync: $error');
     }
   }
+
+  static Future<void> refreshWidgetToday() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return;
+    }
+    try {
+      await _channel.invokeMethod<void>('refreshWidgetToday');
+    } on Object catch (error) {
+      debugPrint('Unable to refresh today on the widget: $error');
+    }
+  }
 }

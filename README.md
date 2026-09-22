@@ -1,97 +1,57 @@
-# Better Phenikaa Schedule
+# Better Phenikaa DemoF3
 
-Bài tập lớn nhóm 1 — ứng dụng **thời khóa biểu & lịch thi** cho sinh viên Phenikaa University.
+Ứng dụng Flutter hiển thị lịch học, lịch thi và widget Android cho sinh viên
+Phenikaa. DemoF3 kế thừa giao diện, chức năng, animation và toàn bộ preset theme
+của DemoF; các fix sync/widget phù hợp từ demoD được tích hợp có chọn lọc.
 
-## Nhóm
+## Tính năng chính
 
-| STT | Họ và tên | MSSV | Vai trò chính |
-|---:|---|---|---|
-| 1 | Đăng Văn Nam Khánh | 24100041 | QLĐT intake / session / parser |
-| 2 | Trần Đỗ Quốc Huy | 21011607 | Timetable + exam UI |
-| 3 | Trần Văn Dương | 24100043 | Local DB + sync |
-| 4 | Nguyễn Minh Đạo | 24100222 | Lead + widget + settings |
+- Đăng nhập QLĐT/Microsoft trong WebView và đồng bộ thủ công.
+- Lưu snapshot lịch cục bộ; dữ liệu hợp lệ cũ không bị ghi đè khi sync lỗi.
+- Đồng bộ nền bằng một WorkManager hữu hạn cho lần 06:00 địa phương tiếp theo.
+- Widget dùng kích thước launcher thực tế, hiển thị lịch ngày hiện tại và tự làm
+  mới khi đổi ngày, reboot, sync thành công hoặc dữ liệu thay đổi.
+- Giữ nguyên 10 preset: Classic, League of Legends, Valorant, Minecraft,
+  Facebook, Shopee, TikTok, Ben 10, YouTube và Steam.
+- Theme Engine sinh token có kiểm tra contrast từ ảnh hoặc 2–3 màu theo tỷ lệ.
+- Preview trước khi áp dụng; lưu, sửa, xóa nhiều custom theme.
+- Font hệ thống, font tích hợp và import TTF/OTF vào private app storage.
+- Widget giữ palette custom nhưng dùng font hệ thống an toàn khi RemoteViews không
+  hỗ trợ font đã nhập.
 
-## Mục tiêu kỹ thuật
+## Cấu trúc feature
 
-- Flutter/Dart là stack chính.
-- Đăng nhập qua luồng QLĐT/Microsoft chính thức; không tự thu mật khẩu.
-- Dữ liệu lịch học/lịch thi lưu local để xem offline.
-- Không dùng Firebase/backend/cloud database cho dữ liệu sinh viên.
-- UI không truy vấn SQL trực tiếp; mọi truy cập dữ liệu đi qua repository contract.
-- Widget chỉ đọc `WidgetSnapshot` đã được app ghi local.
-- Đồng bộ lỗi phải giữ nguyên dữ liệu cũ đang dùng được.
+Tên thư mục feature dùng tiếng Việt không dấu:
 
-## Stack đã chuẩn hóa
+- `lib/features/dang_nhap_qldt/`
+- `lib/features/dong_bo_hang_ngay/`
+- `lib/features/tien_ich_lich_hoc/`
+- `lib/features/giao_dien/`
 
-- Flutter 3.47.2 / Dart 3.13
-- Riverpod + GoRouter
-- Drift/SQLite
-- Dio + CookieJar + InAppWebView + HTML parser
-- Secure Storage + SharedPreferences
-- Home Widget
-- Freezed/JSON codegen
-- Mocktail
-- Very Good Analysis + Riverpod Lint
-- Dev Container + GitHub Actions
+Chi tiết nằm tại `lib/features/README.md`.
 
-## Bắt đầu nhanh
+## Quyền riêng tư và bảo mật
 
-### Codespaces / Dev Container — khuyến nghị
+- Ảnh, screenshot, wallpaper và font chỉ được xử lý trên thiết bị.
+- File được chọn qua Android Storage Access Framework rồi sao chép vào vùng
+  private của ứng dụng; không upload lên server.
+- Ứng dụng không thêm analytics, tracker hay backend thu thập custom theme.
+- Không log mật khẩu, cookie, token hoặc dữ liệu đăng nhập QLĐT.
+- Không commit credential, session thật, keystore hoặc database người dùng.
 
-1. Tạo Codespace trực tiếp trên **feature branch của mình**.
-2. Chọn Dev Container `Better Phenikaa Schedule`.
-3. Container tự cài Flutter 3.47.2, Dart, Android SDK, tắt telemetry, cấu hình Git safe-directory, tạo platform Android/Web nếu thiếu và chạy `flutter pub get`.
-4. Sau khi terminal mở, chỉ cần chạy:
+## Kiểm tra và build
 
-```bash
-bash tool/setup.sh
-```
-
-`tool/setup.sh` sẽ tự bootstrap, format, analyze và test. Không cần tự cài Flutter/Dart/JDK hay sửa Git `safe.directory` thủ công.
-
-Trong quá trình code, dùng:
+Yêu cầu Flutter 3.47.2, Dart 3.13, JDK 17 và Android SDK phù hợp.
 
 ```bash
-bash tool/quality.sh
-```
-
-Lệnh này tự format code rồi chạy analyze + test.
-
-### Máy local
-
-Yêu cầu Flutter 3.47.2, Dart 3.13, JDK 17 và Android SDK. Sau đó chạy:
-
-```bash
-bash tool/setup.sh
-```
-
-## Nhánh làm việc
-
-- `main`: bản ổn định.
-- `develop`: nhánh tích hợp.
-- `feature/qldt-intake-khanh`
-- `feature/timetable-exam-huy`
-- `feature/local-data-sync-duong`
-- `feature/widget-settings-dao`
-
-Không push tính năng trực tiếp vào `main`. Feature branch mở PR vào `develop`; chỉ merge `develop` vào `main` khi quality gate xanh.
-
-## Contract freeze
-
-Các contract trong `lib/core/contracts/` là điểm nối giữa 4 phần việc. Thay đổi model/repository contract cần Lead và thành viên đang tiêu thụ contract đó review trước khi merge.
-
-## Lệnh chuẩn
-
-```bash
-bash tool/setup.sh
-bash tool/quality.sh
-dart run build_runner build --delete-conflicting-outputs
-flutter run
+bash tool/bootstrap.sh
+flutter analyze
+flutter test
+cd android && ./gradlew testDebugUnitTest
 flutter build apk --debug
+flutter build apk --release
 ```
 
-## Quy tắc dữ liệu nhạy cảm
-
-Tuyệt đối không commit mật khẩu, cookie/session thật, token, HTML chứa dữ liệu sinh viên, file DB thật, keystore hoặc ảnh chụp chứa thông tin tài khoản. Xem `SECURITY.md`.
-
-Tài liệu chi tiết: `docs/ARCHITECTURE.md`, `docs/WORKFLOW.md`, `LEADER_FIRST_RUN.md`.
+GitHub Actions chạy lại analyze, Flutter test, native Android test và build APK.
+WorkManager có thể chạy sau 06:00 tùy tối ưu pin/hạn chế nền của Android; ứng dụng
+không dùng exact alarm để ép giờ và không tự mở Activity/WebView lên màn hình.

@@ -1,5 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_tokens.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme_repository.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +22,7 @@ enum AppThemeId {
   ben10,
   youtube,
   steam,
+  custom,
 }
 
 enum AppThemeGeometry { rounded, square, valorant, lol, pixel }
@@ -35,6 +41,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.ben10 => 'Ben 10',
     AppThemeId.youtube => 'YouTube',
     AppThemeId.steam => 'Steam',
+    AppThemeId.custom => 'Tùy chỉnh',
   };
 
   String get caption => switch (this) {
@@ -48,6 +55,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.ben10 => 'Omnitrix • đen • xanh neon',
     AppThemeId.youtube => 'Dark feed • đỏ video',
     AppThemeId.steam => 'Store dark • xanh Steam',
+    AppThemeId.custom => 'Màu và font do bạn tạo',
   };
 
   IconData get icon => switch (this) {
@@ -61,6 +69,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.ben10 => Icons.watch_rounded,
     AppThemeId.youtube => Icons.play_circle_fill_rounded,
     AppThemeId.steam => Icons.sports_esports_rounded,
+    AppThemeId.custom => Icons.tune_rounded,
   };
 }
 
@@ -109,6 +118,63 @@ class AppThemePalette {
   final AppThemeGeometry geometry;
   final bool dark;
   final String? fontFamily;
+
+  factory AppThemePalette.fromTokens(
+    ThemeTokens tokens, {
+    required AppThemeId id,
+    AppThemeGeometry geometry = AppThemeGeometry.rounded,
+    String? fontFamily,
+  }) => AppThemePalette(
+    id: id,
+    pageStart: tokens.background,
+    pageEnd: tokens.backgroundEnd,
+    surface: tokens.surface,
+    card: tokens.card,
+    cardAlt: tokens.cardAlternate,
+    primary: tokens.primary,
+    accent: tokens.accent,
+    textPrimary: tokens.textPrimary,
+    textSecondary: tokens.textSecondary,
+    border: tokens.border,
+    shadow: tokens.shadow,
+    widgetStart: tokens.widgetStart,
+    widgetEnd: tokens.widgetEnd,
+    widgetText: tokens.widgetText,
+    widgetSubtext: tokens.widgetSubtext,
+    radius: tokens.radius,
+    geometry: geometry,
+    dark: tokens.dark,
+    fontFamily: fontFamily,
+  );
+
+  ThemeTokens toTokens() => ThemeTokens(
+    background: pageStart,
+    backgroundEnd: pageEnd,
+    surface: surface,
+    card: card,
+    cardAlternate: cardAlt,
+    primary: primary,
+    secondary: mixColors(primary, accent, 0.42),
+    accent: accent,
+    textPrimary: textPrimary,
+    textSecondary: textSecondary,
+    icon: textPrimary,
+    border: border,
+    divider: border,
+    selected: mixColors(card, primary, dark ? 0.28 : 0.12),
+    pressed: mixColors(primary, textPrimary, dark ? 0.18 : 0.10),
+    disabled: mixColors(textSecondary, surface, 0.48),
+    success: const Color(0xFF168A45),
+    warning: const Color(0xFFE08A00),
+    error: const Color(0xFFD83B45),
+    widgetStart: widgetStart,
+    widgetEnd: widgetEnd,
+    widgetText: widgetText,
+    widgetSubtext: widgetSubtext,
+    shadow: shadow,
+    dark: dark,
+    radius: radius,
+  );
 }
 
 const Map<AppThemeId, AppThemePalette> appThemePalettes =
@@ -326,78 +392,279 @@ const Map<AppThemeId, AppThemePalette> appThemePalettes =
       ),
     };
 
-AppThemePalette get appThemePalette =>
-    appThemePalettes[AppThemeController.instance.theme] ??
-    appThemePalettes[AppThemeId.classic]!;
+AppThemePalette get appThemePalette => AppThemeController.instance.palette;
 
 class AppThemeController extends ChangeNotifier {
   new _();
 
   static final AppThemeController instance = AppThemeController._();
-  static const _preferenceKey = 'better_phenikaa_theme_v2';
+  static const _preferenceKey = 'better_phenikaa_theme_v3';
+  static const _legacyPreferenceKey = 'better_phenikaa_theme_v2';
+  static const _appliedCustomThemeKey =
+      'better_phenikaa_applied_custom_theme_v1';
   static const _widgetPreferenceKey = 'appTheme';
   static const MethodChannel _widgetThemeChannel = MethodChannel(
     'better_phenikaa/widget_theme',
   );
 
   AppThemeId _theme = AppThemeId.classic;
+  CustomThemeDefinition? _activeCustomTheme;
+  String? _activeCustomFontFamily;
+  List<CustomThemeDefinition> _customThemes = <CustomThemeDefinition>[];
+  AppThemePalette? _transitionPalette;
+  Timer? _transitionTimer;
+  Completer<void>? _transitionCompletion;
+  int _transitionSerial = 0;
   bool _loaded = false;
 
   AppThemeId get theme => _theme;
-  AppThemePalette get palette => appThemePalettes[_theme]!;
+  AppThemePalette get palette =>
+      _transitionPalette ?? _resolvedPalette(_theme, _activeCustomTheme);
+  List<CustomThemeDefinition> get customThemes =>
+      List<CustomThemeDefinition>.unmodifiable(_customThemes);
+  CustomThemeDefinition? get activeCustomTheme => _activeCustomTheme;
+  bool get isTransitioning => _transitionPalette != null;
+
+  AppThemePalette _resolvedPalette(
+    AppThemeId id,
+    CustomThemeDefinition? custom,
+  ) {
+    if (id == AppThemeId.custom && custom != null) {
+      return AppThemePalette.fromTokens(
+        custom.tokens,
+        id: AppThemeId.custom,
+        fontFamily: _activeCustomFontFamily,
+      );
+    }
+    return appThemePalettes[id] ?? appThemePalettes[AppThemeId.classic]!;
+  }
 
   Future<void> load() async {
     if (_loaded) return;
     _loaded = true;
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_preferenceKey);
-    if (saved != null) {
+    _customThemes = await const CustomThemeRepository().readAll();
+    final saved =
+        prefs.getString(_preferenceKey) ??
+        prefs.getString(_legacyPreferenceKey);
+    if (saved != null && saved.startsWith('custom:')) {
+      final customId = saved.substring('custom:'.length);
+      CustomThemeDefinition? applied;
+      final appliedRaw = prefs.getString(_appliedCustomThemeKey);
+      if (appliedRaw != null) {
+        try {
+          final decoded = jsonDecode(appliedRaw);
+          if (decoded is Map<String, dynamic>) {
+            final candidate = CustomThemeDefinition.fromJson(
+              Map<String, Object?>.from(decoded),
+            );
+            if (candidate.id == customId) applied = candidate;
+          }
+        } on Object {
+          applied = null;
+        }
+      }
+      final match = _customThemes.where((item) => item.id == customId);
+      final restored = applied ?? (match.isNotEmpty ? match.first : null);
+      if (restored != null) {
+        _activeCustomTheme = restored;
+        _activeCustomFontFamily = await ThemeFontManager.instance.resolveFamily(
+          restored.font,
+        );
+        _theme = AppThemeId.custom;
+      }
+    } else if (saved != null) {
       for (final candidate in AppThemeId.values) {
-        if (candidate.storageKey == saved) {
+        if (candidate != AppThemeId.custom && candidate.storageKey == saved) {
           _theme = candidate;
           break;
         }
       }
     }
+    final widgetKey = _widgetThemeKey;
     if (!prefs.containsKey(_widgetPreferenceKey)) {
-      await prefs.setString(_widgetPreferenceKey, _theme.storageKey);
+      await prefs.setString(_widgetPreferenceKey, widgetKey);
     }
     notifyListeners();
     final widgetTheme = prefs.getString(_widgetPreferenceKey);
-    if (widgetTheme != _theme.storageKey) {
-      final nativeApplied = await _applyWidgetThemeImmediately(
-        _theme.storageKey,
-      );
+    if (widgetTheme != widgetKey) {
+      final nativeApplied = await _applyWidgetTheme(widgetKey, palette);
       if (!nativeApplied) {
-        await prefs.setString(_widgetPreferenceKey, _theme.storageKey);
+        await prefs.setString(_widgetPreferenceKey, widgetKey);
         await _syncWidgetTheme();
       }
     }
   }
 
   Future<void> select(AppThemeId value) async {
-    if (_theme == value) return;
-    _theme = value;
-    notifyListeners();
+    if (value == AppThemeId.custom ||
+        (_theme == value && _activeCustomTheme == null)) {
+      return;
+    }
+    await _transitionTo(themeId: value);
+  }
 
-    // Dispatch the native widget update at the exact theme tap. The widget's
-    // theme-only path is a partial RemoteViews update and never rebinds StackView.
-    final nativeUpdate = _applyWidgetThemeImmediately(value.storageKey);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_preferenceKey, value.storageKey);
-    final nativeApplied = await nativeUpdate;
+  Future<void> applyCustomTheme(CustomThemeDefinition theme) async {
+    final fontFamily = await ThemeFontManager.instance.resolveFamily(
+      theme.font,
+    );
+    await _transitionTo(
+      themeId: AppThemeId.custom,
+      customTheme: theme,
+      resolvedFontFamily: fontFamily,
+    );
+  }
+
+  Future<void> saveCustomTheme(CustomThemeDefinition theme) async {
+    final index = _customThemes.indexWhere((item) => item.id == theme.id);
+    final next = List<CustomThemeDefinition>.of(_customThemes);
+    if (index == -1) {
+      next.add(theme);
+    } else {
+      next[index] = theme;
+    }
+    next.sort((left, right) => right.updatedAt.compareTo(left.updatedAt));
+    await const CustomThemeRepository().replaceAll(next);
+    _customThemes = next;
+    notifyListeners();
+  }
+
+  Future<void> deleteCustomTheme(String id) async {
+    final next = _customThemes.where((item) => item.id != id).toList();
+    if (next.length == _customThemes.length) {
+      return;
+    }
+    await const CustomThemeRepository().replaceAll(next);
+    _customThemes = next;
+    if (_activeCustomTheme?.id == id) {
+      await _transitionTo(themeId: AppThemeId.classic);
+    } else {
+      notifyListeners();
+    }
+  }
+
+  Future<void> _transitionTo({
+    required AppThemeId themeId,
+    CustomThemeDefinition? customTheme,
+    String? resolvedFontFamily,
+  }) async {
+    final from = palette;
+    final oldCustomFont = _activeCustomFontFamily;
+    _activeCustomFontFamily = resolvedFontFamily;
+    final target = _resolvedPalette(themeId, customTheme);
+    _activeCustomFontFamily = oldCustomFont;
+
+    _transitionTimer?.cancel();
+    final interrupted = _transitionCompletion;
+    if (interrupted != null && !interrupted.isCompleted) {
+      interrupted.complete();
+    }
+    final serial = ++_transitionSerial;
+    const frames = 15;
+    var frame = 0;
+    final completion = Completer<void>();
+    _transitionCompletion = completion;
+    _transitionTimer = Timer.periodic(const Duration(milliseconds: 33), (
+      timer,
+    ) {
+      if (serial != _transitionSerial) {
+        timer.cancel();
+        if (!completion.isCompleted) completion.complete();
+        return;
+      }
+      frame += 1;
+      final progress = frame / frames;
+      if (frame < frames) {
+        final tokens = ThemeTokens.lerp(
+          from.toTokens(),
+          target.toTokens(),
+          progress,
+        );
+        _transitionPalette = AppThemePalette.fromTokens(
+          tokens,
+          id: from.id,
+          geometry: from.geometry,
+          fontFamily: from.fontFamily,
+        );
+        notifyListeners();
+        return;
+      }
+      timer.cancel();
+      _transitionTimer = null;
+      _theme = themeId;
+      _activeCustomTheme = customTheme;
+      _activeCustomFontFamily = resolvedFontFamily;
+      _transitionPalette = null;
+      notifyListeners();
+      unawaited(() async {
+        try {
+          await _commitSelection(target);
+          if (!completion.isCompleted) completion.complete();
+        } on Object catch (error, stackTrace) {
+          if (!completion.isCompleted) {
+            completion.completeError(error, stackTrace);
+          }
+        } finally {
+          if (_transitionCompletion == completion) {
+            _transitionCompletion = null;
+          }
+        }
+      }());
+    });
+    return completion.future;
+  }
+
+  Future<void> _commitSelection(AppThemePalette target) async {
+    final preferences = await SharedPreferences.getInstance();
+    final selectionKey =
+        _theme == AppThemeId.custom && _activeCustomTheme != null
+        ? 'custom:${_activeCustomTheme!.id}'
+        : _theme.storageKey;
+    if (_theme == AppThemeId.custom && _activeCustomTheme != null) {
+      final savedCustom = await preferences.setString(
+        _appliedCustomThemeKey,
+        jsonEncode(_activeCustomTheme!.toJson()),
+      );
+      if (!savedCustom) {
+        throw StateError('Không thể lưu custom theme đang áp dụng.');
+      }
+    } else {
+      await preferences.remove(_appliedCustomThemeKey);
+    }
+    final savedSelection = await preferences.setString(
+      _preferenceKey,
+      selectionKey,
+    );
+    if (!savedSelection) {
+      throw StateError('Không thể lưu lựa chọn theme.');
+    }
+    final widgetKey = _widgetThemeKey;
+    final nativeApplied = await _applyWidgetTheme(widgetKey, target);
     if (!nativeApplied) {
-      await prefs.setString(_widgetPreferenceKey, value.storageKey);
+      await preferences.setString(_widgetPreferenceKey, widgetKey);
       await _syncWidgetTheme();
     }
   }
 
-  Future<bool> _applyWidgetThemeImmediately(String themeKey) async {
+  String get _widgetThemeKey =>
+      _theme == AppThemeId.custom ? 'custom' : _theme.storageKey;
+
+  Future<bool> _applyWidgetTheme(
+    String themeKey,
+    AppThemePalette target,
+  ) async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
     try {
       await _widgetThemeChannel.invokeMethod<int>(
         'applyTheme',
-        <String, Object>{'theme': themeKey},
+        <String, Object>{
+          'theme': themeKey,
+          'widgetStart': target.widgetStart.toARGB32(),
+          'widgetEnd': target.widgetEnd.toARGB32(),
+          'widgetText': target.widgetText.toARGB32(),
+          'widgetSubtext': target.widgetSubtext.toARGB32(),
+          'widgetIcon': target.widgetText.toARGB32(),
+        },
       );
       return true;
     } on MissingPluginException {
@@ -542,7 +809,7 @@ class _ThemeBackdropPainter extends CustomPainter {
 
     switch (palette.id) {
       case AppThemeId.minecraft:
-        final block = (size.shortestSide / 11).clamp(26.0, 48.0);
+        final block = (size.shortestSide / 11).clamp(26.0, 48.0).toDouble();
         final paint = Paint();
         for (var y = 0.0; y < size.height; y += block) {
           for (var x = 0.0; x < size.width; x += block) {
@@ -639,13 +906,18 @@ class _ThemeBackdropPainter extends CustomPainter {
         );
       case AppThemeId.facebook:
       case AppThemeId.classic:
+      case AppThemeId.custom:
         break;
     }
   }
 
   @override
   bool shouldRepaint(covariant _ThemeBackdropPainter oldDelegate) =>
-      oldDelegate.palette.id != palette.id;
+      oldDelegate.palette.id != palette.id ||
+      oldDelegate.palette.pageStart != palette.pageStart ||
+      oldDelegate.palette.pageEnd != palette.pageEnd ||
+      oldDelegate.palette.primary != palette.primary ||
+      oldDelegate.palette.accent != palette.accent;
 }
 
 class AppThemePanel extends StatelessWidget {
@@ -751,250 +1023,4 @@ class _LolClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
-Future<void> showAppThemePicker(BuildContext context) async {
-  final controller = AppThemeController.instance;
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    barrierColor: const Color(0x99000000),
-    builder: (context) => AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final palette = controller.palette;
-        final radius = palette.geometry == AppThemeGeometry.rounded
-            ? 28.0
-            : 0.0;
-        return SafeArea(
-          top: false,
-          child: Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * .78,
-            ),
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
-            decoration: BoxDecoration(
-              color: palette.surface,
-              border: Border(top: BorderSide(color: palette.border)),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(radius)),
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  color: palette.shadow,
-                  blurRadius: 32,
-                  offset: const Offset(0, -8),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 5,
-                    margin: const EdgeInsets.only(bottom: 14),
-                    decoration: BoxDecoration(
-                      color: palette.textSecondary.withValues(alpha: .35),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
-                ),
-                Text(
-                  'Giao diện',
-                  style: TextStyle(
-                    color: palette.textPrimary,
-                    fontSize: 21,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: themeLetterSpacing(palette),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Đổi skin cho toàn bộ app và widget. Lịch và dữ liệu không thay đổi.',
-                  style: TextStyle(
-                    color: palette.textSecondary,
-                    fontSize: 12.5,
-                    height: 1.35,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Flexible(
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const BouncingScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                          childAspectRatio: 1.45,
-                        ),
-                    itemCount: AppThemeId.values.length,
-                    itemBuilder: (context, index) {
-                      final id = AppThemeId.values[index];
-                      final preview = appThemePalettes[id]!;
-                      final selected = controller.theme == id;
-                      return InkWell(
-                        onTap: () => controller.select(id),
-                        borderRadius: BorderRadius.circular(14),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 220),
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: palette.card,
-                            borderRadius: BorderRadius.circular(
-                              palette.geometry == AppThemeGeometry.rounded
-                                  ? 14
-                                  : 2,
-                            ),
-                            border: Border.all(
-                              color: selected
-                                  ? palette.primary
-                                  : palette.border,
-                              width: selected ? 2 : 1,
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Expanded(
-                                child: Container(
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: <Color>[
-                                        preview.pageStart,
-                                        preview.primary,
-                                        preview.accent,
-                                      ],
-                                    ),
-                                    borderRadius: BorderRadius.circular(
-                                      preview.geometry ==
-                                              AppThemeGeometry.rounded
-                                          ? 9
-                                          : 1,
-                                    ),
-                                  ),
-                                  child: Align(
-                                    alignment: Alignment.topRight,
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(7),
-                                      child: Icon(
-                                        selected
-                                            ? Icons.check_circle_rounded
-                                            : id.icon,
-                                        color: preview.widgetText,
-                                        size: 19,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                id.label,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: palette.textPrimary,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 12.5,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                id.caption,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: palette.textSecondary,
-                                  fontSize: 10,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    ),
-  );
-}
-
-class AppThemeSettingButton extends StatelessWidget {
-  const new({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final controller = AppThemeController.instance;
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final palette = controller.palette;
-        return AppThemePanel(
-          elevated: false,
-          alt: true,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: InkWell(
-            onTap: () => showAppThemePicker(context),
-            child: Row(
-              children: <Widget>[
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: <Color>[palette.primary, palette.accent],
-                    ),
-                    borderRadius: BorderRadius.circular(
-                      palette.geometry == AppThemeGeometry.rounded ? 10 : 1,
-                    ),
-                  ),
-                  child: Icon(
-                    controller.theme.icon,
-                    color: palette.widgetText,
-                    size: 21,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        'Giao diện',
-                        style: TextStyle(
-                          color: palette.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        controller.theme.label,
-                        style: TextStyle(
-                          color: palette.textSecondary,
-                          fontSize: 11.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(Icons.chevron_right_rounded, color: palette.textSecondary),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 }

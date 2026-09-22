@@ -127,7 +127,7 @@ private class ScheduleWidgetFactory(
     override fun hasStableIds(): Boolean = true
 
     private fun reload() {
-        items = readWidgetClasses(context, widgetId)
+        items = WidgetSnapshotStore.read(context, widgetId).items
     }
 
     private fun rememberVisiblePosition(position: Int) {
@@ -178,7 +178,8 @@ private fun renderWidgetSlide(
     val canvas = Canvas(horizontal)
     val widthPx = width.toFloat()
     val heightPx = height.toFloat()
-    val theme = themeOverrideKey?.let(::widgetThemeForKey) ?: readWidgetTheme(context)
+    val theme = themeOverrideKey?.let { widgetThemeForKey(context, it) }
+        ?: readWidgetTheme(context)
 
     val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = LinearGradient(
@@ -347,14 +348,30 @@ private data class WidgetTheme(
 )
 
 private fun readWidgetTheme(context: Context): WidgetTheme {
-    val key = context
-        .getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
-        .getString(THEME_KEY, "classic")
-        ?: "classic"
-    return widgetThemeForKey(key)
+    val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
+    val theme = preferences.getString(THEME_KEY, "classic") ?: "classic"
+    val token = preferences.getString(MainActivity.THEME_TOKEN_KEY, theme) ?: theme
+    return widgetThemeForKey(context, token)
 }
 
-private fun widgetThemeForKey(key: String): WidgetTheme = when (key) {
+private fun widgetThemeForKey(context: Context, key: String): WidgetTheme {
+    if (key.startsWith("custom:")) {
+        val colors = key.split(':').drop(1).map(String::toIntOrNull)
+        if (colors.size == 5 && colors.all { it != null }) {
+            return WidgetTheme(key, colors[0]!!, colors[1]!!, colors[2]!!, colors[3]!!)
+        }
+    }
+    if (key == "custom") {
+        val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
+        return WidgetTheme(
+            key,
+            preferences.getInt(MainActivity.CUSTOM_START_KEY, 0xFF173A8E.toInt()),
+            preferences.getInt(MainActivity.CUSTOM_END_KEY, 0xFF315AB5.toInt()),
+            preferences.getInt(MainActivity.CUSTOM_TEXT_KEY, 0xFFFFFFFF.toInt()),
+            preferences.getInt(MainActivity.CUSTOM_SUBTEXT_KEY, 0xFFDDE8FF.toInt()),
+        )
+    }
+    return when (key) {
     "lol" -> WidgetTheme(key, 0xFF06131A.toInt(), 0xFF0B343A.toInt(), 0xFFF0E6D2.toInt(), 0xFFC8AA6E.toInt())
     "valorant" -> WidgetTheme(key, 0xFF0F1923.toInt(), 0xFF24313B.toInt(), 0xFFECE8E1.toInt(), 0xFFFF7B86.toInt())
     "minecraft" -> WidgetTheme(key, 0xFF3A2B20.toInt(), 0xFF6B4A2F.toInt(), 0xFFFFFFFF.toInt(), 0xFFD8D1C9.toInt())
@@ -365,6 +382,7 @@ private fun widgetThemeForKey(key: String): WidgetTheme = when (key) {
     "youtube" -> WidgetTheme(key, 0xFF181818.toInt(), 0xFF2B0E14.toInt(), 0xFFFFFFFF.toInt(), 0xFFFF8A9F.toInt())
     "steam" -> WidgetTheme(key, 0xFF171D25.toInt(), 0xFF1B3D55.toInt(), 0xFFD6E9F8.toInt(), 0xFF66C0F4.toInt())
     else -> WidgetTheme("classic", 0xFF173A8E.toInt(), 0xFF315AB5.toInt(), 0xFFFFFFFF.toInt(), 0xFFDDE8FF.toInt())
+    }
 }
 
 private fun themedTypeface(context: Context, theme: WidgetTheme, style: Int): Typeface {
@@ -380,10 +398,11 @@ private fun themedTypeface(context: Context, theme: WidgetTheme, style: Int): Ty
 }
 
 private fun currentWidgetClass(context: Context, widgetId: Int): WidgetClass? {
-    val items = readWidgetClasses(context, widgetId)
+    val collection = WidgetSnapshotStore.read(context, widgetId)
+    val items = collection.items
     if (items.isEmpty()) return null
     val position = if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-        0
+        collection.selectedIndex
     } else {
         context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
             .getInt(visiblePositionKey(widgetId), 0)
@@ -525,7 +544,7 @@ private fun isIsoDate(value: String): Boolean =
         value.substring(5, 7).all(Char::isDigit) &&
         value.substring(8, 10).all(Char::isDigit)
 
-private data class WidgetClass(
+private data class LegacyWidgetClass(
     val id: String,
     val subject: String,
     val room: String,

@@ -5,7 +5,7 @@
 import 'dart:convert';
 import 'dart:html' as html;
 
-import 'package:better_phenikaa_schedule/features/qldt_intake/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:flutter/material.dart';
 
 const bool supportsLiveQldtLogin = true;

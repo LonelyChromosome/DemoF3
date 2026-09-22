@@ -19,6 +19,13 @@ Fixture/test phải dùng dữ liệu giả rõ ràng. Nếu cần tái hiện p
 
 Ưu tiên WebView/luồng xác thực chính thức. App không tạo form riêng để thu password. Chỉ lưu tối thiểu session cần thiết bằng secure storage/cookie storage phù hợp và phải xóa khi logout.
 
+## Custom theme
+
+Ảnh, screenshot, wallpaper và font được chọn qua Storage Access Framework, sao
+chép vào private app storage và xử lý hoàn toàn trên thiết bị. Không upload nội
+dung này, không thêm analytics/tracker và không ghi đường dẫn hay nội dung file
+vào log. Widget chỉ nhận token màu; font import dùng fallback hệ thống.
+
 ## Khi phát hiện lộ dữ liệu
 
 Không chỉ xóa ở commit mới. Cần coi credential/session đã lộ là không còn an toàn, revoke/đăng xuất phiên liên quan và làm sạch lịch sử Git nếu dữ liệu nhạy cảm đã được push.

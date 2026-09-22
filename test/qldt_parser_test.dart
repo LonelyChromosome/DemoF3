@@ -1,4 +1,4 @@
-import 'package:better_phenikaa_schedule/features/qldt_intake/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -7,11 +7,11 @@ void main() {
   test('extracts the display name from the QLĐT account element', () {
     const html = '''
       <div class="nav-account">
-        <span id="lblHoTenNguoiDangNhap">Nguyễn Minh Đạo</span>
+        <span id="lblHoTenNguoiDangNhap">Sinh Viên Demo</span>
       </div>
     ''';
 
-    expect(parser.parseDisplayName(html), 'Nguyễn Minh Đạo');
+    expect(parser.parseDisplayName(html), 'Sinh Viên Demo');
   });
 
   test('separates study schedule and exam schedule using PHANLOAI', () {
@@ -39,9 +39,9 @@ void main() {
           'PHUTKETTHUC': 0,
         },
       ],
-    }, displayName: 'Nguyễn Minh Đạo');
+    }, displayName: 'Sinh Viên Demo');
 
-    expect(parsed.displayName, 'Nguyễn Minh Đạo');
+    expect(parsed.displayName, 'Sinh Viên Demo');
     expect(parsed.classes, hasLength(1));
     expect(parsed.exams, hasLength(1));
     expect(parsed.classes.single.subjectName, 'Thiết kế web nâng cao');
@@ -50,7 +50,7 @@ void main() {
 
   test('local snapshot JSON round-trip preserves records', () {
     final original = ImportedScheduleData(
-      displayName: 'Nguyễn Minh Đạo',
+      displayName: 'Sinh Viên Demo',
       syncedAt: DateTime(2026, 9, 9, 14),
       records: <ScheduleRecord>[
         ScheduleRecord(

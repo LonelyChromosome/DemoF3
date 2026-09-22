@@ -15,7 +15,11 @@ fi
 
 needs_android=false
 needs_web=false
-[[ -f android/app/build.gradle.kts || -f android/app/build.gradle ]] || needs_android=true
+if [[ ! -f android/app/build.gradle.kts && ! -f android/app/build.gradle ]]; then
+  needs_android=true
+elif [[ ! -f android/gradlew || ! -f android/gradle/wrapper/gradle-wrapper.jar ]]; then
+  needs_android=true
+fi
 [[ -f web/index.html ]] || needs_web=true
 
 if [[ "${needs_android}" == true || "${needs_web}" == true ]]; then
@@ -71,6 +75,14 @@ if app_kts.exists():
         text,
         count=1,
     )
+    if 'androidx.work:work-runtime-ktx' not in text:
+        dependencies = '''dependencies {
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
+    testImplementation("junit:junit:4.13.2")
+}
+
+'''
+        text = text.replace('android {', dependencies + 'android {', 1)
     app_kts.write_text(text)
 
 app_groovy = Path('android/app/build.gradle')
@@ -82,6 +94,14 @@ if app_groovy.exists():
         text,
         count=1,
     )
+    if 'androidx.work:work-runtime-ktx' not in text:
+        dependencies = '''dependencies {
+    implementation 'androidx.work:work-runtime-ktx:2.11.2'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+'''
+        text = text.replace('android {', dependencies + 'android {', 1)
     app_groovy.write_text(text)
 PY
 
@@ -126,6 +146,14 @@ if 'android.permission.INTERNET' not in text:
         1,
     )
 
+boot_permission = '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n'
+if 'android.permission.RECEIVE_BOOT_COMPLETED' not in text:
+    text = text.replace(
+        '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n',
+        '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n' + boot_permission,
+        1,
+    )
+
 receiver = '''        <receiver
             android:name=".ScheduleWidgetProvider"
             android:exported="true">
@@ -155,6 +183,34 @@ activity = '''        <activity
 '''
 if '.WidgetDatePickerActivity' not in text:
     text = text.replace('    </application>', activity + '    </application>', 1)
+
+sync_receiver = '''        <receiver
+            android:name=".DailySyncRescheduleReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+'''
+if '.DailySyncRescheduleReceiver' not in text:
+    text = text.replace('    </application>', sync_receiver + '    </application>', 1)
+
+day_receiver = '''        <receiver
+            android:name=".WidgetDayChangeReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.DATE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+'''
+if '.WidgetDayChangeReceiver' not in text:
+    text = text.replace('    </application>', day_receiver + '    </application>', 1)
 
 text = re.sub(
     r'android:label="[^"]*"',

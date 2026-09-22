@@ -17,7 +17,7 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -50,6 +50,9 @@ jobs:
 
       - name: Test
         run: flutter test --coverage
+
+      - name: Native Android tests
+        run: cd android && ./gradlew testDebugUnitTest
 
       - name: Build debug APK
         run: flutter build apk --debug

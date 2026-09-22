@@ -35,7 +35,7 @@
             android:clickable="true"
             android:clipChildren="true"
             android:clipToPadding="true"
-            android:loopViews="true" />
+            android:loopViews="false" />
 
         <TextView
             android:id="@+id/widget_empty"

@@ -1,8 +1,6 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 import android.annotation.SuppressLint
-import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
 import android.os.Build
@@ -10,8 +8,10 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.work.Worker
@@ -39,59 +39,77 @@ class QldtDailySyncWorker(
             return Result.success()
         }
 
-        val preferences = applicationContext.getSharedPreferences(
-            FLUTTER_PREFERENCES,
-            Context.MODE_PRIVATE,
-        )
-        val previousSnapshot = preferences.getString(SNAPSHOT_KEY, null)
-        if (previousSnapshot.isNullOrBlank()) {
-            return Result.success()
-        }
+        DailySyncScheduler.recordStarted(applicationContext, System.currentTimeMillis())
+        try {
+            val preferences = applicationContext.getSharedPreferences(
+                FLUTTER_PREFERENCES,
+                Context.MODE_PRIVATE,
+            )
+            val previousSnapshot = preferences.getString(APP_SNAPSHOT_KEY, null)
+            if (previousSnapshot.isNullOrBlank()) {
+                DailySyncScheduler.disable(applicationContext)
+                return Result.success()
+            }
 
-        val synchronizer = HeadlessQldtSync(applicationContext)
-        activeSync = synchronizer
-        val syncResult = try {
-            synchronizer.run()
-        } finally {
-            activeSync = null
-        }
-        if (isStopped || !DailySyncScheduler.isEnabled(applicationContext)) {
-            return Result.success()
-        }
+            val synchronizer = HeadlessQldtSync(applicationContext)
+            activeSync = synchronizer
+            val syncResult = try {
+                synchronizer.run()
+            } finally {
+                activeSync = null
+            }
+            if (isStopped || !DailySyncScheduler.isEnabled(applicationContext)) {
+                return Result.success()
+            }
 
-        return when (syncResult) {
-            is HeadlessQldtSync.Result.Success -> {
-                try {
-                    val snapshot = QldtSnapshotEncoder.encode(
+            when (syncResult) {
+                is HeadlessQldtSync.Result.Success -> {
+                    val bundle = QldtSnapshotEncoder.encode(
                         syncResult.envelope,
                         previousSnapshot,
                     )
-                    if (!preferences.edit().putString(SNAPSHOT_KEY, snapshot).commit()) {
+                    val saved = preferences.edit()
+                        .putString(APP_SNAPSHOT_KEY, bundle.appSnapshot)
+                        .putString(WIDGET_SNAPSHOT_KEY, bundle.widgetSnapshot)
+                        .commit()
+                    if (!saved) {
                         DailySyncScheduler.recordFailure(
                             applicationContext,
                             "Không thể ghi dữ liệu đồng bộ vào bộ nhớ cục bộ.",
                         )
                         return Result.success()
                     }
-                    DailyWidgetRefresher.refresh(applicationContext)
+                    WidgetRefreshCoordinator.refreshToday(applicationContext)
                     DailySyncScheduler.recordSuccess(
                         applicationContext,
                         System.currentTimeMillis(),
                     )
-                    Result.success()
-                } catch (error: Exception) {
+                }
+                is HeadlessQldtSync.Result.Failure -> {
                     DailySyncScheduler.recordFailure(
                         applicationContext,
-                        "Dữ liệu QLĐT không hợp lệ: " + error.message.orEmpty(),
+                        syncResult.message,
                     )
-                    Result.success()
                 }
             }
-            is HeadlessQldtSync.Result.Failure -> {
-                DailySyncScheduler.recordFailure(applicationContext, syncResult.message)
-                Result.success()
+        } catch (error: Exception) {
+            DailySyncScheduler.recordFailure(
+                applicationContext,
+                "Dữ liệu QLĐT không hợp lệ: ${error.message.orEmpty()}",
+            )
+        } finally {
+            if (DailySyncScheduler.isEnabled(applicationContext)) {
+                runCatching {
+                    DailySyncScheduler.scheduleAfterRun(applicationContext)
+                }.onFailure { error ->
+                    DailySyncScheduler.recordFailure(
+                        applicationContext,
+                        "Không thể đặt lịch đồng bộ tiếp theo: ${error.message.orEmpty()}",
+                    )
+                }
             }
         }
+        return Result.success()
     }
 
     override fun onStopped() {
@@ -101,7 +119,8 @@ class QldtDailySyncWorker(
 
     private companion object {
         const val FLUTTER_PREFERENCES = "FlutterSharedPreferences"
-        const val SNAPSHOT_KEY = "flutter.better_phenikaa_snapshot_v1"
+        const val APP_SNAPSHOT_KEY = "flutter.better_phenikaa_snapshot_v1"
+        const val WIDGET_SNAPSHOT_KEY = "flutter.better_phenikaa_widget_snapshot_v1"
     }
 }
 
@@ -130,13 +149,13 @@ private class HeadlessQldtSync(private val context: Context) {
         if (!finished) {
             complete(Result.Failure("Tác vụ QLĐT hết thời gian chờ."))
         }
-        disposeWebView()
+        disposeWebViewAndWait()
         return result.get() ?: Result.Failure("QLĐT không trả kết quả đồng bộ.")
     }
 
     fun cancel() {
         complete(Result.Failure("Tác vụ đồng bộ đã dừng."))
-        disposeWebView()
+        disposeWebViewAndWait()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -183,6 +202,38 @@ private class HeadlessQldtSync(private val context: Context) {
                             ),
                         )
                     }
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    errorResponse: WebResourceResponse,
+                ) {
+                    super.onReceivedHttpError(view, request, errorResponse)
+                    if (request.isForMainFrame) {
+                        complete(
+                            Result.Failure(
+                                "QLĐT trả lỗi HTTP ${errorResponse.statusCode}.",
+                            ),
+                        )
+                    }
+                }
+
+                override fun onRenderProcessGone(
+                    view: WebView,
+                    detail: RenderProcessGoneDetail,
+                ): Boolean {
+                    webViewReference.compareAndSet(view, null)
+                    complete(
+                        Result.Failure(
+                            if (detail.didCrash()) {
+                                "Tiến trình WebView nền đã bị lỗi."
+                            } else {
+                                "Tiến trình WebView nền đã bị hệ thống dừng."
+                            },
+                        ),
+                    )
+                    return true
                 }
             }
             webView.loadUrl(QLDT_URL)
@@ -299,13 +350,33 @@ private class HeadlessQldtSync(private val context: Context) {
         }
     }
 
-    private fun disposeWebView() {
-        mainHandler.post {
+    private fun disposeWebViewAndWait() {
+        val dispose = {
             webViewReference.getAndSet(null)?.let { webView ->
                 webView.stopLoading()
                 webView.removeJavascriptInterface(JAVASCRIPT_BRIDGE)
+                webView.loadUrl("about:blank")
+                webView.clearHistory()
+                webView.removeAllViews()
                 webView.destroy()
             }
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            dispose()
+            return
+        }
+        val cleanupLatch = CountDownLatch(1)
+        mainHandler.post {
+            try {
+                dispose()
+            } finally {
+                cleanupLatch.countDown()
+            }
+        }
+        try {
+            cleanupLatch.await(CLEANUP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
         }
     }
 
@@ -327,7 +398,8 @@ private class HeadlessQldtSync(private val context: Context) {
         const val QLDT_URL = "https://qldtbeta.phenikaa-uni.edu.vn/"
         const val QLDT_HOST = "qldtbeta.phenikaa-uni.edu.vn"
         const val JAVASCRIPT_BRIDGE = "BetterPhenikaaNative"
-        const val SYNC_TIMEOUT_SECONDS = 75L
+        const val SYNC_TIMEOUT_SECONDS = 90L
+        const val CLEANUP_TIMEOUT_SECONDS = 5L
         const val MAX_READINESS_ATTEMPTS = 35
         const val READINESS_RETRY_MILLIS = 1_000L
         const val SESSION_READY_SCRIPT = """
@@ -340,7 +412,12 @@ private class HeadlessQldtSync(private val context: Context) {
 }
 
 private object QldtSnapshotEncoder {
-    fun encode(envelopeJson: String, previousSnapshot: String): String {
+    data class SnapshotBundle(
+        val appSnapshot: String,
+        val widgetSnapshot: String,
+    )
+
+    fun encode(envelopeJson: String, previousSnapshot: String): SnapshotBundle {
         val envelope = JSONObject(envelopeJson)
         val response = envelope.optJSONObject("response")
             ?: throw IllegalArgumentException("QLĐT response is not an object.")
@@ -354,21 +431,46 @@ private object QldtSnapshotEncoder {
         }.getOrDefault("")
         val displayName = jsonString(envelope, "name").ifBlank { previousName }
 
-        val records = ArrayList<JSONObject>(rawData.length())
+        val recordsById = LinkedHashMap<String, JSONObject>()
         for (index in 0 until rawData.length()) {
             val item = rawData.optJSONObject(index) ?: continue
-            parseRecord(item)?.let(records::add)
+            parseRecord(item)?.let { record ->
+                recordsById[record.getString("id")] = record
+            }
         }
-        records.sortBy { it.optString("startAt") }
+        if (rawData.length() > 0 && recordsById.isEmpty()) {
+            throw IllegalArgumentException("Không có bản ghi QLĐT hợp lệ.")
+        }
+        val records = recordsById.values.sortedBy { it.optString("startAt") }
+        val syncedAt = isoTimestamp(Date())
 
         val encodedRecords = JSONArray()
-        records.forEach { encodedRecords.put(it) }
-        return JSONObject()
+        val widgetClasses = JSONArray()
+        records.forEach { record ->
+            encodedRecords.put(record)
+            if (!record.optBoolean("isExam", false)) {
+                widgetClasses.put(
+                    JSONObject()
+                        .put("id", record.getString("id"))
+                        .put("subjectName", record.getString("subjectName"))
+                        .put("room", record.getString("room"))
+                        .put("startAt", record.getString("startAt"))
+                        .put("endAt", record.getString("endAt")),
+                )
+            }
+        }
+        val appSnapshot = JSONObject()
             .put("displayName", displayName)
             .put("records", encodedRecords)
-            .put("syncedAt", isoTimestamp(Date()))
+            .put("syncedAt", syncedAt)
             .put("source", "qldt")
             .toString()
+        val widgetSnapshot = JSONObject()
+            .put("schemaVersion", 1)
+            .put("generatedAt", syncedAt)
+            .put("classes", widgetClasses)
+            .toString()
+        return SnapshotBundle(appSnapshot, widgetSnapshot)
     }
 
     private fun parseRecord(item: JSONObject): JSONObject? {
@@ -400,6 +502,9 @@ private object QldtSnapshotEncoder {
         }
         val startAt = isoDateTime(date, startHour, startMinute)
         val endAt = isoDateTime(date, endHour, endMinute)
+        if (endAt <= startAt) {
+            return null
+        }
         val idPrefix = if (isExam) "exam" else "class"
         val id = listOf(
             idPrefix,
@@ -484,33 +589,4 @@ private object QldtSnapshotEncoder {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).format(date)
 
     private data class DateParts(val year: Int, val month: Int, val day: Int)
-}
-
-private object DailyWidgetRefresher {
-    fun refresh(context: Context) {
-        val manager = AppWidgetManager.getInstance(context)
-        val component = ComponentName(context, ScheduleWidgetProvider::class.java)
-        val widgetIds = manager.getAppWidgetIds(component)
-        if (widgetIds.isEmpty()) {
-            return
-        }
-
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        val selectionEditor = context.getSharedPreferences(
-            ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
-            Context.MODE_PRIVATE,
-        ).edit()
-        widgetIds.forEach { widgetId ->
-            selectionEditor
-                .putString(ScheduleWidgetProvider.selectedDateKey(widgetId), today)
-                .putBoolean(ScheduleWidgetProvider.resetChildKey(widgetId), true)
-        }
-        selectionEditor.commit()
-
-        val widgetData = context.getSharedPreferences(
-            "FlutterSharedPreferences",
-            Context.MODE_PRIVATE,
-        )
-        ScheduleWidgetProvider().onUpdate(context, manager, widgetIds, widgetData)
-    }
 }

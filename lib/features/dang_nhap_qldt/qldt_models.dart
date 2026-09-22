@@ -150,7 +150,7 @@ final class QldtParser {
       throw const FormatException('QLĐT Data is not a list.');
     }
 
-    final records = <ScheduleRecord>[];
+    final recordsById = <String, ScheduleRecord>{};
     for (final rawItem in rawData) {
       if (rawItem is! Map) {
         continue;
@@ -158,10 +158,15 @@ final class QldtParser {
       final item = Map<String, dynamic>.from(rawItem);
       final record = _parseRecord(item);
       if (record != null) {
-        records.add(record);
+        recordsById[record.id] = record;
       }
     }
 
+    if (rawData.isNotEmpty && recordsById.isEmpty) {
+      throw const FormatException('Không có bản ghi QLĐT hợp lệ.');
+    }
+
+    final records = recordsById.values.toList();
     records.sort((a, b) => a.startAt.compareTo(b.startAt));
     return ImportedScheduleData(
       displayName: displayName,
@@ -192,6 +197,16 @@ final class QldtParser {
         endMinute == null) {
       return null;
     }
+    if (startHour < 0 ||
+        startHour > 23 ||
+        endHour < 0 ||
+        endHour > 23 ||
+        startMinute < 0 ||
+        startMinute > 59 ||
+        endMinute < 0 ||
+        endMinute > 59) {
+      return null;
+    }
 
     final isExam = _string(item['PHANLOAI']).toUpperCase() == 'LICHTHI';
     final room = isExam
@@ -207,6 +222,9 @@ final class QldtParser {
       startMinute,
     );
     final endAt = DateTime(day.year, day.month, day.day, endHour, endMinute);
+    if (!endAt.isAfter(startAt)) {
+      return null;
+    }
     final id = <String>[
       if (isExam) 'exam' else 'class',
       dateText,
@@ -240,7 +258,11 @@ final class QldtParser {
     if (day == null || month == null || year == null) {
       return null;
     }
-    return DateTime(year, month, day);
+    final parsed = DateTime(year, month, day);
+    if (parsed.year != year || parsed.month != month || parsed.day != day) {
+      return null;
+    }
+    return parsed;
   }
 
   static String _firstNonEmpty(List<Object?> values) {

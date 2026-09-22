@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:better_phenikaa_schedule/features/daily_sync/daily_sync.dart';
-import 'package:better_phenikaa_schedule/features/qldt_intake/qldt_login.dart';
-import 'package:better_phenikaa_schedule/features/qldt_intake/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
+import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class BetterPhenikaaScheduleApp extends StatefulWidget {
@@ -35,6 +35,7 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
         return MaterialApp(
           title: 'Better Phenikaa App',
           debugShowCheckedModeBanner: false,
+          themeAnimationDuration: Duration.zero,
           theme: buildBetterTheme(palette),
           home: const _AppRoot(),
         );
@@ -91,6 +92,7 @@ class _AppRootState extends State<_AppRoot> {
         final data = ImportedScheduleData.decode(raw);
         _data = data;
         _selectedDate = _initialDateFor(data);
+        await WidgetPublisher.publish(data, resetToToday: false);
         await DailySync.enable();
       }
     } on Object catch (error) {
@@ -104,37 +106,12 @@ class _AppRootState extends State<_AppRoot> {
 
   Future<void> _save(ImportedScheduleData data) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_storageKey, data.encode());
-    await _publishWidget(data);
-    await DailySync.enable();
-  }
-
-  Future<void> _publishWidget(ImportedScheduleData data) async {
-    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
-      return;
+    final saved = await prefs.setString(_storageKey, data.encode());
+    if (!saved) {
+      throw StateError('Không thể lưu dữ liệu lịch trên thiết bị.');
     }
-    final next = _nextClass(data);
-    await HomeWidget.saveWidgetData<String>(
-      'subjectName',
-      next?.subjectName ?? 'Không có lịch học sắp tới',
-    );
-    await HomeWidget.saveWidgetData<String>('room', next?.room ?? '');
-    await HomeWidget.saveWidgetData<String>(
-      'time',
-      next == null ? '' : '${_time(next.startAt)} - ${_time(next.endAt)}',
-    );
-    await HomeWidget.updateWidget(
-      name: 'ScheduleWidgetProvider',
-      androidName: 'ScheduleWidgetProvider',
-    );
-  }
-
-  ScheduleRecord? _nextClass(ImportedScheduleData data) {
-    final now = DateTime.now();
-    final future =
-        data.classes.where((item) => !item.endAt.isBefore(now)).toList()
-          ..sort((a, b) => a.startAt.compareTo(b.startAt));
-    return future.isEmpty ? null : future.first;
+    await WidgetPublisher.publish(data, resetToToday: true);
+    await DailySync.enable();
   }
 
   Future<void> _loginOrSync() async {
@@ -185,15 +162,7 @@ class _AppRootState extends State<_AppRoot> {
     await clearQldtSession();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      await HomeWidget.saveWidgetData<String>('subjectName', '');
-      await HomeWidget.saveWidgetData<String>('room', '');
-      await HomeWidget.saveWidgetData<String>('time', '');
-      await HomeWidget.updateWidget(
-        name: 'ScheduleWidgetProvider',
-        androidName: 'ScheduleWidgetProvider',
-      );
-    }
+    await WidgetPublisher.clear();
     if (mounted) {
       setState(() {
         _data = null;
@@ -1616,7 +1585,7 @@ class _ArcPanelAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = ((progress - start) / (1 - start)).clamp(0.0, 1.0);
+    final t = ((progress - start) / (1 - start)).clamp(0.0, 1.0).toDouble();
     final curved = Curves.easeOutBack.transform(t);
     return Positioned(
       right: right,
@@ -1707,6 +1676,7 @@ Color _panelSecondaryColor(AppThemePalette palette) => switch (palette.id) {
   AppThemeId.ben10 => const Color(0xFF00AEEF),
   AppThemeId.youtube => const Color(0xFF3EA6FF),
   AppThemeId.steam => const Color(0xFFA4D007),
+  AppThemeId.custom => palette.primary,
 };
 
 Color _panelTertiaryColor(AppThemePalette palette) => switch (palette.id) {
@@ -1720,6 +1690,7 @@ Color _panelTertiaryColor(AppThemePalette palette) => switch (palette.id) {
   AppThemeId.ben10 => const Color(0xFFC5FF35),
   AppThemeId.youtube => const Color(0xFF8B5CF6),
   AppThemeId.steam => const Color(0xFF66C0F4),
+  AppThemeId.custom => palette.accent,
 };
 
 Color _contrastForeground(Color background) =>
