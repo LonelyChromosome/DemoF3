@@ -102,7 +102,7 @@ jobs:
           ls -lh dist
 
       - name: Upload Better Phenikaa App
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Better-Phenikaa-App-v1.0.3
           path: |
