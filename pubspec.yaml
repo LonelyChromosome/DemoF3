@@ -9,7 +9,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_inappwebview: 6.1.5
-  home_widget: 0.9.4
+  home_widget: 0.10.0
   html: 0.15.7
   shared_preferences: 2.5.5
 
