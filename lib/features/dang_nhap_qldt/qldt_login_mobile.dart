@@ -39,7 +39,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   bool _rendererGone = false;
   bool _webCanGoBack = false;
   bool _allowRoutePop = false;
-  bool _hybridComposition = true;
+  final bool _hybridComposition = true;
   int _webViewGeneration = 0;
   int _readinessAttempt = 0;
   String _status = 'Đăng nhập bằng tài khoản Microsoft của bạn.';
@@ -139,8 +139,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                           }
                         },
                         onLoadStop: (_, _) => _beginReadinessChecks(),
-                        onUpdateVisitedHistory: (_, __, ___) =>
-                            _updateBackState(),
+                        onUpdateVisitedHistory: (_, _, _) => _updateBackState(),
                         onReceivedError: (_, request, error) {
                           if (request.isForMainFrame == true && mounted) {
                             setState(() {

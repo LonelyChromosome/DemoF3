@@ -15,7 +15,7 @@ import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 class CustomThemeEditor extends StatefulWidget {
-  const CustomThemeEditor({this.existing, super.key});
+  const new({this.existing, super.key});
 
   final CustomThemeDefinition? existing;
 
@@ -24,7 +24,7 @@ class CustomThemeEditor extends StatefulWidget {
 }
 
 class _CustomThemeEditorState extends State<CustomThemeEditor> {
-  static const _maximumImageBytes = 20 * 1024 * 1024;
+  static const int _maximumImageBytes = 20 * 1024 * 1024;
 
   final _nameController = TextEditingController();
   final _extractor = const PaletteExtractor();
@@ -515,7 +515,7 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
+  const new(this.text);
 
   final String text;
 
@@ -530,7 +530,7 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _SwatchRow extends StatelessWidget {
-  const _SwatchRow({required this.colors});
+  const new({required this.colors});
 
   final List<Color> colors;
 
@@ -543,7 +543,7 @@ class _SwatchRow extends StatelessWidget {
 }
 
 class _ThemePreview extends StatelessWidget {
-  const _ThemePreview({required this.tokens, required this.fontFamily});
+  const new({required this.tokens, required this.fontFamily});
 
   final ThemeTokens tokens;
   final String? fontFamily;
@@ -648,7 +648,7 @@ class _ThemePreview extends StatelessWidget {
 }
 
 class _HsvColorPicker extends StatefulWidget {
-  const _HsvColorPicker({required this.initial});
+  const new({required this.initial});
 
   final Color initial;
 
@@ -723,16 +723,14 @@ class _HsvColorPickerState extends State<_HsvColorPicker> {
   void _setFromOffset(Offset offset, Size size) {
     setState(() {
       _color = _color
-          .withSaturation((offset.dx / size.width).clamp(0.0, 1.0).toDouble())
-          .withValue(
-            (1 - (offset.dy / size.height)).clamp(0.0, 1.0).toDouble(),
-          );
+          .withSaturation((offset.dx / size.width).clamp(0.0, 1.0))
+          .withValue((1 - (offset.dy / size.height)).clamp(0.0, 1.0));
     });
   }
 }
 
 class _SaturationValuePainter extends CustomPainter {
-  const _SaturationValuePainter(this.hue);
+  const new(this.hue);
 
   final Color hue;
 
@@ -762,7 +760,7 @@ class _SaturationValuePainter extends CustomPainter {
 }
 
 class _SelectionPainter extends CustomPainter {
-  const _SelectionPainter(this.saturation, this.value);
+  const new(this.saturation, this.value);
 
   final double saturation;
   final double value;

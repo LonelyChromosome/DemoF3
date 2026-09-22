@@ -5,7 +5,7 @@ enum LocalFileKind { image, font }
 
 @immutable
 final class ManagedLocalFile {
-  const ManagedLocalFile({
+  const new({
     required this.path,
     required this.name,
     required this.size,

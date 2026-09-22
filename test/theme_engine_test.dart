@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'dart:ui' as ui;
 
 import 'package:better_phenikaa_schedule/features/giao_dien/bang_mau_anh/palette_extractor.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_generator.dart';
@@ -62,21 +61,15 @@ void main() {
       expect(restored.toJson(), source.toJson());
     });
 
-    testWidgets('ảnh gần đơn sắc vẫn sinh ít nhất hai swatch', (_) async {
-      final recorder = ui.PictureRecorder();
-      final canvas = Canvas(recorder);
-      canvas.drawRect(
-        const Rect.fromLTWH(0, 0, 32, 32),
-        Paint()..color = const Color(0xFF2456A6),
-      );
-      final image = await recorder.endRecording().toImage(32, 32);
-      final encoded = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
-      final bytes = encoded!.buffer.asUint8List(
-        encoded.offsetInBytes,
-        encoded.lengthInBytes,
-      );
-      final swatches = await const PaletteExtractor().extract(bytes);
+    test('ảnh gần đơn sắc vẫn sinh ít nhất hai swatch', () {
+      final bytes = Uint8List(32 * 32 * 4);
+      for (var index = 0; index < bytes.length; index += 4) {
+        bytes[index] = 0x24;
+        bytes[index + 1] = 0x56;
+        bytes[index + 2] = 0xA6;
+        bytes[index + 3] = 0xFF;
+      }
+      final swatches = const PaletteExtractor().extractRgba(bytes);
       expect(swatches.length, greaterThanOrEqualTo(2));
     });
   });

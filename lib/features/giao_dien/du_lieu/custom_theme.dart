@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 
 @immutable
 final class CustomThemeDefinition {
-  const CustomThemeDefinition({
+  const new({
     required this.id,
     required this.name,
     required this.source,
@@ -15,7 +15,7 @@ final class CustomThemeDefinition {
     required this.updatedAt,
   });
 
-  factory CustomThemeDefinition.fromJson(Map<String, Object?> json) {
+  factory fromJson(Map<String, Object?> json) {
     final now = DateTime.now();
     return CustomThemeDefinition(
       id: json['id'] as String? ?? now.microsecondsSinceEpoch.toString(),

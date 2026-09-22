@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 /// explicit prevents feature widgets from inventing one-off colors.
 @immutable
 final class ThemeTokens {
-  const ThemeTokens({
+  const new({
     required this.background,
     required this.backgroundEnd,
     required this.surface,
@@ -35,7 +35,40 @@ final class ThemeTokens {
     required this.radius,
   });
 
-  factory ThemeTokens.fromJson(Map<String, Object?> json) {
+  factory lerp(ThemeTokens from, ThemeTokens to, double progress) {
+    final t = progress.clamp(0.0, 1.0);
+    Color blend(Color a, Color b) => Color.lerp(a, b, t) ?? b;
+    return ThemeTokens(
+      background: blend(from.background, to.background),
+      backgroundEnd: blend(from.backgroundEnd, to.backgroundEnd),
+      surface: blend(from.surface, to.surface),
+      card: blend(from.card, to.card),
+      cardAlternate: blend(from.cardAlternate, to.cardAlternate),
+      primary: blend(from.primary, to.primary),
+      secondary: blend(from.secondary, to.secondary),
+      accent: blend(from.accent, to.accent),
+      textPrimary: blend(from.textPrimary, to.textPrimary),
+      textSecondary: blend(from.textSecondary, to.textSecondary),
+      icon: blend(from.icon, to.icon),
+      border: blend(from.border, to.border),
+      divider: blend(from.divider, to.divider),
+      selected: blend(from.selected, to.selected),
+      pressed: blend(from.pressed, to.pressed),
+      disabled: blend(from.disabled, to.disabled),
+      success: blend(from.success, to.success),
+      warning: blend(from.warning, to.warning),
+      error: blend(from.error, to.error),
+      widgetStart: blend(from.widgetStart, to.widgetStart),
+      widgetEnd: blend(from.widgetEnd, to.widgetEnd),
+      widgetText: blend(from.widgetText, to.widgetText),
+      widgetSubtext: blend(from.widgetSubtext, to.widgetSubtext),
+      shadow: blend(from.shadow, to.shadow),
+      dark: t < 1 ? from.dark : to.dark,
+      radius: from.radius + ((to.radius - from.radius) * t),
+    );
+  }
+
+  factory fromJson(Map<String, Object?> json) {
     Color color(String key, int fallback) {
       final value = json[key];
       return Color(value is num ? value.toInt() : fallback);
@@ -126,39 +159,6 @@ final class ThemeTokens {
     'dark': dark,
     'radius': radius,
   };
-
-  factory ThemeTokens.lerp(ThemeTokens from, ThemeTokens to, double progress) {
-    final t = progress.clamp(0.0, 1.0).toDouble();
-    Color blend(Color a, Color b) => Color.lerp(a, b, t) ?? b;
-    return ThemeTokens(
-      background: blend(from.background, to.background),
-      backgroundEnd: blend(from.backgroundEnd, to.backgroundEnd),
-      surface: blend(from.surface, to.surface),
-      card: blend(from.card, to.card),
-      cardAlternate: blend(from.cardAlternate, to.cardAlternate),
-      primary: blend(from.primary, to.primary),
-      secondary: blend(from.secondary, to.secondary),
-      accent: blend(from.accent, to.accent),
-      textPrimary: blend(from.textPrimary, to.textPrimary),
-      textSecondary: blend(from.textSecondary, to.textSecondary),
-      icon: blend(from.icon, to.icon),
-      border: blend(from.border, to.border),
-      divider: blend(from.divider, to.divider),
-      selected: blend(from.selected, to.selected),
-      pressed: blend(from.pressed, to.pressed),
-      disabled: blend(from.disabled, to.disabled),
-      success: blend(from.success, to.success),
-      warning: blend(from.warning, to.warning),
-      error: blend(from.error, to.error),
-      widgetStart: blend(from.widgetStart, to.widgetStart),
-      widgetEnd: blend(from.widgetEnd, to.widgetEnd),
-      widgetText: blend(from.widgetText, to.widgetText),
-      widgetSubtext: blend(from.widgetSubtext, to.widgetSubtext),
-      shadow: blend(from.shadow, to.shadow),
-      dark: t < 1 ? from.dark : to.dark,
-      radius: from.radius + ((to.radius - from.radius) * t),
-    );
-  }
 }
 
 double contrastRatio(Color foreground, Color background) {
@@ -170,4 +170,4 @@ double contrastRatio(Color foreground, Color background) {
 }
 
 Color mixColors(Color first, Color second, double amount) =>
-    Color.lerp(first, second, amount.clamp(0.0, 1.0).toDouble()) ?? second;
+    Color.lerp(first, second, amount.clamp(0.0, 1.0)) ?? second;

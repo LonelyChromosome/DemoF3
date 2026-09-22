@@ -32,7 +32,7 @@ Future<void> showAppThemePicker(BuildContext context) async {
 }
 
 class _ThemePickerSheet extends StatelessWidget {
-  const _ThemePickerSheet({required this.controller});
+  const new({required this.controller});
 
   final AppThemeController controller;
 
@@ -204,11 +204,7 @@ class _ThemePickerSheet extends StatelessWidget {
 }
 
 class _PresetCard extends StatelessWidget {
-  const _PresetCard({
-    required this.id,
-    required this.selected,
-    required this.onTap,
-  });
+  const new({required this.id, required this.selected, required this.onTap});
 
   final AppThemeId id;
   final bool selected;
@@ -292,7 +288,7 @@ class _PresetCard extends StatelessWidget {
 }
 
 class _CustomThemeCard extends StatelessWidget {
-  const _CustomThemeCard({
+  const new({
     required this.theme,
     required this.selected,
     required this.onApply,
@@ -353,7 +349,7 @@ class _CustomThemeCard extends StatelessWidget {
 }
 
 class AppThemeSettingButton extends StatelessWidget {
-  const AppThemeSettingButton({super.key});
+  const new({super.key});
 
   @override
   Widget build(BuildContext context) {

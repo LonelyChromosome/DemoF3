@@ -5,15 +5,15 @@ enum ThemeSourceKind { image, colorMix }
 
 @immutable
 final class ThemeSourceData {
-  const ThemeSourceData.image({required this.imagePath, required this.colors})
+  const new image({required this.imagePath, required this.colors})
     : kind = ThemeSourceKind.image,
       weights = const <double>[];
 
-  const ThemeSourceData.colorMix({required this.colors, required this.weights})
+  const new colorMix({required this.colors, required this.weights})
     : kind = ThemeSourceKind.colorMix,
       imagePath = null;
 
-  factory ThemeSourceData.fromJson(Map<String, Object?> json) {
+  factory fromJson(Map<String, Object?> json) {
     final kindName = json['kind'] as String?;
     final rawColors = json['colors'] as List<Object?>? ?? const <Object?>[];
     final colors = rawColors

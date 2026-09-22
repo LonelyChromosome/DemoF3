@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 @immutable
 final class ExtractedSwatch {
-  const ExtractedSwatch(this.color, this.population);
+  const new(this.color, this.population);
 
   final Color color;
   final int population;
@@ -13,7 +13,7 @@ final class ExtractedSwatch {
 
 /// Trích màu đại diện với bộ nhớ giới hạn cho screenshot và wallpaper.
 final class PaletteExtractor {
-  const PaletteExtractor({this.sampleSize = 96, this.maximumSwatches = 8});
+  const new({this.sampleSize = 96, this.maximumSwatches = 8});
 
   final int sampleSize;
   final int maximumSwatches;
@@ -35,58 +35,67 @@ final class PaletteExtractor {
       if (bytes == null) {
         throw const FormatException('Không thể đọc điểm ảnh.');
       }
-      final buckets = <int, _ColorBucket>{};
-      for (var index = 0; index + 3 < bytes.lengthInBytes; index += 4) {
-        final red = bytes.getUint8(index);
-        final green = bytes.getUint8(index + 1);
-        final blue = bytes.getUint8(index + 2);
-        final alpha = bytes.getUint8(index + 3);
-        if (alpha < 180) {
-          continue;
-        }
-        final key = ((red >> 4) << 8) | ((green >> 4) << 4) | (blue >> 4);
-        buckets.putIfAbsent(key, _ColorBucket.new).add(red, green, blue);
-      }
-      if (buckets.isEmpty) {
-        throw const FormatException('Ảnh không có màu hiển thị hợp lệ.');
-      }
-
-      final ranked = buckets.values.toList()
-        ..sort((left, right) => right.score.compareTo(left.score));
-      final selected = <ExtractedSwatch>[];
-      for (final bucket in ranked) {
-        final color = bucket.color;
-        if (selected.any(
-          (item) => _distanceSquared(item.color, color) < 42 * 42,
-        )) {
-          continue;
-        }
-        selected.add(ExtractedSwatch(color, bucket.count));
-        if (selected.length == maximumSwatches) {
-          break;
-        }
-      }
-
-      if (selected.length == 1) {
-        final base = HSLColor.fromColor(selected.single.color);
-        selected.add(
-          ExtractedSwatch(
-            base
-                .withHue((base.hue + 150) % 360)
-                .withSaturation(
-                  (base.saturation + 0.35).clamp(0.35, 0.9).toDouble(),
-                )
-                .withLightness(base.lightness < 0.5 ? 0.62 : 0.38)
-                .toColor(),
-            1,
-          ),
-        );
-      }
-      return selected;
+      return extractRgba(
+        bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
+      );
     } finally {
       image.dispose();
       codec.dispose();
     }
+  }
+
+  /// Điểm vào thuần Dart để kiểm thử thuật toán lượng tử hóa mà không cần GPU.
+  @visibleForTesting
+  List<ExtractedSwatch> extractRgba(Uint8List rgba) {
+    if (rgba.length < 4 || rgba.length % 4 != 0) {
+      throw const FormatException('Dữ liệu điểm ảnh RGBA không hợp lệ.');
+    }
+    final buckets = <int, _ColorBucket>{};
+    for (var index = 0; index + 3 < rgba.length; index += 4) {
+      final red = rgba[index];
+      final green = rgba[index + 1];
+      final blue = rgba[index + 2];
+      final alpha = rgba[index + 3];
+      if (alpha < 180) {
+        continue;
+      }
+      final key = ((red >> 4) << 8) | ((green >> 4) << 4) | (blue >> 4);
+      buckets.putIfAbsent(key, _ColorBucket.new).add(red, green, blue);
+    }
+    if (buckets.isEmpty) {
+      throw const FormatException('Ảnh không có màu hiển thị hợp lệ.');
+    }
+
+    final ranked = buckets.values.toList()
+      ..sort((left, right) => right.score.compareTo(left.score));
+    final selected = <ExtractedSwatch>[];
+    for (final bucket in ranked) {
+      final color = bucket.color;
+      if (selected.any(
+        (item) => _distanceSquared(item.color, color) < 42 * 42,
+      )) {
+        continue;
+      }
+      selected.add(ExtractedSwatch(color, bucket.count));
+      if (selected.length == maximumSwatches) {
+        break;
+      }
+    }
+
+    if (selected.length == 1) {
+      final base = HSLColor.fromColor(selected.single.color);
+      selected.add(
+        ExtractedSwatch(
+          base
+              .withHue((base.hue + 150) % 360)
+              .withSaturation((base.saturation + 0.35).clamp(0.35, 0.9))
+              .withLightness(base.lightness < 0.5 ? 0.62 : 0.38)
+              .toColor(),
+          1,
+        ),
+      );
+    }
+    return selected;
   }
 
   static double _distanceSquared(Color first, Color second) {

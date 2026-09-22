@@ -1,12 +1,10 @@
-import 'dart:typed_data';
-
+import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_choice.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tep_cuc_bo/file_bytes.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tep_cuc_bo/local_file_bridge.dart';
-import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_choice.dart';
 import 'package:flutter/services.dart';
 
 final class ThemeFontManager {
-  ThemeFontManager._();
+  new _();
 
   static final ThemeFontManager instance = ThemeFontManager._();
   static const int _maximumFontBytes = 12 * 1024 * 1024;

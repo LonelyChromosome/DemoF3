@@ -1585,7 +1585,7 @@ class _ArcPanelAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = ((progress - start) / (1 - start)).clamp(0.0, 1.0).toDouble();
+    final t = ((progress - start) / (1 - start)).clamp(0.0, 1.0);
     final curved = Curves.easeOutBack.transform(t);
     return Positioned(
       right: right,

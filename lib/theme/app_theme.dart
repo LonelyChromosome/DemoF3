@@ -98,28 +98,7 @@ class AppThemePalette {
     this.fontFamily,
   });
 
-  final AppThemeId id;
-  final Color pageStart;
-  final Color pageEnd;
-  final Color surface;
-  final Color card;
-  final Color cardAlt;
-  final Color primary;
-  final Color accent;
-  final Color textPrimary;
-  final Color textSecondary;
-  final Color border;
-  final Color shadow;
-  final Color widgetStart;
-  final Color widgetEnd;
-  final Color widgetText;
-  final Color widgetSubtext;
-  final double radius;
-  final AppThemeGeometry geometry;
-  final bool dark;
-  final String? fontFamily;
-
-  factory AppThemePalette.fromTokens(
+  factory fromTokens(
     ThemeTokens tokens, {
     required AppThemeId id,
     AppThemeGeometry geometry = AppThemeGeometry.rounded,
@@ -146,6 +125,27 @@ class AppThemePalette {
     dark: tokens.dark,
     fontFamily: fontFamily,
   );
+
+  final AppThemeId id;
+  final Color pageStart;
+  final Color pageEnd;
+  final Color surface;
+  final Color card;
+  final Color cardAlt;
+  final Color primary;
+  final Color accent;
+  final Color textPrimary;
+  final Color textSecondary;
+  final Color border;
+  final Color shadow;
+  final Color widgetStart;
+  final Color widgetEnd;
+  final Color widgetText;
+  final Color widgetSubtext;
+  final double radius;
+  final AppThemeGeometry geometry;
+  final bool dark;
+  final String? fontFamily;
 
   ThemeTokens toTokens() => ThemeTokens(
     background: pageStart,
@@ -809,7 +809,7 @@ class _ThemeBackdropPainter extends CustomPainter {
 
     switch (palette.id) {
       case AppThemeId.minecraft:
-        final block = (size.shortestSide / 11).clamp(26.0, 48.0).toDouble();
+        final block = (size.shortestSide / 11).clamp(26.0, 48.0);
         final paint = Paint();
         for (var y = 0.0; y < size.height; y += block) {
           for (var x = 0.0; x < size.width; x += block) {

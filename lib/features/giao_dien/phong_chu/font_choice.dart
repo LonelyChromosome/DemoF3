@@ -4,7 +4,7 @@ enum AppFontKind { system, builtIn, imported }
 
 @immutable
 final class AppFontChoice {
-  const AppFontChoice({
+  const new({
     required this.id,
     required this.label,
     required this.kind,
@@ -13,7 +13,7 @@ final class AppFontChoice {
     this.fileName,
   });
 
-  factory AppFontChoice.fromJson(Map<String, Object?> json) {
+  factory fromJson(Map<String, Object?> json) {
     final kindName = json['kind'] as String?;
     final kind = AppFontKind.values.firstWhere(
       (candidate) => candidate.name == kindName,

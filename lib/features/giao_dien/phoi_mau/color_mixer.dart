@@ -2,7 +2,7 @@ import 'package:better_phenikaa_schedule/features/giao_dien/bang_mau_anh/palette
 import 'package:flutter/material.dart';
 
 final class ColorMixer {
-  const ColorMixer();
+  const new();
 
   List<ExtractedSwatch> mix(List<Color> colors, List<double> weights) {
     if (colors.length < 2 || colors.length > 3) {
@@ -10,9 +10,7 @@ final class ColorMixer {
     }
     final safeWeights = List<double>.generate(
       colors.length,
-      (index) => index < weights.length
-          ? weights[index].clamp(0.0, 100.0).toDouble()
-          : 1,
+      (index) => index < weights.length ? weights[index].clamp(0.0, 100.0) : 1,
     );
     var total = safeWeights.fold<double>(0, (sum, value) => sum + value);
     if (total <= 0) {
@@ -28,7 +26,7 @@ final class ColorMixer {
         final argb = colors[index].toARGB32();
         value += ((argb >> shift) & 0xFF) * safeWeights[index] / total;
       }
-      return value.round().clamp(0, 255).toInt();
+      return value.round().clamp(0, 255);
     }
 
     final blended = Color.fromARGB(255, channel(16), channel(8), channel(0));
@@ -42,7 +40,7 @@ final class ColorMixer {
       ExtractedSwatch(
         hsl
             .withHue((hsl.hue + 145) % 360)
-            .withSaturation((hsl.saturation + 0.25).clamp(0.35, 0.9).toDouble())
+            .withSaturation((hsl.saturation + 0.25).clamp(0.35, 0.9))
             .toColor(),
         1,
       ),

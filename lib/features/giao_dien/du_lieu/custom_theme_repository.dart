@@ -4,7 +4,7 @@ import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme
 import 'package:shared_preferences/shared_preferences.dart';
 
 final class CustomThemeRepository {
-  const CustomThemeRepository();
+  const new();
 
   static const _storageKey = 'better_phenikaa_custom_themes_v1';
 

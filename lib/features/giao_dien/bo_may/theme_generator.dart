@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 
 @immutable
 final class ThemeGenerationSettings {
-  const ThemeGenerationSettings({this.preferDark, this.radius = 16});
+  const new({this.preferDark, this.radius = 16});
 
   final bool? preferDark;
   final double radius;
@@ -14,7 +14,7 @@ final class ThemeGenerationSettings {
 
 /// Assigns semantic roles by luminance, chroma and hue separation.
 final class ThemeGenerator {
-  const ThemeGenerator();
+  const new();
 
   ThemeTokens generate(
     List<ExtractedSwatch> source, {
@@ -75,15 +75,25 @@ final class ThemeGenerator {
       minimumRatio: 1.35,
     );
 
-    final widgetStart = dark
+    final widgetStartCandidate = dark
         ? mixColors(background, primary, 0.46)
         : _setLightness(primary, 0.34);
-    final widgetEnd = dark
+    final widgetEndCandidate = dark
         ? mixColors(backgroundEnd, accent, 0.42)
         : _setLightness(mixColors(primary, accent, 0.42), 0.44);
     final widgetText = _readableAcross(
-      widgetStart,
-      widgetEnd,
+      widgetStartCandidate,
+      widgetEndCandidate,
+      minimumRatio: 4.5,
+    );
+    final widgetStart = _ensureBackgroundContrast(
+      widgetStartCandidate,
+      widgetText,
+      minimumRatio: 4.5,
+    );
+    final widgetEnd = _ensureBackgroundContrast(
+      widgetEndCandidate,
+      widgetText,
       minimumRatio: 4.5,
     );
     final widgetSubtext = _ensureAcross(
@@ -119,18 +129,16 @@ final class ThemeGenerator {
       widgetSubtext: widgetSubtext,
       shadow: dark ? const Color(0x78000000) : const Color(0x24000000),
       dark: dark,
-      radius: settings.radius.clamp(0.0, 28.0).toDouble(),
+      radius: settings.radius.clamp(0.0, 28.0),
     );
   }
 
   static Color _normalizeAccent(Color color, {required bool dark}) {
     final hsl = HSLColor.fromColor(color);
     return hsl
-        .withSaturation(hsl.saturation.clamp(0.42, 0.92).toDouble())
+        .withSaturation(hsl.saturation.clamp(0.42, 0.92))
         .withLightness(
-          hsl.lightness
-              .clamp(dark ? 0.54 : 0.32, dark ? 0.72 : 0.58)
-              .toDouble(),
+          hsl.lightness.clamp(dark ? 0.54 : 0.32, dark ? 0.72 : 0.58),
         )
         .toColor();
   }
@@ -160,7 +168,7 @@ final class ThemeGenerator {
 
   static Color _setLightness(Color color, double lightness) =>
       HSLColor.fromColor(color)
-          .withLightness(lightness.clamp(0.0, 1.0).toDouble())
+          .withLightness(lightness.clamp(0.0, 1.0))
           .toColor();
 
   static Color _readableOn(Color background, {required double minimumRatio}) {
@@ -223,6 +231,26 @@ final class ThemeGenerator {
     for (var step = 1; step <= 20; step += 1) {
       candidate = mixColors(foreground, target, step / 20);
       if (contrastRatio(candidate, background) >= minimumRatio) {
+        return candidate;
+      }
+    }
+    return target;
+  }
+
+  static Color _ensureBackgroundContrast(
+    Color background,
+    Color foreground, {
+    required double minimumRatio,
+  }) {
+    if (contrastRatio(foreground, background) >= minimumRatio) {
+      return background;
+    }
+    final target = foreground.computeLuminance() > 0.5
+        ? Colors.black
+        : Colors.white;
+    for (var step = 1; step <= 20; step += 1) {
+      final candidate = mixColors(background, target, step / 20);
+      if (contrastRatio(foreground, candidate) >= minimumRatio) {
         return candidate;
       }
     }
