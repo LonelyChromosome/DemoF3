@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout release branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: feature/full-app-implementation
           fetch-depth: 0
