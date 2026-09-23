@@ -199,7 +199,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                               onReceivedError: (_, request, error) {
                                 if (request.isForMainFrame == true && mounted) {
                                   setState(() {
-                                    _showWebPage = true;
+                                    _showWebPage = _pendingSchedule == null;
                                     _syncing = false;
                                     _status = 'Không tải được QLĐT. Kiểm tra mạng rồi thử lại.';
                                   });
@@ -208,7 +208,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                               onReceivedHttpError: (_, request, response) {
                                 if (request.isForMainFrame == true && mounted) {
                                   setState(() {
-                                    _showWebPage = true;
+                                    _showWebPage = _pendingSchedule == null;
                                     _syncing = false;
                                     _status =
                                         'QLĐT trả lỗi HTTP ${response.statusCode}.';
@@ -266,10 +266,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   String get _initialUrl {
     final path = widget.portalPath;
-    if (!widget.cachedSession ||
-        path == null ||
-        !path.startsWith('/') ||
-        path.startsWith('//'))
+    if (path == null || !path.startsWith('/') || path.startsWith('//'))
       return _qldtUri.toString();
     return Uri.parse(_qldtUri.toString()).resolve(path).toString();
   }
@@ -283,6 +280,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_portalPathKey, uri.path);
+    await prefs.setBool(_sessionKey, true);
   }
 
   Future<void> _handleBack() async {
