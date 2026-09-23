@@ -71,10 +71,15 @@ class QldtDailySyncWorker(
                         syncResult.registration,
                         previousSnapshot,
                     )
+                    val difference = NativeSemesterDifference.compare(
+                        preferences.getString(CURRENT_SEMESTER_KEY, null),
+                        bundle.semester,
+                    )
                     val saved = preferences.edit()
                         .putString(APP_SNAPSHOT_KEY, bundle.appSnapshot)
                         .putString(WIDGET_SNAPSHOT_KEY, bundle.widgetSnapshot)
                         .putString(CURRENT_SEMESTER_KEY, bundle.semester)
+                        .putString(DIFFERENCE_KEY, difference)
                         .commit()
                     if (!saved) {
                         DailySyncScheduler.recordFailure(
@@ -126,6 +131,7 @@ class QldtDailySyncWorker(
         const val APP_SNAPSHOT_KEY = "flutter.better_phenikaa_snapshot_v1"
         const val WIDGET_SNAPSHOT_KEY = "flutter.better_phenikaa_widget_snapshot_v1"
         const val CURRENT_SEMESTER_KEY = "flutter.better_phenikaa_current_semester_v1"
+        const val DIFFERENCE_KEY = "flutter.better_phenikaa_semester_difference_v1"
     }
 }
 
