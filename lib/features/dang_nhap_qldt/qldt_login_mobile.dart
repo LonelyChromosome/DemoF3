@@ -277,16 +277,20 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   }
 
   Future<void> _rememberPortal(InAppWebViewController controller) async {
-    final uri = Uri.tryParse((await controller.getUrl())?.toString() ?? '');
-    if (uri == null ||
-        uri.host != _qldtUri.host ||
-        uri.hasQuery ||
-        uri.hasFragment) {
+    try {
+      final uri = Uri.tryParse((await controller.getUrl())?.toString() ?? '');
+      if (uri == null ||
+          uri.host != _qldtUri.host ||
+          uri.hasQuery ||
+          uri.hasFragment) {
+        return;
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_portalPathKey, uri.path);
+      await prefs.setBool(_sessionKey, true);
+    } on Object {
       return;
     }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_portalPathKey, uri.path);
-    await prefs.setBool(_sessionKey, true);
   }
 
   Future<void> _rememberVerifiedTracuu() async {
@@ -407,9 +411,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             displayName: schedule.displayName,
             syncedAt: schedule.syncedAt,
           );
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool(_sessionKey, true);
-          await _rememberVerifiedTracuu();
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool(_sessionKey, true);
+            await _rememberVerifiedTracuu();
+          } on Object {
+            // A cache failure must not discard a verified schedule.
+          }
           if (!mounted) return null;
           Navigator.of(context).pop(
             QldtLoginResult(
