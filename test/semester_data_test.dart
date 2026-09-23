@@ -46,7 +46,6 @@ void main() {
       examSchedules: <ScheduleRecord>[row('Toán cao cấp', isExam: true)],
       displayName: 'Sinh viên',
       syncedAt: DateTime(2026, 9, 24),
-      previous: first,
     );
 
     expect(next.subjects.first.subjectId, first.subjects.first.subjectId);
@@ -60,6 +59,53 @@ void main() {
     expect(
       next.toImportedScheduleData().records.map((item) => item.id).toSet(),
       hasLength(2),
+    );
+  });
+
+  test('subject IDs survive reordered registration and differ by semester', () {
+    CurrentSemester build(String semesterId, List<String> names) =>
+        builder.build(
+          registration: RegisteredSemester(
+            id: semesterId,
+            name: semesterId,
+            subjectNames: names,
+          ),
+          studySchedules: const <ScheduleRecord>[],
+          examSchedules: const <ScheduleRecord>[],
+          displayName: 'Sinh viên',
+          syncedAt: DateTime(2026, 9, 23),
+        );
+
+    final first = build('2026_2027_1', <String>[
+      'Lập trình C++',
+      'Toán cao cấp',
+    ]);
+    final reordered = build('2026_2027_1', <String>[
+      'Toán cao cấp',
+      'Lập trình C++',
+    ]);
+    final otherTerm = build('2026_2027_2', <String>['Lập trình C++']);
+    expect(first.subjects.first.subjectId, reordered.subjects.last.subjectId);
+    expect(
+      first.subjects.first.subjectId,
+      isNot(otherTerm.subjects.single.subjectId),
+    );
+  });
+
+  test('rejects two indistinguishable registered subjects in one term', () {
+    expect(
+      () => builder.build(
+        registration: const RegisteredSemester(
+          id: '2026_2027_1',
+          name: '2026_2027_1',
+          subjectNames: <String>['Lập trình C++', ' LẬP TRÌNH C++ '],
+        ),
+        studySchedules: const <ScheduleRecord>[],
+        examSchedules: const <ScheduleRecord>[],
+        displayName: 'Sinh viên',
+        syncedAt: DateTime(2026, 9, 23),
+      ),
+      throwsFormatException,
     );
   });
 

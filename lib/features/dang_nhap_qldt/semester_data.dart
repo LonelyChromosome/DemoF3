@@ -70,7 +70,7 @@ final class SemesterSubject {
   });
 
   factory fromJson(Map<String, dynamic> json) => SemesterSubject(
-    subjectId: (json['subjectId'] ?? json['id']) as String,
+    subjectId: json['subjectId'] as String,
     name: json['name'] as String,
     normalizedName: json['normalizedName'] as String,
     studySchedules: _readRecords(json['studySchedules']),
@@ -172,7 +172,6 @@ final class SemesterDataBuilder {
     required List<ScheduleRecord> examSchedules,
     required String displayName,
     required DateTime syncedAt,
-    CurrentSemester? previous,
   }) {
     if (registration.id.trim().isEmpty || registration.name.trim().isEmpty) {
       throw const FormatException('Không xác định được học kỳ mới nhất.');
@@ -184,22 +183,15 @@ final class SemesterDataBuilder {
       if (normalized.isEmpty) {
         throw const FormatException('Danh sách đăng ký có tên môn trống.');
       }
-      names.putIfAbsent(normalized, name.trim);
+      if (names.containsKey(normalized)) {
+        throw FormatException('TraCuu trả nhiều môn cùng tên: $name');
+      }
+      names[normalized] = name.trim();
     }
 
     if (names.isEmpty) {
       throw const FormatException('Không xác minh được danh sách môn đăng ký.');
     }
-
-    final previousSubjects = previous?.semesterId == registration.id
-        ? {for (final item in previous!.subjects) item.normalizedName: item}
-        : <String, SemesterSubject>{};
-    var nextId = previousSubjects.values.fold<int>(0, (maxId, item) {
-      final number = int.tryParse(
-        item.subjectId.replaceFirst(RegExp('^S'), ''),
-      );
-      return number != null && number > maxId ? number : maxId;
-    });
 
     List<ScheduleRecord> matching(
       String normalized,
@@ -234,11 +226,12 @@ final class SemesterDataBuilder {
 
     final subjects = <SemesterSubject>[];
     for (final entry in names.entries) {
-      final old = previousSubjects[entry.key];
+      final identity =
+          '${registration.id.length}:${registration.id}${entry.key}';
       subjects.add(
         SemesterSubject(
           subjectId:
-              old?.subjectId ?? 'S${(++nextId).toString().padLeft(2, '0')}',
+              'S${base64Url.encode(utf8.encode(identity)).replaceAll('=', '')}',
           name: entry.value,
           normalizedName: entry.key,
           studySchedules: matching(entry.key, studySchedules, isExam: false),
