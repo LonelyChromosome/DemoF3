@@ -60,6 +60,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   bool _registrationRequested = false;
   bool _registrationProbeStarted = false;
   bool _registrationChecking = false;
+  bool _registrationNavigationFound = false;
   bool _pageReady = false;
   bool _syncing = false;
   bool _autoSyncStarted = false;
@@ -358,6 +359,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           _registrationAttempt = 0;
           _registrationRequested = false;
           _registrationProbeStarted = false;
+          _registrationNavigationFound = false;
           setState(() {
             _showWebPage = false;
             _status = 'Đang xác minh học kỳ và môn đã đăng ký trên TraCuu...';
@@ -436,12 +438,17 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     );
     controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaRegistrationError',
-      callback: (_) {
+      callback: (arguments) {
         if (mounted) {
+          final reason = arguments.isEmpty ? '' : arguments.first.toString();
           setState(() {
             _syncing = false;
             _registrationProbeStarted = false;
-            _status = 'TraCuu chưa tải đủ danh sách đăng ký hoặc yêu cầu Xem thất bại. Dữ liệu cũ được giữ nguyên. Hãy thử lại.';
+            _status = reason.contains('kế hoạch')
+                ? 'TraCuu chưa tải hoặc có nhiều kế hoạch đăng ký. Dữ liệu cũ được giữ nguyên.'
+                : reason.contains('học kỳ')
+                ? 'TraCuu không xác định được học kỳ mới nhất. Dữ liệu cũ được giữ nguyên.'
+                : 'TraCuu chưa tải đủ danh sách môn hoặc yêu cầu Xem thất bại. Dữ liệu cũ được giữ nguyên.';
           });
         }
         return null;
@@ -489,6 +496,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       if (!mounted || _pendingSchedule == null) return;
       if (ready == true || ready?.toString() == 'true') {
         _registrationTimer?.cancel();
+        _registrationNavigationFound = true;
         _registrationProbeStarted = true;
         await controller.evaluateJavascript(
           source: const TracuuWebViewProbe().script,
@@ -514,6 +522,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         );
         if (navigated != true && navigated?.toString() != 'true') {
           _registrationRequested = false;
+        } else {
+          _registrationNavigationFound = true;
         }
       }
       _registrationAttempt++;
@@ -531,7 +541,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           _syncing = false;
           _registrationProbeStarted = false;
           _status = error is FormatException
-              ? 'TraCuu chưa sẵn sàng sau 60 giây. Dữ liệu cũ được giữ nguyên. Hãy thử lại.'
+              ? _registrationNavigationFound
+                    ? 'TraCuu chưa tải xong sau 60 giây. Dữ liệu cũ được giữ nguyên.'
+                    : 'Không tìm thấy đường vào TraCuu trong cổng sinh viên. Dữ liệu cũ được giữ nguyên.'
               : 'Không đọc được trang TraCuu. Dữ liệu cũ được giữ nguyên. Hãy thử lại.';
         });
       }
@@ -617,6 +629,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _registrationAttempt = 0;
     _registrationRequested = false;
     _registrationProbeStarted = false;
+    _registrationNavigationFound = false;
 
     final now = DateTime.now();
     final academicStartYear = now.month >= 8 ? now.year : now.year - 1;
