@@ -26,7 +26,7 @@ void main() {
     () {
       expect(
         normalizeSubjectName('  LẬP  TRÌNH  C++ '),
-      normalizeSubjectName('La\u0302\u0323p tri\u0300nh c++'),
+        normalizeSubjectName('La\u0302\u0323p tri\u0300nh c++'),
       );
       expect(normalizeSubjectName('Ma'), isNot(normalizeSubjectName('Má')));
     },
