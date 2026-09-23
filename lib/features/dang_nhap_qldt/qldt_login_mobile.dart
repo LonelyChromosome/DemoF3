@@ -652,7 +652,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       _registrationTimer = Timer(const Duration(milliseconds: 300), () {
         if (mounted) unawaited(_checkRegistrationPage());
       });
-    } on Object {
+    } on Object catch (error) {
       if (mounted && _syncing && epoch == _syncEpoch) {
         final reason = switch (operation) {
           'DOM_CHECK' => 'Không đọc được cấu trúc trang TraCuu.',
@@ -662,7 +662,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         _stopSync(
           epoch,
           '$reason Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
-          code: '${operation}_ERROR',
+          code: '${operation}_${error.runtimeType}',
         );
       }
     } finally {
