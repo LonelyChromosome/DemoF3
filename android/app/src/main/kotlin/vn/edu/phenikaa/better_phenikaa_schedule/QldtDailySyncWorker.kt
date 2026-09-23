@@ -512,6 +512,7 @@ private object QldtSnapshotEncoder {
             subjectName,
             "$startHour:$startMinute",
             room,
+            jsonString(item, "TENLOPHOCPHAN"),
         ).joinToString("|")
 
         return JSONObject()

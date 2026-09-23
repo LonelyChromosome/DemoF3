@@ -34,7 +34,7 @@ final class ExamReminderPlanner {
     for (final subject in semester.subjects) {
       for (final exam in subject.examSchedules) {
         final examKey =
-            '${subject.subjectId}|${exam.startAt.toIso8601String()}|${exam.endAt.toIso8601String()}|${exam.room.trim().toLowerCase()}';
+            '${subject.subjectId}|${exam.startAt.toIso8601String()}|${exam.endAt.toIso8601String()}|${exam.room.trim().toLowerCase()}|${normalizeSubjectName(exam.className)}|${normalizeSubjectName(exam.examForm)}';
         for (final days in const <int>[7, 3, 1]) {
           final at = exam.startAt.subtract(Duration(days: days));
           if (!at.isAfter(now)) continue;

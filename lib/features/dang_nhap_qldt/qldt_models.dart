@@ -248,6 +248,7 @@ final class QldtParser {
       subjectName,
       '$startHour:$startMinute',
       room,
+      className,
     ].join('|');
 
     return ScheduleRecord(
