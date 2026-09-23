@@ -25,7 +25,7 @@ Future<QldtLoginResult?> openQldtLogin(BuildContext context) async {
   if (!context.mounted) return null;
   final cached = prefs.getBool(_sessionKey) ?? false;
   final portalPath = prefs.getString(_portalPathKey);
-  return Navigator.of(context).push<QldtLoginResult>(
+  return await Navigator.of(context).push<QldtLoginResult>(
     MaterialPageRoute<QldtLoginResult>(
       fullscreenDialog: true,
       builder: (_) =>
@@ -73,8 +73,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   void initState() {
     super.initState();
     _showWebPage = !widget.cachedSession;
-    if (widget.cachedSession)
+    if (widget.cachedSession) {
       _status = 'Đang kiểm tra phiên QLĐT và đồng bộ...';
+    }
   }
 
   @override
@@ -266,8 +267,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   String get _initialUrl {
     final path = widget.portalPath;
-    if (path == null || !path.startsWith('/') || path.startsWith('//'))
+    if (path == null || !path.startsWith('/') || path.startsWith('//')) {
       return _qldtUri.toString();
+    }
     return Uri.parse(_qldtUri.toString()).resolve(path).toString();
   }
 
@@ -276,8 +278,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     if (uri == null ||
         uri.host != _qldtUri.host ||
         uri.hasQuery ||
-        uri.hasFragment)
+        uri.hasFragment) {
       return;
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_portalPathKey, uri.path);
     await prefs.setBool(_sessionKey, true);
