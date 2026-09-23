@@ -39,11 +39,7 @@ int _markOrder(String mark) => switch (mark) {
 };
 
 final class RegisteredSemester {
-  const RegisteredSemester({
-    required this.id,
-    required this.name,
-    required this.subjectNames,
-  });
+  const new({required this.id, required this.name, required this.subjectNames});
 
   final String id;
   final String name;
@@ -51,7 +47,7 @@ final class RegisteredSemester {
 }
 
 final class SemesterSubject {
-  const SemesterSubject({
+  const new({
     required this.id,
     required this.name,
     required this.normalizedName,
@@ -59,14 +55,13 @@ final class SemesterSubject {
     required this.examSchedules,
   });
 
-  factory SemesterSubject.fromJson(Map<String, dynamic> json) =>
-      SemesterSubject(
-        id: json['id'] as String,
-        name: json['name'] as String,
-        normalizedName: json['normalizedName'] as String,
-        studySchedules: _readRecords(json['studySchedules']),
-        examSchedules: _readRecords(json['examSchedules']),
-      );
+  factory fromJson(Map<String, dynamic> json) => SemesterSubject(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    normalizedName: json['normalizedName'] as String,
+    studySchedules: _readRecords(json['studySchedules']),
+    examSchedules: _readRecords(json['examSchedules']),
+  );
 
   final String id;
   final String name;
@@ -84,7 +79,7 @@ final class SemesterSubject {
 }
 
 final class CurrentSemester {
-  const CurrentSemester({
+  const new({
     required this.semesterId,
     required this.semesterName,
     required this.displayName,
@@ -92,20 +87,19 @@ final class CurrentSemester {
     required this.subjects,
   });
 
-  factory CurrentSemester.fromJson(Map<String, dynamic> json) =>
-      CurrentSemester(
-        semesterId: json['semesterId'] as String,
-        semesterName: json['semesterName'] as String,
-        displayName: json['displayName'] as String,
-        syncedAt: DateTime.parse(json['syncedAt'] as String),
-        subjects: (json['subjects'] as List<dynamic>)
-            .map(
-              (item) => SemesterSubject.fromJson(
-                Map<String, dynamic>.from(item as Map<dynamic, dynamic>),
-              ),
-            )
-            .toList(growable: false),
-      );
+  factory fromJson(Map<String, dynamic> json) => CurrentSemester(
+    semesterId: json['semesterId'] as String,
+    semesterName: json['semesterName'] as String,
+    displayName: json['displayName'] as String,
+    syncedAt: DateTime.parse(json['syncedAt'] as String),
+    subjects: (json['subjects'] as List<dynamic>)
+        .map(
+          (item) => SemesterSubject.fromJson(
+            Map<String, dynamic>.from(item as Map<dynamic, dynamic>),
+          ),
+        )
+        .toList(growable: false),
+  );
 
   final String semesterId;
   final String semesterName;
@@ -156,7 +150,7 @@ final class CurrentSemester {
 }
 
 final class SemesterDataBuilder {
-  const SemesterDataBuilder();
+  const new();
 
   CurrentSemester build({
     required RegisteredSemester registration,
@@ -176,7 +170,7 @@ final class SemesterDataBuilder {
       if (normalized.isEmpty) {
         throw const FormatException('Danh sách đăng ký có tên môn trống.');
       }
-      names.putIfAbsent(normalized, () => name.trim());
+      names.putIfAbsent(normalized, name.trim);
     }
 
     if (names.isEmpty) {
@@ -187,7 +181,7 @@ final class SemesterDataBuilder {
         ? {for (final item in previous!.subjects) item.normalizedName: item}
         : <String, SemesterSubject>{};
     var nextId = previousSubjects.values.fold<int>(0, (maxId, item) {
-      final number = int.tryParse(item.id.replaceFirst(RegExp(r'^S'), ''));
+      final number = int.tryParse(item.id.replaceFirst(RegExp('^S'), ''));
       return number != null && number > maxId ? number : maxId;
     });
 
@@ -266,7 +260,7 @@ final class CurrentSemesterStore {
   }
 }
 
-List<ScheduleRecord> _readRecords(Object? raw) => (raw as List<dynamic>)
+List<ScheduleRecord> _readRecords(Object? raw) => (raw! as List<dynamic>)
     .map(
       (item) => ScheduleRecord.fromJson(
         Map<String, Object?>.from(item as Map<dynamic, dynamic>),
