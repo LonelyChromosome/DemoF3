@@ -36,6 +36,7 @@ jobs:
           profile: pixel_6
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           script: |
+            set -e
             adb shell wm size 720x1280
             flutter test integration_test/app_flow_test.dart
             adb shell wm size 1080x1920
