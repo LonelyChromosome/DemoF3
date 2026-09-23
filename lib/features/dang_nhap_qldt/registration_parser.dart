@@ -7,11 +7,13 @@ final class QldtRegistrationParser {
   RegisteredSemester parse({
     required String html,
     required String selectedSemesterValue,
+    required String selectedPlanValue,
   }) {
     final document = html_parser.parse(html);
     final dropdown = document.querySelector('#dropSearch_HocKy');
+    final plans = document.querySelector('#dropSearch_KeHoach');
     final results = document.querySelector('#zoneKetQuaDangKy');
-    if (dropdown == null || results == null) {
+    if (dropdown == null || plans == null || results == null) {
       throw const FormatException('TraCuu chưa tải đủ dữ liệu đăng ký.');
     }
 
@@ -50,6 +52,19 @@ final class QldtRegistrationParser {
         'TraCuu chưa hiển thị kết quả của học kỳ mới nhất.',
       );
     }
+    final matchingPlans = plans.querySelectorAll('option').where((option) {
+      final label = option.text.trim();
+      return label.startsWith('${latest.name},') || label == latest.name;
+    });
+    if (selectedPlanValue.trim().isEmpty ||
+        !matchingPlans.any(
+          (option) =>
+              option.attributes['value']?.trim() == selectedPlanValue.trim(),
+        )) {
+      throw const FormatException(
+        'TraCuu chưa chọn kế hoạch của học kỳ mới nhất.',
+      );
+    }
 
     final subjectItems = results.querySelectorAll('.subject-item');
     if (subjectItems.isEmpty) {
@@ -58,7 +73,10 @@ final class QldtRegistrationParser {
     final subjectNames = <String>[];
     final classSections = <String, List<RegisteredClassSection>>{};
     for (final item in subjectItems) {
-      final name = item.querySelector('h4')?.text.trim() ?? '';
+      final heading = item.querySelector('h4')?.text.trim() ?? '';
+      final name = heading
+          .replaceFirst(RegExp(r'^Môn\s+', caseSensitive: false), '')
+          .trim();
       if (name.isEmpty) {
         throw const FormatException('TraCuu có môn học không có tên.');
       }
