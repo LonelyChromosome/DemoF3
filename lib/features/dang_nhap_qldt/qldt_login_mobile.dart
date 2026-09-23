@@ -1,6 +1,10 @@
 import 'dart:async';
 
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/tracuu_webview_probe.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -10,9 +14,9 @@ Future<void> clearQldtSession() async {
   await CookieManager.instance().deleteAllCookies();
 }
 
-Future<ImportedScheduleData?> openQldtLogin(BuildContext context) {
-  return Navigator.of(context).push<ImportedScheduleData>(
-    MaterialPageRoute<ImportedScheduleData>(
+Future<QldtLoginResult?> openQldtLogin(BuildContext context) {
+  return Navigator.of(context).push<QldtLoginResult>(
+    MaterialPageRoute<QldtLoginResult>(
       fullscreenDialog: true,
       builder: (_) => const _QldtWebLoginScreen(),
     ),
@@ -33,6 +37,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   InAppWebViewController? _controller;
   Timer? _readinessTimer;
+  Timer? _registrationTimer;
+  ImportedScheduleData? _pendingSchedule;
+  int _registrationAttempt = 0;
+  bool _registrationRequested = false;
+  bool _registrationProbeStarted = false;
   bool _pageReady = false;
   bool _syncing = false;
   bool _autoSyncStarted = false;
@@ -47,13 +56,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   @override
   void dispose() {
     _readinessTimer?.cancel();
+    _registrationTimer?.cancel();
     _controller = null;
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope<ImportedScheduleData>(
+    return PopScope<QldtLoginResult>(
       canPop: _allowRoutePop || !_webCanGoBack,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) {
@@ -138,7 +148,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                             });
                           }
                         },
-                        onLoadStop: (_, _) => _beginReadinessChecks(),
+                        onLoadStop: (_, _) {
+                          if (_pendingSchedule == null) {
+                            _beginReadinessChecks();
+                          } else {
+                            unawaited(_checkRegistrationPage());
+                          }
+                        },
                         onUpdateVisitedHistory: (_, _, _) => _updateBackState(),
                         onReceivedError: (_, request, error) {
                           if (request.isForMainFrame == true && mounted) {
@@ -240,11 +256,19 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         }
         try {
           final raw = arguments.first?.toString() ?? '';
-          final data = const QldtParser().parseLiveEnvelope(raw);
+          final data = const QldtParser().parseLiveEnvelope(raw, strict: true);
           if (!mounted) {
             return null;
           }
-          Navigator.of(context).pop(data);
+          _pendingSchedule = data;
+          _registrationAttempt = 0;
+          _registrationRequested = false;
+          _registrationProbeStarted = false;
+          setState(
+            () => _status =
+                'Đang xác minh học kỳ và môn đã đăng ký trên TraCuu...',
+          );
+          await _checkRegistrationPage();
         } on Object catch (error) {
           if (mounted) {
             setState(() {
@@ -270,12 +294,124 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         return null;
       },
     );
+    controller.addJavaScriptHandler(
+      handlerName: 'betterPhenikaaRegistrationResult',
+      callback: (arguments) {
+        if (!mounted || _pendingSchedule == null || arguments.isEmpty) {
+          return null;
+        }
+        try {
+          final registration = const TracuuWebViewProbe().parseResult(
+            arguments.first as String,
+          );
+          final schedule = _pendingSchedule!;
+          final verified = const SemesterScheduleVerifier().verify(
+            registration: registration,
+            schedule: schedule,
+          );
+          final semester = const SemesterDataBuilder().build(
+            registration: registration,
+            studySchedules: verified.studySchedules,
+            examSchedules: verified.examSchedules,
+            displayName: schedule.displayName,
+            syncedAt: schedule.syncedAt,
+          );
+          Navigator.of(context).pop(
+            QldtLoginResult(
+              schedule: semester.toImportedScheduleData(),
+              semester: semester,
+            ),
+          );
+        } on Object {
+          setState(() {
+            _syncing = false;
+            _status = 'Không xác minh được học kỳ, kế hoạch hoặc lớp của lịch. Dữ liệu trước đó được giữ nguyên. Hãy thử lại.';
+          });
+        }
+        return null;
+      },
+    );
+    controller.addJavaScriptHandler(
+      handlerName: 'betterPhenikaaRegistrationError',
+      callback: (_) {
+        if (mounted) {
+          setState(() {
+            _syncing = false;
+            _status = 'TraCuu chưa trả dữ liệu đăng ký đầy đủ. Dữ liệu trước đó được giữ nguyên. Hãy thử lại.';
+          });
+        }
+        return null;
+      },
+    );
   }
 
   void _beginReadinessChecks() {
     _readinessTimer?.cancel();
     _readinessAttempt = 0;
     unawaited(_checkReady());
+  }
+
+  Future<void> _checkRegistrationPage() async {
+    final controller = _controller;
+    if (controller == null ||
+        _pendingSchedule == null ||
+        !mounted ||
+        _registrationProbeStarted) {
+      return;
+    }
+    _registrationTimer?.cancel();
+    try {
+      final ready = await controller.evaluateJavascript(
+        source: '''
+        Boolean(document.querySelector('#dropSearch_HocKy') &&
+          document.querySelector('#dropSearch_KeHoach') &&
+          document.querySelector('#btnXemKetQuaDangKy'));
+      ''',
+      );
+      if (!mounted || _pendingSchedule == null) return;
+      if (ready == true || ready?.toString() == 'true') {
+        _registrationTimer?.cancel();
+        _registrationProbeStarted = true;
+        await controller.evaluateJavascript(
+          source: const TracuuWebViewProbe().script,
+        );
+        return;
+      }
+      if (!_registrationRequested) {
+        _registrationRequested = true;
+        final navigated = await controller.evaluateJavascript(
+          source: r'''
+          (function () {
+            const links = [...document.querySelectorAll('a')];
+            const candidates = links.filter(node => {
+              const label = (node.textContent || '').toLocaleLowerCase('vi');
+              return label.includes('tra cứu') && label.includes('đăng ký');
+            });
+            if (candidates.length !== 1) return false;
+            candidates[0].click();
+            return true;
+          })();
+        ''',
+        );
+        if (navigated != true && navigated?.toString() != 'true') {
+          throw const FormatException('Không tìm thấy trang TraCuu duy nhất.');
+        }
+      }
+      _registrationAttempt++;
+      if (_registrationAttempt >= 50) {
+        throw const FormatException('Trang TraCuu không tải xong.');
+      }
+      _registrationTimer = Timer(const Duration(milliseconds: 200), () {
+        if (mounted) unawaited(_checkRegistrationPage());
+      });
+    } on Object {
+      if (mounted) {
+        setState(() {
+          _syncing = false;
+          _status = 'Không mở hoặc xác minh được TraCuu trong phiên QLĐT. Dữ liệu trước đó được giữ nguyên. Hãy thử lại.';
+        });
+      }
+    }
   }
 
   Future<void> _checkReady() async {

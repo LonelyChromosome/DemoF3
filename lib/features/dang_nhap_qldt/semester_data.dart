@@ -270,6 +270,13 @@ final class CurrentSemesterStore {
       throw StateError('Không thể lưu dữ liệu học kỳ trên thiết bị.');
     }
   }
+
+  Future<void> clear() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!await preferences.remove(storageKey)) {
+      throw StateError('Không thể xóa dữ liệu học kỳ trên thiết bị.');
+    }
+  }
 }
 
 List<ScheduleRecord> _readRecords(Object? raw) => (raw! as List<dynamic>)

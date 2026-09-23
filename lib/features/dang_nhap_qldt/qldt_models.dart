@@ -125,7 +125,10 @@ final class QldtParser {
     return '';
   }
 
-  ImportedScheduleData parseLiveEnvelope(String envelopeJson) {
+  ImportedScheduleData parseLiveEnvelope(
+    String envelopeJson, {
+    bool strict = false,
+  }) {
     final envelope = jsonDecode(envelopeJson) as Map<String, dynamic>;
     final displayName = (envelope['name'] as String? ?? '').trim();
     final response = envelope['response'];
@@ -135,6 +138,7 @@ final class QldtParser {
     return parseApiResponse(
       Map<String, dynamic>.from(response),
       displayName: displayName,
+      strict: strict,
     );
   }
 

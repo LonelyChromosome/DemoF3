@@ -1,5 +1,6 @@
 import 'package:better_phenikaa_schedule/app/app.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -60,4 +61,40 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     },
   );
+
+  testWidgets('restores subject database through the legacy view adapter', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final today = DateTime.now();
+    final semester = const SemesterDataBuilder().build(
+      registration: const RegisteredSemester(
+        id: '2026_2027_1',
+        name: '2026_2027_1',
+        subjectNames: <String>['Thiết kế web nâng cao'],
+      ),
+      studySchedules: <ScheduleRecord>[
+        ScheduleRecord(
+          id: 'class',
+          isExam: false,
+          subjectName: 'Thiết kế web nâng cao',
+          room: 'A1',
+          startAt: DateTime(today.year, today.month, today.day, 7),
+          endAt: DateTime(today.year, today.month, today.day, 9),
+        ),
+      ],
+      examSchedules: const <ScheduleRecord>[],
+      displayName: 'Sinh viên',
+      syncedAt: today,
+    );
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'better_phenikaa_current_semester_v1': semester.encode(),
+    });
+    await tester.pumpWidget(const BetterPhenikaaScheduleApp());
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+    expect(find.text('Theo ngày'), findsOneWidget);
+    expect(find.text('Thiết kế web nâng cao'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
 }

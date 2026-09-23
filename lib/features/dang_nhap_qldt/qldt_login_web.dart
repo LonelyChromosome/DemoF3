@@ -5,6 +5,7 @@
 import 'dart:convert';
 import 'dart:html' as html;
 
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:flutter/material.dart';
 
@@ -12,8 +13,8 @@ const bool supportsLiveQldtLogin = true;
 
 Future<void> clearQldtSession() async {}
 
-Future<ImportedScheduleData?> openQldtLogin(BuildContext context) {
-  return showDialog<ImportedScheduleData>(
+Future<QldtLoginResult?> openQldtLogin(BuildContext context) {
+  return showDialog<QldtLoginResult>(
     context: context,
     barrierDismissible: false,
     builder: (_) => const _WebQldtBridgeDialog(),
@@ -113,7 +114,7 @@ class _WebQldtBridgeDialogState extends State<_WebQldtBridgeDialog> {
       }
       final data = const QldtParser().parseLiveEnvelope(envelope);
       if (mounted) {
-        Navigator.of(context).pop(data);
+        Navigator.of(context).pop(QldtLoginResult(schedule: data));
       }
     } on Object catch (error) {
       if (mounted) {

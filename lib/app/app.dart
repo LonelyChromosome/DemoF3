@@ -1,12 +1,15 @@
 import 'dart:async';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
 import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -89,12 +92,15 @@ class _AppRootState extends State<_AppRoot> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_storageKey);
-      if (raw != null && raw.isNotEmpty) {
-        final data = ImportedScheduleData.decode(raw);
+      final semester = await CurrentSemesterStore().read();
+      if (semester != null || (raw != null && raw.isNotEmpty)) {
+        final data =
+            semester?.toImportedScheduleData() ??
+            ImportedScheduleData.decode(raw!);
         _data = data;
         _selectedDate = _initialDateFor(data);
         await WidgetPublisher.publish(data, resetToToday: false);
-        await DailySync.enable();
+        await DailySync.disable();
       }
     } on Object catch (error) {
       _errorMessage = 'Không đọc được dữ liệu cục bộ: $error';
@@ -105,14 +111,34 @@ class _AppRootState extends State<_AppRoot> {
     }
   }
 
-  Future<void> _save(ImportedScheduleData data) async {
+  Future<void> _save(QldtLoginResult result) async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = await prefs.setString(_storageKey, data.encode());
-    if (!saved) {
-      throw StateError('Không thể lưu dữ liệu lịch trên thiết bị.');
+    final store = CurrentSemesterStore();
+    final previousSemester = await store.read();
+    final previousSnapshot = prefs.getString(_storageKey);
+    if (result.semester == null && !kIsWeb) {
+      throw const FormatException('Không xác minh được dữ liệu học kỳ QLĐT.');
     }
-    await WidgetPublisher.publish(data, resetToToday: true);
-    await DailySync.enable();
+    try {
+      if (result.semester != null) await store.save(result.semester!);
+      if (!await prefs.setString(_storageKey, result.schedule.encode())) {
+        throw StateError('Không thể lưu dữ liệu lịch trên thiết bị.');
+      }
+      await WidgetPublisher.publish(result.schedule, resetToToday: true);
+      await DailySync.disable();
+    } on Object {
+      if (previousSemester == null) {
+        await store.clear();
+      } else {
+        await store.save(previousSemester);
+      }
+      if (previousSnapshot == null) {
+        await prefs.remove(_storageKey);
+      } else {
+        await prefs.setString(_storageKey, previousSnapshot);
+      }
+      rethrow;
+    }
   }
 
   Future<void> _loginOrSync() async {
@@ -141,8 +167,8 @@ class _AppRootState extends State<_AppRoot> {
         await _save(imported);
         if (mounted) {
           setState(() {
-            _data = imported;
-            _selectedDate = _initialDateFor(imported);
+            _data = imported.schedule;
+            _selectedDate = _initialDateFor(imported.schedule);
             _page = _AppPage.timetable;
           });
         }
@@ -163,6 +189,7 @@ class _AppRootState extends State<_AppRoot> {
     await clearQldtSession();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
+    await CurrentSemesterStore().clear();
     await WidgetPublisher.clear();
     if (mounted) {
       setState(() {
