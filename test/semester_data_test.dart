@@ -49,7 +49,8 @@ void main() {
       previous: first,
     );
 
-    expect(next.subjects.first.id, first.subjects.first.id);
+    expect(next.subjects.first.subjectId, first.subjects.first.subjectId);
+    expect(next.subjects.first.toJson(), contains('subjectId'));
     expect(next.subjects.first.studySchedules.single.room, 'B2');
     expect(next.toImportedScheduleData().classes.single.room, 'B2');
     expect(
@@ -79,6 +80,30 @@ void main() {
   );
 
   test(
+    'keeps registered subjects even before either schedule is published',
+    () {
+      final semester = builder.build(
+        registration: registration,
+        studySchedules: const <ScheduleRecord>[],
+        examSchedules: const <ScheduleRecord>[],
+        displayName: 'Sinh viên',
+        syncedAt: DateTime(2026, 9, 23),
+      );
+
+      expect(semester.subjects, hasLength(2));
+      expect(
+        semester.subjects.every((subject) => subject.studySchedules.isEmpty),
+        isTrue,
+      );
+      expect(
+        semester.subjects.every((subject) => subject.examSchedules.isEmpty),
+        isTrue,
+      );
+      expect(semester.toImportedScheduleData().records, isEmpty);
+    },
+  );
+
+  test(
     'restores the semester with its subject identity after restarting',
     () async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -93,7 +118,10 @@ void main() {
       await store.save(semester);
       final restored = await CurrentSemesterStore().read();
       expect(restored?.semesterId, registration.id);
-      expect(restored?.subjects.first.id, semester.subjects.first.id);
+      expect(
+        restored?.subjects.first.subjectId,
+        semester.subjects.first.subjectId,
+      );
       expect(restored?.subjects.first.studySchedules.single.room, 'A1');
     },
   );

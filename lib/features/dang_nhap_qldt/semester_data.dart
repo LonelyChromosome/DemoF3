@@ -39,16 +39,30 @@ int _markOrder(String mark) => switch (mark) {
 };
 
 final class RegisteredSemester {
-  const new({required this.id, required this.name, required this.subjectNames});
+  const new({
+    required this.id,
+    required this.name,
+    required this.subjectNames,
+    this.classSections = const <String, List<RegisteredClassSection>>{},
+  });
 
   final String id;
   final String name;
   final List<String> subjectNames;
+  final Map<String, List<RegisteredClassSection>> classSections;
+}
+
+final class RegisteredClassSection {
+  const new({required this.name, required this.startsOn, required this.endsOn});
+
+  final String name;
+  final DateTime startsOn;
+  final DateTime endsOn;
 }
 
 final class SemesterSubject {
   const new({
-    required this.id,
+    required this.subjectId,
     required this.name,
     required this.normalizedName,
     required this.studySchedules,
@@ -56,21 +70,21 @@ final class SemesterSubject {
   });
 
   factory fromJson(Map<String, dynamic> json) => SemesterSubject(
-    id: json['id'] as String,
+    subjectId: (json['subjectId'] ?? json['id']) as String,
     name: json['name'] as String,
     normalizedName: json['normalizedName'] as String,
     studySchedules: _readRecords(json['studySchedules']),
     examSchedules: _readRecords(json['examSchedules']),
   );
 
-  final String id;
+  final String subjectId;
   final String name;
   final String normalizedName;
   final List<ScheduleRecord> studySchedules;
   final List<ScheduleRecord> examSchedules;
 
   Map<String, Object?> toJson() => <String, Object?>{
-    'id': id,
+    'subjectId': subjectId,
     'name': name,
     'normalizedName': normalizedName,
     'studySchedules': studySchedules.map((item) => item.toJson()).toList(),
@@ -126,7 +140,7 @@ final class CurrentSemester {
       ]) {
         records.add(
           ScheduleRecord(
-            id: '${subject.id}|${schedule.id}',
+            id: '${subject.subjectId}|${schedule.id}',
             isExam: schedule.isExam,
             subjectName: subject.name,
             room: schedule.room,
@@ -181,7 +195,9 @@ final class SemesterDataBuilder {
         ? {for (final item in previous!.subjects) item.normalizedName: item}
         : <String, SemesterSubject>{};
     var nextId = previousSubjects.values.fold<int>(0, (maxId, item) {
-      final number = int.tryParse(item.id.replaceFirst(RegExp('^S'), ''));
+      final number = int.tryParse(
+        item.subjectId.replaceFirst(RegExp('^S'), ''),
+      );
       return number != null && number > maxId ? number : maxId;
     });
 
@@ -221,7 +237,8 @@ final class SemesterDataBuilder {
       final old = previousSubjects[entry.key];
       subjects.add(
         SemesterSubject(
-          id: old?.id ?? 'S${(++nextId).toString().padLeft(2, '0')}',
+          subjectId:
+              old?.subjectId ?? 'S${(++nextId).toString().padLeft(2, '0')}',
           name: entry.value,
           normalizedName: entry.key,
           studySchedules: matching(entry.key, studySchedules, isExam: false),
