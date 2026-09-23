@@ -1,5 +1,5 @@
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/registration_parser.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/registration_parser.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:flutter_test/flutter_test.dart';
 
