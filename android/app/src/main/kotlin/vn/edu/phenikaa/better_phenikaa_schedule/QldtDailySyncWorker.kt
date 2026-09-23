@@ -276,9 +276,11 @@ private class HeadlessQldtSync(private val context: Context) {
                     return true
                 }
             }
-            val portalPath = context.getSharedPreferences(
+            val sessionPrefs = context.getSharedPreferences(
                 "FlutterSharedPreferences", Context.MODE_PRIVATE,
-            ).getString("flutter.qldt_verified_portal_path", null)
+            )
+            val portalPath = sessionPrefs.getString("flutter.qldt_verified_tracuu_path", null)
+                ?: sessionPrefs.getString("flutter.qldt_verified_portal_path", null)
             val portalUrl = if (portalPath != null && portalPath.startsWith("/") &&
                 !portalPath.startsWith("//")) {
                 Uri.parse(QLDT_URL).buildUpon().path(portalPath).build().toString()

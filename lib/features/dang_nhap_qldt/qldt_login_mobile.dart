@@ -12,19 +12,22 @@ import 'package:shared_preferences/shared_preferences.dart';
 const bool supportsLiveQldtLogin = true;
 const _sessionKey = 'qldt_verified_session';
 const _portalPathKey = 'qldt_verified_portal_path';
+const _tracuuPathKey = 'qldt_verified_tracuu_path';
 
 Future<void> clearQldtSession() async {
   await CookieManager.instance().deleteAllCookies();
   final prefs = await SharedPreferences.getInstance();
   await prefs.remove(_sessionKey);
   await prefs.remove(_portalPathKey);
+  await prefs.remove(_tracuuPathKey);
 }
 
 Future<QldtLoginResult?> openQldtLogin(BuildContext context) async {
   final prefs = await SharedPreferences.getInstance();
   if (!context.mounted) return null;
   final cached = prefs.getBool(_sessionKey) ?? false;
-  final portalPath = prefs.getString(_portalPathKey);
+  final portalPath =
+      prefs.getString(_tracuuPathKey) ?? prefs.getString(_portalPathKey);
   return await Navigator.of(context).push<QldtLoginResult>(
     MaterialPageRoute<QldtLoginResult>(
       fullscreenDialog: true,
@@ -286,6 +289,18 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     await prefs.setBool(_sessionKey, true);
   }
 
+  Future<void> _rememberVerifiedTracuu() async {
+    final uri = Uri.tryParse((await _controller?.getUrl())?.toString() ?? '');
+    if (uri == null ||
+        uri.host != _qldtUri.host ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      return;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tracuuPathKey, uri.path);
+  }
+
   Future<void> _handleBack() async {
     final controller = _controller;
     if (controller != null && await controller.canGoBack()) {
@@ -394,6 +409,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           );
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool(_sessionKey, true);
+          await _rememberVerifiedTracuu();
           if (!mounted) return null;
           Navigator.of(context).pop(
             QldtLoginResult(
