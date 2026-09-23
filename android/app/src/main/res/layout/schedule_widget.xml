@@ -82,5 +82,16 @@
             android:focusable="true"
             android:padding="7dp"
             android:src="@drawable/ic_widget_calendar" />
+
+        <ImageView
+            android:id="@+id/widget_mode"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:layout_gravity="top|start"
+            android:layout_marginTop="4dp"
+            android:layout_marginStart="8dp"
+            android:contentDescription="Chuyển lịch học và lịch thi"
+            android:padding="7dp"
+            android:src="@drawable/ic_widget_bell" />
     </FrameLayout>
 </FrameLayout>

@@ -36,6 +36,10 @@ internal object WidgetSnapshotStore {
     }
 
     fun read(context: Context, widgetId: Int): WidgetCollection {
+        if (SmallWidgetMode.isExam(context, widgetId)) {
+            val exams = readOverview(context, widgetId, true)
+            return WidgetCollection(exams, 0)
+        }
         val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
         val normalized = preferences.getString(WIDGET_SNAPSHOT_KEY, null)
         val legacy = preferences.getString(APP_SNAPSHOT_KEY, null)

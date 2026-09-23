@@ -34,6 +34,18 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         renderThemeBackground(context, widthDp, heightDp, readThemeColors(context))
 
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == ACTION_SMALL_MODE) {
+            val id = intent.getIntExtra(
+                AppWidgetManager.EXTRA_APPWIDGET_ID,
+                AppWidgetManager.INVALID_APPWIDGET_ID,
+            )
+            if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
+            SmallWidgetMode.toggle(context, id)
+            context.getSharedPreferences(WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(resetChildKey(id), true).apply()
+            renderWidget(context, AppWidgetManager.getInstance(context), id)
+            return
+        }
         if (intent.action == ACTION_COLLECTION_FRAME_READY) {
             val widgetId = intent.getIntExtra(
                 AppWidgetManager.EXTRA_APPWIDGET_ID,
@@ -68,6 +80,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             Context.MODE_PRIVATE,
         )
         appWidgetIds.forEach { widgetId ->
+            SmallWidgetMode.clear(context, widgetId)
             renderState.edit()
                 .remove(contentTokenKey(widgetId))
                 .remove(themeTokenKey(widgetId))
@@ -239,11 +252,20 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             ).coerceAtLeast(1f)
             views.setViewLayoutWidth(R.id.widget_calendar, calendarSizeDp, TypedValue.COMPLEX_UNIT_DIP)
             views.setViewLayoutHeight(R.id.widget_calendar, calendarSizeDp, TypedValue.COMPLEX_UNIT_DIP)
+            views.setViewLayoutWidth(R.id.widget_mode, calendarSizeDp, TypedValue.COMPLEX_UNIT_DIP)
+            views.setViewLayoutHeight(R.id.widget_mode, calendarSizeDp, TypedValue.COMPLEX_UNIT_DIP)
             val calendarPaddingPx = (
                 calendarSizeDp * context.resources.displayMetrics.density * CALENDAR_PADDING_FRACTION
             ).roundToInt()
             views.setViewPadding(
                 R.id.widget_calendar,
+                calendarPaddingPx,
+                calendarPaddingPx,
+                calendarPaddingPx,
+                calendarPaddingPx,
+            )
+            views.setViewPadding(
+                R.id.widget_mode,
                 calendarPaddingPx,
                 calendarPaddingPx,
                 calendarPaddingPx,
@@ -257,6 +279,14 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             renderThemeBackground(context, renderWidthDp, renderHeightDp, theme),
         )
         views.setInt(R.id.widget_calendar, "setColorFilter", theme.iconColor)
+        views.setInt(R.id.widget_mode, "setColorFilter", theme.iconColor)
+        val examMode = SmallWidgetMode.isExam(context, widgetId)
+        views.setImageViewResource(R.id.widget_mode,
+            if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
+        views.setContentDescription(R.id.widget_mode,
+            if (examMode) "Về lịch học" else "Xem lịch thi")
+        views.setTextViewText(R.id.widget_empty,
+            if (examMode) "Không có lịch thi" else "Không có lịch học")
         views.setTextColor(R.id.widget_empty, theme.textColor)
         views.setFloat(R.id.widget_root, "setAlpha", 1f)
 
@@ -315,6 +345,14 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         views.setOnClickPendingIntent(R.id.widget_calendar, chooseDate)
+        val modeIntent = Intent(context, ScheduleWidgetProvider::class.java).apply {
+            action = ACTION_SMALL_MODE
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+            data = Uri.parse("better-phenikaa://widget/$widgetId/mode")
+        }
+        views.setOnClickPendingIntent(R.id.widget_mode,
+            PendingIntent.getBroadcast(context, widgetId, modeIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
 
         if (bindCollection) {
             val selectionPrefs = context.getSharedPreferences(
@@ -569,7 +607,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             val size = legacyWidgetSize(options)
             String.format(Locale.US, "%.1fx%.1f", size.width, size.height)
         }
-        return "${snapshot.hashCode()}|$selectedDate|$sizeSignature"
+        return "${snapshot.hashCode()}|$selectedDate|${SmallWidgetMode.isExam(context, widgetId)}|$sizeSignature"
     }
 
     private fun contentTokenKey(widgetId: Int): String = "content_token_$widgetId"
@@ -612,6 +650,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
     }
 
     companion object {
+        private const val ACTION_SMALL_MODE = "vn.edu.phenikaa.better_phenikaa_schedule.SMALL_MODE"
         const val EXTRA_RENDER_WIDTH_DP = "renderWidthDp"
         const val EXTRA_RENDER_HEIGHT_DP = "renderHeightDp"
         const val ACTION_COLLECTION_FRAME_READY =
