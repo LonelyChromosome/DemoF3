@@ -170,6 +170,7 @@ class MainActivity : FlutterActivity() {
             .putInt(CUSTOM_SUBTEXT_KEY, request.subtextColor)
             .putInt(CUSTOM_ICON_KEY, request.iconColor)
             .commit()
+        WidgetRefreshCoordinator.refreshOverview(this)
     }
 
     private fun configureDailySyncChannel(flutterEngine: FlutterEngine) {
