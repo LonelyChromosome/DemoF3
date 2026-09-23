@@ -11,6 +11,12 @@ final class ScheduleDifference {
     required this.modified,
   });
 
+  factory fromJson(Map<String, dynamic> json) => ScheduleDifference(
+    added: json['added'] as int,
+    removed: json['removed'] as int,
+    modified: json['modified'] as int,
+  );
+
   final int added;
   final int removed;
   final int modified;
@@ -22,12 +28,6 @@ final class ScheduleDifference {
     'removed': removed,
     'modified': modified,
   };
-
-  factory fromJson(Map<String, dynamic> json) => ScheduleDifference(
-    added: json['added'] as int,
-    removed: json['removed'] as int,
-    modified: json['modified'] as int,
-  );
 }
 
 final class SemesterDifference {
@@ -38,6 +38,18 @@ final class SemesterDifference {
     required this.study,
     required this.exams,
   });
+
+  factory fromJson(Map<String, dynamic> json) => SemesterDifference(
+    initial: json['initial'] as bool,
+    addedSubjects: (json['addedSubjects'] as List<dynamic>).cast<String>(),
+    removedSubjects: (json['removedSubjects'] as List<dynamic>).cast<String>(),
+    study: ScheduleDifference.fromJson(
+      Map<String, dynamic>.from(json['study'] as Map<dynamic, dynamic>),
+    ),
+    exams: ScheduleDifference.fromJson(
+      Map<String, dynamic>.from(json['exams'] as Map<dynamic, dynamic>),
+    ),
+  );
 
   final bool initial;
   final List<String> addedSubjects;
@@ -59,18 +71,6 @@ final class SemesterDifference {
     'study': study.toJson(),
     'exams': exams.toJson(),
   };
-
-  factory fromJson(Map<String, dynamic> json) => SemesterDifference(
-    initial: json['initial'] as bool,
-    addedSubjects: (json['addedSubjects'] as List<dynamic>).cast<String>(),
-    removedSubjects: (json['removedSubjects'] as List<dynamic>).cast<String>(),
-    study: ScheduleDifference.fromJson(
-      Map<String, dynamic>.from(json['study'] as Map<dynamic, dynamic>),
-    ),
-    exams: ScheduleDifference.fromJson(
-      Map<String, dynamic>.from(json['exams'] as Map<dynamic, dynamic>),
-    ),
-  );
 }
 
 final class SemesterDifferenceStore {
