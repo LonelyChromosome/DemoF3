@@ -216,13 +216,15 @@ class _AppRootState extends State<_AppRoot> {
           try {
             await DailySync.syncReminders();
           } on Object {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Đã lưu lịch, nhưng chưa lên lịch nhắc thi. Hãy thử đồng bộ lại.',
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Đã lưu lịch, nhưng chưa lên lịch nhắc thi. Hãy thử đồng bộ lại.',
+                  ),
                 ),
-              ),
-            );
+              );
+            }
           }
         }
       }
