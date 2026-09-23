@@ -74,7 +74,7 @@ class WeekTimetable extends StatelessWidget {
                   )
                   .toList();
               return Container(
-                height: 78,
+                height: 86,
                 decoration: BoxDecoration(
                   color: palette.cardAlt,
                   borderRadius: BorderRadius.circular(15),
