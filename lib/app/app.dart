@@ -120,6 +120,9 @@ class _AppRootState extends State<_AppRoot> {
     final previousSemester = await store.read();
     final previousDifference = await differenceStore.read();
     final previousSnapshot = prefs.getString(_storageKey);
+    final previousWidgetSnapshot = prefs.getString(
+      'better_phenikaa_widget_snapshot_v1',
+    );
     if (result.semester == null && !kIsWeb) {
       throw const FormatException('Không xác minh được dữ liệu học kỳ QLĐT.');
     }
@@ -154,6 +157,14 @@ class _AppRootState extends State<_AppRoot> {
         await differenceStore.clear();
       } else {
         await differenceStore.save(previousDifference);
+      }
+      if (previousWidgetSnapshot == null) {
+        await prefs.remove('better_phenikaa_widget_snapshot_v1');
+      } else {
+        await prefs.setString(
+          'better_phenikaa_widget_snapshot_v1',
+          previousWidgetSnapshot,
+        );
       }
       rethrow;
     }

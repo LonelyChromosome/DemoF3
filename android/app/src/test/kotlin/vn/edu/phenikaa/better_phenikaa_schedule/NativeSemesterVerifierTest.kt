@@ -48,4 +48,21 @@ class NativeSemesterVerifierTest {
             NativeSemesterVerifier.verify(malformed, registration, "")
         }
     }
+
+    @Test fun anOldExamWithTheSameClassNameIsRejected() {
+        val exam = envelope(date = "10/12/2025")
+            .replace("LICHHOC", "LICHTHI")
+        assertThrows(IllegalArgumentException::class.java) {
+            NativeSemesterVerifier.verify(exam, registration, "")
+        }
+    }
+
+    @Test fun aVerifiedExamIsAttachedToTheSubjectAndWidget() {
+        val exam = envelope(date = "10/12/2026")
+            .replace("LICHHOC", "LICHTHI")
+        val result = NativeSemesterVerifier.verify(exam, registration, "")
+        val subject = JSONObject(result.semester).getJSONArray("subjects").getJSONObject(0)
+        assertEquals(1, subject.getJSONArray("examSchedules").length())
+        assertEquals(1, JSONObject(result.widgetSnapshot).getJSONArray("exams").length())
+    }
 }
