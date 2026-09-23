@@ -31,6 +31,20 @@ abstract final class WidgetPublisher {
             },
           )
           .toList(growable: false),
+      'exams':
+          (data.exams.toList()
+                ..sort((left, right) => left.startAt.compareTo(right.startAt)))
+              .map(
+                (item) => <String, Object?>{
+                  'id': item.id,
+                  'subjectName': item.subjectName,
+                  'room': item.room,
+                  'examForm': item.examForm,
+                  'startAt': item.startAt.toIso8601String(),
+                  'endAt': item.endAt.toIso8601String(),
+                },
+              )
+              .toList(growable: false),
     });
     await HomeWidget.saveWidgetData<String>(_storageKey, snapshot);
     if (resetToToday) {

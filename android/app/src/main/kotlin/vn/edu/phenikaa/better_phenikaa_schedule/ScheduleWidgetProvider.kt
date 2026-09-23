@@ -25,6 +25,11 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 class ScheduleWidgetProvider : HomeWidgetProvider() {
+    internal fun overviewColors(context: Context): Pair<Int, Int> {
+        val colors = readThemeColors(context)
+        return colors.textColor to colors.iconColor
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == ACTION_COLLECTION_FRAME_READY) {
             val widgetId = intent.getIntExtra(
