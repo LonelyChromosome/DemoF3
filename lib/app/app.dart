@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_sync_message.dart';
@@ -218,7 +219,23 @@ class _AppRootState extends State<_AppRoot> {
     try {
       final imported = await openQldtLogin(context);
       if (imported != null) {
-        final difference = await _save(imported);
+        final saveStarted = DateTime.now();
+        SemesterDifference? difference;
+        try {
+          difference = await _save(imported);
+          try {
+            await QldtSyncDiagnostics.appendSave(saveStarted, 'OK');
+          } on Object {
+            // Diagnostics must not change the saved schedule.
+          }
+        } on Object {
+          try {
+            await QldtSyncDiagnostics.appendSave(saveStarted, 'SAVE_FAILED');
+          } on Object {
+            // The original save error remains authoritative.
+          }
+          rethrow;
+        }
         if (mounted) {
           setState(() {
             _data = imported.schedule;

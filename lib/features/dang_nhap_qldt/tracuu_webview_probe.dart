@@ -15,10 +15,18 @@ final class TracuuWebViewProbe {
     );
   }
 
-  String get script => r'''
+  String get script => scriptForAttempt(0);
+
+  String scriptForAttempt(int attempt) =>
+      _script.replaceAll('__BP_ATTEMPT__', '$attempt');
+
+  String get _script => r'''
     (async function () {
+      const sendStage = stage => window.flutter_inappwebview.callHandler(
+        'betterPhenikaaRegistrationStage', __BP_ATTEMPT__, stage
+      );
       const sendError = message => window.flutter_inappwebview.callHandler(
-        'betterPhenikaaRegistrationError', message
+        'betterPhenikaaRegistrationError', __BP_ATTEMPT__, message
       );
       const waitFor = async predicate => {
         for (let attempt = 0; attempt < 300; attempt++) {
@@ -62,6 +70,7 @@ final class TracuuWebViewProbe {
         const matchingPlan = matchingPlans[0];
         plan.value = matchingPlan.value;
         plan.dispatchEvent(new Event('change', {bubbles: true}));
+        sendStage('subjects');
         const alreadySelected = initialSemester === latest.value &&
           initialPlan === matchingPlan.value;
         const existing = alreadySelected && results.querySelector('.subject-item');
@@ -87,8 +96,10 @@ final class TracuuWebViewProbe {
         if (semester.value !== latest.value || plan.value !== matchingPlan.value) {
           throw Error('TraCuu đã đổi học kỳ hoặc kế hoạch trong lúc tải.');
         }
+        sendStage('verification');
         window.flutter_inappwebview.callHandler(
           'betterPhenikaaRegistrationResult',
+          __BP_ATTEMPT__,
           JSON.stringify({html: document.documentElement.outerHTML,
             semester: semester.value, plan: plan.value})
         );

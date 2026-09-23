@@ -39,8 +39,10 @@ jobs:
             set -e
             adb shell wm size 720x1280
             flutter test integration_test/app_flow_test.dart
+            flutter test integration_test/qldt_login_flow_test.dart
             adb shell wm size 1080x1920
             flutter test integration_test/app_flow_test.dart
+            flutter test integration_test/qldt_login_flow_test.dart
 
   apk:
     needs: emulator

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/tracuu_webview_probe.dart';
@@ -22,7 +23,10 @@ Future<void> clearQldtSession() async {
   await prefs.remove(_tracuuPathKey);
 }
 
-Future<QldtLoginResult?> openQldtLogin(BuildContext context) async {
+Future<QldtLoginResult?> openQldtLogin(
+  BuildContext context, {
+  String? testHtml,
+}) async {
   final prefs = await SharedPreferences.getInstance();
   if (!context.mounted) return null;
   final cached = prefs.getBool(_sessionKey) ?? false;
@@ -31,17 +35,25 @@ Future<QldtLoginResult?> openQldtLogin(BuildContext context) async {
   return await Navigator.of(context).push<QldtLoginResult>(
     MaterialPageRoute<QldtLoginResult>(
       fullscreenDialog: true,
-      builder: (_) =>
-          _QldtWebLoginScreen(cachedSession: cached, portalPath: portalPath),
+      builder: (_) => _QldtWebLoginScreen(
+        cachedSession: cached,
+        portalPath: portalPath,
+        testHtml: testHtml,
+      ),
     ),
   );
 }
 
 class _QldtWebLoginScreen extends StatefulWidget {
-  const new({required this.cachedSession, required this.portalPath});
+  const new({
+    required this.cachedSession,
+    required this.portalPath,
+    this.testHtml,
+  });
 
   final bool cachedSession;
   final String? portalPath;
+  final String? testHtml;
 
   @override
   State<_QldtWebLoginScreen> createState() => _QldtWebLoginScreenState();
@@ -55,8 +67,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   InAppWebViewController? _controller;
   Timer? _readinessTimer;
   Timer? _registrationTimer;
+  Timer? _syncWatchdog;
+  Timer? _phaseTimer;
+  Timer? _sessionTimer;
+  final QldtSyncDiagnostics _diagnostics = QldtSyncDiagnostics();
+  QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
-  int _registrationAttempt = 0;
+  int _syncEpoch = 0;
   bool _registrationRequested = false;
   bool _registrationProbeStarted = false;
   bool _registrationChecking = false;
@@ -86,6 +103,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   void dispose() {
     _readinessTimer?.cancel();
     _registrationTimer?.cancel();
+    _syncWatchdog?.cancel();
+    _phaseTimer?.cancel();
+    _sessionTimer?.cancel();
     _controller = null;
     super.dispose();
   }
@@ -155,9 +175,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                             color: Colors.white,
                             child: InAppWebView(
                               key: ValueKey<int>(_webViewGeneration),
-                              initialUrlRequest: URLRequest(
-                                url: WebUri(_initialUrl),
-                              ),
+                              initialUrlRequest: widget.testHtml == null
+                                  ? URLRequest(url: WebUri(_initialUrl))
+                                  : null,
+                              initialData: widget.testHtml == null
+                                  ? null
+                                  : InAppWebViewInitialData(
+                                      data: widget.testHtml!,
+                                    ),
                               initialSettings: InAppWebViewSettings(
                                 javaScriptEnabled: true,
                                 domStorageEnabled: true,
@@ -177,7 +202,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                                 _readinessTimer?.cancel();
                                 if (mounted) {
                                   setState(() {
-                                    if (_pendingSchedule == null && !_syncing) {
+                                    if (_pendingSchedule == null &&
+                                        !_syncing &&
+                                        !_autoSyncStarted) {
                                       _pageReady = false;
                                       _status = _showWebPage
                                           ? 'Đang tải trang đăng nhập QLĐT...'
@@ -187,9 +214,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                                 }
                               },
                               onLoadStop: (_, _) {
-                                if (_pendingSchedule == null) {
+                                if (_pendingSchedule == null &&
+                                    !_autoSyncStarted) {
                                   _beginReadinessChecks();
-                                } else {
+                                } else if (_pendingSchedule != null) {
                                   _registrationRequested = false;
                                   unawaited(_checkRegistrationPage());
                                 }
@@ -203,26 +231,46 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                               },
                               onReceivedError: (_, request, error) {
                                 if (request.isForMainFrame == true && mounted) {
-                                  setState(() {
-                                    _showWebPage = _pendingSchedule == null;
-                                    _syncing = false;
-                                    _status = 'Không tải được QLĐT. Kiểm tra mạng rồi thử lại.';
-                                  });
+                                  if (_syncing) {
+                                    _stopSync(
+                                      _syncEpoch,
+                                      'Không tải được QLĐT. Kiểm tra mạng rồi thử lại.',
+                                      code: 'NETWORK_ERROR',
+                                    );
+                                  } else {
+                                    setState(() {
+                                      _showWebPage = true;
+                                      _status = 'Không tải được QLĐT. Kiểm tra mạng rồi thử lại.';
+                                    });
+                                  }
                                 }
                               },
                               onReceivedHttpError: (_, request, response) {
                                 if (request.isForMainFrame == true && mounted) {
-                                  setState(() {
-                                    _showWebPage = _pendingSchedule == null;
-                                    _syncing = false;
-                                    _status =
-                                        'QLĐT trả lỗi HTTP ${response.statusCode}.';
-                                  });
+                                  if (_syncing) {
+                                    _stopSync(
+                                      _syncEpoch,
+                                      'QLĐT trả lỗi HTTP ${response.statusCode}.',
+                                      code: 'HTTP_ERROR',
+                                    );
+                                  } else {
+                                    setState(
+                                      () => _status =
+                                          'QLĐT trả lỗi HTTP ${response.statusCode}.',
+                                    );
+                                  }
                                 }
                               },
                               onRenderProcessGone: (_, detail) {
                                 _readinessTimer?.cancel();
                                 _controller = null;
+                                if (_syncing) {
+                                  _stopSync(
+                                    _syncEpoch,
+                                    'Tiến trình WebView đã dừng.',
+                                    code: 'RENDERER_GONE',
+                                  );
+                                }
                                 if (mounted) {
                                   setState(() {
                                     _rendererGone = true;
@@ -238,10 +286,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                           ),
                         ),
                         if (!_showWebPage)
-                          const Positioned.fill(
+                          Positioned.fill(
                             child: ColoredBox(
                               color: Colors.white,
-                              child: Center(child: CircularProgressIndicator()),
+                              child: Center(
+                                child: _syncing || !_autoSyncStarted
+                                    ? const CircularProgressIndicator()
+                                    : const Icon(Icons.error_outline, size: 48),
+                              ),
                             ),
                           ),
                       ],
@@ -343,20 +395,34 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   void _onWebViewCreated(InAppWebViewController controller) {
     _controller = controller;
+    _diagnostics.start(QldtSyncPhase.session);
+    if (widget.cachedSession) {
+      _sessionTimer = Timer(const Duration(seconds: 35), () {
+        if (!mounted || _pageReady || _syncing) return;
+        _diagnostics.finish('SESSION_TIMEOUT');
+        setState(() {
+          _showWebPage = true;
+          _status = 'Phiên QLĐT đã hết hạn hoặc cổng sinh viên không phản hồi. Hãy đăng nhập lại.';
+        });
+      });
+    }
     controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaSyncResult',
       callback: (arguments) async {
-        if (!mounted || arguments.isEmpty) {
+        if (!mounted ||
+            !_syncing ||
+            arguments.length < 2 ||
+            arguments.first?.toString() != '$_syncEpoch') {
           return null;
         }
+        final epoch = _syncEpoch;
         try {
-          final raw = arguments.first?.toString() ?? '';
+          final raw = arguments[1]?.toString() ?? '';
           final data = const QldtParser().parseLiveEnvelope(raw, strict: true);
-          if (!mounted) {
+          if (!mounted || !_syncing || epoch != _syncEpoch) {
             return null;
           }
           _pendingSchedule = data;
-          _registrationAttempt = 0;
           _registrationRequested = false;
           _registrationProbeStarted = false;
           _registrationNavigationFound = false;
@@ -364,15 +430,17 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             _showWebPage = false;
             _status = 'Đang xác minh học kỳ và môn đã đăng ký trên TraCuu...';
           });
+          _startPhase(
+            QldtSyncPhase.navigation,
+            const Duration(seconds: 20),
+            epoch,
+          );
           await _checkRegistrationPage();
         } on Object {
-          if (mounted) {
-            setState(() {
-              _syncing = false;
-              _status =
-                  'Dữ liệu lịch QLĐT không hợp lệ. Dữ liệu cũ được giữ nguyên.';
-            });
-          }
+          _stopSync(
+            epoch,
+            'Dữ liệu lịch QLĐT không hợp lệ. Dữ liệu cũ được giữ nguyên.',
+          );
         }
         return null;
       },
@@ -380,13 +448,35 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaSyncError',
       callback: (arguments) {
-        if (mounted) {
-          setState(() {
-            _syncing = false;
-            _status = arguments.isEmpty
-                ? 'QLĐT không trả dữ liệu.'
-                : arguments.first.toString();
-          });
+        if (arguments.length >= 2 &&
+            arguments.first?.toString() == '$_syncEpoch' &&
+            _syncing) {
+          _stopSync(_syncEpoch, arguments[1].toString());
+        }
+        return null;
+      },
+    );
+    controller.addJavaScriptHandler(
+      handlerName: 'betterPhenikaaRegistrationStage',
+      callback: (arguments) {
+        if (!mounted ||
+            !_syncing ||
+            arguments.length < 2 ||
+            arguments.first?.toString() != '$_syncEpoch')
+          return null;
+        final stage = arguments[1]?.toString();
+        if (stage == 'subjects') {
+          _startPhase(
+            QldtSyncPhase.subjects,
+            const Duration(seconds: 20),
+            _syncEpoch,
+          );
+        } else if (stage == 'verification') {
+          _startPhase(
+            QldtSyncPhase.verification,
+            const Duration(seconds: 10),
+            _syncEpoch,
+          );
         }
         return null;
       },
@@ -394,12 +484,17 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaRegistrationResult',
       callback: (arguments) async {
-        if (!mounted || _pendingSchedule == null || arguments.isEmpty) {
+        if (!mounted ||
+            !_syncing ||
+            _pendingSchedule == null ||
+            arguments.length < 2 ||
+            arguments.first?.toString() != '$_syncEpoch') {
           return null;
         }
+        final epoch = _syncEpoch;
         try {
           final registration = const TracuuWebViewProbe().parseResult(
-            arguments.first as String,
+            arguments[1] as String,
           );
           final schedule = _pendingSchedule!;
           final verified = const SemesterScheduleVerifier().verify(
@@ -413,6 +508,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             displayName: schedule.displayName,
             syncedAt: schedule.syncedAt,
           );
+          _startPhase(
+            QldtSyncPhase.sessionCache,
+            const Duration(seconds: 10),
+            epoch,
+          );
           try {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setBool(_sessionKey, true);
@@ -420,7 +520,15 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           } on Object {
             // A cache failure must not discard a verified schedule.
           }
-          if (!mounted) return null;
+          if (!mounted || !_syncing || epoch != _syncEpoch) return null;
+          _phaseTimer?.cancel();
+          _syncWatchdog?.cancel();
+          _diagnostics.finish('OK');
+          try {
+            await _diagnostics.flushed.timeout(const Duration(seconds: 2));
+          } on Object {
+            // Diagnostic persistence cannot block a verified schedule.
+          }
           Navigator.of(context).pop(
             QldtLoginResult(
               schedule: semester.toImportedScheduleData(),
@@ -428,10 +536,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             ),
           );
         } on Object catch (error) {
-          setState(() {
-            _syncing = false;
-            _status = _verificationErrorMessage(error);
-          });
+          _stopSync(epoch, _verificationErrorMessage(error));
         }
         return null;
       },
@@ -439,17 +544,17 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaRegistrationError',
       callback: (arguments) {
-        if (mounted) {
-          final reason = arguments.isEmpty ? '' : arguments.first.toString();
-          setState(() {
-            _syncing = false;
-            _registrationProbeStarted = false;
-            _status = reason.contains('kế hoạch')
-                ? 'TraCuu chưa tải hoặc có nhiều kế hoạch đăng ký. Dữ liệu cũ được giữ nguyên.'
-                : reason.contains('học kỳ')
-                ? 'TraCuu không xác định được học kỳ mới nhất. Dữ liệu cũ được giữ nguyên.'
-                : 'TraCuu chưa tải đủ danh sách môn hoặc yêu cầu Xem thất bại. Dữ liệu cũ được giữ nguyên.';
-          });
+        if (mounted &&
+            _syncing &&
+            arguments.length >= 2 &&
+            arguments.first?.toString() == '$_syncEpoch') {
+          final reason = arguments[1].toString();
+          final status = reason.contains('kế hoạch')
+              ? 'TraCuu chưa tải hoặc có nhiều kế hoạch đăng ký. Dữ liệu cũ được giữ nguyên.'
+              : reason.contains('học kỳ')
+              ? 'TraCuu không xác định được học kỳ mới nhất. Dữ liệu cũ được giữ nguyên.'
+              : 'TraCuu chưa tải đủ danh sách môn hoặc yêu cầu Xem thất bại. Dữ liệu cũ được giữ nguyên.';
+          _stopSync(_syncEpoch, status);
         }
         return null;
       },
@@ -477,12 +582,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   Future<void> _checkRegistrationPage() async {
     final controller = _controller;
     if (controller == null ||
+        !_syncing ||
         _pendingSchedule == null ||
         !mounted ||
         _registrationProbeStarted ||
         _registrationChecking) {
       return;
     }
+    final epoch = _syncEpoch;
     _registrationChecking = true;
     _registrationTimer?.cancel();
     try {
@@ -493,13 +600,22 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           document.querySelector('#btnXemKetQuaDangKy'));
       ''',
       );
-      if (!mounted || _pendingSchedule == null) return;
+      if (!mounted ||
+          !_syncing ||
+          epoch != _syncEpoch ||
+          _pendingSchedule == null)
+        return;
       if (ready == true || ready?.toString() == 'true') {
         _registrationTimer?.cancel();
         _registrationNavigationFound = true;
         _registrationProbeStarted = true;
+        _startPhase(
+          QldtSyncPhase.semesterPlan,
+          const Duration(seconds: 15),
+          epoch,
+        );
         await controller.evaluateJavascript(
-          source: const TracuuWebViewProbe().script,
+          source: const TracuuWebViewProbe().scriptForAttempt(epoch),
         );
         return;
       }
@@ -520,35 +636,26 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           })();
         ''',
         );
+        if (!mounted || !_syncing || epoch != _syncEpoch) return;
         if (navigated != true && navigated?.toString() != 'true') {
           _registrationRequested = false;
         } else {
           _registrationNavigationFound = true;
         }
       }
-      _registrationAttempt++;
-      if (_registrationAttempt >= 200) {
-        throw const FormatException(
-          'Trang TraCuu không xuất hiện sau khi chờ.',
-        );
-      }
       _registrationTimer = Timer(const Duration(milliseconds: 300), () {
         if (mounted) unawaited(_checkRegistrationPage());
       });
-    } on Object catch (error) {
-      if (mounted) {
-        setState(() {
-          _syncing = false;
-          _registrationProbeStarted = false;
-          _status = error is FormatException
-              ? _registrationNavigationFound
-                    ? 'TraCuu chưa tải xong sau 60 giây. Dữ liệu cũ được giữ nguyên.'
-                    : 'Không tìm thấy đường vào TraCuu trong cổng sinh viên. Dữ liệu cũ được giữ nguyên.'
-              : 'Không đọc được trang TraCuu. Dữ liệu cũ được giữ nguyên. Hãy thử lại.';
-        });
+    } on Object {
+      if (mounted && _syncing && epoch == _syncEpoch) {
+        _stopSync(
+          epoch,
+          'Không đọc được trang TraCuu. Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
+          code: 'NAVIGATION_ERROR',
+        );
       }
     } finally {
-      _registrationChecking = false;
+      if (epoch == _syncEpoch) _registrationChecking = false;
     }
   }
 
@@ -567,7 +674,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         ''',
       );
       final ready = result == true || result?.toString() == 'true';
-      if (!mounted) {
+      if (!mounted || (_autoSyncStarted && !_syncing)) {
         return;
       }
 
@@ -580,6 +687,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
       if (ready && !_autoSyncStarted && !_syncing) {
         _readinessTimer?.cancel();
+        _sessionTimer?.cancel();
+        _diagnostics.finish('OK');
         _autoSyncStarted = true;
         unawaited(_rememberPortal(controller));
         await _sync();
@@ -598,6 +707,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _readinessAttempt += 1;
     if (_readinessAttempt >= 35) {
       if (mounted) {
+        _sessionTimer?.cancel();
+        _diagnostics.finish('SESSION_TIMEOUT');
         setState(() {
           _showWebPage = true;
           _autoSyncStarted = false;
@@ -619,6 +730,17 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     if (controller == null || _syncing) {
       return;
     }
+    final epoch = ++_syncEpoch;
+    _currentPhase = null;
+    _syncWatchdog?.cancel();
+    _syncWatchdog = Timer(const Duration(seconds: 70), () {
+      _stopSync(
+        epoch,
+        'Đồng bộ quá 70 giây. Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
+        code: 'TOTAL_TIMEOUT',
+      );
+    });
+    _startPhase(QldtSyncPhase.schedule, const Duration(seconds: 20), epoch);
     setState(() {
       _syncing = true;
       _showWebPage = false;
@@ -626,9 +748,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     });
     _pendingSchedule = null;
     _registrationTimer?.cancel();
-    _registrationAttempt = 0;
     _registrationRequested = false;
     _registrationProbeStarted = false;
+    _registrationChecking = false;
     _registrationNavigationFound = false;
 
     final now = DateTime.now();
@@ -646,6 +768,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                 edu.system.iM != null && typeof edu.system.makeRequest === 'function')) {
             window.flutter_inappwebview.callHandler(
               'betterPhenikaaSyncError',
+              $epoch,
               'Phiên QLĐT chưa sẵn sàng.'
             );
             return;
@@ -676,12 +799,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
               }
               window.flutter_inappwebview.callHandler(
                 'betterPhenikaaSyncResult',
+                $epoch,
                 JSON.stringify({name: name, response: response})
               );
             },
             error: function () {
               window.flutter_inappwebview.callHandler(
                 'betterPhenikaaSyncError',
+                $epoch,
                 'QLĐT báo lỗi khi tải lịch cá nhân.'
               );
             },
@@ -694,6 +819,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         } catch (error) {
           window.flutter_inappwebview.callHandler(
             'betterPhenikaaSyncError',
+            $epoch,
             'Không thực hiện được yêu cầu lịch QLĐT.'
           );
         }
@@ -703,13 +829,41 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     try {
       await controller.evaluateJavascript(source: script);
     } on Object {
-      if (mounted) {
-        setState(() {
-          _syncing = false;
-          _status = 'Không thể yêu cầu lịch QLĐT. Hãy thử lại.';
-        });
-      }
+      _stopSync(epoch, 'Không thể yêu cầu lịch QLĐT. Hãy thử lại.');
     }
+  }
+
+  void _startPhase(QldtSyncPhase phase, Duration limit, int epoch) {
+    if (_currentPhase != null && phase.index <= _currentPhase!.index) return;
+    _currentPhase = phase;
+    _phaseTimer?.cancel();
+    _diagnostics.start(phase);
+    _phaseTimer = Timer(limit, () {
+      final reason =
+          phase == QldtSyncPhase.navigation && !_registrationNavigationFound
+          ? 'Không tìm thấy đường vào TraCuu trong cổng sinh viên.'
+          : '${phase.name} không phản hồi trong ${limit.inSeconds} giây.';
+      _stopSync(
+        epoch,
+        '$reason Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
+        code: '${phase.name.toUpperCase()}_TIMEOUT',
+      );
+    });
+  }
+
+  void _stopSync(int epoch, String status, {String code = 'FAILED'}) {
+    if (!mounted || epoch != _syncEpoch) return;
+    _syncWatchdog?.cancel();
+    _phaseTimer?.cancel();
+    _registrationTimer?.cancel();
+    _diagnostics.finish(code);
+    _pendingSchedule = null;
+    _registrationProbeStarted = false;
+    _registrationChecking = false;
+    setState(() {
+      _syncing = false;
+      _status = status;
+    });
   }
 
   static String _formatDate(DateTime value) {

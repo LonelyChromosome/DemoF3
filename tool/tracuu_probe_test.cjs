@@ -6,7 +6,8 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname,
   '../lib/features/dang_nhap_qldt/tracuu_webview_probe.dart'), 'utf8');
-const script = source.match(/String get script => r'''([\s\S]*?)'''/)[1];
+const script = source.match(/String get _script => r'''([\s\S]*?)'''/)[1]
+  .replaceAll('__BP_ATTEMPT__', '7');
 
 async function run({selected = false, delayedPlan = false, networkFailure = false} = {}) {
   const calls = [];
@@ -70,17 +71,17 @@ async function run({selected = false, delayedPlan = false, networkFailure = fals
 test('uses already loaded latest registration without another request', async () => {
   const result = await run({selected: true});
   assert.equal(result.clickCount, 0);
-  assert.equal(result.calls[0].name, 'betterPhenikaaRegistrationResult');
+  assert.equal(result.calls.at(-1).name, 'betterPhenikaaRegistrationResult');
 });
 
 test('waits for asynchronous plan and real result mutation', async () => {
   const result = await run({delayedPlan: true});
   assert.equal(result.clickCount, 1);
-  assert.equal(result.calls[0].name, 'betterPhenikaaRegistrationResult');
+  assert.equal(result.calls.at(-1).name, 'betterPhenikaaRegistrationResult');
 });
 
 test('network failure cannot reuse stale registration', async () => {
   const result = await run({networkFailure: true});
   assert.equal(result.clickCount, 1);
-  assert.equal(result.calls[0].name, 'betterPhenikaaRegistrationError');
+  assert.equal(result.calls.at(-1).name, 'betterPhenikaaRegistrationError');
 });
