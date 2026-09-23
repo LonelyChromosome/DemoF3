@@ -462,8 +462,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         if (!mounted ||
             !_syncing ||
             arguments.length < 2 ||
-            arguments.first?.toString() != '$_syncEpoch')
+            arguments.first?.toString() != '$_syncEpoch') {
           return null;
+        }
         final stage = arguments[1]?.toString();
         if (stage == 'subjects') {
           _startPhase(
@@ -529,6 +530,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           } on Object {
             // Diagnostic persistence cannot block a verified schedule.
           }
+          if (!mounted || !_syncing || epoch != _syncEpoch) return null;
           Navigator.of(context).pop(
             QldtLoginResult(
               schedule: semester.toImportedScheduleData(),
@@ -603,8 +605,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       if (!mounted ||
           !_syncing ||
           epoch != _syncEpoch ||
-          _pendingSchedule == null)
+          _pendingSchedule == null) {
         return;
+      }
       if (ready == true || ready?.toString() == 'true') {
         _registrationTimer?.cancel();
         _registrationNavigationFound = true;

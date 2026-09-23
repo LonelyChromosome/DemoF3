@@ -14,8 +14,7 @@ enum QldtSyncPhase {
 }
 
 final class QldtSyncDiagnostics {
-  QldtSyncDiagnostics({DateTime Function()? clock})
-    : _clock = clock ?? DateTime.now;
+  new({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
   static const storageKey = 'qldt_sync_diagnostics';
   final DateTime Function() _clock;
@@ -40,7 +39,7 @@ final class QldtSyncDiagnostics {
   }
 
   List<Map<String, String>> get events =>
-      _events.map((entry) => Map<String, String>.from(entry)).toList();
+      _events.map(Map<String, String>.from).toList();
 
   void start(QldtSyncPhase phase) {
     finish('OK');

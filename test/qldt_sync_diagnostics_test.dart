@@ -19,9 +19,11 @@ void main() {
     await trail.flushed;
 
     final prefs = await SharedPreferences.getInstance();
-    final stored = jsonDecode(
-      prefs.getString(QldtSyncDiagnostics.storageKey)!,
-    ) as List<dynamic>;
+    final stored =
+        (jsonDecode(prefs.getString(QldtSyncDiagnostics.storageKey)!)
+                as List<dynamic>)
+            .map((event) => Map<String, dynamic>.from(event as Map))
+            .toList();
     expect(stored, hasLength(2));
     expect(stored[0], containsPair('code', 'OK'));
     expect(stored[1], containsPair('code', 'NAVIGATION_TIMEOUT'));
