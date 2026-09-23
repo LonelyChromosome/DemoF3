@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
 import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
@@ -557,7 +558,7 @@ class _MainShell extends StatelessWidget {
   }
 }
 
-class _TimetableScreen extends StatelessWidget {
+class _TimetableScreen extends StatefulWidget {
   const new({
     required this.data,
     required this.selectedDate,
@@ -569,9 +570,70 @@ class _TimetableScreen extends StatelessWidget {
   final ValueChanged<DateTime> onDateChanged;
 
   @override
+  State<_TimetableScreen> createState() => _TimetableScreenState();
+}
+
+class _TimetableScreenState extends State<_TimetableScreen>
+    with WidgetsBindingObserver {
+  bool _weekly = false;
+  DateTime _week = weekMonday(DateTime.now());
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_weekly) {
+      widget.onDateChanged(DateTime.now());
+    }
+  }
+
+  Future<void> _pickWeek() async {
+    final palette = appThemePalette;
+    final picked = await showModalBottomSheet<DateTime>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: SizedBox(
+          height: 440,
+          child: Column(
+            children: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(context, DateTime.now()),
+                child: const Text('Về tuần hiện tại'),
+              ),
+              Expanded(
+                child: CalendarDatePicker(
+                  initialDate: _week,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2100),
+                  onDateChanged: (date) => Navigator.pop(context, date),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      backgroundColor: palette.surface,
+    );
+    if (picked != null && mounted) {
+      setState(() => _week = weekMonday(picked));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final items = data.classes
-        .where((record) => _sameDay(record.startAt, selectedDate))
+    final palette = appThemePalette;
+    final items = widget.data.classes
+        .where((record) => _sameDay(record.startAt, widget.selectedDate))
         .toList(growable: false);
 
     return GestureDetector(
@@ -581,7 +643,11 @@ class _TimetableScreen extends StatelessWidget {
         if (velocity.abs() < 180) {
           return;
         }
-        onDateChanged(selectedDate.add(Duration(days: velocity < 0 ? 1 : -1)));
+        if (!_weekly) {
+          widget.onDateChanged(
+            widget.selectedDate.add(Duration(days: velocity < 0 ? 1 : -1)),
+          );
+        }
       },
       child: Padding(
         padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
@@ -591,58 +657,110 @@ class _TimetableScreen extends StatelessWidget {
             _TopTitle(
               title: 'Lịch học',
               badge: null,
-              onCalendarTap: () =>
-                  _showCalendarPicker(context, selectedDate, onDateChanged),
+              onCalendarTap: () => _weekly
+                  ? _pickWeek()
+                  : _showCalendarPicker(
+                      context,
+                      widget.selectedDate,
+                      widget.onDateChanged,
+                    ),
             ),
-            const SizedBox(height: 24),
-            _DateNavigator(
-              date: selectedDate,
-              onTap: () =>
-                  _showCalendarPicker(context, selectedDate, onDateChanged),
-              onPrevious: () =>
-                  onDateChanged(selectedDate.subtract(const Duration(days: 1))),
-              onNext: () =>
-                  onDateChanged(selectedDate.add(const Duration(days: 1))),
-            ),
-            const SizedBox(height: 18),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 320),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) {
-                  final slide = Tween<Offset>(
-                    begin: const Offset(.14, 0),
-                    end: Offset.zero,
-                  ).animate(animation);
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(position: slide, child: child),
-                  );
-                },
-                child: KeyedSubtree(
-                  key: ValueKey<String>(
-                    '${selectedDate.year}-${selectedDate.month}-${selectedDate.day}',
-                  ),
-                  child: items.isEmpty
-                      ? const _EmptyState(
-                          icon: Icons.event_available_outlined,
-                          title: 'Không có lịch học',
-                          message: 'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.only(bottom: 82),
-                          itemCount: items.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 14),
-                          itemBuilder: (context, index) => _ScheduleCard(
-                            item: items[index],
-                            accent: _accentFor(index),
-                          ),
+            const SizedBox(height: 12),
+            Row(
+              children: <Widget>[
+                for (final weekly in <bool>[false, true])
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: OutlinedButton(
+                        onPressed: () {
+                          if (!weekly) widget.onDateChanged(DateTime.now());
+                          setState(() {
+                            _weekly = weekly;
+                            if (weekly) _week = weekMonday(DateTime.now());
+                          });
+                        },
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: _weekly == weekly
+                              ? palette.primary
+                              : palette.cardAlt,
+                          foregroundColor: _weekly == weekly
+                              ? Colors.white
+                              : palette.textPrimary,
+                          side: BorderSide(color: palette.border),
                         ),
+                        child: Text(weekly ? 'Theo tuần' : 'Theo ngày'),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_weekly)
+              Expanded(
+                child: WeekTimetable(
+                  data: widget.data,
+                  week: _week,
+                  onWeekChanged: (value) =>
+                      setState(() => _week = weekMonday(value)),
+                  onPickWeek: _pickWeek,
+                ),
+              )
+            else ...<Widget>[
+              _DateNavigator(
+                date: widget.selectedDate,
+                onTap: () => _showCalendarPicker(
+                  context,
+                  widget.selectedDate,
+                  widget.onDateChanged,
+                ),
+                onPrevious: () => widget.onDateChanged(
+                  widget.selectedDate.subtract(const Duration(days: 1)),
+                ),
+                onNext: () => widget.onDateChanged(
+                  widget.selectedDate.add(const Duration(days: 1)),
                 ),
               ),
-            ),
+              const SizedBox(height: 18),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 320),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
+                    final slide = Tween<Offset>(
+                      begin: const Offset(.14, 0),
+                      end: Offset.zero,
+                    ).animate(animation);
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(position: slide, child: child),
+                    );
+                  },
+                  child: KeyedSubtree(
+                    key: ValueKey<String>(
+                      '${widget.selectedDate.year}-${widget.selectedDate.month}-${widget.selectedDate.day}',
+                    ),
+                    child: items.isEmpty
+                        ? const _EmptyState(
+                            icon: Icons.event_available_outlined,
+                            title: 'Không có lịch học',
+                            message: 'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.only(bottom: 82),
+                            itemCount: items.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 14),
+                            itemBuilder: (context, index) => _ScheduleCard(
+                              item: items[index],
+                              accent: _accentFor(index),
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
