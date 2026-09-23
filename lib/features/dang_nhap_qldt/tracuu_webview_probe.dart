@@ -21,7 +21,7 @@ final class TracuuWebViewProbe {
         'betterPhenikaaRegistrationError', message
       );
       const waitFor = async predicate => {
-        for (let attempt = 0; attempt < 100; attempt++) {
+        for (let attempt = 0; attempt < 300; attempt++) {
           const value = predicate();
           if (value) return value;
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -45,6 +45,8 @@ final class TracuuWebViewProbe {
         }).filter(Boolean).sort((a, b) => b.year - a.year || b.term - a.term);
         if (!options.length) throw Error('TraCuu chưa có học kỳ hợp lệ.');
         const latest = options[0];
+        const initialSemester = semester.value;
+        const initialPlan = plan.value;
         semester.value = latest.value;
         semester.dispatchEvent(new Event('change', {bubbles: true}));
         const matchingPlans = await waitFor(() => {
@@ -60,9 +62,20 @@ final class TracuuWebViewProbe {
         const matchingPlan = matchingPlans[0];
         plan.value = matchingPlan.value;
         plan.dispatchEvent(new Event('change', {bubbles: true}));
-        results.replaceChildren();
-        view.click();
-        await waitFor(() => results.querySelector('.subject-item'));
+        const alreadySelected = initialSemester === latest.value &&
+          initialPlan === matchingPlan.value;
+        const existing = alreadySelected && results.querySelector('.subject-item');
+        if (!existing) {
+          let changed = false;
+          const observer = new MutationObserver(() => { changed = true; });
+          observer.observe(results, {childList: true, subtree: true, characterData: true});
+          try {
+            view.click();
+            await waitFor(() => changed && results.querySelector('.subject-item'));
+          } finally {
+            observer.disconnect();
+          }
+        }
         let previous = '';
         let stable = 0;
         await waitFor(() => {

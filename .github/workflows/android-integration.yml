@@ -60,6 +60,7 @@ jobs:
           cache: true
       - run: bash tool/bootstrap.sh
       - run: flutter test
+      - run: node --test tool/tracuu_probe_test.cjs
       - run: cd android && ./gradlew :app:testDebugUnitTest
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4

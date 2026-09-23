@@ -48,6 +48,9 @@ jobs:
       - name: Test
         run: flutter test --coverage
 
+      - name: TraCuu browser-flow simulation
+        run: node --test tool/tracuu_probe_test.cjs
+
       - name: Native Android tests
         run: cd android && ./gradlew :app:testDebugUnitTest
 

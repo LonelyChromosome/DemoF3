@@ -214,8 +214,18 @@ private class HeadlessQldtSync(private val context: Context) {
                             readinessAttempt = 0
                             checkSessionReady(view)
                         } else {
+                            navigationRequested.set(false)
                             checkRegistrationPage(view)
                         }
+                    }
+                }
+
+                override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+                    super.doUpdateVisitedHistory(view, url, isReload)
+                    if (pendingEnvelope.get() != null && url != null &&
+                        Uri.parse(url).host == QLDT_HOST) {
+                        navigationRequested.set(false)
+                        checkRegistrationPage(view)
                     }
                 }
 
@@ -266,7 +276,16 @@ private class HeadlessQldtSync(private val context: Context) {
                     return true
                 }
             }
-            webView.loadUrl(QLDT_URL)
+            val portalPath = context.getSharedPreferences(
+                "FlutterSharedPreferences", Context.MODE_PRIVATE,
+            ).getString("flutter.qldt_verified_portal_path", null)
+            val portalUrl = if (portalPath != null && portalPath.startsWith("/") &&
+                !portalPath.startsWith("//")) {
+                Uri.parse(QLDT_URL).buildUpon().path(portalPath).build().toString()
+            } else {
+                QLDT_URL
+            }
+            webView.loadUrl(portalUrl)
         } catch (error: Exception) {
             complete(
                 Result.Failure(
@@ -380,10 +399,9 @@ private class HeadlessQldtSync(private val context: Context) {
             if (navigationRequested.compareAndSet(false, true)) {
                 webView.evaluateJavascript(NAVIGATE_TRACUU_SCRIPT) { navigated ->
                     if (navigated != "true") {
-                        complete(Result.Failure("Không tìm thấy trang TraCuu duy nhất."))
-                    } else {
-                        retryRegistration(webView)
+                        navigationRequested.set(false)
                     }
+                    retryRegistration(webView)
                 }
             } else {
                 retryRegistration(webView)
@@ -392,10 +410,10 @@ private class HeadlessQldtSync(private val context: Context) {
     }
 
     private fun retryRegistration(webView: WebView) {
-        if (++registrationAttempt >= 50) {
-            complete(Result.Failure("Trang TraCuu không tải xong."))
+        if (++registrationAttempt >= 200) {
+            complete(Result.Failure("TraCuu chưa sẵn sàng sau 60 giây."))
         } else {
-            mainHandler.postDelayed({ checkRegistrationPage(webView) }, 200L)
+            mainHandler.postDelayed({ checkRegistrationPage(webView) }, 300L)
         }
     }
 
@@ -485,7 +503,8 @@ private class HeadlessQldtSync(private val context: Context) {
             (function () {
               const candidates = [...document.querySelectorAll('a')].filter(node => {
                 const label = (node.textContent || '').toLocaleLowerCase('vi');
-                return label.includes('tra cứu') && label.includes('đăng ký');
+                return (label.includes('tra cứu') && label.includes('đăng ký')) ||
+                  label.trim() === 'đăng ký học';
               });
               if (candidates.length !== 1) return false;
               candidates[0].click();
@@ -496,7 +515,7 @@ private class HeadlessQldtSync(private val context: Context) {
             (async function () {
               const fail = message => window.BetterPhenikaaNative.onError(message);
               const waitFor = async predicate => {
-                for (let attempt = 0; attempt < 100; attempt++) {
+                for (let attempt = 0; attempt < 300; attempt++) {
                   const value = predicate();
                   if (value) return value;
                   await new Promise(resolve => setTimeout(resolve, 100));
@@ -527,6 +546,8 @@ private class HeadlessQldtSync(private val context: Context) {
                 }).filter(Boolean).sort((a, b) => b.year - a.year || b.term - a.term);
                 if (!options.length) throw Error('TraCuu chưa có học kỳ hợp lệ.');
                 const latest = options[0];
+                const initialSemester = semester.value;
+                const initialPlan = plan.value;
                 semester.value = latest.value;
                 semester.dispatchEvent(new Event('change', {bubbles: true}));
                 const plans = await waitFor(() => {
@@ -538,9 +559,19 @@ private class HeadlessQldtSync(private val context: Context) {
                 if (plans.length !== 1) throw Error('Không xác định được một kế hoạch duy nhất.');
                 plan.value = plans[0].value;
                 plan.dispatchEvent(new Event('change', {bubbles: true}));
-                results.replaceChildren();
-                view.click();
-                await waitFor(() => results.querySelector('.subject-item'));
+                const existing = initialSemester === latest.value &&
+                  initialPlan === plans[0].value && results.querySelector('.subject-item');
+                if (!existing) {
+                  let changed = false;
+                  const observer = new MutationObserver(() => { changed = true; });
+                  observer.observe(results, {childList: true, subtree: true, characterData: true});
+                  try {
+                    view.click();
+                    await waitFor(() => changed && results.querySelector('.subject-item'));
+                  } finally {
+                    observer.disconnect();
+                  }
+                }
                 let previous = '';
                 let stable = 0;
                 await waitFor(() => {
