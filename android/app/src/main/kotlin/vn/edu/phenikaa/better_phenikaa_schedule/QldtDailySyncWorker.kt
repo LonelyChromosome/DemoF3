@@ -106,10 +106,10 @@ class QldtDailySyncWorker(
                     WidgetRefreshCoordinator.refreshOverview(applicationContext)
                 }
             }
-        } catch (error: Exception) {
+        } catch (_: Exception) {
             DailySyncScheduler.recordFailure(
                 applicationContext,
-                "Dữ liệu QLĐT không hợp lệ: ${error.message.orEmpty()}",
+                "Dữ liệu QLĐT không hợp lệ hoặc chưa tải đủ. Hãy thử lại trong ứng dụng.",
             )
             WidgetRefreshCoordinator.refreshOverview(applicationContext)
         }
@@ -196,7 +196,7 @@ private class HeadlessQldtSync(private val context: Context) {
                     onRegistration = { registration ->
                         pendingEnvelope.get()?.let { complete(Result.Success(it, registration)) }
                     },
-                    onError = { message -> complete(Result.Failure(message)) },
+                    onError = { complete(Result.Failure("Không xác minh được dữ liệu QLĐT hoặc TraCuu. Hãy thử lại.")) },
                 ),
                 JAVASCRIPT_BRIDGE,
             )
@@ -222,7 +222,7 @@ private class HeadlessQldtSync(private val context: Context) {
                     if (request.isForMainFrame) {
                         complete(
                             Result.Failure(
-                                "Không tải được QLĐT: " + error.description,
+                                "Không tải được QLĐT. Hãy kiểm tra mạng rồi thử lại.",
                             ),
                         )
                     }
@@ -350,7 +350,7 @@ private class HeadlessQldtSync(private val context: Context) {
                   fakedb: []
                 }, false, false, false, null);
               } catch (error) {
-                window.$JAVASCRIPT_BRIDGE.onError('Lỗi QLĐT: ' + error);
+                window.$JAVASCRIPT_BRIDGE.onError('Không đọc được lịch QLĐT. Hãy thử lại.');
               }
             })();
         """.trimIndent()
