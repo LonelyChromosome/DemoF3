@@ -395,8 +395,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   void _onWebViewCreated(InAppWebViewController controller) {
     _controller = controller;
-    _diagnostics.start(QldtSyncPhase.session);
-    if (widget.cachedSession) {
+    if (!_syncing) {
+      _diagnostics.start(QldtSyncPhase.session);
+    }
+    if (widget.cachedSession && !_syncing) {
       _sessionTimer = Timer(const Duration(seconds: 35), () {
         if (!mounted || _pageReady || _syncing) return;
         _diagnostics.finish('SESSION_TIMEOUT');
@@ -653,6 +655,16 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         if (mounted) unawaited(_checkRegistrationPage());
       });
     } on Object catch (error) {
+      if (controller != _controller &&
+          mounted &&
+          _syncing &&
+          epoch == _syncEpoch) {
+        _registrationTimer?.cancel();
+        _registrationTimer = Timer(const Duration(milliseconds: 300), () {
+          if (mounted) unawaited(_checkRegistrationPage());
+        });
+        return;
+      }
       if (mounted && _syncing && epoch == _syncEpoch) {
         final reason = switch (operation) {
           'DOM_CHECK' => 'Không đọc được cấu trúc trang TraCuu.',
