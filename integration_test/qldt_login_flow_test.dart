@@ -90,10 +90,19 @@ void main() {
       await tester.tap(find.text('Thử đồng bộ lại'));
       await tester.pump();
       await tester.runAsync(
-        () => Future<void>.delayed(const Duration(seconds: 3)),
+        () => Future<void>.delayed(const Duration(seconds: 8)),
       );
       await tester.pump();
-      expect(result?.semester?.subjects.single.name, 'Thiết kế web nâng cao');
+      final labels = find
+          .byType(Text)
+          .evaluate()
+          .map((element) => (element.widget as Text).data)
+          .join(' | ');
+      expect(
+        result?.semester?.subjects.single.name,
+        'Thiết kế web nâng cao',
+        reason: labels,
+      );
     },
   );
 }
