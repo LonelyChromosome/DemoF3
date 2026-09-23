@@ -80,9 +80,16 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         ).getString(ScheduleWidgetProvider.selectedDateKey(id), today) ?: today
         val date = if (selected.length == 10) "${selected.substring(8, 10)}/${selected.substring(5, 7)}"
             else SimpleDateFormat("dd/MM", Locale.getDefault()).format(Date())
-        views.setTextViewText(R.id.overview_title,
-            if (examMode) "Lịch thi sắp tới · ${items.size} ca" else
-                "${if (selected == today) "Hôm nay" else "Ngày $date"} · ${items.size} môn")
+        val status = DailySyncScheduler.status(context)
+        val error = status["lastError"] as? String
+        val started = status["lastStartedAtMillis"] as? Long ?: 0L
+        val succeeded = status["lastSuccessAtMillis"] as? Long ?: 0L
+        views.setTextViewText(R.id.overview_title, when {
+            !error.isNullOrEmpty() && started > succeeded -> "Đồng bộ lỗi · Bấm ↻ thử lại"
+            started > succeeded -> "Đang đồng bộ QLĐT..."
+            examMode -> "Lịch thi sắp tới · ${items.size} ca"
+            else -> "${if (selected == today) "Hôm nay" else "Ngày $date"} · ${items.size} môn"
+        })
         views.setImageViewResource(R.id.overview_mode,
             if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
         views.setContentDescription(R.id.overview_mode,

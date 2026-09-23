@@ -40,6 +40,7 @@ class QldtDailySyncWorker(
         }
 
         DailySyncScheduler.recordStarted(applicationContext, System.currentTimeMillis())
+        WidgetRefreshCoordinator.refreshOverview(applicationContext)
         try {
             val preferences = applicationContext.getSharedPreferences(
                 FLUTTER_PREFERENCES,
@@ -47,6 +48,8 @@ class QldtDailySyncWorker(
             )
             val previousSnapshot = preferences.getString(APP_SNAPSHOT_KEY, null)
             if (previousSnapshot.isNullOrBlank()) {
+                DailySyncScheduler.recordFailure(applicationContext, "Hãy đồng bộ lần đầu trong ứng dụng.")
+                WidgetRefreshCoordinator.refreshOverview(applicationContext)
                 return Result.success()
             }
 
@@ -78,6 +81,7 @@ class QldtDailySyncWorker(
                             applicationContext,
                             "Không thể ghi dữ liệu đồng bộ vào bộ nhớ cục bộ.",
                         )
+                        WidgetRefreshCoordinator.refreshOverview(applicationContext)
                         return Result.success()
                     }
                     WidgetRefreshCoordinator.refreshToday(applicationContext)
@@ -91,6 +95,7 @@ class QldtDailySyncWorker(
                         applicationContext,
                         syncResult.message,
                     )
+                    WidgetRefreshCoordinator.refreshOverview(applicationContext)
                 }
             }
         } catch (error: Exception) {
@@ -98,6 +103,7 @@ class QldtDailySyncWorker(
                 applicationContext,
                 "Dữ liệu QLĐT không hợp lệ: ${error.message.orEmpty()}",
             )
+            WidgetRefreshCoordinator.refreshOverview(applicationContext)
         }
         return Result.success()
     }
