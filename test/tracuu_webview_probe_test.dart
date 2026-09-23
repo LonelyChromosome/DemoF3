@@ -7,6 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const probe = TracuuWebViewProbe();
 
+  test('probe recognizes numeric semester options', () {
+    expect(probe.script, contains(r'/^(\d{4})_(\d{4})_(\d+)$/'));
+  });
+
   test('WebView result still passes the strict TraCuu parser', () {
     final html = File('test/fixtures/tracuu_latest.html').readAsStringSync();
     final raw = jsonEncode(<String, String>{

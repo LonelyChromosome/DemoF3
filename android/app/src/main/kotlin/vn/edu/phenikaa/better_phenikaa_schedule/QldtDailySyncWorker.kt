@@ -35,7 +35,7 @@ class QldtDailySyncWorker(
     private var activeSync: HeadlessQldtSync? = null
 
     override fun doWork(): Result {
-        if (!DailySyncScheduler.isEnabled(applicationContext)) {
+        if (!inputData.getBoolean("manual", false)) {
             return Result.success()
         }
 
@@ -47,7 +47,6 @@ class QldtDailySyncWorker(
             )
             val previousSnapshot = preferences.getString(APP_SNAPSHOT_KEY, null)
             if (previousSnapshot.isNullOrBlank()) {
-                DailySyncScheduler.disable(applicationContext)
                 return Result.success()
             }
 
@@ -58,19 +57,21 @@ class QldtDailySyncWorker(
             } finally {
                 activeSync = null
             }
-            if (isStopped || !DailySyncScheduler.isEnabled(applicationContext)) {
+            if (isStopped) {
                 return Result.success()
             }
 
             when (syncResult) {
                 is HeadlessQldtSync.Result.Success -> {
-                    val bundle = QldtSnapshotEncoder.encode(
+                    val bundle = NativeSemesterVerifier.verify(
                         syncResult.envelope,
+                        syncResult.registration,
                         previousSnapshot,
                     )
                     val saved = preferences.edit()
                         .putString(APP_SNAPSHOT_KEY, bundle.appSnapshot)
                         .putString(WIDGET_SNAPSHOT_KEY, bundle.widgetSnapshot)
+                        .putString(CURRENT_SEMESTER_KEY, bundle.semester)
                         .commit()
                     if (!saved) {
                         DailySyncScheduler.recordFailure(
@@ -97,17 +98,6 @@ class QldtDailySyncWorker(
                 applicationContext,
                 "Dữ liệu QLĐT không hợp lệ: ${error.message.orEmpty()}",
             )
-        } finally {
-            if (DailySyncScheduler.isEnabled(applicationContext)) {
-                runCatching {
-                    DailySyncScheduler.scheduleAfterRun(applicationContext)
-                }.onFailure { error ->
-                    DailySyncScheduler.recordFailure(
-                        applicationContext,
-                        "Không thể đặt lịch đồng bộ tiếp theo: ${error.message.orEmpty()}",
-                    )
-                }
-            }
         }
         return Result.success()
     }
@@ -121,22 +111,27 @@ class QldtDailySyncWorker(
         const val FLUTTER_PREFERENCES = "FlutterSharedPreferences"
         const val APP_SNAPSHOT_KEY = "flutter.better_phenikaa_snapshot_v1"
         const val WIDGET_SNAPSHOT_KEY = "flutter.better_phenikaa_widget_snapshot_v1"
+        const val CURRENT_SEMESTER_KEY = "flutter.better_phenikaa_current_semester_v1"
     }
 }
 
 private class HeadlessQldtSync(private val context: Context) {
     sealed interface Result {
-        data class Success(val envelope: String) : Result
+        data class Success(val envelope: String, val registration: String) : Result
         data class Failure(val message: String) : Result
     }
 
     private val completed = AtomicBoolean(false)
     private val syncRequested = AtomicBoolean(false)
+    private val pendingEnvelope = AtomicReference<String>()
+    private val registrationRequested = AtomicBoolean(false)
+    private val navigationRequested = AtomicBoolean(false)
     private val result = AtomicReference<Result>()
     private val latch = CountDownLatch(1)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val webViewReference = AtomicReference<WebView>()
     private var readinessAttempt = 0
+    private var registrationAttempt = 0
 
     fun run(): Result {
         mainHandler.post(::createAndLoadWebView)
@@ -177,15 +172,30 @@ private class HeadlessQldtSync(private val context: Context) {
             }
 
             webView.addJavascriptInterface(
-                JavascriptResultBridge(::complete),
+                JavascriptResultBridge(
+                    onSchedule = { envelope ->
+                        mainHandler.post {
+                            pendingEnvelope.set(envelope)
+                            checkRegistrationPage(webView)
+                        }
+                    },
+                    onRegistration = { registration ->
+                        pendingEnvelope.get()?.let { complete(Result.Success(it, registration)) }
+                    },
+                    onError = { message -> complete(Result.Failure(message)) },
+                ),
                 JAVASCRIPT_BRIDGE,
             )
             webView.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
                     if (url != null && Uri.parse(url).host == QLDT_HOST) {
-                        readinessAttempt = 0
-                        checkSessionReady(view)
+                        if (pendingEnvelope.get() == null) {
+                            readinessAttempt = 0
+                            checkSessionReady(view)
+                        } else {
+                            checkRegistrationPage(view)
+                        }
                     }
                 }
 
@@ -310,7 +320,7 @@ private class HeadlessQldtSync(private val context: Context) {
                         }
                       }
                     }
-                    window.$JAVASCRIPT_BRIDGE.onResult(
+                    window.$JAVASCRIPT_BRIDGE.onSchedule(
                       JSON.stringify({name: name, response: response})
                     );
                   },
@@ -331,6 +341,42 @@ private class HeadlessQldtSync(private val context: Context) {
             })();
         """.trimIndent()
         webView.evaluateJavascript(script, null)
+    }
+
+    private fun checkRegistrationPage(webView: WebView) {
+        if (completed.get() || registrationRequested.get()) return
+        webView.evaluateJavascript(
+            "Boolean(document.querySelector('#dropSearch_HocKy') && " +
+                "document.querySelector('#dropSearch_KeHoach') && " +
+                "document.querySelector('#btnXemKetQuaDangKy') && " +
+                "document.querySelector('#zoneKetQuaDangKy'))",
+        ) { ready ->
+            if (completed.get() || registrationRequested.get()) return@evaluateJavascript
+            if (ready == "true") {
+                registrationRequested.set(true)
+                webView.evaluateJavascript(REGISTRATION_SCRIPT, null)
+                return@evaluateJavascript
+            }
+            if (navigationRequested.compareAndSet(false, true)) {
+                webView.evaluateJavascript(NAVIGATE_TRACUU_SCRIPT) { navigated ->
+                    if (navigated != "true") {
+                        complete(Result.Failure("Không tìm thấy trang TraCuu duy nhất."))
+                    } else {
+                        retryRegistration(webView)
+                    }
+                }
+            } else {
+                retryRegistration(webView)
+            }
+        }
+    }
+
+    private fun retryRegistration(webView: WebView) {
+        if (++registrationAttempt >= 50) {
+            complete(Result.Failure("Trang TraCuu không tải xong."))
+        } else {
+            mainHandler.postDelayed({ checkRegistrationPage(webView) }, 200L)
+        }
     }
 
     private fun currentAcademicYearRange(): Pair<String, String> {
@@ -381,16 +427,23 @@ private class HeadlessQldtSync(private val context: Context) {
     }
 
     private class JavascriptResultBridge(
-        private val complete: (Result) -> Unit,
+        private val onSchedule: (String) -> Unit,
+        private val onRegistration: (String) -> Unit,
+        private val onError: (String) -> Unit,
     ) {
         @JavascriptInterface
-        fun onResult(envelope: String) {
-            complete(Result.Success(envelope))
+        fun onSchedule(envelope: String) {
+            onSchedule.invoke(envelope)
+        }
+
+        @JavascriptInterface
+        fun onRegistration(registration: String) {
+            onRegistration.invoke(registration)
         }
 
         @JavascriptInterface
         fun onError(message: String) {
-            complete(Result.Failure(message))
+            onError(message)
         }
     }
 
@@ -408,10 +461,103 @@ private class HeadlessQldtSync(private val context: Context) {
               edu.system.iM != null && typeof edu.system.makeRequest === 'function'
             );
         """
+        const val NAVIGATE_TRACUU_SCRIPT = """
+            (function () {
+              const candidates = [...document.querySelectorAll('a')].filter(node => {
+                const label = (node.textContent || '').toLocaleLowerCase('vi');
+                return label.includes('tra cứu') && label.includes('đăng ký');
+              });
+              if (candidates.length !== 1) return false;
+              candidates[0].click();
+              return true;
+            })();
+        """
+        const val REGISTRATION_SCRIPT = """
+            (async function () {
+              const fail = message => window.BetterPhenikaaNative.onError(message);
+              const waitFor = async predicate => {
+                for (let attempt = 0; attempt < 100; attempt++) {
+                  const value = predicate();
+                  if (value) return value;
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                throw Error('TraCuu chưa tải xong. Hãy thử lại.');
+              };
+              const date = value => {
+                const match = /^(\d{2})\/(\d{2})\/(\d{4})${'$'}/.exec(value);
+                if (!match) throw Error('TraCuu thiếu ngày của lớp.');
+                const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+                if (parsed.getFullYear() !== Number(match[3]) ||
+                    parsed.getMonth() + 1 !== Number(match[2]) ||
+                    parsed.getDate() !== Number(match[1])) throw Error('TraCuu có ngày không hợp lệ.');
+                return match[3] + '-' + match[2] + '-' + match[1];
+              };
+              try {
+                const semester = document.querySelector('#dropSearch_HocKy');
+                const plan = document.querySelector('#dropSearch_KeHoach');
+                const results = document.querySelector('#zoneKetQuaDangKy');
+                const view = document.querySelector('#btnXemKetQuaDangKy');
+                if (!semester || !plan || !results || !view) throw Error('Trang TraCuu chưa sẵn sàng.');
+                const options = [...semester.options].map(option => {
+                  const name = option.textContent.trim();
+                  const match = /^(\d{4})_(\d{4})_(\d+)${'$'}/.exec(name);
+                  return match && Number(match[2]) === Number(match[1]) + 1 && option.value
+                    ? {value: option.value, name, year: Number(match[1]), term: Number(match[3])}
+                    : null;
+                }).filter(Boolean).sort((a, b) => b.year - a.year || b.term - a.term);
+                if (!options.length) throw Error('TraCuu chưa có học kỳ hợp lệ.');
+                const latest = options[0];
+                semester.value = latest.value;
+                semester.dispatchEvent(new Event('change', {bubbles: true}));
+                const plans = await waitFor(() => {
+                  const choices = [...plan.options].filter(option => option.value &&
+                    (option.textContent.trim() === latest.name ||
+                     option.textContent.trim().startsWith(latest.name + ',')));
+                  return choices.length ? choices : null;
+                });
+                if (plans.length !== 1) throw Error('Không xác định được một kế hoạch duy nhất.');
+                plan.value = plans[0].value;
+                plan.dispatchEvent(new Event('change', {bubbles: true}));
+                results.replaceChildren();
+                view.click();
+                await waitFor(() => results.querySelector('.subject-item'));
+                let previous = '';
+                let stable = 0;
+                await waitFor(() => {
+                  const current = results.innerHTML;
+                  stable = current === previous ? stable + 1 : 0;
+                  previous = current;
+                  return stable >= 4;
+                });
+                if (semester.value !== latest.value || plan.value !== plans[0].value) {
+                  throw Error('TraCuu đã đổi học kỳ hoặc kế hoạch.');
+                }
+                const subjects = [...results.querySelectorAll('.subject-item')].map(item => {
+                  const heading = item.querySelector('h4');
+                  const name = heading ? heading.textContent.trim().replace(/^Môn\s+/i, '').trim() : '';
+                  if (!name) throw Error('TraCuu có môn thiếu tên.');
+                  const classes = [...item.querySelectorAll('.classroom-section-item')].map(section => {
+                    const classNode = section.querySelector('.btnChiTietLopHocPhan');
+                    const name = classNode ? classNode.textContent.trim() : '';
+                    const dateNode = section.querySelector('.classroom-day');
+                    const match = dateNode && /(\d{2}\/\d{2}\/\d{4})\s*-\s*(\d{2}\/\d{2}\/\d{4})/.exec(dateNode.textContent);
+                    if (!name || !match) throw Error('TraCuu thiếu lớp hoặc khoảng ngày.');
+                    return {name, startsOn: date(match[1]), endsOn: date(match[2])};
+                  });
+                  return {name, classes};
+                });
+                window.BetterPhenikaaNative.onRegistration(JSON.stringify({
+                  id: latest.name, name: latest.name, subjects
+                }));
+              } catch (error) {
+                fail(error.message || 'Không xác minh được dữ liệu TraCuu.');
+              }
+            })();
+        """
     }
 }
 
-private object QldtSnapshotEncoder {
+internal object QldtSnapshotEncoder {
     data class SnapshotBundle(
         val appSnapshot: String,
         val widgetSnapshot: String,

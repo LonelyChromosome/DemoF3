@@ -38,7 +38,7 @@ final class TracuuWebViewProbe {
         }
         const options = [...semester.options].map(option => {
           const name = option.textContent.trim();
-          const match = /^(d{4})_(d{4})_(d+)$/.exec(name);
+          const match = /^(\d{4})_(\d{4})_(\d+)$/.exec(name);
           return match && Number(match[2]) === Number(match[1]) + 1 && option.value
             ? {value: option.value, name, year: Number(match[1]), term: Number(match[3])}
             : null;
