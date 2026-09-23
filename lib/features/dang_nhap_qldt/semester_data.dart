@@ -44,12 +44,14 @@ final class RegisteredSemester {
     required this.name,
     required this.subjectNames,
     this.classSections = const <String, List<RegisteredClassSection>>{},
+    this.confirmedEmpty = false,
   });
 
   final String id;
   final String name;
   final List<String> subjectNames;
   final Map<String, List<RegisteredClassSection>> classSections;
+  final bool confirmedEmpty;
 }
 
 final class RegisteredClassSection {
@@ -189,7 +191,7 @@ final class SemesterDataBuilder {
       names[normalized] = name.trim();
     }
 
-    if (names.isEmpty) {
+    if (names.isEmpty && !registration.confirmedEmpty) {
       throw const FormatException('Không xác minh được danh sách môn đăng ký.');
     }
 

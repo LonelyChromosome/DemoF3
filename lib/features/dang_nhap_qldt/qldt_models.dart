@@ -141,6 +141,7 @@ final class QldtParser {
   ImportedScheduleData parseApiResponse(
     Map<String, dynamic> response, {
     required String displayName,
+    bool strict = false,
   }) {
     if (response['Success'] != true) {
       throw const FormatException('QLĐT returned Success != true.');
@@ -153,12 +154,23 @@ final class QldtParser {
     final recordsById = <String, ScheduleRecord>{};
     for (final rawItem in rawData) {
       if (rawItem is! Map) {
+        if (strict)
+          throw const FormatException('QLĐT có bản ghi không hợp lệ.');
         continue;
       }
       final item = Map<String, dynamic>.from(rawItem);
+      if (strict &&
+          !<String>{
+            'LICHHOC',
+            'LICHTHI',
+          }.contains(_string(item['PHANLOAI']).toUpperCase())) {
+        throw const FormatException('QLĐT có loại lịch không xác định.');
+      }
       final record = _parseRecord(item);
       if (record != null) {
         recordsById[record.id] = record;
+      } else if (strict) {
+        throw const FormatException('QLĐT có bản ghi thiếu trường bắt buộc.');
       }
     }
 
