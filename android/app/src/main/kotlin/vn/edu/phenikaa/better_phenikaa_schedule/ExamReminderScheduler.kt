@@ -97,6 +97,9 @@ class ExamReminderWorker(context: Context, parameters: WorkerParameters) : Worke
         val subject = inputData.getString("subject") ?: return Result.success()
         val days = inputData.getInt("days", 0)
         if (days !in listOf(7, 3, 1)) return Result.success()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED) return Result.retry()
         ExamReminderScheduler.deliver(applicationContext, key, subject, days)
         return Result.success()
     }
