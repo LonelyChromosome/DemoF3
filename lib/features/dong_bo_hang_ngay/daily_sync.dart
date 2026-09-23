@@ -38,4 +38,14 @@ abstract final class DailySync {
       debugPrint('Unable to refresh today on the widget: $error');
     }
   }
+
+  static Future<void> syncReminders() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('syncReminders');
+  }
+
+  static Future<void> clearReminders() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('clearReminders');
+  }
 }

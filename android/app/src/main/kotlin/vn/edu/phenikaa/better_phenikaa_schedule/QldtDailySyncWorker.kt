@@ -89,6 +89,14 @@ class QldtDailySyncWorker(
                         applicationContext,
                         System.currentTimeMillis(),
                     )
+                    runCatching {
+                        ExamReminderScheduler.reconcile(applicationContext, bundle.semester)
+                    }.onFailure {
+                        DailySyncScheduler.recordFailure(
+                            applicationContext,
+                            "Lịch đã lưu nhưng không lên lịch được nhắc thi.",
+                        )
+                    }
                 }
                 is HeadlessQldtSync.Result.Failure -> {
                     DailySyncScheduler.recordFailure(

@@ -1,12 +1,14 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 import android.app.Activity
+import android.Manifest
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
@@ -186,6 +188,28 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "status" -> result.success(DailySyncScheduler.status(applicationContext))
+                "syncReminders" -> {
+                    val semester = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+                        .getString("flutter.better_phenikaa_current_semester_v1", null)
+                    if (semester == null) {
+                        result.error("missing_semester", "Chưa có dữ liệu học kỳ.", null)
+                    } else {
+                        runCatching { ExamReminderScheduler.reconcile(applicationContext, semester) }
+                            .onSuccess {
+                                if (Build.VERSION.SDK_INT >= 33 &&
+                                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                                    android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 8421)
+                                }
+                                result.success(null)
+                            }
+                            .onFailure { result.error("reminder_failed", it.message, null) }
+                    }
+                }
+                "clearReminders" -> {
+                    ExamReminderScheduler.clear(applicationContext)
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }

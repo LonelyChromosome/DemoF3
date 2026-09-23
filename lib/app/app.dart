@@ -102,6 +102,14 @@ class _AppRootState extends State<_AppRoot> {
         _data = data;
         _selectedDate = _initialDateFor(data);
         await WidgetPublisher.publish(data, resetToToday: false);
+        if (semester != null) {
+          try {
+            await DailySync.syncReminders();
+          } on Object {
+            _errorMessage =
+                'Không lên lịch được nhắc lịch thi. Hãy thử đồng bộ lại.';
+          }
+        }
         await DailySync.disable();
       }
     } on Object catch (error) {
@@ -205,6 +213,17 @@ class _AppRootState extends State<_AppRoot> {
               SnackBar(content: Text(SemesterSyncMessage.from(difference))),
             );
           }
+          try {
+            await DailySync.syncReminders();
+          } on Object {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Đã lưu lịch, nhưng chưa lên lịch nhắc thi. Hãy thử đồng bộ lại.',
+                ),
+              ),
+            );
+          }
         }
       }
     } on Object catch (error) {
@@ -220,6 +239,7 @@ class _AppRootState extends State<_AppRoot> {
 
   Future<void> _logout() async {
     await DailySync.disable();
+    await DailySync.clearReminders();
     await clearQldtSession();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
