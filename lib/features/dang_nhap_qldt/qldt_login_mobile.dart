@@ -594,6 +594,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     final epoch = _syncEpoch;
     _registrationChecking = true;
     _registrationTimer?.cancel();
+    var operation = 'DOM_CHECK';
     try {
       final ready = await controller.evaluateJavascript(
         source: '''
@@ -617,6 +618,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           const Duration(seconds: 15),
           epoch,
         );
+        operation = 'PROBE_START';
         await controller.evaluateJavascript(
           source: const TracuuWebViewProbe().scriptForAttempt(epoch),
         );
@@ -624,6 +626,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       }
       if (!_registrationRequested) {
         _registrationRequested = true;
+        operation = 'NAVIGATION';
         final navigated = await controller.evaluateJavascript(
           source: '''
           (function () {
@@ -651,10 +654,15 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       });
     } on Object {
       if (mounted && _syncing && epoch == _syncEpoch) {
+        final reason = switch (operation) {
+          'DOM_CHECK' => 'Không đọc được cấu trúc trang TraCuu.',
+          'PROBE_START' => 'Không khởi chạy được bước tải đăng ký trên TraCuu.',
+          _ => 'Không mở được TraCuu trong phiên QLĐT.',
+        };
         _stopSync(
           epoch,
-          'Không đọc được trang TraCuu. Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
-          code: 'NAVIGATION_ERROR',
+          '$reason Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
+          code: '${operation}_ERROR',
         );
       }
     } finally {
