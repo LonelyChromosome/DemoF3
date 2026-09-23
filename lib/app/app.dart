@@ -149,6 +149,11 @@ class _AppRootState extends State<_AppRoot> {
       }
       await WidgetPublisher.publish(result.schedule, resetToToday: true);
       await DailySync.disable();
+      try {
+        await DailySync.recordAppSyncSuccess();
+      } on Object {
+        // The successful semester snapshot is already stored.
+      }
       return difference;
     } on Object {
       if (previousSemester == null) {

@@ -44,6 +44,11 @@ abstract final class DailySync {
     await _channel.invokeMethod<void>('syncReminders');
   }
 
+  static Future<void> recordAppSyncSuccess() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('recordAppSyncSuccess');
+  }
+
   static Future<void> clearReminders() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     await _channel.invokeMethod<void>('clearReminders');

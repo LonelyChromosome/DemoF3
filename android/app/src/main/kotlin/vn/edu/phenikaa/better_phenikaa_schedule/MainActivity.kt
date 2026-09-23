@@ -189,6 +189,11 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "status" -> result.success(DailySyncScheduler.status(applicationContext))
+                "recordAppSyncSuccess" -> {
+                    DailySyncScheduler.recordSuccess(applicationContext, System.currentTimeMillis())
+                    WidgetRefreshCoordinator.refreshOverview(applicationContext)
+                    result.success(null)
+                }
                 "syncReminders" -> {
                     val semester = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
                         .getString("flutter.better_phenikaa_current_semester_v1", null)
