@@ -24,7 +24,6 @@ void main() {
     'stored schedule opens day and week views without changing navigation',
     (tester) async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      addTearDown(() => debugDefaultTargetPlatformOverride = null);
       final today = DateTime.now();
       final snapshot = ImportedScheduleData(
         displayName: 'Sinh viên',
@@ -58,6 +57,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Thiết kế web nâng cao'), findsOneWidget);
       expect(find.byTooltip('Tuần sau'), findsNothing);
+      debugDefaultTargetPlatformOverride = null;
     },
   );
 }
