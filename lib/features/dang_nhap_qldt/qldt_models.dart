@@ -154,8 +154,9 @@ final class QldtParser {
     final recordsById = <String, ScheduleRecord>{};
     for (final rawItem in rawData) {
       if (rawItem is! Map) {
-        if (strict)
+        if (strict) {
           throw const FormatException('QLĐT có bản ghi không hợp lệ.');
+        }
         continue;
       }
       final item = Map<String, dynamic>.from(rawItem);
