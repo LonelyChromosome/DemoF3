@@ -315,8 +315,14 @@ class WidgetDatePickerActivity : Activity() {
     }
 
     private fun refreshWidget(widgetId: Int) {
+        val provider = AppWidgetManager.getInstance(this).getAppWidgetInfo(widgetId)?.provider
+        val receiver = if (provider?.className == OverviewWidgetProvider::class.java.name) {
+            OverviewWidgetProvider::class.java
+        } else {
+            ScheduleWidgetProvider::class.java
+        }
         sendBroadcast(
-            Intent(this, ScheduleWidgetProvider::class.java).apply {
+            Intent(this, receiver).apply {
                 action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(widgetId))
             },

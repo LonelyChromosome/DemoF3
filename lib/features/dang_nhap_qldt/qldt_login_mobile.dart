@@ -380,7 +380,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       if (!_registrationRequested) {
         _registrationRequested = true;
         final navigated = await controller.evaluateJavascript(
-          source: r'''
+          source: '''
           (function () {
             const links = [...document.querySelectorAll('a')];
             const candidates = links.filter(node => {

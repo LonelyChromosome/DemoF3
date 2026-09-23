@@ -30,6 +30,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         return colors.textColor to colors.iconColor
     }
 
+    internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int): Bitmap =
+        renderThemeBackground(context, widthDp, heightDp, readThemeColors(context))
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == ACTION_COLLECTION_FRAME_READY) {
             val widgetId = intent.getIntExtra(

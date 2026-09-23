@@ -62,13 +62,23 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val items = WidgetSnapshotStore.readOverview(context, id, examMode)
         val width = manager.getAppWidgetOptions(id)
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
+        val height = manager.getAppWidgetOptions(id)
+            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
         val size = OverviewPager.pageSize(width)
         val page = OverviewPager.clamp(state.getInt(pageKey(id), 0), items.size, size)
         val (textColor, iconColor) = ScheduleWidgetProvider().overviewColors(context)
         val views = RemoteViews(context.packageName, R.layout.overview_widget)
-        val date = SimpleDateFormat("dd/MM", Locale.getDefault()).format(Date())
+        views.setImageViewBitmap(R.id.overview_background,
+            ScheduleWidgetProvider().overviewBackground(context, width, height))
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        val selected = context.getSharedPreferences(
+            ScheduleWidgetProvider.WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE,
+        ).getString(ScheduleWidgetProvider.selectedDateKey(id), today) ?: today
+        val date = if (selected.length == 10) "${selected.substring(8, 10)}/${selected.substring(5, 7)}"
+            else SimpleDateFormat("dd/MM", Locale.getDefault()).format(Date())
         views.setTextViewText(R.id.overview_title,
-            if (examMode) "Lịch thi sắp tới · ${items.size} ca" else "Hôm nay · $date · ${items.size} môn")
+            if (examMode) "Lịch thi sắp tới · ${items.size} ca" else
+                "${if (selected == today) "Hôm nay" else "Ngày $date"} · ${items.size} môn")
         views.setImageViewResource(R.id.overview_mode,
             if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
         views.setContentDescription(R.id.overview_mode,
