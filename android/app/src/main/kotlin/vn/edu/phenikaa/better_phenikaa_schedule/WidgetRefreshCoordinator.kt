@@ -11,7 +11,10 @@ internal object WidgetRefreshCoordinator {
         val manager = AppWidgetManager.getInstance(appContext)
         val component = ComponentName(appContext, ScheduleWidgetProvider::class.java)
         val widgetIds = manager.getAppWidgetIds(component)
-        if (widgetIds.isEmpty()) return
+        val overviewIds = manager.getAppWidgetIds(
+            ComponentName(appContext, OverviewWidgetProvider::class.java),
+        )
+        if (widgetIds.isEmpty() && overviewIds.isEmpty()) return
 
         val selection = appContext.getSharedPreferences(
             ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
@@ -23,7 +26,7 @@ internal object WidgetRefreshCoordinator {
         )
         val selectionEditor = selection.edit()
         val visibleEditor = visible.edit()
-        widgetIds.forEach { widgetId ->
+        (widgetIds + overviewIds).forEach { widgetId ->
             selectionEditor
                 .remove(ScheduleWidgetProvider.selectedDateKey(widgetId))
                 .putBoolean(ScheduleWidgetProvider.resetChildKey(widgetId), true)
@@ -32,11 +35,12 @@ internal object WidgetRefreshCoordinator {
         selectionEditor.commit()
         visibleEditor.apply()
 
-        manager.notifyAppWidgetViewDataChanged(widgetIds, R.id.widget_list)
+        if (widgetIds.isNotEmpty()) manager.notifyAppWidgetViewDataChanged(widgetIds, R.id.widget_list)
         val widgetData = appContext.getSharedPreferences(
             "FlutterSharedPreferences",
             Context.MODE_PRIVATE,
         )
         ScheduleWidgetProvider().onUpdate(appContext, manager, widgetIds, widgetData)
+        OverviewWidgetProvider().onUpdate(appContext, manager, overviewIds, widgetData)
     }
 }

@@ -15,6 +15,10 @@ import java.util.Locale
 
 class OverviewWidgetProvider : HomeWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action == ACTION_RELOAD) {
+            WidgetManualSync.request(context)
+            return
+        }
         if (intent.action == ACTION_PAGE || intent.action == ACTION_MODE) {
             val id = intent.getIntExtra(
                 AppWidgetManager.EXTRA_APPWIDGET_ID,
@@ -108,6 +112,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         views.setOnClickPendingIntent(R.id.overview_previous, action(context, id, ACTION_PAGE, -1))
         views.setOnClickPendingIntent(R.id.overview_next, action(context, id, ACTION_PAGE, 1))
         views.setOnClickPendingIntent(R.id.overview_mode, action(context, id, ACTION_MODE, 0))
+        views.setOnClickPendingIntent(R.id.overview_reload, action(context, id, ACTION_RELOAD, 0))
         val dateIntent = Intent(context, WidgetDatePickerActivity::class.java).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
             data = Uri.parse("better-phenikaa://overview/$id/date-picker")
@@ -132,6 +137,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
     private companion object {
         const val ACTION_PAGE = "vn.edu.phenikaa.better_phenikaa_schedule.OVERVIEW_PAGE"
         const val ACTION_MODE = "vn.edu.phenikaa.better_phenikaa_schedule.OVERVIEW_MODE"
+        const val ACTION_RELOAD = "vn.edu.phenikaa.better_phenikaa_schedule.OVERVIEW_RELOAD"
         const val EXTRA_DIRECTION = "direction"
         const val STATE_PREFS = "better_phenikaa_overview_state"
         fun pageKey(id: Int) = "page_$id"
