@@ -23,6 +23,13 @@ final class SemesterScheduleVerifier {
       if (classes.containsKey(normalized)) {
         throw FormatException('Trùng môn đăng ký: $name');
       }
+      final sectionNames = sections
+          .map((section) => normalizeSubjectName(section.name))
+          .toList();
+      if (sectionNames.toSet().length != sectionNames.length ||
+          sectionNames.any((value) => value.isEmpty)) {
+        throw FormatException('TraCuu có lớp trùng hoặc thiếu tên: $name');
+      }
       classes[normalized] = {
         for (final section in sections)
           normalizeSubjectName(section.name): section,
@@ -47,6 +54,14 @@ final class SemesterScheduleVerifier {
         );
       }
       if (row.isExam) {
+        final earliestStart = subject.values
+            .map((section) => section.startsOn)
+            .reduce((a, b) => a.isBefore(b) ? a : b);
+        if (row.startAt.isBefore(earliestStart)) {
+          throw FormatException(
+            'Ca thi đứng trước học kỳ đăng ký: ${row.subjectName}',
+          );
+        }
         exams.add(row);
         continue;
       }

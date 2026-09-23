@@ -80,6 +80,22 @@ void main() {
     );
   });
 
+  test('rejects an old exam even if a repeated class name matches', () {
+    final oldExam = Map<String, dynamic>.from(
+      (response['Data'] as List<dynamic>).last as Map<String, dynamic>,
+    )..['NGAYHOC'] = '10/12/2025';
+    expect(
+      () => verifier.verify(
+        registration: registration,
+        schedule: parse(<String, dynamic>{
+          'Success': true,
+          'Data': <dynamic>[oldExam],
+        }),
+      ),
+      throwsFormatException,
+    );
+  });
+
   test('rejects partial or malformed API response before linking', () {
     final incomplete = <String, dynamic>{
       'Success': true,
