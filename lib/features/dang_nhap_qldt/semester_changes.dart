@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 final class ScheduleDifference {
   const new({
@@ -13,6 +16,18 @@ final class ScheduleDifference {
   final int modified;
 
   bool get hasChanges => added + removed + modified > 0;
+
+  Map<String, int> toJson() => <String, int>{
+    'added': added,
+    'removed': removed,
+    'modified': modified,
+  };
+
+  factory fromJson(Map<String, dynamic> json) => ScheduleDifference(
+    added: json['added'] as int,
+    removed: json['removed'] as int,
+    modified: json['modified'] as int,
+  );
 }
 
 final class SemesterDifference {
@@ -36,6 +51,57 @@ final class SemesterDifference {
           removedSubjects.isNotEmpty ||
           study.hasChanges ||
           exams.hasChanges);
+
+  Map<String, Object> toJson() => <String, Object>{
+    'initial': initial,
+    'addedSubjects': addedSubjects,
+    'removedSubjects': removedSubjects,
+    'study': study.toJson(),
+    'exams': exams.toJson(),
+  };
+
+  factory fromJson(Map<String, dynamic> json) => SemesterDifference(
+    initial: json['initial'] as bool,
+    addedSubjects: (json['addedSubjects'] as List<dynamic>).cast<String>(),
+    removedSubjects: (json['removedSubjects'] as List<dynamic>).cast<String>(),
+    study: ScheduleDifference.fromJson(
+      Map<String, dynamic>.from(json['study'] as Map<dynamic, dynamic>),
+    ),
+    exams: ScheduleDifference.fromJson(
+      Map<String, dynamic>.from(json['exams'] as Map<dynamic, dynamic>),
+    ),
+  );
+}
+
+final class SemesterDifferenceStore {
+  static const storageKey = 'better_phenikaa_semester_difference_v1';
+
+  Future<SemesterDifference?> read() async {
+    final preferences = await SharedPreferences.getInstance();
+    final raw = preferences.getString(storageKey);
+    return raw == null
+        ? null
+        : SemesterDifference.fromJson(
+            Map<String, dynamic>.from(jsonDecode(raw) as Map<dynamic, dynamic>),
+          );
+  }
+
+  Future<void> save(SemesterDifference difference) async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!await preferences.setString(
+      storageKey,
+      jsonEncode(difference.toJson()),
+    )) {
+      throw StateError('Không thể lưu kết quả đồng bộ.');
+    }
+  }
+
+  Future<void> clear() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!await preferences.remove(storageKey)) {
+      throw StateError('Không thể xóa kết quả đồng bộ.');
+    }
+  }
 }
 
 final class SemesterChangeDetector {

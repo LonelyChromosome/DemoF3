@@ -2,6 +2,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dar
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   const detector = SemesterChangeDetector();
@@ -111,4 +112,20 @@ void main() {
     expect(detector.compare(before, moved).exams.modified, 1);
     expect(detector.compare(before, before).hasChanges, isFalse);
   });
+
+  test(
+    'last successful difference survives reload and empty change replaces it',
+    () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final store = SemesterDifferenceStore();
+      final previous = state();
+      final next = state(
+        study: <ScheduleRecord>[row(subject: 'Thiết kế web nâng cao')],
+      );
+      await store.save(detector.compare(previous, next));
+      expect((await store.read())!.study.added, 1);
+      await store.save(detector.compare(next, next));
+      expect((await store.read())!.hasChanges, isFalse);
+    },
+  );
 }

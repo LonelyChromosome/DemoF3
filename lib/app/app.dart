@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_sync_message.dart';
 import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
@@ -111,21 +113,32 @@ class _AppRootState extends State<_AppRoot> {
     }
   }
 
-  Future<void> _save(QldtLoginResult result) async {
+  Future<SemesterDifference?> _save(QldtLoginResult result) async {
     final prefs = await SharedPreferences.getInstance();
     final store = CurrentSemesterStore();
+    final differenceStore = SemesterDifferenceStore();
     final previousSemester = await store.read();
+    final previousDifference = await differenceStore.read();
     final previousSnapshot = prefs.getString(_storageKey);
     if (result.semester == null && !kIsWeb) {
       throw const FormatException('Không xác minh được dữ liệu học kỳ QLĐT.');
     }
     try {
-      if (result.semester != null) await store.save(result.semester!);
+      SemesterDifference? difference;
+      if (result.semester != null) {
+        difference = const SemesterChangeDetector().compare(
+          previousSemester,
+          result.semester!,
+        );
+        await store.save(result.semester!);
+        await differenceStore.save(difference);
+      }
       if (!await prefs.setString(_storageKey, result.schedule.encode())) {
         throw StateError('Không thể lưu dữ liệu lịch trên thiết bị.');
       }
       await WidgetPublisher.publish(result.schedule, resetToToday: true);
       await DailySync.disable();
+      return difference;
     } on Object {
       if (previousSemester == null) {
         await store.clear();
@@ -136,6 +149,11 @@ class _AppRootState extends State<_AppRoot> {
         await prefs.remove(_storageKey);
       } else {
         await prefs.setString(_storageKey, previousSnapshot);
+      }
+      if (previousDifference == null) {
+        await differenceStore.clear();
+      } else {
+        await differenceStore.save(previousDifference);
       }
       rethrow;
     }
@@ -164,13 +182,18 @@ class _AppRootState extends State<_AppRoot> {
     try {
       final imported = await openQldtLogin(context);
       if (imported != null) {
-        await _save(imported);
+        final difference = await _save(imported);
         if (mounted) {
           setState(() {
             _data = imported.schedule;
             _selectedDate = _initialDateFor(imported.schedule);
             _page = _AppPage.timetable;
           });
+          if (difference != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(SemesterSyncMessage.from(difference))),
+            );
+          }
         }
       }
     } on Object catch (error) {
@@ -190,6 +213,7 @@ class _AppRootState extends State<_AppRoot> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
     await CurrentSemesterStore().clear();
+    await SemesterDifferenceStore().clear();
     await WidgetPublisher.clear();
     if (mounted) {
       setState(() {
