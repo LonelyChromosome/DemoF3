@@ -174,6 +174,18 @@ class _AppRootState extends State<_AppRoot> {
           previousWidgetSnapshot,
         );
       }
+      try {
+        final oldData =
+            previousSemester?.toImportedScheduleData() ??
+            (previousSnapshot == null
+                ? null
+                : ImportedScheduleData.decode(previousSnapshot));
+        if (oldData != null) {
+          await WidgetPublisher.publish(oldData, resetToToday: false);
+        }
+      } on Object {
+        // The saved snapshot remains available for the next widget refresh.
+      }
       rethrow;
     }
   }
