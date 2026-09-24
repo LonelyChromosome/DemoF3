@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DemoF3 TraCuu Inspector</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; width: 330px; margin: 16px; color: #182845; }
+    h1 { font-size: 17px; margin: 0 0 10px; }
+    p { line-height: 1.45; }
+    button { padding: 10px 12px; border: 0; border-radius: 8px; background: #1747b5; color: white; cursor: pointer; width: 100%; }
+    button:disabled { opacity: .55; cursor: default; }
+    #status { white-space: pre-wrap; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <h1>TraCuu Inspector</h1>
+  <p>Mở TraCuu, tải lại trang, đợi môn hiện ra và bấm Xem một lần. Sau đó bấm nút dưới để tải bản ghi đã che định danh.</p>
+  <button id="export">Tải capture TraCuu</button>
+  <p id="status" role="status"></p>
+  <script src="popup.js"></script>
+</body>
+</html>
