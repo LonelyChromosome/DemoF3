@@ -14,6 +14,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
 import android.widget.RemoteViews
+import androidx.work.WorkManager
 
 /** Partial icon updates run off the WebView's main thread during one-shot sync. */
 internal object WidgetSyncIndicator {
@@ -27,15 +28,18 @@ internal object WidgetSyncIndicator {
     private const val STARTED_AT = "started_at"
     private const val FRAME_DELAY_MS = 50L
     private const val FRAME_COUNT = 20
-    private const val MAX_SPIN_MS = 110_000L
+    private const val MAX_SPIN_MS = 65_000L
     private const val SUCCESS_HOLD_MS = 1_000L
     private const val FAILURE_HOLD_MS = 1_500L
 
-    fun start(context: Context) {
+    fun start(context: Context): Long {
         val appContext = context.applicationContext
-        val token = SystemClock.elapsedRealtime().coerceAtLeast(1L)
+        val token: Long
         val current: Int
         synchronized(this) {
+            val previous = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getLong(STARTED_AT, 0L)
+            token = maxOf(SystemClock.elapsedRealtime().coerceAtLeast(1L), previous + 1L)
             phase = Phase.SPINNING
             step = 0
             current = ++generation
@@ -45,18 +49,29 @@ internal object WidgetSyncIndicator {
         }
         handler.post { spin(appContext, current) }
         handler.postDelayed({ timeout(appContext, token) }, MAX_SPIN_MS)
+        return token
     }
 
-    fun finish(context: Context, succeeded: Boolean) {
-        finishInternal(context.applicationContext, succeeded, null)
-    }
+    fun finish(context: Context, token: Long, succeeded: Boolean): Boolean =
+        finishInternal(context.applicationContext, succeeded, token)
+
+    fun isCurrent(context: Context, token: Long): Boolean = token != 0L &&
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getLong(STARTED_AT, 0L) == token
 
     fun timeout(context: Context, token: Long) {
         val appContext = context.applicationContext
-        if (SystemClock.elapsedRealtime() - token < MAX_SPIN_MS) return
+        if (SystemClock.elapsedRealtime() - token < MAX_SPIN_MS) {
+            handler.postDelayed({ timeout(appContext, token) },
+                MAX_SPIN_MS - (SystemClock.elapsedRealtime() - token))
+            return
+        }
         if (finishInternal(appContext, false, token)) {
-            DailySyncScheduler.recordFailure(appContext, "Đồng bộ quá thời gian chờ. Hãy thử lại.")
+            DailySyncScheduler.recordFailure(appContext,
+                "SYNC_TIMEOUT: QLĐT không phản hồi trong 65 giây. Hãy thử lại.")
             WidgetRefreshCoordinator.refreshOverview(appContext)
+            WorkManager.getInstance(appContext)
+                .cancelUniqueWork(WidgetManualSync.WORK_NAME)
         }
     }
 
@@ -66,12 +81,12 @@ internal object WidgetSyncIndicator {
     fun applyToOverview(context: Context, views: RemoteViews) =
         apply(context, views, R.id.overview_reload)
 
-    private fun finishInternal(context: Context, succeeded: Boolean, token: Long?): Boolean {
+    private fun finishInternal(context: Context, succeeded: Boolean, token: Long): Boolean {
         val current: Int
         val expectedPhase: Phase
         synchronized(this) {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            if (token != null && prefs.getLong(STARTED_AT, 0L) != token) return false
+            if (token == 0L || prefs.getLong(STARTED_AT, 0L) != token) return false
             prefs.edit().remove(STARTED_AT).commit()
             cancelTimeout(context)
             expectedPhase = if (succeeded) Phase.SUCCESS else Phase.FAILURE

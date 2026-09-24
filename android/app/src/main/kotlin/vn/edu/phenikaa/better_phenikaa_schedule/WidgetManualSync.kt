@@ -7,15 +7,17 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 
 internal object WidgetManualSync {
+    const val WORK_NAME = "better_phenikaa_widget_reload"
+
     fun request(context: Context) {
         // A tap always repairs the visible widget immediately, even if the
         // network task is already running or eventually fails.
-        WidgetSyncIndicator.start(context.applicationContext)
+        val token = WidgetSyncIndicator.start(context.applicationContext)
         WidgetRefreshCoordinator.manualRefresh(context.applicationContext)
         val work = OneTimeWorkRequestBuilder<QldtDailySyncWorker>()
-            .setInputData(workDataOf("manual" to true))
+            .setInputData(workDataOf("manual" to true, "sync_token" to token))
             .build()
         WorkManager.getInstance(context.applicationContext)
-            .enqueueUniqueWork("better_phenikaa_widget_reload", ExistingWorkPolicy.KEEP, work)
+            .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, work)
     }
 }

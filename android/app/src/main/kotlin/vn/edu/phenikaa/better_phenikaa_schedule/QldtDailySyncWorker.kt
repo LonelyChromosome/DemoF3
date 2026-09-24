@@ -33,15 +33,19 @@ class QldtDailySyncWorker(
 ) : Worker(appContext, workerParameters) {
     @Volatile
     private var activeSync: HeadlessQldtSync? = null
+    private val syncToken: Long get() = inputData.getLong("sync_token", 0L)
 
     override fun doWork(): Result {
         if (!inputData.getBoolean("manual", false)) {
             return Result.success()
         }
 
+        if (!WidgetSyncIndicator.isCurrent(applicationContext, syncToken)) return Result.success()
         DailySyncScheduler.recordStarted(applicationContext, System.currentTimeMillis())
         WidgetRefreshCoordinator.refreshOverview(applicationContext)
         var syncSucceeded = false
+        var syncError = "SYNC_UNKNOWN: QLĐT chưa trả kết quả."
+        var reminderSemester: String? = null
         try {
             val preferences = applicationContext.getSharedPreferences(
                 FLUTTER_PREFERENCES,
@@ -49,8 +53,7 @@ class QldtDailySyncWorker(
             )
             val previousSnapshot = preferences.getString(APP_SNAPSHOT_KEY, null)
             if (previousSnapshot.isNullOrBlank()) {
-                DailySyncScheduler.recordFailure(applicationContext, "Hãy đồng bộ lần đầu trong ứng dụng.")
-                WidgetRefreshCoordinator.refreshOverview(applicationContext)
+                syncError = "SYNC_NO_SNAPSHOT: Hãy đồng bộ lần đầu trong ứng dụng."
                 return Result.success()
             }
 
@@ -61,9 +64,8 @@ class QldtDailySyncWorker(
             } finally {
                 activeSync = null
             }
-            if (isStopped) {
-                DailySyncScheduler.recordFailure(applicationContext, "Đồng bộ bị dừng. Hãy thử lại.")
-                WidgetRefreshCoordinator.refreshOverview(applicationContext)
+            if (isStopped || !WidgetSyncIndicator.isCurrent(applicationContext, syncToken)) {
+                syncError = "SYNC_STOPPED: Tác vụ đồng bộ đã dừng."
                 return Result.success()
             }
 
@@ -78,6 +80,8 @@ class QldtDailySyncWorker(
                         preferences.getString(CURRENT_SEMESTER_KEY, null),
                         bundle.semester,
                     )
+                    if (!WidgetSyncIndicator.isCurrent(applicationContext, syncToken))
+                        return Result.success()
                     val saved = preferences.edit()
                         .putString(APP_SNAPSHOT_KEY, bundle.appSnapshot)
                         .putString(WIDGET_SNAPSHOT_KEY, bundle.widgetSnapshot)
@@ -85,57 +89,44 @@ class QldtDailySyncWorker(
                         .putString(DIFFERENCE_KEY, difference)
                         .commit()
                     if (!saved) {
-                        DailySyncScheduler.recordFailure(
-                            applicationContext,
-                            "Không thể ghi dữ liệu đồng bộ vào bộ nhớ cục bộ.",
-                        )
-                        WidgetRefreshCoordinator.refreshOverview(applicationContext)
+                        syncError = "SYNC_SAVE: Không thể lưu dữ liệu đồng bộ."
                         return Result.success()
                     }
-                    DailySyncScheduler.recordSuccess(
-                        applicationContext,
-                        System.currentTimeMillis(),
-                    )
                     WidgetRefreshCoordinator.refreshData(applicationContext)
                     syncSucceeded = true
-                    runCatching {
-                        ExamReminderScheduler.reconcile(applicationContext, bundle.semester)
-                    }.onFailure {
-                        DailySyncScheduler.recordFailure(
-                            applicationContext,
-                            "Lịch đã lưu nhưng không lên lịch được nhắc thi.",
-                        )
-                    }
+                    reminderSemester = bundle.semester
                 }
                 is HeadlessQldtSync.Result.Failure -> {
-                    DailySyncScheduler.recordFailure(
-                        applicationContext,
-                        syncResult.message,
-                    )
-                    WidgetRefreshCoordinator.refreshOverview(applicationContext)
+                    syncError = syncResult.message
                 }
             }
         } catch (error: IllegalArgumentException) {
-            DailySyncScheduler.recordFailure(
-                applicationContext,
-                "VERIFY: " + error.message.orEmpty().take(150),
-            )
-            WidgetRefreshCoordinator.refreshOverview(applicationContext)
-        } catch (_: Exception) {
-            DailySyncScheduler.recordFailure(
-                applicationContext,
-                "Dữ liệu QLĐT không hợp lệ hoặc chưa tải đủ. Hãy thử lại trong ứng dụng.",
-            )
-            WidgetRefreshCoordinator.refreshOverview(applicationContext)
+            syncError = "VERIFY: " + error.message.orEmpty().take(150)
+        } catch (error: Exception) {
+            syncError = "SYNC_EXCEPTION: " + error.javaClass.simpleName.take(48)
         } finally {
-            WidgetSyncIndicator.finish(applicationContext, syncSucceeded)
+            if (WidgetSyncIndicator.finish(applicationContext, syncToken, syncSucceeded)) {
+                if (syncSucceeded) {
+                    DailySyncScheduler.recordSuccess(applicationContext, System.currentTimeMillis())
+                } else {
+                    DailySyncScheduler.recordFailure(applicationContext, syncError)
+                }
+                WidgetRefreshCoordinator.refreshOverview(applicationContext)
+            }
+        }
+        reminderSemester?.let { semester ->
+            runCatching { ExamReminderScheduler.reconcile(applicationContext, semester) }
         }
         return Result.success()
     }
 
     override fun onStopped() {
         activeSync?.cancel()
-        WidgetSyncIndicator.finish(applicationContext, false)
+        if (WidgetSyncIndicator.finish(applicationContext, syncToken, false)) {
+            DailySyncScheduler.recordFailure(applicationContext,
+                "SYNC_STOPPED: Android đã dừng tác vụ. Hãy thử lại.")
+            WidgetRefreshCoordinator.refreshOverview(applicationContext)
+        }
         super.onStopped()
     }
 
@@ -175,7 +166,7 @@ private class HeadlessQldtSync(private val context: Context) {
             false
         }
         if (!finished) {
-            complete(Result.Failure("Tác vụ QLĐT hết thời gian chờ."))
+            complete(Result.Failure("QLDT_TIMEOUT: QLĐT không phản hồi trong 50 giây."))
         }
         disposeWebViewAndWait()
         return result.get() ?: Result.Failure("QLĐT không trả kết quả đồng bộ.")
@@ -217,8 +208,8 @@ private class HeadlessQldtSync(private val context: Context) {
                     },
                     onError = { code ->
                         val message = when (code) {
-                            "SESSION_EXPIRED" -> "Phiên QLĐT đã hết hạn. Hãy đăng nhập lại trong app."
-                            "NETWORK_ERROR", "REQUEST_ERROR" -> "Yêu cầu QLĐT thất bại. Hãy thử lại."
+                            "SESSION_EXPIRED" -> "SESSION_EXPIRED: Hãy đăng nhập lại QLĐT trong app."
+                            "NETWORK_ERROR", "REQUEST_ERROR" -> "$code: Yêu cầu QLĐT thất bại."
                             "NO_SEMESTER" -> "TraCuu không trả học kỳ hợp lệ."
                             "PLAN_AMBIGUOUS" -> "PLAN_AMBIGUOUS: Không xác định được kế hoạch."
                             "INVALID_REGISTRATION" -> "INVALID_REGISTRATION: Kết quả đăng ký sai kế hoạch hoặc học kỳ."
@@ -365,7 +356,7 @@ private class HeadlessQldtSync(private val context: Context) {
               try {
                 if (!(window.edu && edu.system && edu.system.userId &&
                       edu.system.iM != null && typeof edu.system.makeRequest === 'function')) {
-                  window.$JAVASCRIPT_BRIDGE.onError('Phiên QLĐT chưa sẵn sàng.');
+                  window.$JAVASCRIPT_BRIDGE.onError('SESSION_EXPIRED');
                   return;
                 }
                 var requestData = {
@@ -396,7 +387,7 @@ private class HeadlessQldtSync(private val context: Context) {
                   },
                   error: function () {
                     window.$JAVASCRIPT_BRIDGE.onError(
-                      'QLĐT báo lỗi khi tải lịch cá nhân.'
+                      'NETWORK_ERROR'
                     );
                   },
                   type: 'POST',
@@ -406,7 +397,7 @@ private class HeadlessQldtSync(private val context: Context) {
                   fakedb: []
                 }, false, false, false, null);
               } catch (error) {
-                window.$JAVASCRIPT_BRIDGE.onError('Không đọc được lịch QLĐT. Hãy thử lại.');
+                window.$JAVASCRIPT_BRIDGE.onError('REQUEST_ERROR');
               }
             })();
         """.trimIndent()
@@ -490,7 +481,7 @@ private class HeadlessQldtSync(private val context: Context) {
         const val QLDT_URL = "https://qldtbeta.phenikaa-uni.edu.vn/"
         const val QLDT_HOST = "qldtbeta.phenikaa-uni.edu.vn"
         const val JAVASCRIPT_BRIDGE = "BetterPhenikaaNative"
-        const val SYNC_TIMEOUT_SECONDS = 90L
+        const val SYNC_TIMEOUT_SECONDS = 50L
         const val CLEANUP_TIMEOUT_SECONDS = 5L
         const val MAX_READINESS_ATTEMPTS = 35
         const val READINESS_RETRY_MILLIS = 1_000L
