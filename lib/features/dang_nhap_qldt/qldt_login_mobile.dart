@@ -406,7 +406,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             const Duration(seconds: 20),
             epoch,
           );
-          await _requestRegistration(epoch);
+          unawaited(
+            Future<void>.delayed(
+              Duration.zero,
+              () => _requestRegistration(epoch),
+            ),
+          );
         } on Object {
           _stopSync(
             epoch,
