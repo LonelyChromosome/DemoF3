@@ -445,7 +445,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     // No input or keystroke listeners, and no credential data in diagnostics.
     try {
       await controller.evaluateJavascript(
-        source: r'''
+        source: '''
         (function () {
           if (!['login.microsoftonline.com', 'login.live.com'].includes(location.hostname) &&
               !location.hostname.endsWith('.microsoftonline.com')) return;
@@ -522,10 +522,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaAutoStep',
       callback: (arguments) {
-        if (arguments.isNotEmpty && arguments.first == 'email')
+        if (arguments.isNotEmpty && arguments.first == 'email') {
           _autoEmailSubmitted = true;
-        if (arguments.isNotEmpty && arguments.first == 'password')
+        }
+        if (arguments.isNotEmpty && arguments.first == 'password') {
           _autoPasswordSubmitted = true;
+        }
         return null;
       },
     );
