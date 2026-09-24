@@ -113,6 +113,12 @@ class QldtDailySyncWorker(
                     WidgetRefreshCoordinator.refreshOverview(applicationContext)
                 }
             }
+        } catch (error: IllegalArgumentException) {
+            DailySyncScheduler.recordFailure(
+                applicationContext,
+                "VERIFY: " + error.message.orEmpty().take(150),
+            )
+            WidgetRefreshCoordinator.refreshOverview(applicationContext)
         } catch (_: Exception) {
             DailySyncScheduler.recordFailure(
                 applicationContext,
@@ -207,8 +213,12 @@ private class HeadlessQldtSync(private val context: Context) {
                             "SESSION_EXPIRED" -> "Phiên QLĐT đã hết hạn. Hãy đăng nhập lại trong app."
                             "NETWORK_ERROR", "REQUEST_ERROR" -> "Yêu cầu QLĐT thất bại. Hãy thử lại."
                             "NO_SEMESTER" -> "TraCuu không trả học kỳ hợp lệ."
-                            "PLAN_AMBIGUOUS" -> "Không xác định được kế hoạch đăng ký duy nhất."
-                            else -> "QLĐT trả dữ liệu thiếu hoặc không hợp lệ. Hãy thử lại."
+                            "PLAN_AMBIGUOUS" -> "PLAN_AMBIGUOUS: Không xác định được kế hoạch."
+                            "INVALID_REGISTRATION" -> "INVALID_REGISTRATION: Kết quả đăng ký sai kế hoạch hoặc học kỳ."
+                            "INVALID_DATE" -> "INVALID_DATE: Ngày lớp đăng ký không hợp lệ."
+                            "INVALID_SUBJECT" -> "INVALID_SUBJECT: Thông tin môn đăng ký không nhất quán."
+                            "INVALID_RESPONSE" -> "INVALID_RESPONSE: QLĐT không trả danh sách hợp lệ."
+                            else -> "REQUEST: QLĐT trả dữ liệu thiếu hoặc không hợp lệ."
                         }
                         complete(Result.Failure(message))
                     },
@@ -284,10 +294,10 @@ private class HeadlessQldtSync(private val context: Context) {
                 QLDT_URL
             }
             webView.loadUrl(portalUrl)
-        } catch (error: Exception) {
+        } catch (_: Exception) {
             complete(
                 Result.Failure(
-                    "Không thể khởi tạo phiên QLĐT: " + error.message.orEmpty(),
+                    "WEBVIEW_INIT: Không thể khởi tạo phiên QLĐT.",
                 ),
             )
         }

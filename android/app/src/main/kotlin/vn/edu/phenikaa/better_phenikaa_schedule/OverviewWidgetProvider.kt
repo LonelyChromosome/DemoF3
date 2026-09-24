@@ -114,7 +114,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         views.setTextViewText(R.id.overview_subtitle,
             if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học")
         views.setTextViewText(R.id.overview_status, when {
-            !error.isNullOrEmpty() && started > succeeded -> "Đồng bộ lỗi · Bấm ↻ thử lại"
+            !error.isNullOrEmpty() && started > succeeded -> error
             started > succeeded -> "Đang đồng bộ QLĐT..."
             examMode && items.isNotEmpty() -> {
                 val first = items.first()
