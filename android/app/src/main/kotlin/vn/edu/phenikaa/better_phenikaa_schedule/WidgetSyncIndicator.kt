@@ -67,6 +67,17 @@ internal object WidgetSyncIndicator {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getLong(STARTED_AT, 0L) == token
 
+    fun clear(context: Context) {
+        synchronized(this) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
+            cancelTimeout(context)
+            generation++
+            step = 0
+            resultFrame = -1
+            phase = Phase.IDLE
+        }
+    }
+
     fun timeout(context: Context, token: Long) {
         val appContext = context.applicationContext
         if (SystemClock.elapsedRealtime() - token < MAX_SPIN_MS) {

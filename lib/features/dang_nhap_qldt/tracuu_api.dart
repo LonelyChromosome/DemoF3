@@ -140,7 +140,7 @@ final class TracuuApi {
                   stage('verification');
                   done = true;
                   send('betterPhenikaaRegistrationResult',
-                    JSON.stringify({semesters, plans, registrations}));
+                    JSON.stringify({semesters, plans, registrations, userId: system.userId}));
                 });
             });
         });
@@ -253,6 +253,30 @@ final class TracuuApi {
       },
       confirmedEmpty: rows.isEmpty,
     );
+  }
+
+  /// Persist only verified routing identifiers, never credentials or responses.
+  String routeForVerifiedResult(String raw) {
+    final payload = jsonDecode(raw) as Map<String, dynamic>;
+    final userId = _string(payload['userId']);
+    final semesters = _data(payload['semesters']);
+    final plans = _data(payload['plans']);
+    final registration = parse(raw);
+    final latest = semesters.where((row) => _string(row['THOIGIAN']) == registration.id)
+        .map((row) => _string(row['ID'])).toSet();
+    final matching = plans.where((row) {
+      final name = _string(row['MAKEHOACH']);
+      return name == registration.name || name.startsWith('${registration.name},');
+    }).map((row) => _string(row['ID'])).where((id) => id.isNotEmpty).toSet();
+    if (userId.isEmpty || latest.length != 1 || matching.length != 1) {
+      throw const FormatException('Không xác minh được đường dẫn đăng ký.');
+    }
+    return jsonEncode(<String, String>{
+      'userId': userId,
+      'semesterId': latest.single,
+      'semesterName': registration.name,
+      'planId': matching.single,
+    });
   }
 
   List<Map<String, dynamic>> _data(Object? value) {

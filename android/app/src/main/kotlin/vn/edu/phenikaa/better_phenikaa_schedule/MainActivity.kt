@@ -15,6 +15,7 @@ import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import androidx.work.WorkManager
 import java.io.DataInputStream
 import java.io.File
 import java.io.FileInputStream
@@ -36,6 +37,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         configureDailySyncChannel(flutterEngine)
         configureQldtCredentialChannel(flutterEngine)
+        configureWidgetSessionChannel(flutterEngine)
         configureLocalFileChannel(flutterEngine)
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -184,6 +186,44 @@ class MainActivity : FlutterActivity() {
             .putInt(CUSTOM_ICON_KEY, request.iconColor)
             .commit()
         if (refreshOverview) WidgetRefreshCoordinator.refreshOverview(this)
+    }
+
+    private fun configureWidgetSessionChannel(flutterEngine: FlutterEngine) {
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "better_phenikaa/widget_session",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "invalidate" -> {
+                    WidgetSyncIndicator.clear(applicationContext)
+                    WorkManager.getInstance(applicationContext)
+                        .cancelUniqueWork(WidgetManualSync.WORK_NAME)
+                    result.success(null)
+                }
+                "clear" -> {
+                    val prefs = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+                    prefs.edit()
+                        .remove("flutter.better_phenikaa_snapshot_v1")
+                        .remove("flutter.better_phenikaa_widget_snapshot_v1")
+                        .remove("flutter.better_phenikaa_current_semester_v1")
+                        .remove("flutter.better_phenikaa_semester_difference_v1")
+                        .remove("flutter.better_phenikaa_qldt_registration_route_v1")
+                        .commit()
+                    listOf(
+                        ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
+                        WIDGET_VISIBLE_POSITION_PREFS,
+                        "better_phenikaa_widget_render_state",
+                        OverviewWidgetProvider.STATE_PREFS,
+                        "better_phenikaa_small_widget_mode",
+                    ).forEach { name ->
+                        getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
+                    }
+                    WidgetRefreshCoordinator.refreshData(applicationContext)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     private fun configureDailySyncChannel(flutterEngine: FlutterEngine) {

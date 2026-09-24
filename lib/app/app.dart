@@ -14,6 +14,7 @@ import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publi
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class BetterPhenikaaScheduleApp extends StatefulWidget {
@@ -62,6 +63,8 @@ class _AppRoot extends StatefulWidget {
 
 class _AppRootState extends State<_AppRoot> {
   static const _storageKey = 'better_phenikaa_snapshot_v1';
+  static const _routeKey = 'better_phenikaa_qldt_registration_route_v1';
+  static const _widgetSessionChannel = MethodChannel('better_phenikaa/widget_session');
 
   bool _booting = true;
   bool _syncing = false;
@@ -129,6 +132,7 @@ class _AppRootState extends State<_AppRoot> {
     final previousSemester = await store.read();
     final previousDifference = await differenceStore.read();
     final previousSnapshot = prefs.getString(_storageKey);
+    final previousRoute = prefs.getString(_routeKey);
     final previousWidgetSnapshot = prefs.getString(
       'better_phenikaa_widget_snapshot_v1',
     );
@@ -148,6 +152,10 @@ class _AppRootState extends State<_AppRoot> {
       if (!await prefs.setString(_storageKey, result.schedule.encode())) {
         throw StateError('Không thể lưu dữ liệu lịch trên thiết bị.');
       }
+      if (result.registrationRoute != null &&
+          !await prefs.setString(_routeKey, result.registrationRoute!)) {
+        throw StateError('Không thể lưu đường dẫn đăng ký trên thiết bị.');
+      }
       await WidgetPublisher.publish(result.schedule, resetToToday: true);
       await DailySync.disable();
       try {
@@ -166,6 +174,11 @@ class _AppRootState extends State<_AppRoot> {
         await prefs.remove(_storageKey);
       } else {
         await prefs.setString(_storageKey, previousSnapshot);
+      }
+      if (previousRoute == null) {
+        await prefs.remove(_routeKey);
+      } else {
+        await prefs.setString(_routeKey, previousRoute);
       }
       if (previousDifference == null) {
         await differenceStore.clear();
@@ -274,14 +287,21 @@ class _AppRootState extends State<_AppRoot> {
   }
 
   Future<void> _logout() async {
+    if (!kIsWeb) {
+      await _widgetSessionChannel.invokeMethod<void>('invalidate');
+    }
     await DailySync.disable();
     await DailySync.clearReminders();
     await clearQldtSession();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storageKey);
+    await prefs.remove(_routeKey);
     await CurrentSemesterStore().clear();
     await SemesterDifferenceStore().clear();
     await WidgetPublisher.clear();
+    if (!kIsWeb) {
+      await _widgetSessionChannel.invokeMethod<void>('clear');
+    }
     if (mounted) {
       setState(() {
         _data = null;

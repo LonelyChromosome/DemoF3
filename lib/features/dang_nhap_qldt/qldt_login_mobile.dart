@@ -790,6 +790,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         QldtLoginResult(
           schedule: semester.toImportedScheduleData(),
           semester: semester,
+          registrationRoute: const TracuuApi().routeForVerifiedResult(raw),
         ),
       );
     } on Object catch (error) {

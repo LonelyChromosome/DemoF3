@@ -56,7 +56,8 @@ class QldtDailySyncWorker(
                 return Result.success()
             }
 
-            val synchronizer = HeadlessQldtSync(applicationContext)
+            val cachedRoute = preferences.getString(REGISTRATION_ROUTE_KEY, null)
+            val synchronizer = HeadlessQldtSync(applicationContext, cachedRoute)
             activeSync = synchronizer
             val syncResult = try {
                 synchronizer.run()
@@ -86,6 +87,10 @@ class QldtDailySyncWorker(
                         .putString(WIDGET_SNAPSHOT_KEY, bundle.widgetSnapshot)
                         .putString(CURRENT_SEMESTER_KEY, bundle.semester)
                         .putString(DIFFERENCE_KEY, difference)
+                        .apply {
+                            val route = JSONObject(syncResult.registration).optJSONObject("route")
+                            if (route != null) putString(REGISTRATION_ROUTE_KEY, route.toString())
+                        }
                         .commit()
                     if (!saved) {
                         syncError = "SYNC_SAVE: Không thể lưu dữ liệu đồng bộ."
@@ -135,10 +140,16 @@ class QldtDailySyncWorker(
         const val WIDGET_SNAPSHOT_KEY = "flutter.better_phenikaa_widget_snapshot_v1"
         const val CURRENT_SEMESTER_KEY = "flutter.better_phenikaa_current_semester_v1"
         const val DIFFERENCE_KEY = "flutter.better_phenikaa_semester_difference_v1"
+        const val REGISTRATION_ROUTE_KEY = "flutter.better_phenikaa_qldt_registration_route_v1"
     }
 }
 
-private class HeadlessQldtSync(private val context: Context) {
+private class HeadlessQldtSync(private val context: Context, cachedRoute: String?) {
+    private val routeLiteral: String = runCatching {
+        val route = JSONObject(cachedRoute ?: "")
+        if (listOf("userId", "semesterId", "semesterName", "planId")
+                .any { route.optString(it).isBlank() }) "null" else route.toString()
+    }.getOrDefault("null")
     sealed interface Result {
         data class Success(val envelope: String, val registration: String) : Result
         data class Failure(val message: String) : Result
@@ -173,13 +184,13 @@ private class HeadlessQldtSync(private val context: Context) {
             complete(Result.Failure(
                 "QLDT_TIMEOUT_${stage.get()}: QLĐT không phản hồi trong 50 giây."))
         }
-        disposeWebViewAndWait()
+        disposeWebViewAsync()
         return result.get() ?: Result.Failure("QLĐT không trả kết quả đồng bộ.")
     }
 
     fun cancel() {
         complete(Result.Failure("Tác vụ đồng bộ đã dừng."))
-        disposeWebViewAndWait()
+        disposeWebViewAsync()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -491,7 +502,7 @@ private class HeadlessQldtSync(private val context: Context) {
     private fun requestRegistration(webView: WebView) {
         if (completed.get() || !registrationRequested.compareAndSet(false, true)) return
         stage.set("REGISTRATION")
-        webView.evaluateJavascript(REGISTRATION_SCRIPT, null)
+        webView.evaluateJavascript(REGISTRATION_SCRIPT.replace("__ROUTE__", routeLiteral), null)
     }
 
     private fun completeWhenBothReady() {
@@ -517,7 +528,7 @@ private class HeadlessQldtSync(private val context: Context) {
         }
     }
 
-    private fun disposeWebViewAndWait() {
+    private fun disposeWebViewAsync() {
         val dispose = {
             webViewReference.getAndSet(null)?.let { webView ->
                 webView.stopLoading()
@@ -532,19 +543,7 @@ private class HeadlessQldtSync(private val context: Context) {
             dispose()
             return
         }
-        val cleanupLatch = CountDownLatch(1)
-        mainHandler.post {
-            try {
-                dispose()
-            } finally {
-                cleanupLatch.countDown()
-            }
-        }
-        try {
-            cleanupLatch.await(CLEANUP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
+        mainHandler.post(dispose)
     }
 
     private class JavascriptResultBridge(
@@ -579,7 +578,6 @@ private class HeadlessQldtSync(private val context: Context) {
         const val QLDT_HOST = "qldtbeta.phenikaa-uni.edu.vn"
         const val JAVASCRIPT_BRIDGE = "BetterPhenikaaNative"
         const val SYNC_TIMEOUT_SECONDS = 50L
-        const val CLEANUP_TIMEOUT_SECONDS = 5L
         const val MAX_READINESS_ATTEMPTS = 35
         const val READINESS_RETRY_MILLIS = 1_000L
         const val SESSION_READY_SCRIPT = """
@@ -592,6 +590,7 @@ private class HeadlessQldtSync(private val context: Context) {
             (function () {
               const bridge = window.BetterPhenikaaNative;
               const system = window.edu && edu.system;
+              const storedRoute = __ROUTE__;
               let finished = false;
               const fail = code => {
                 if (finished) return;
@@ -602,7 +601,7 @@ private class HeadlessQldtSync(private val context: Context) {
                   typeof system.makeRequest !== 'function') {
                 fail('SESSION_EXPIRED'); return;
               }
-              const call = (action, func, fields, next) => {
+              const call = (action, func, fields, next, onFailure = fail) => {
                 const payload = Object.assign({action, func, iM: system.iM,
                   strQLSV_NguoiHoc_Id: system.userId}, fields);
                 try {
@@ -610,14 +609,73 @@ private class HeadlessQldtSync(private val context: Context) {
                     success: response => {
                       if (finished) return;
                       if (!response || response.Success !== true || !Array.isArray(response.Data)) {
-                        fail('INVALID_RESPONSE'); return;
+                        onFailure('INVALID_RESPONSE'); return;
                       }
-                      try { next(response.Data); } catch (_) { fail('INVALID_RESPONSE'); }
+                      try { next(response.Data); } catch (_) { onFailure('INVALID_RESPONSE'); }
                     },
-                    error: () => fail('NETWORK_ERROR'),
+                    error: () => onFailure('NETWORK_ERROR'),
                     type: 'POST', action, contentType: true, data: payload, fakedb: []
                   }, false, false, false, null);
-                } catch (_) { fail('REQUEST_ERROR'); }
+                } catch (_) { onFailure('REQUEST_ERROR'); }
+              };
+              const requestRows = (semesterId, planId, next, onFailure = fail) =>
+                call('DKH_Chung_MH/DSA4CiQ1EDQgBSAvJgo4DS4xCS4iESkgLwPP',
+                  'pkg_dangkyhoc_chung.LayKetQuaDangKyLopHocPhan',
+                  {strDaoTao_ChuongTrinh_Id: '',
+                    strDangKy_KeHoachDangKy_Id: planId,
+                    strNguoiThucHien_Id: system.userId,
+                    strDaoTao_ThoiGianDaoTao_Id: semesterId}, next, onFailure);
+              const cached = storedRoute && storedRoute.userId === String(system.userId)
+                ? storedRoute : null;
+              let cachedReady = false, cachedRows = null, cachedError = false;
+              let validated = null;
+              const finishRows = (latest, planId, planSemesterId, rows) => {
+                const subjects = new Map();
+                for (const row of rows) {
+                  if (row.DANGKY_KEHOACHDANGKY_ID !== planId ||
+                      (row.DAOTAO_THOIGIANDAOTAO_ID !== latest.id &&
+                        row.DAOTAO_THOIGIANDAOTAO_ID !== planSemesterId) ||
+                      !row.DAOTAO_HOCPHAN_ID || !row.DAOTAO_HOCPHAN_TEN ||
+                      !row.DANGKY_LOPHOCPHAN_ID || !row.DANGKY_LOPHOCPHAN_TEN) {
+                    fail('INVALID_REGISTRATION'); return;
+                  }
+                  const key = row.DAOTAO_HOCPHAN_ID;
+                  const start = date(row.NGAYBATDAU);
+                  const end = date(row.NGAYKETTHUC);
+                  if (end < start) { fail('INVALID_DATE'); return; }
+                  if (!subjects.has(key)) subjects.set(key, {
+                    name: row.DAOTAO_HOCPHAN_TEN, classes: []
+                  });
+                  const subject = subjects.get(key);
+                  if (subject.name !== row.DAOTAO_HOCPHAN_TEN) {
+                    fail('INVALID_SUBJECT'); return;
+                  }
+                  if (!subject.classes.some(item => item.id === row.DANGKY_LOPHOCPHAN_ID)) {
+                    subject.classes.push({id: row.DANGKY_LOPHOCPHAN_ID,
+                      name: row.DANGKY_LOPHOCPHAN_TEN, startsOn: start, endsOn: end});
+                  }
+                }
+                finished = true;
+                bridge.onRegistration(JSON.stringify({id: latest.name,
+                  name: latest.name, confirmedEmpty: rows.length === 0,
+                  route: {userId: String(system.userId), semesterId: String(latest.id),
+                    semesterName: latest.name, planId: String(planId)},
+                  subjects: [...subjects.values()].map(subject => ({
+                    name: subject.name,
+                    classes: subject.classes.map(({name, startsOn, endsOn}) =>
+                      ({name, startsOn, endsOn}))
+                  }))}));
+              };
+              const resolveRows = () => {
+                if (!validated || finished) return;
+                const {latest, planId, planSemesterId} = validated;
+                if (cached && cached.semesterId === String(latest.id) &&
+                    cached.semesterName === latest.name && cached.planId === planId) {
+                  if (!cachedReady) return;
+                  if (!cachedError) { finishRows(latest, planId, planSemesterId, cachedRows); return; }
+                }
+                requestRows(latest.id, planId, rows =>
+                  finishRows(latest, planId, planSemesterId, rows));
               };
               const date = value => {
                 const match = /^(\d{2})\/(\d{2})\/(\d{4})${'$'}/.exec(value);
@@ -628,6 +686,9 @@ private class HeadlessQldtSync(private val context: Context) {
                     parsed.getDate() !== Number(match[1])) throw Error('DATE_INVALID');
                 return match[3] + '-' + match[2] + '-' + match[1];
               };
+              if (cached) requestRows(cached.semesterId, cached.planId, rows => {
+                cachedRows = rows; cachedReady = true; resolveRows();
+              }, () => { cachedError = true; cachedReady = true; resolveRows(); });
               call('DKH_ThongTin_MH/DSA4FSkuKAYoIC8FIC8mCjgCIA8pIC8P',
                 'pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan',
                 {strDaoTao_ThoiGianDaoTao_Id: null}, semesters => {
@@ -654,47 +715,8 @@ private class HeadlessQldtSync(private val context: Context) {
                       if (planIds.length !== 1 || planSemesterIds.length !== 1) {
                         fail('PLAN_AMBIGUOUS'); return;
                       }
-                      call('DKH_Chung_MH/DSA4CiQ1EDQgBSAvJgo4DS4xCS4iESkgLwPP',
-                        'pkg_dangkyhoc_chung.LayKetQuaDangKyLopHocPhan',
-                        {strDaoTao_ChuongTrinh_Id: '',
-                          strDangKy_KeHoachDangKy_Id: planIds[0],
-                          strNguoiThucHien_Id: system.userId,
-                          strDaoTao_ThoiGianDaoTao_Id: latest.id}, rows => {
-                          const subjects = new Map();
-                          for (const row of rows) {
-                            if (row.DANGKY_KEHOACHDANGKY_ID !== planIds[0] ||
-                                (row.DAOTAO_THOIGIANDAOTAO_ID !== latest.id &&
-                                  row.DAOTAO_THOIGIANDAOTAO_ID !== planSemesterIds[0]) ||
-                                !row.DAOTAO_HOCPHAN_ID || !row.DAOTAO_HOCPHAN_TEN ||
-                                !row.DANGKY_LOPHOCPHAN_ID || !row.DANGKY_LOPHOCPHAN_TEN) {
-                              fail('INVALID_REGISTRATION'); return;
-                            }
-                            const key = row.DAOTAO_HOCPHAN_ID;
-                            const start = date(row.NGAYBATDAU);
-                            const end = date(row.NGAYKETTHUC);
-                            if (end < start) { fail('INVALID_DATE'); return; }
-                            if (!subjects.has(key)) subjects.set(key, {
-                              name: row.DAOTAO_HOCPHAN_TEN, classes: []
-                            });
-                            const subject = subjects.get(key);
-                            if (subject.name !== row.DAOTAO_HOCPHAN_TEN) {
-                              fail('INVALID_SUBJECT'); return;
-                            }
-                            if (!subject.classes.some(item => item.id === row.DANGKY_LOPHOCPHAN_ID)) {
-                              subject.classes.push({id: row.DANGKY_LOPHOCPHAN_ID,
-                                name: row.DANGKY_LOPHOCPHAN_TEN, startsOn: start, endsOn: end});
-                            }
-                          }
-                          finished = true;
-                          bridge.onRegistration(JSON.stringify({id: latest.name,
-                            name: latest.name,
-                            confirmedEmpty: rows.length === 0,
-                            subjects: [...subjects.values()].map(subject => ({
-                              name: subject.name,
-                              classes: subject.classes.map(({name, startsOn, endsOn}) =>
-                                ({name, startsOn, endsOn}))
-                            }))}));
-                        });
+                      validated = {latest, planId: planIds[0], planSemesterId: planSemesterIds[0]};
+                      resolveRows();
                     });
                 });
             })();
