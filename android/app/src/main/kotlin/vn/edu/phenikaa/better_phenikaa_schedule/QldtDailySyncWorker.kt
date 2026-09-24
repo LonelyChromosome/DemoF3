@@ -147,6 +147,8 @@ private class HeadlessQldtSync(private val context: Context) {
 
     private val completed = AtomicBoolean(false)
     private val syncRequested = AtomicBoolean(false)
+    private val sessionProbeStarted = AtomicBoolean(false)
+    private val stage = AtomicReference("PAGE_LOAD")
     private val pendingEnvelope = AtomicReference<String>()
     private val registrationRequested = AtomicBoolean(false)
     private val result = AtomicReference<Result>()
@@ -166,7 +168,8 @@ private class HeadlessQldtSync(private val context: Context) {
             false
         }
         if (!finished) {
-            complete(Result.Failure("QLDT_TIMEOUT: QLĐT không phản hồi trong 50 giây."))
+            complete(Result.Failure(
+                "QLDT_TIMEOUT_${stage.get()}: QLĐT không phản hồi trong 50 giây."))
         }
         disposeWebViewAndWait()
         return result.get() ?: Result.Failure("QLĐT không trả kết quả đồng bộ.")
@@ -224,14 +227,14 @@ private class HeadlessQldtSync(private val context: Context) {
                 JAVASCRIPT_BRIDGE,
             )
             webView.webViewClient = object : WebViewClient() {
+                override fun onPageCommitVisible(view: WebView, url: String?) {
+                    super.onPageCommitVisible(view, url)
+                    beginReadinessProbe(view, url)
+                }
+
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
-                    if (!pageRetryPending && url != null && Uri.parse(url).host == QLDT_HOST) {
-                        if (pendingEnvelope.get() == null) {
-                            readinessAttempt = 0
-                            checkSessionReady(view)
-                        }
-                    }
+                    beginReadinessProbe(view, url)
                 }
 
                 override fun onReceivedError(
@@ -250,10 +253,13 @@ private class HeadlessQldtSync(private val context: Context) {
                         if (retryDelay != null) {
                             pageLoadRetries++
                             pageRetryPending = true
+                            sessionProbeStarted.set(false)
+                            stage.set("PAGE_RETRY_$code")
                             mainHandler.postDelayed({
                                 if (!completed.get()) {
                                     readinessAttempt = 0
                                     pageRetryPending = false
+                                    stage.set("PAGE_LOAD")
                                     view.loadUrl(request.url.toString())
                                 }
                             }, retryDelay)
@@ -317,8 +323,17 @@ private class HeadlessQldtSync(private val context: Context) {
         }
     }
 
+    private fun beginReadinessProbe(webView: WebView, url: String?) {
+        if (completed.get() || pageRetryPending || url == null ||
+            Uri.parse(url).host != QLDT_HOST || pendingEnvelope.get() != null ||
+            !sessionProbeStarted.compareAndSet(false, true)) return
+        stage.set("SESSION_READY")
+        readinessAttempt = 0
+        checkSessionReady(webView)
+    }
+
     private fun checkSessionReady(webView: WebView) {
-        if (completed.get()) {
+        if (completed.get() || pageRetryPending || !sessionProbeStarted.get()) {
             return
         }
         webView.evaluateJavascript(SESSION_READY_SCRIPT) { rawResult ->
@@ -327,6 +342,7 @@ private class HeadlessQldtSync(private val context: Context) {
             }
             if (rawResult == "true") {
                 if (syncRequested.compareAndSet(false, true)) {
+                    stage.set("SCHEDULE")
                     requestSchedule(webView)
                 }
                 return@evaluateJavascript
@@ -406,6 +422,7 @@ private class HeadlessQldtSync(private val context: Context) {
 
     private fun requestRegistration(webView: WebView) {
         if (completed.get() || !registrationRequested.compareAndSet(false, true)) return
+        stage.set("REGISTRATION")
         webView.evaluateJavascript(REGISTRATION_SCRIPT, null)
     }
 

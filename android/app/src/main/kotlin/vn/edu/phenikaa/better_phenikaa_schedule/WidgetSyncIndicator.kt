@@ -9,6 +9,10 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.SweepGradient
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
@@ -26,11 +30,11 @@ internal object WidgetSyncIndicator {
     @Volatile private var step = 0
     private const val PREFS = "better_phenikaa_widget_sync_indicator"
     private const val STARTED_AT = "started_at"
-    private const val FRAME_DELAY_MS = 50L
+    private const val FRAME_DELAY_MS = 60L
     private const val FRAME_COUNT = 20
     private const val MAX_SPIN_MS = 65_000L
     private const val SUCCESS_HOLD_MS = 1_000L
-    private const val FAILURE_HOLD_MS = 1_500L
+    private const val FAILURE_HOLD_MS = 2_000L
 
     fun start(context: Context): Long {
         val appContext = context.applicationContext
@@ -136,24 +140,33 @@ internal object WidgetSyncIndicator {
         when (phase) {
             Phase.IDLE -> views.setImageViewResource(icon, R.drawable.ic_widget_reload)
             Phase.SUCCESS -> views.setImageViewResource(icon, R.drawable.ic_widget_check)
-            Phase.FAILURE -> views.setImageViewResource(icon, R.drawable.ic_widget_warning)
+            Phase.FAILURE -> views.setImageViewResource(icon, R.drawable.ic_widget_failure)
             Phase.SPINNING -> views.setImageViewBitmap(icon,
-                rotatedReload(context, step * 360f / FRAME_COUNT))
+                loadingRing(context, step * 360f / FRAME_COUNT))
         }
         views.setInt(icon, "setColorFilter", ScheduleWidgetProvider().overviewColors(context).second)
         views.setContentDescription(if (icon == R.id.widget_reload) R.id.widget_reload_hit else icon,
             description)
     }
 
-    private fun rotatedReload(context: Context, degrees: Float): Bitmap {
+    private fun loadingRing(context: Context, degrees: Float): Bitmap {
         val size = (24 * context.resources.displayMetrics.density).toInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        canvas.rotate(degrees, size / 2f, size / 2f)
-        context.getDrawable(R.drawable.ic_widget_reload)?.apply {
-            setBounds(0, 0, size, size)
-            draw(canvas)
+        val center = size / 2f
+        val stroke = (2.8f * context.resources.displayMetrics.density)
+        val inset = stroke / 2f + context.resources.displayMetrics.density
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = stroke
+            strokeCap = Paint.Cap.BUTT
+            shader = SweepGradient(center, center,
+                intArrayOf(Color.TRANSPARENT, Color.argb(100, 255, 255, 255), Color.WHITE),
+                floatArrayOf(0f, 0.35f, 1f))
         }
+        canvas.rotate(degrees - 90f, center, center)
+        canvas.drawArc(RectF(inset, inset, size - inset, size - inset),
+            25f, 310f, false, paint)
         return bitmap
     }
 
