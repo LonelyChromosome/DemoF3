@@ -158,6 +158,8 @@ private class HeadlessQldtSync(private val context: Context) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val webViewReference = AtomicReference<WebView>()
     private var readinessAttempt = 0
+    private var pageLoadRetries = 0
+    private var pageRetryPending = false
 
     fun run(): Result {
         mainHandler.post(::createAndLoadWebView)
@@ -228,7 +230,7 @@ private class HeadlessQldtSync(private val context: Context) {
             webView.webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
-                    if (url != null && Uri.parse(url).host == QLDT_HOST) {
+                    if (!pageRetryPending && url != null && Uri.parse(url).host == QLDT_HOST) {
                         if (pendingEnvelope.get() == null) {
                             readinessAttempt = 0
                             checkSessionReady(view)
@@ -243,11 +245,27 @@ private class HeadlessQldtSync(private val context: Context) {
                 ) {
                     super.onReceivedError(view, request, error)
                     if (request.isForMainFrame) {
-                        complete(
-                            Result.Failure(
-                                "Không tải được QLĐT. Hãy kiểm tra mạng rồi thử lại.",
-                            ),
+                        if (pageRetryPending) return
+                        val code = error.errorCode
+                        val retryDelay = QldtPageRetry.delayMillis(
+                            code, pageLoadRetries,
+                            Uri.parse(request.url.toString()).host == QLDT_HOST,
                         )
+                        if (retryDelay != null) {
+                            pageLoadRetries++
+                            pageRetryPending = true
+                            mainHandler.postDelayed({
+                                if (!completed.get()) {
+                                    readinessAttempt = 0
+                                    pageRetryPending = false
+                                    view.loadUrl(request.url.toString())
+                                }
+                            }, retryDelay)
+                        } else {
+                            complete(Result.Failure(
+                                "QLDT_PAGE_$code: Không tải được QLĐT. Kiểm tra mạng rồi thử lại.",
+                            ))
+                        }
                     }
                 }
 

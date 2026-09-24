@@ -167,7 +167,9 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 card.setTextViewText(R.id.overview_card_subject,
                     OverviewPager.compactSubject(item.subject, (width - 24) / columns))
                 card.setContentDescription(R.id.overview_card_root, item.subject)
-                card.setTextViewText(R.id.overview_card_room, item.room)
+                // The header already shows the selected date, and exam cards have their own date.
+                // Keeping only the room makes four fixed slots readable on a phone.
+                card.setTextViewText(R.id.overview_card_room, item.room.substringBefore(" • "))
                 listOf(R.id.overview_card_date, R.id.overview_card_time,
                     R.id.overview_card_subject, R.id.overview_card_room).forEach {
                     card.setTextColor(it, textColor)

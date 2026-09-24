@@ -23,6 +23,7 @@ import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
 import org.json.JSONObject
 import java.util.Locale
+import kotlin.math.pow
 import kotlin.math.roundToInt
 
 class ScheduleWidgetProvider : HomeWidgetProvider() {
@@ -54,17 +55,19 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val width = (110 * density).roundToInt().coerceAtLeast(1)
         val height = (76 * density).roundToInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        // The five accent stops follow the reference mockup. For other themes
-        // interpolate the active Theme Engine's own gradient endpoints.
+        // The five accent stops follow the reference mockup. Other themes derive
+        // their card contrast from the active Theme Engine's own colors.
         val accent = if (theme.key == "classic") {
             intArrayOf(0xFF0874CA.toInt(), 0xFF334AA9.toInt(), 0xFF7644B3.toInt(),
                 0xFFAD478E.toInt(), 0xFFC24178.toInt())[index % 5]
         } else {
-            blend(theme.startColor, theme.endColor, (index % 5) / 4f)
+            val base = blend(theme.startColor, theme.endColor, (index % 5) / 4f)
+            readableCardColor(base, theme)
         }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
-                blend(accent, theme.startColor, 0.4f), accent, Shader.TileMode.CLAMP)
+                blend(accent, theme.startColor, if (theme.key == "classic") 0.4f else 0.18f),
+                accent, Shader.TileMode.CLAMP)
         }
         val radius = 12f * density
         Canvas(bitmap).drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(),
@@ -93,7 +96,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             val accent = if (theme.key == "classic") {
                 intArrayOf(0xFF12CCFA.toInt(), 0xFF6578FF.toInt(), 0xFFC375E8.toInt(),
                     0xFFFA67BA.toInt(), 0xFFFF557C.toInt())[index]
-            } else blend(theme.startColor, theme.endColor, index / 4f)
+            } else {
+                val base = blend(theme.startColor, theme.endColor, index / 4f)
+                blend(base, theme.textColor, if (isLight(theme.textColor)) 0.45f else 0.25f)
+            }
             val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
             canvas.drawCircle(x, y, 5f * density, dot)
         }
@@ -108,6 +114,39 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             (Color.green(from) * (1 - t) + Color.green(to) * t).roundToInt(),
             (Color.blue(from) * (1 - t) + Color.blue(to) * t).roundToInt(),
         )
+    }
+
+    private fun isLight(color: Int): Boolean =
+        (Color.red(color) * 299 + Color.green(color) * 587 + Color.blue(color) * 114) >= 160_000
+
+    private fun readableCardColor(base: Int, theme: ThemeColors): Int {
+        var card = blend(base, theme.textColor,
+            if (isLight(theme.textColor)) 0.24f else 0.12f)
+        val opposite = if (isLight(theme.textColor)) Color.BLACK else Color.WHITE
+        repeat(6) {
+            val leadingEdge = blend(card, theme.startColor, 0.18f)
+            if (contrastRatio(theme.textColor, card) >= 4.5 &&
+                contrastRatio(theme.textColor, leadingEdge) >= 4.5) return card
+            card = blend(card, opposite, 0.16f)
+        }
+        return card
+    }
+
+    private fun contrastRatio(first: Int, second: Int): Double {
+        val a = luminance(first)
+        val b = luminance(second)
+        return (maxOf(a, b) + 0.05) / (minOf(a, b) + 0.05)
+    }
+
+    private fun luminance(color: Int): Double {
+        fun channel(value: Int): Double {
+            val normalized = value / 255.0
+            return if (normalized <= 0.04045) normalized / 12.92
+                else ((normalized + 0.055) / 1.055).pow(2.4)
+        }
+        return channel(Color.red(color)) * 0.2126 +
+            channel(Color.green(color)) * 0.7152 +
+            channel(Color.blue(color)) * 0.0722
     }
 
     override fun onReceive(context: Context, intent: Intent) {
