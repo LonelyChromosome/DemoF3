@@ -37,7 +37,7 @@ final class QldtSyncDiagnostics {
       if (value == null) return null;
       final text = value.toString();
       if (RegExp(
-        r'token|cookie|authorization|session|bearer|password|mat.?khau',
+        'token|cookie|authorization|session|bearer|password|mat.?khau',
         caseSensitive: false,
       ).hasMatch(text)) {
         return '[redacted]';
@@ -68,7 +68,9 @@ final class QldtSyncDiagnostics {
             : <String>[],
       };
     }).toList();
-    final dropdown = source['dropdown'];
+    final dropdown = source['dropdown'] is Map
+        ? source['dropdown'] as Map
+        : null;
     final options = dropdown is Map && dropdown['options'] is List
         ? (dropdown['options'] as List).take(200).map((value) {
             final option = value is Map ? value : const <String, Object?>{};
@@ -101,7 +103,7 @@ final class QldtSyncDiagnostics {
       'dropdown': options == null
           ? null
           : <String, Object?>{
-              'selectedId': id(dropdown['selectedId']),
+              'selectedId': id(dropdown?['selectedId']),
               'options': options,
             },
     });
