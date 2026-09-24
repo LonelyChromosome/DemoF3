@@ -3,7 +3,20 @@ import 'dart:convert';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-String normalizeSubjectName(String name) {
+String subjectDisplayName(String name) => name
+    .trim()
+    .replaceFirst(RegExp(r'^Môn\s+', caseSensitive: false), '')
+    .replaceFirst(RegExp(r'-\d+-\d+-\d+\([^)]*\)(?:\.[\w]+)?$'), '')
+    .trim();
+
+String normalizeSubjectName(String name) =>
+    _normalizeText(subjectDisplayName(name));
+
+String normalizeClassName(String name) => _normalizeText(
+  name.split(RegExp(r'<br\s*/?>', caseSensitive: false)).first,
+);
+
+String _normalizeText(String name) {
   final collapsed = name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
   final decomposed = StringBuffer();
   for (final rune in collapsed.runes) {
@@ -188,7 +201,7 @@ final class SemesterDataBuilder {
       if (names.containsKey(normalized)) {
         throw FormatException('TraCuu trả nhiều môn cùng tên: $name');
       }
-      names[normalized] = name.trim();
+      names[normalized] = subjectDisplayName(name);
     }
 
     if (names.isEmpty && !registration.confirmedEmpty) {

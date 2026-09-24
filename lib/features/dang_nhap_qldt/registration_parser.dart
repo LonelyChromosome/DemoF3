@@ -74,9 +74,7 @@ final class QldtRegistrationParser {
     final classSections = <String, List<RegisteredClassSection>>{};
     for (final item in subjectItems) {
       final heading = item.querySelector('h4')?.text.trim() ?? '';
-      final name = heading
-          .replaceFirst(RegExp(r'^Môn\s+', caseSensitive: false), '')
-          .trim();
+      final name = subjectDisplayName(heading);
       if (name.isEmpty) {
         throw const FormatException('TraCuu có môn học không có tên.');
       }

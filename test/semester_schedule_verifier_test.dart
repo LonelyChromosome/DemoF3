@@ -80,6 +80,52 @@ void main() {
     );
   });
 
+  test('cleans attendance HTML but keeps distinct registered class codes', () {
+    final actual = RegisteredSemester(
+      id: '2026_2027_1',
+      name: '2026_2027_1',
+      subjectNames: const <String>['Phân tích và thiết kế phần mềm'],
+      classSections: <String, List<RegisteredClassSection>>{
+        'Phân tích và thiết kế phần mềm': <RegisteredClassSection>[
+          RegisteredClassSection(
+            name: 'Phân tích và thiết kế phần mềm-1-1-26(N08)',
+            startsOn: DateTime(2026, 8, 17),
+            endsOn: DateTime(2026, 12, 1),
+          ),
+        ],
+      },
+    );
+    Map<String, Object> row(String code) => <String, Object>{
+      'PHANLOAI': 'LICHHOC',
+      'TENHOCPHAN': 'Môn Phân tích và thiết kế phần mềm-1-1-26(N08)',
+      'TENLOPHOCPHAN': '$code<br>Có mặt<br>',
+      'NGAYHOC': '20/08/2026',
+      'GIOBATDAU': 7,
+      'PHUTBATDAU': 0,
+      'GIOKETTHUC': 9,
+      'PHUTKETTHUC': 0,
+      'PHONGHOC_TEN': 'A1',
+    };
+    const code = 'Phân tích và thiết kế phần mềm-1-1-26(N08)';
+    final parsed = parse(<String, dynamic>{
+      'Success': true,
+      'Data': <dynamic>[row(code)],
+    });
+    final verified = verifier.verify(registration: actual, schedule: parsed);
+    expect(parsed.records.single.subjectName, 'Phân tích và thiết kế phần mềm');
+    expect(parsed.records.single.className, code);
+    expect(verified.studySchedules, hasLength(1));
+
+    final other = parse(<String, dynamic>{
+      'Success': true,
+      'Data': <dynamic>[row('Phân tích và thiết kế phần mềm-1-1-26(N09)')],
+    });
+    expect(
+      () => verifier.verify(registration: actual, schedule: other),
+      throwsFormatException,
+    );
+  });
+
   test('rejects an old exam even if a repeated class name matches', () {
     final oldExam = Map<String, dynamic>.from(
       (response['Data'] as List<dynamic>).last as Map<String, dynamic>,

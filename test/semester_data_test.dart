@@ -29,6 +29,24 @@ void main() {
         normalizeSubjectName('La\u0302\u0323p tri\u0300nh c++'),
       );
       expect(normalizeSubjectName('Ma'), isNot(normalizeSubjectName('Má')));
+      expect(
+        normalizeSubjectName('Môn Phân tích và thiết kế phần mềm-1-1-26(N08)'),
+        normalizeSubjectName('Phân tích và thiết kế phần mềm'),
+      );
+      expect(
+        subjectDisplayName('Môn Phân tích và thiết kế phần mềm-1-1-26(N08)'),
+        'Phân tích và thiết kế phần mềm',
+      );
+      expect(
+        normalizeClassName(
+          'Kỹ thuật phần mềm-1-1-26(COUR02.LT5)<br>Có mặt<br>',
+        ),
+        normalizeClassName('Kỹ thuật phần mềm-1-1-26(COUR02.LT5)'),
+      );
+      expect(
+        normalizeClassName('Kỹ thuật phần mềm-1-1-26(COUR02.LT5)'),
+        isNot(normalizeClassName('Kỹ thuật phần mềm-1-1-26(COUR02)')),
+      );
     },
   );
 

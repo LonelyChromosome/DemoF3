@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:html/parser.dart' as html_parser;
 
 final class ScheduleRecord {
@@ -193,7 +194,7 @@ final class QldtParser {
   }
 
   ScheduleRecord? _parseRecord(Map<String, dynamic> item) {
-    final subjectName = _string(item['TENHOCPHAN']);
+    final subjectName = subjectDisplayName(_string(item['TENHOCPHAN']));
     final dateText = _string(item['NGAYHOC']);
     if (subjectName.isEmpty || dateText.isEmpty) {
       return null;
@@ -229,7 +230,10 @@ final class QldtParser {
     final room = isExam
         ? _firstNonEmpty(<Object?>[item['PHONGHOC_TEN'], item['PHONGTHI']])
         : _firstNonEmpty(<Object?>[item['PHONGHOC_TEN'], item['TENPHONGHOC']]);
-    final className = _string(item['TENLOPHOCPHAN']);
+    final className = _string(item['TENLOPHOCPHAN'])
+        .split(RegExp(r'<br\s*/?>', caseSensitive: false))
+        .first
+        .trim();
     final examForm = _string(item['DANGKY_LOPHOCPHAN_TEN']);
     final startAt = DateTime(
       day.year,

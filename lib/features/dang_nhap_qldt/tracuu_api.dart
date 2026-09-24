@@ -204,7 +204,7 @@ final class TracuuApi {
         );
       }
       final subjectId = _string(row['DAOTAO_HOCPHAN_ID']);
-      final name = _string(row['DAOTAO_HOCPHAN_TEN']);
+      final name = subjectDisplayName(_string(row['DAOTAO_HOCPHAN_TEN']));
       final classId = _string(row['DANGKY_LOPHOCPHAN_ID']);
       final className = _string(row['DANGKY_LOPHOCPHAN_TEN']);
       final start = _date(row['NGAYBATDAU']);

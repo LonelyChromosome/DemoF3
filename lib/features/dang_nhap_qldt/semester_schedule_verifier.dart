@@ -24,7 +24,7 @@ final class SemesterScheduleVerifier {
         throw FormatException('Trùng môn đăng ký: $name');
       }
       final sectionNames = sections
-          .map((section) => normalizeSubjectName(section.name))
+          .map((section) => normalizeClassName(section.name))
           .toList();
       if (sectionNames.toSet().length != sectionNames.length ||
           sectionNames.any((value) => value.isEmpty)) {
@@ -32,7 +32,7 @@ final class SemesterScheduleVerifier {
       }
       classes[normalized] = {
         for (final section in sections)
-          normalizeSubjectName(section.name): section,
+          normalizeClassName(section.name): section,
       };
     }
     if (classes.isEmpty &&
@@ -47,7 +47,7 @@ final class SemesterScheduleVerifier {
     for (final row in schedule.records) {
       final subject = classes[normalizeSubjectName(row.subjectName)];
       if (subject == null) continue;
-      final className = normalizeSubjectName(row.className);
+      final className = normalizeClassName(row.className);
       if (className.isEmpty || !subject.containsKey(className)) {
         throw FormatException(
           'Không xác minh được lớp của lịch: ${row.subjectName}',
