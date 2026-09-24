@@ -133,6 +133,6 @@ test('native worker uses the same three verified calls without page navigation',
   assert.equal(nativeScript.includes('MutationObserver'), false);
   assert.ok(nativeScript.includes('new Set(matchingPlans'));
   assert.ok(nativeScript.includes("startsWith(latest.name + ',')"));
-  assert.ok(nativeScript.includes('row.DAOTAO_THOIGIANDAOTAO_ID !== planSemesterIds[0]'));
-  assert.ok(nativeScript.includes('strDangKy_KeHoachDangKy_Id: planIds[0]'));
+  assert.ok(nativeScript.includes('row.DAOTAO_THOIGIANDAOTAO_ID !== planSemesterId'));
+  assert.ok(nativeScript.includes('strDangKy_KeHoachDangKy_Id: planId'));
 });
