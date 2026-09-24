@@ -42,8 +42,26 @@ void main() {
     await tester.pumpWidget(const BetterPhenikaaScheduleApp());
     await tester.pump(const Duration(milliseconds: 700));
     await tester.pumpAndSettle();
+    for (
+      var attempt = 0;
+      attempt < 12 && find.text('Thiết kế web nâng cao').evaluate().isEmpty;
+      attempt++
+    ) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 250)),
+      );
+      await tester.pumpAndSettle();
+    }
     expect(find.text('Theo ngày'), findsOneWidget);
-    expect(find.text('Thiết kế web nâng cao'), findsWidgets);
+    expect(
+      find.text('Thiết kế web nâng cao'),
+      findsWidgets,
+      reason: find
+          .byType(Text)
+          .evaluate()
+          .map((element) => (element.widget as Text).data)
+          .join(' | '),
+    );
 
     await tester.tap(find.text('Theo tuần'));
     await tester.pumpAndSettle();

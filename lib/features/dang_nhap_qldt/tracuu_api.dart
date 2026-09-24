@@ -187,8 +187,9 @@ final class TracuuApi {
       throw const FormatException('TraCuu chưa trả Data hợp lệ.');
     }
     return (value['Data'] as List).map((row) {
-      if (row is! Map)
+      if (row is! Map) {
         throw const FormatException('TraCuu có dòng không hợp lệ.');
+      }
       return Map<String, dynamic>.from(row);
     }).toList();
   }
