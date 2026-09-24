@@ -36,7 +36,8 @@ class OverviewPagerTest {
 
     @Test fun fiveMockupCardsFitAcrossAndPhoneUsesTwoCompactRows() {
         assertEquals(2, OverviewPager.pageSize(320, 160))
-        assertEquals(4, OverviewPager.pageSize(320, 270))
+        assertEquals(2, OverviewPager.pageSize(320, 270))
+        assertEquals(180, OverviewPager.panelHeight(270))
         assertEquals(5, OverviewPager.pageSize(620, 180))
         assertEquals(2, OverviewPager.columns(320))
         assertEquals(5, OverviewPager.columns(620))

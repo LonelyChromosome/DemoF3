@@ -1,6 +1,8 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 internal object OverviewPager {
+    fun panelHeight(hostHeightDp: Int): Int = hostHeightDp.coerceAtMost(180).coerceAtLeast(160)
+
     // The mockup has five cards across at tablet width. A phone shows two
     // columns in two rows when its widget is tall enough, without dead space.
     fun columns(widthDp: Int): Int = ((widthDp - 24) / 110).coerceIn(1, 5)
@@ -8,7 +10,7 @@ internal object OverviewPager {
     fun rows(heightDp: Int): Int = if (heightDp >= 258) 2 else 1
 
     fun pageSize(widthDp: Int, heightDp: Int): Int =
-        columns(widthDp) * rows(heightDp)
+        columns(widthDp) * rows(panelHeight(heightDp))
 
     fun lastPage(itemCount: Int, pageSize: Int): Int =
         if (itemCount == 0) 0 else (itemCount - 1) / pageSize

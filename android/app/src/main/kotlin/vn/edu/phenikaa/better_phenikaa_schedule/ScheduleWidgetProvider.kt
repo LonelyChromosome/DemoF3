@@ -122,6 +122,12 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             )
             if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
             SmallWidgetMode.toggle(context, id)
+            context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .remove(transitionFromKey(id))
+                .remove(transitionTargetKey(id))
+                .remove(transitionPhaseKey(id))
+                .apply()
             context.getSharedPreferences(WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE)
                 .edit().putBoolean(resetChildKey(id), true).apply()
             renderWidget(context, AppWidgetManager.getInstance(context), id)
@@ -296,12 +302,12 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 .putString(contentTokenKey(widgetId), contentToken)
                 .putString(themeTokenKey(widgetId), themeKey)
                 .apply()
-            scheduleRefreshCoverHide(context, appWidgetManager, widgetId)
+            scheduleRefreshCoverHide(context, appWidgetManager, widgetId, contentToken)
         } else if (themeChanged && !hasActiveThemeTransition(renderStatePrefs, widgetId)) {
             appWidgetManager.partiallyUpdateAppWidget(widgetId, views)
             appWidgetManager.notifyAppWidgetViewDataChanged(widgetId, R.id.widget_list)
             renderStatePrefs.edit().putString(themeTokenKey(widgetId), themeKey).apply()
-            scheduleRefreshCoverHide(context, appWidgetManager, widgetId)
+            scheduleRefreshCoverHide(context, appWidgetManager, widgetId, contentToken)
         } else if (!hasActiveThemeTransition(renderStatePrefs, widgetId)) {
             appWidgetManager.partiallyUpdateAppWidget(widgetId, views)
         }
@@ -311,10 +317,15 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         context: Context,
         manager: AppWidgetManager,
         widgetId: Int,
+        contentToken: String,
     ) {
         Handler(Looper.getMainLooper()).postDelayed({
+            val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
+            if (state.getString(contentTokenKey(widgetId), null) != contentToken) return@postDelayed
             val reveal = RemoteViews(context.packageName, R.layout.schedule_widget)
-            reveal.setViewVisibility(R.id.widget_list, View.VISIBLE)
+            val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
+            reveal.setViewVisibility(R.id.widget_list, if (hasItems) View.VISIBLE else View.GONE)
+            reveal.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
             reveal.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
             manager.partiallyUpdateAppWidget(widgetId, reveal)
         }, 360L)
@@ -348,17 +359,20 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         )
         views.setInt(R.id.widget_calendar, "setColorFilter", theme.iconColor)
         views.setInt(R.id.widget_mode, "setColorFilter", theme.iconColor)
-        views.setTextColor(R.id.widget_reload, theme.iconColor)
+        views.setInt(R.id.widget_reload, "setColorFilter", theme.iconColor)
         val examMode = SmallWidgetMode.isExam(context, widgetId)
-        views.setImageViewResource(R.id.widget_mode, R.drawable.ic_widget_switch)
+        views.setImageViewResource(R.id.widget_mode,
+            if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
         views.setContentDescription(R.id.widget_mode,
             if (examMode) "Về lịch học" else "Xem lịch thi")
         views.setTextViewText(R.id.widget_empty,
             if (examMode) "Không có lịch thi" else "Không có lịch học")
         views.setTextColor(R.id.widget_empty, theme.textColor)
         views.setFloat(R.id.widget_root, "setAlpha", 1f)
+        val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
+        views.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
 
-        if (showRefreshCover) {
+        if (showRefreshCover && hasItems) {
             val cover = renderWidgetRefreshCover(
                 context,
                 widgetId,
@@ -375,7 +389,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             }
         } else {
             views.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
-            views.setViewVisibility(R.id.widget_list, View.VISIBLE)
+            views.setViewVisibility(R.id.widget_list, if (hasItems) View.VISIBLE else View.GONE)
         }
 
         if (bindCollection) {
@@ -384,10 +398,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
                 putExtra(EXTRA_RENDER_WIDTH_DP, renderWidthDp)
                 putExtra(EXTRA_RENDER_HEIGHT_DP, renderHeightDp)
-                data = Uri.parse("better-phenikaa://widget/$widgetId/$sizeToken")
+                data = Uri.parse("better-phenikaa://widget/$widgetId/$sizeToken/${if (examMode) "exam" else "study"}")
             }
             views.setRemoteAdapter(R.id.widget_list, serviceIntent)
-            views.setEmptyView(R.id.widget_list, R.id.widget_empty)
 
             context.packageManager.getLaunchIntentForPackage(context.packageName)?.let { launchIntent ->
                 launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -500,11 +513,13 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         )
         hiddenTarget.setInt(R.id.widget_calendar, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setInt(R.id.widget_mode, "setColorFilter", targetTheme.iconColor)
-        hiddenTarget.setTextColor(R.id.widget_reload, targetTheme.iconColor)
+        hiddenTarget.setInt(R.id.widget_reload, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setTextColor(R.id.widget_empty, targetTheme.textColor)
         hiddenTarget.setFloat(R.id.widget_root, "setAlpha", 0f)
         hiddenTarget.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
-        hiddenTarget.setViewVisibility(R.id.widget_list, View.VISIBLE)
+        val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
+        hiddenTarget.setViewVisibility(R.id.widget_list, if (hasItems) View.VISIBLE else View.GONE)
+        hiddenTarget.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
         manager.partiallyUpdateAppWidget(widgetId, hiddenTarget)
 
         state.edit()

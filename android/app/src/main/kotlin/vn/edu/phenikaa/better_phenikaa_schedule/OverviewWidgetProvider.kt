@@ -73,6 +73,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
         val height = manager.getAppWidgetOptions(id)
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
+        val panelHeight = OverviewPager.panelHeight(height)
         val columns = OverviewPager.columns(width)
         val size = OverviewPager.pageSize(width, height)
         val page = WidgetRefreshDecision.overviewPage(
@@ -83,8 +84,12 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         }
         val (textColor, iconColor) = ScheduleWidgetProvider().overviewColors(context)
         val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            views.setViewLayoutHeight(R.id.overview_panel, panelHeight.toFloat(),
+                TypedValue.COMPLEX_UNIT_DIP)
+        }
         views.setImageViewBitmap(R.id.overview_background,
-            ScheduleWidgetProvider().overviewBackground(context, width, height))
+            ScheduleWidgetProvider().overviewBackground(context, width, panelHeight))
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val selected = context.getSharedPreferences(
             ScheduleWidgetProvider.WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE,
@@ -121,7 +126,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             selected == today -> "Lịch học hôm nay"
             else -> "Lịch học ngày $date"
         })
-        views.setImageViewResource(R.id.overview_mode, R.drawable.ic_widget_switch)
+        views.setImageViewResource(R.id.overview_mode,
+            if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
         views.setContentDescription(R.id.overview_mode,
             if (examMode) "Về lịch học" else "Xem lịch thi")
         listOf(R.id.overview_title, R.id.overview_subtitle,
@@ -140,7 +146,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 val card = RemoteViews(context.packageName, R.layout.overview_widget_card)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     card.setViewLayoutHeight(R.id.overview_card_root,
-                        if (height >= 180) 76f else 63f, TypedValue.COMPLEX_UNIT_DIP)
+                        if (panelHeight >= 180) 76f else 63f, TypedValue.COMPLEX_UNIT_DIP)
                 }
                 val colorIndex = page * size + rowIndex * columns + columnIndex
                 card.setImageViewBitmap(R.id.overview_card_background,

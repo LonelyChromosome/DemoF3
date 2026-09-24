@@ -28,16 +28,26 @@ class WidgetLayoutContractTest {
         val stack = element("widget_list", root)
         assertEquals("match_parent", stack.getAttributeNS(androidNamespace, "layout_height"))
         assertEquals("true", stack.getAttributeNS(androidNamespace, "loopViews"))
-        assertEquals("8dp", element("widget_calendar", root)
+        assertEquals("5dp", element("widget_calendar", root)
             .getAttributeNS(androidNamespace, "layout_marginEnd"))
-        assertEquals("44dp", element("widget_reload", root)
+        assertEquals("5dp", element("widget_reload", root)
             .getAttributeNS(androidNamespace, "layout_marginEnd"))
-        assertEquals("80dp", element("widget_mode", root)
+        assertEquals("5dp", element("widget_mode", root)
             .getAttributeNS(androidNamespace, "layout_marginEnd"))
+        assertEquals("1dp", element("widget_calendar", root)
+            .getAttributeNS(androidNamespace, "layout_marginTop"))
+        assertEquals("22dp", element("widget_reload", root)
+            .getAttributeNS(androidNamespace, "layout_marginTop"))
+        assertEquals("43dp", element("widget_mode", root)
+            .getAttributeNS(androidNamespace, "layout_marginTop"))
+        assertEquals("gone", element("widget_empty", root)
+            .getAttributeNS(androidNamespace, "visibility"))
     }
 
     @Test fun overviewMatchesMockupCardStripAndLongNamesCanUseTwoLines() {
         val root = layout("overview_widget").documentElement
+        assertEquals("bottom", element("overview_panel", root)
+            .getAttributeNS(androidNamespace, "layout_gravity"))
         assertEquals("vertical", element("overview_cards", root)
             .getAttributeNS(androidNamespace, "orientation"))
         val card = layout("overview_widget_card").documentElement

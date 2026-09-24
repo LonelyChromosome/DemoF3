@@ -195,11 +195,8 @@ private fun renderWidgetSlide(
     canvas.drawRect(0f, 0f, widthPx, heightPx, backgroundPaint)
 
     val left = widthPx * CONTENT_LEFT_FRACTION
-    // Leave the legacy card geometry intact and reserve only the action cluster.
-    val titleRight = minOf(
-        widthPx * TITLE_RIGHT_FRACTION,
-        widthPx - 122f * density,
-    )
+    // The three actions form a narrow vertical rail at the right edge.
+    val titleRight = minOf(widthPx * TITLE_RIGHT_FRACTION, widthPx - 32f * density)
     val detailRight = widthPx * DETAIL_RIGHT_FRACTION
 
     val subjectPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
