@@ -38,7 +38,7 @@ internal object WidgetSnapshotStore {
     fun read(context: Context, widgetId: Int): WidgetCollection {
         if (SmallWidgetMode.isExam(context, widgetId)) {
             val exams = readOverview(context, widgetId, true)
-            return WidgetCollection(exams, 0)
+            return WidgetTimeline.forDownwardSwipe(WidgetCollection(exams, 0))
         }
         val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
         val normalized = preferences.getString(WIDGET_SNAPSHOT_KEY, null)
@@ -68,7 +68,9 @@ internal object WidgetSnapshotStore {
             if (visibleItems.none { it.dateKey == selectedDate }) {
                 visibleItems.add(emptyDay(selectedDate, today))
             }
-            WidgetTimeline.arrange(visibleItems, selectedDate, today, now)
+            WidgetTimeline.forDownwardSwipe(
+                WidgetTimeline.arrange(visibleItems, selectedDate, today, now),
+            )
         }.getOrElse { WidgetCollection.empty() }
     }
 
@@ -152,6 +154,15 @@ internal object WidgetTimeline {
             indexes.firstOrNull() ?: 0
         }
         return WidgetCollection(items, selectedIndex)
+    }
+
+    /** StackView swiping down selects the previous adapter item. */
+    fun forDownwardSwipe(collection: WidgetCollection): WidgetCollection {
+        if (collection.items.isEmpty()) return collection
+        return WidgetCollection(
+            collection.items.asReversed(),
+            collection.items.lastIndex - collection.selectedIndex,
+        )
     }
 }
 

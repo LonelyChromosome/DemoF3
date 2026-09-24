@@ -406,7 +406,7 @@ private fun currentWidgetClass(context: Context, widgetId: Int): WidgetClass? {
         collection.selectedIndex
     } else {
         context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
-            .getInt(visiblePositionKey(widgetId), 0)
+            .getInt(visiblePositionKey(widgetId), collection.selectedIndex)
             .coerceIn(0, items.lastIndex)
     }
     return items.getOrNull(position) ?: items.firstOrNull()

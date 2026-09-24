@@ -25,4 +25,20 @@ class WidgetTimelineDateTest {
             WidgetTimeline.fromDate(listOf(item("2026-08-17"), item("2026-09-25")),
                 "2026-08-17").map { it.dateKey })
     }
+
+    @Test fun downwardSwipeFromTodayMovesToNextDayAndStopsAtEnd() {
+        val ordered = WidgetTimeline.arrange(
+            WidgetTimeline.fromDate(
+                listOf(item("2026-09-24"), item("2026-09-25"), item("2026-10-31")),
+                "2026-09-24",
+            ),
+            "2026-09-24", "2026-09-24", "2026-09-24T08:00:00",
+        )
+        val stack = WidgetTimeline.forDownwardSwipe(ordered)
+        assertEquals(listOf("2026-10-31", "2026-09-25", "2026-09-24"),
+            stack.items.map { it.dateKey })
+        assertEquals(2, stack.selectedIndex)
+        assertEquals("2026-09-25", stack.items[stack.selectedIndex - 1].dateKey)
+        assertEquals("2026-10-31", stack.items.first().dateKey)
+    }
 }

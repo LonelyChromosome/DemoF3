@@ -307,6 +307,13 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         )
         val contentToken = collectionContentToken(context, widgetId, options)
         val previousToken = renderStatePrefs.getString(contentTokenKey(widgetId), null)
+        val orderChanged = previousToken != null && !previousToken.endsWith("|downward-v1")
+        if (orderChanged) {
+            context.getSharedPreferences(WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(resetChildKey(widgetId), true).apply()
+            context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
+                .edit().remove(visiblePositionKey(widgetId)).apply()
+        }
         val collectionChanged = previousToken != contentToken
         val themeKey = readThemeColors(context).key
         val previousThemeKey = renderStatePrefs.getString(themeTokenKey(widgetId), null)
@@ -326,7 +333,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                         visualHeightDp = size.height,
                         bindCollection = collectionChanged,
                         showRefreshCover = showRefreshCover,
-                        resetPosition = previousToken == null,
+                        resetPosition = previousToken == null || orderChanged,
                     )
                 }
                 RemoteViews(sizedViews)
@@ -339,7 +346,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                     visualHeightDp = fallback.height,
                     bindCollection = collectionChanged,
                     showRefreshCover = showRefreshCover,
-                    resetPosition = previousToken == null,
+                    resetPosition = previousToken == null || orderChanged,
                 )
             }
         } else {
@@ -351,7 +358,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 visualHeightDp = fallback.height,
                 bindCollection = collectionChanged,
                 showRefreshCover = showRefreshCover,
-                resetPosition = previousToken == null,
+                resetPosition = previousToken == null || orderChanged,
             )
         }
 
@@ -767,7 +774,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             (root.optJSONArray(if (examMode) "exams" else "classes")
                 ?: root.optJSONArray("records"))?.toString() ?: snapshot
         }.getOrDefault(snapshot)
-        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature"
+        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|downward-v1"
     }
 
     private fun contentTokenKey(widgetId: Int): String = "content_token_$widgetId"
