@@ -442,6 +442,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           return null;
         }
         final stage = arguments[1]?.toString();
+        _diagnostics.mark('REG_STAGE_${stage ?? 'UNKNOWN'}');
         if (stage == 'semesterPlan') {
           _startPhase(
             QldtSyncPhase.semesterPlan,
@@ -574,9 +575,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       return;
     }
     try {
+      _diagnostics.mark('REG_EVAL_START');
       await controller.evaluateJavascript(
         source: const TracuuApi().scriptForAttempt(epoch),
       );
+      _diagnostics.mark('REG_EVAL_RETURN');
     } on Object {
       _stopSync(
         epoch,

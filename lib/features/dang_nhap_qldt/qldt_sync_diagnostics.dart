@@ -61,6 +61,17 @@ final class QldtSyncDiagnostics {
     _persist();
   }
 
+  void mark(String code) {
+    final now = _clock().toUtc().toIso8601String();
+    _events.add(<String, String>{
+      'phase': _active?['phase'] ?? 'session',
+      'startedAt': now,
+      'endedAt': now,
+      'code': code,
+    });
+    _persist();
+  }
+
   void _persist() {
     final snapshot = jsonEncode(_events);
     _write = _write
