@@ -16,12 +16,30 @@ final class TracuuApi {
       if (!bridge || typeof bridge.callHandler !== 'function') return 'BRIDGE_MISSING';
       const send = (handler, value) => bridge.callHandler(handler, attempt, value);
       let done = false;
-      const fail = code => {
+      const fail = (code, diagnostic) => {
         if (done) return;
         done = true;
-        send('betterPhenikaaRegistrationError', code);
+        if (diagnostic) {
+          bridge.callHandler('betterPhenikaaRegistrationError', attempt,
+            code, JSON.stringify(diagnostic));
+        } else {
+          send('betterPhenikaaRegistrationError', code);
+        }
       };
       const stage = value => send('betterPhenikaaRegistrationStage', value);
+      const id = value => {
+        const text = String(value == null ? '' : value).trim();
+        return /^[A-Za-z0-9_-]{1,64}$/.test(text) ? text : '[redacted]';
+      };
+      const label = value => {
+        if (value == null) return null;
+        const text = String(value).trim();
+        if (/token|cookie|authorization|session|bearer|password|mat.?khau/i.test(text))
+          return '[redacted]';
+        return text.slice(0, 160)
+          .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[email]')
+          .replace(/(?:\+?\d[\d\s.-]{6,}\d)/g, '[number]');
+      };
       try { stage('scriptStart'); } catch (_) { return 'BRIDGE_EXCEPTION'; }
       if (!bridge || !system || !system.userId || system.iM == null ||
           typeof system.makeRequest !== 'function') {
@@ -65,11 +83,47 @@ final class TracuuApi {
           call('DKH_ThongTin_MH/DSA4BRIKJAkuICIpBSAvJgo4AiAPKSAv',
             'pkg_dangkyhoc_thongtin.LayDSKeHoachDangKyCaNhan',
             {strDaoTao_ThoiGianDaoTao_Id: latest.id}, plans => {
+              const rows = plans.Data;
+              const dropdown = document.querySelector('#dropSearch_KeHoach');
+              const diagnostic = {
+                version: 1,
+                latestSemesterId: id(latest.id),
+                latestSemesterName: label(latest.name),
+                recordCount: rows.length,
+                distinctIdCount: new Set(rows.map(row => String(row && row.ID || '').trim())
+                  .filter(Boolean)).size,
+                records: rows.slice(0, 200).map((row, index) => ({
+                  index,
+                  ID: id(row && row.ID),
+                  DAOTAO_THOIGIANDAOTAO_ID: id(row && row.DAOTAO_THOIGIANDAOTAO_ID),
+                  MAKEHOACH: label(row && row.MAKEHOACH),
+                  TENKEHOACH: label(row && row.TENKEHOACH),
+                  TRANGTHAI_ID: id(row && row.TRANGTHAI_ID),
+                  HIEULUC: row && typeof row.HIEULUC === 'boolean' ? row.HIEULUC : null,
+                  otherKeys: row && typeof row === 'object'
+                    ? Object.keys(row).filter(key => ![
+                      'ID', 'DAOTAO_THOIGIANDAOTAO_ID', 'MAKEHOACH',
+                      'TENKEHOACH', 'TRANGTHAI_ID', 'HIEULUC'
+                    ].includes(key)).slice(0, 100) : []
+                })),
+                dropdown: dropdown ? {
+                  selectedId: id(dropdown.value),
+                  options: [...dropdown.options].slice(0, 200).map((option, index) => ({
+                    index, ID: id(option.value), label: label(option.text),
+                    selected: option.selected
+                  }))
+                } : null
+              };
               const planIds = [...new Set(plans.Data
-                .filter(row => String(row.DAOTAO_THOIGIANDAOTAO_ID || '').trim() === String(latest.id).trim())
+                .filter(row => row && String(row.DAOTAO_THOIGIANDAOTAO_ID || '').trim() === String(latest.id).trim())
                 .map(row => String(row.ID || '').trim())
                 .filter(Boolean))];
-              if (planIds.length !== 1) { fail('PLAN_AMBIGUOUS'); return; }
+              diagnostic.matchingRecordIndexes = rows.flatMap((row, index) =>
+                String(row && row.DAOTAO_THOIGIANDAOTAO_ID || '').trim() ===
+                  String(latest.id).trim() ? [index] : []);
+              diagnostic.computedPlanIdCount = planIds.length;
+              diagnostic.computedPlanIds = planIds.slice(0, 200).map(id);
+              if (planIds.length !== 1) { fail('PLAN_AMBIGUOUS', diagnostic); return; }
               stage('subjects');
               call('DKH_Chung_MH/DSA4CiQ1EDQgBSAvJgo4DS4xCS4iESkgLwPP',
                 'pkg_dangkyhoc_chung.LayKetQuaDangKyLopHocPhan',

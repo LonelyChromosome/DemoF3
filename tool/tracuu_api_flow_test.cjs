@@ -28,7 +28,8 @@ function run({failAt, noCallback, empty = false, oldPlan = false,
         MAKEHOACH: planName},
       ...(duplicatePlan ? [{ID: 'plan', DAOTAO_THOIGIANDAOTAO_ID: 'new',
         MAKEHOACH: 'other metadata'}] : []),
-      ...(extraPlan ? [{ID: 'other', DAOTAO_THOIGIANDAOTAO_ID: 'new'}] : []),
+      ...(extraPlan ? [{ID: 'other', DAOTAO_THOIGIANDAOTAO_ID: 'new',
+        TENKEHOACH: 'Kế hoạch phụ', NGUOITAO_ID: 'private-student-id'}] : []),
     ]},
     LayKetQuaDangKyLopHocPhan: {Success: true, Data: empty ? [] : [
       {DANGKY_KEHOACHDANGKY_ID: 'plan', DAOTAO_THOIGIANDAOTAO_ID: 'new',
@@ -44,10 +45,17 @@ function run({failAt, noCallback, empty = false, oldPlan = false,
     if (key === noCallback) return;
     options.success(data[key]);
   }};
-  const window = {edu: {system}, flutter_inappwebview: {callHandler(name, attempt, value) {
-    stages.push({name, attempt, value});
+  const window = {edu: {system}, flutter_inappwebview: {callHandler(name, attempt, value, details) {
+    stages.push({name, attempt, value, details});
   }}};
-  vm.runInNewContext(script, {window, edu: window.edu});
+  const document = {querySelector(selector) {
+    assert.equal(selector, '#dropSearch_KeHoach');
+    return {value: 'plan', options: [
+      {value: '', text: 'Chọn kế hoạch', selected: false},
+      {value: 'plan', text: 'Kế hoạch hiện tại', selected: true},
+    ]};
+  }};
+  vm.runInNewContext(script, {window, document, edu: window.edu});
   return {calls, stages};
 }
 
@@ -77,6 +85,22 @@ test('rejects ambiguous plan, network error and missing callback', () => {
   const hanging = run({noCallback: 'LayDSKeHoachDangKyCaNhan'});
   assert.equal(hanging.stages.some(item => item.name === 'betterPhenikaaRegistrationResult'), false);
   assert.equal(hanging.calls.length, 2);
+});
+
+test('ambiguous plan includes only scoped plan and dropdown diagnostics', () => {
+  const {calls, stages} = run({extraPlan: true});
+  assert.equal(calls.length, 2);
+  const failure = stages.at(-1);
+  assert.equal(failure.value, 'PLAN_AMBIGUOUS');
+  const captured = JSON.parse(failure.details);
+  assert.equal(captured.recordCount, 2);
+  assert.equal(captured.distinctIdCount, 2);
+  assert.equal(captured.records[1].ID, 'other');
+  assert.equal(captured.dropdown.selectedId, 'plan');
+  assert.equal(captured.dropdown.options[1].ID, 'plan');
+  assert.ok(captured.records[1].otherKeys.includes('NGUOITAO_ID'));
+  assert.equal(failure.details.includes('private-student-id'), false);
+  assert.equal(failure.details.includes('student-private'), false);
 });
 
 test('a successful empty registration remains distinguishable from missing response', () => {

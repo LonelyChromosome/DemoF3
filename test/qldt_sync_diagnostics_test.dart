@@ -34,4 +34,54 @@ void main() {
       containsAll(<String>['phase', 'startedAt', 'endedAt', 'code']),
     );
   });
+
+  test(
+    'plan export keeps scoped fields and drops personal response values',
+    () {
+      final safe = QldtSyncDiagnostics.sanitizePlanSnapshot(
+        jsonEncode(<String, Object?>{
+          'version': 1,
+          'latestSemesterId': 'semester_1',
+          'recordCount': 2,
+          'distinctIdCount': 2,
+          'userId': 'student-private',
+          'cookie': 'secret-cookie',
+          'records': <Map<String, Object?>>[
+            <String, Object?>{
+              'index': 0,
+              'ID': 'plan_1',
+              'DAOTAO_THOIGIANDAOTAO_ID': 'semester_1',
+              'MAKEHOACH': 'contact@example.com 0912345678',
+              'TENKEHOACH': 'Kế hoạch học kỳ',
+              'NGUOITAO_ID': 'private-student-id',
+              'otherKeys': <String>['NGUOITAO_ID'],
+            },
+          ],
+          'dropdown': <String, Object?>{
+            'selectedId': 'plan_1',
+            'options': <Map<String, Object?>>[
+              <String, Object?>{
+                'index': 0,
+                'ID': 'plan_1',
+                'label': 'Kế hoạch học kỳ',
+                'selected': true,
+              },
+            ],
+          },
+        }),
+      );
+      expect(safe, contains('plan_1'));
+      expect(safe, contains('"distinctIdCount":2'));
+      expect(safe, contains('NGUOITAO_ID'));
+      for (final secret in <String>[
+        'student-private',
+        'secret-cookie',
+        'private-student-id',
+        'contact@example.com',
+        '0912345678',
+      ]) {
+        expect(safe, isNot(contains(secret)));
+      }
+    },
+  );
 }

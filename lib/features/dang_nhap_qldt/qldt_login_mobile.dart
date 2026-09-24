@@ -7,6 +7,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.d
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/tracuu_api.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -70,6 +71,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
   String? _pendingRegistrationRaw;
+  String? _planDiagnosticsJson;
   int _syncEpoch = 0;
   bool _pageReady = false;
   bool _syncing = false;
@@ -300,6 +302,31 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                   ),
                 ),
               ),
+            if (_planDiagnosticsJson != null && !_syncing)
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(text: _planDiagnosticsJson!),
+                        );
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Đã sao chép chẩn đoán TraCuu.'),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy_rounded),
+                      label: const Text('Sao chép chẩn đoán TraCuu'),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -508,6 +535,15 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             'PLAN_AMBIGUOUS' => 'PLAN_AMBIGUOUS',
             _ => 'INVALID_RESPONSE',
           };
+          if (code == 'PLAN_AMBIGUOUS' && arguments.length >= 3) {
+            try {
+              _planDiagnosticsJson = QldtSyncDiagnostics.sanitizePlanSnapshot(
+                arguments[2].toString(),
+              );
+            } on Object {
+              _planDiagnosticsJson = null;
+            }
+          }
           final reason = switch (code) {
             'SESSION_EXPIRED' => 'Phiên QLĐT đã hết hạn.',
             'NETWORK_ERROR' ||
@@ -683,6 +719,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     });
     _pendingSchedule = null;
     _pendingRegistrationRaw = null;
+    _planDiagnosticsJson = null;
 
     final now = DateTime.now();
     final academicStartYear = now.month >= 8 ? now.year : now.year - 1;

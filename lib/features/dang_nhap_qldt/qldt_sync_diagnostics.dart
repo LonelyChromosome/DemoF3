@@ -17,6 +17,96 @@ final class QldtSyncDiagnostics {
   new({DateTime Function()? clock}) : _clock = clock ?? DateTime.now;
 
   static const storageKey = 'qldt_sync_diagnostics';
+
+  static String sanitizePlanSnapshot(String raw) {
+    final source = jsonDecode(raw);
+    if (source is! Map ||
+        source['version'] != 1 ||
+        source['records'] is! List) {
+      throw const FormatException('Plan diagnostics không hợp lệ.');
+    }
+    int count(Object? value) => value is int && value >= 0 ? value : 0;
+    String id(Object? value) {
+      final text = value?.toString().trim() ?? '';
+      return RegExp(r'^[A-Za-z0-9_-]{1,64}$').hasMatch(text)
+          ? text
+          : '[redacted]';
+    }
+
+    String? label(Object? value) {
+      if (value == null) return null;
+      final text = value.toString();
+      if (RegExp(
+        r'token|cookie|authorization|session|bearer|password|mat.?khau',
+        caseSensitive: false,
+      ).hasMatch(text)) {
+        return '[redacted]';
+      }
+      return text
+          .substring(0, text.length > 160 ? 160 : text.length)
+          .replaceAll(RegExp(r'[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}'), '[email]')
+          .replaceAll(RegExp(r'(?:\+?\d[\d\s.-]{6,}\d)'), '[number]');
+    }
+
+    final records = (source['records'] as List).take(200).map((value) {
+      final row = value is Map ? value : const <String, Object?>{};
+      final keys = row['otherKeys'];
+      return <String, Object?>{
+        'index': count(row['index']),
+        'ID': id(row['ID']),
+        'DAOTAO_THOIGIANDAOTAO_ID': id(row['DAOTAO_THOIGIANDAOTAO_ID']),
+        'MAKEHOACH': label(row['MAKEHOACH']),
+        'TENKEHOACH': label(row['TENKEHOACH']),
+        'TRANGTHAI_ID': id(row['TRANGTHAI_ID']),
+        'HIEULUC': row['HIEULUC'] is bool ? row['HIEULUC'] : null,
+        'otherKeys': keys is List
+            ? keys
+                  .whereType<String>()
+                  .where((key) => RegExp(r'^[A-Za-z0-9_]{1,80}$').hasMatch(key))
+                  .take(100)
+                  .toList()
+            : <String>[],
+      };
+    }).toList();
+    final dropdown = source['dropdown'];
+    final options = dropdown is Map && dropdown['options'] is List
+        ? (dropdown['options'] as List).take(200).map((value) {
+            final option = value is Map ? value : const <String, Object?>{};
+            return <String, Object?>{
+              'index': count(option['index']),
+              'ID': id(option['ID']),
+              'label': label(option['label']),
+              'selected': option['selected'] == true,
+            };
+          }).toList()
+        : null;
+    return jsonEncode(<String, Object?>{
+      'version': 1,
+      'latestSemesterId': id(source['latestSemesterId']),
+      'latestSemesterName': label(source['latestSemesterName']),
+      'recordCount': count(source['recordCount']),
+      'distinctIdCount': count(source['distinctIdCount']),
+      'matchingRecordIndexes': source['matchingRecordIndexes'] is List
+          ? (source['matchingRecordIndexes'] as List)
+                .whereType<int>()
+                .where((index) => index >= 0)
+                .take(200)
+                .toList()
+          : <int>[],
+      'computedPlanIdCount': count(source['computedPlanIdCount']),
+      'computedPlanIds': source['computedPlanIds'] is List
+          ? (source['computedPlanIds'] as List).take(200).map(id).toList()
+          : <String>[],
+      'records': records,
+      'dropdown': options == null
+          ? null
+          : <String, Object?>{
+              'selectedId': id(dropdown['selectedId']),
+              'options': options,
+            },
+    });
+  }
+
   final DateTime Function() _clock;
   final List<Map<String, String>> _events = [];
   Map<String, String>? _active;
