@@ -406,12 +406,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             const Duration(seconds: 20),
             epoch,
           );
-          unawaited(
-            Future<void>.delayed(
-              Duration.zero,
-              () => _requestRegistration(epoch),
-            ),
-          );
         } on Object {
           _stopSync(
             epoch,
@@ -585,33 +579,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     unawaited(_checkReady());
   }
 
-  Future<void> _requestRegistration(int epoch) async {
-    final controller = _controller;
-    if (controller == null || !mounted || !_syncing || epoch != _syncEpoch) {
-      return;
-    }
-    try {
-      _diagnostics.mark('REG_EVAL_START');
-      final result = await controller.evaluateJavascript(
-        source: const TracuuApi().scriptForAttempt(epoch),
-      );
-      final code = switch (result?.toString()) {
-        'REG_SCRIPT_SUBMITTED' => 'REG_EVAL_SUBMITTED',
-        'BRIDGE_MISSING' => 'REG_BRIDGE_MISSING',
-        'BRIDGE_EXCEPTION' => 'REG_BRIDGE_EXCEPTION',
-        'SESSION_EXPIRED' => 'REG_SESSION_EXPIRED',
-        _ => 'REG_EVAL_UNEXPECTED',
-      };
-      _diagnostics.mark(code);
-    } on Object {
-      _stopSync(
-        epoch,
-        'Không gọi được dữ liệu TraCuu trong phiên QLĐT. Hãy thử lại.',
-        code: 'REGISTRATION_REQUEST_ERROR',
-      );
-    }
-  }
-
   Future<void> _checkReady() async {
     final controller = _controller;
     if (controller == null) {
@@ -708,6 +675,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     final startText = _formatDate(start);
     final endText = _formatDate(end);
 
+    final registrationScript = const TracuuApi().scriptForAttempt(epoch);
     final script =
         '''
       (function () {
@@ -749,7 +717,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                 'betterPhenikaaSyncResult',
                 $epoch,
                 JSON.stringify({name: name, response: response})
-              );
+              ).then(function () {
+                $registrationScript
+              }, function () {
+                window.flutter_inappwebview.callHandler(
+                  'betterPhenikaaRegistrationError', $epoch, 'REQUEST_ERROR'
+                );
+              });
             },
             error: function () {
               window.flutter_inappwebview.callHandler(
