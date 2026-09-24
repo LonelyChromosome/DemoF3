@@ -1,5 +1,6 @@
 import 'package:better_phenikaa_schedule/app/app.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -65,11 +66,29 @@ void main() {
 
     await tester.tap(find.text('Theo tuần'));
     await tester.pumpAndSettle();
+    final weekScroll = find
+        .descendant(
+          of: find.byType(WeekTimetable),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('Thiết kế web nâng cao'),
+      160,
+      scrollable: weekScroll,
+      maxScrolls: 7,
+    );
     expect(find.text('Thiết kế web nâng cao'), findsWidgets);
     await tester.tap(find.byTooltip('Tuần sau'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Tuần trước'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Thiết kế web nâng cao'),
+      160,
+      scrollable: weekScroll,
+      maxScrolls: 7,
+    );
     expect(find.text('Thiết kế web nâng cao'), findsWidgets);
 
     await tester.tap(find.text('Theo ngày'));
