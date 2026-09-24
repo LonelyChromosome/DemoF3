@@ -28,13 +28,16 @@ internal object WidgetSyncIndicator {
     @Volatile private var phase = Phase.IDLE
     @Volatile private var generation = 0
     @Volatile private var step = 0
+    @Volatile private var resultFrame = -1
     private const val PREFS = "better_phenikaa_widget_sync_indicator"
     private const val STARTED_AT = "started_at"
     private const val FRAME_DELAY_MS = 60L
     private const val FRAME_COUNT = 20
     private const val MAX_SPIN_MS = 65_000L
-    private const val SUCCESS_HOLD_MS = 1_000L
-    private const val FAILURE_HOLD_MS = 2_000L
+    private const val SUCCESS_HOLD_MS = 1_500L
+    private const val FAILURE_HOLD_MS = 2_500L
+    private const val RESULT_FRAME_COUNT = 5
+    private const val RESULT_FRAME_DELAY_MS = 50L
 
     fun start(context: Context): Long {
         val appContext = context.applicationContext
@@ -46,6 +49,7 @@ internal object WidgetSyncIndicator {
             token = maxOf(SystemClock.elapsedRealtime().coerceAtLeast(1L), previous + 1L)
             phase = Phase.SPINNING
             step = 0
+            resultFrame = -1
             current = ++generation
             appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit().putLong(STARTED_AT, token).commit()
@@ -95,18 +99,29 @@ internal object WidgetSyncIndicator {
             cancelTimeout(context)
             expectedPhase = if (succeeded) Phase.SUCCESS else Phase.FAILURE
             phase = expectedPhase
+            resultFrame = 0
             current = ++generation
         }
-        handler.post {
-            updateIcons(context)
+        handler.post { showResultFrame(context, current, expectedPhase, 0) }
+        return true
+    }
+
+    private fun showResultFrame(context: Context, current: Int, expected: Phase, frame: Int) {
+        if (generation != current || phase != expected) return
+        resultFrame = frame
+        updateIcons(context)
+        if (frame + 1 < RESULT_FRAME_COUNT) {
+            handler.postDelayed({ showResultFrame(context, current, expected, frame + 1) },
+                RESULT_FRAME_DELAY_MS)
+        } else {
             handler.postDelayed({
-                if (generation == current && phase == expectedPhase) {
+                if (generation == current && phase == expected) {
+                    resultFrame = -1
                     phase = Phase.IDLE
                     updateIcons(context)
                 }
-            }, if (succeeded) SUCCESS_HOLD_MS else FAILURE_HOLD_MS)
+            }, if (expected == Phase.SUCCESS) SUCCESS_HOLD_MS else FAILURE_HOLD_MS)
         }
-        return true
     }
 
     private fun spin(context: Context, current: Int) {
@@ -139,8 +154,14 @@ internal object WidgetSyncIndicator {
         }
         when (phase) {
             Phase.IDLE -> views.setImageViewResource(icon, R.drawable.ic_widget_reload)
-            Phase.SUCCESS -> views.setImageViewResource(icon, R.drawable.ic_widget_check)
-            Phase.FAILURE -> views.setImageViewResource(icon, R.drawable.ic_widget_failure)
+            Phase.SUCCESS, Phase.FAILURE -> if (resultFrame >= 0) {
+                views.setImageViewBitmap(icon, resultTransition(context, resultFrame,
+                    phase == Phase.SUCCESS))
+            } else {
+                views.setImageViewResource(icon,
+                    if (phase == Phase.SUCCESS) R.drawable.ic_widget_check
+                    else R.drawable.ic_widget_failure)
+            }
             Phase.SPINNING -> views.setImageViewBitmap(icon,
                 loadingRing(context, step * 360f / FRAME_COUNT))
         }
@@ -167,6 +188,28 @@ internal object WidgetSyncIndicator {
         canvas.rotate(degrees - 90f, center, center)
         canvas.drawArc(RectF(inset, inset, size - inset, size - inset),
             25f, 310f, false, paint)
+        return bitmap
+    }
+
+    private fun resultTransition(context: Context, frame: Int, succeeded: Boolean): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val size = (24 * density).toInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val progress = frame.toFloat() / (RESULT_FRAME_COUNT - 1)
+        val eased = 1f - (1f - progress) * (1f - progress)
+        canvas.drawBitmap(loadingRing(context, step * 360f / FRAME_COUNT), 0f, 0f,
+            Paint(Paint.ANTI_ALIAS_FLAG).apply { alpha = ((1f - eased) * 255).toInt() })
+        val drawable = context.getDrawable(
+            if (succeeded) R.drawable.ic_widget_check else R.drawable.ic_widget_failure,
+        )?.mutate() ?: return bitmap
+        val scale = 0.65f + 0.35f * eased
+        val saved = canvas.save()
+        canvas.scale(scale, scale, size / 2f, size / 2f)
+        drawable.setBounds(0, 0, size, size)
+        drawable.alpha = (eased * 255).toInt()
+        drawable.draw(canvas)
+        canvas.restoreToCount(saved)
         return bitmap
     }
 

@@ -42,7 +42,6 @@ class QldtDailySyncWorker(
 
         if (!WidgetSyncIndicator.isCurrent(applicationContext, syncToken)) return Result.success()
         DailySyncScheduler.recordStarted(applicationContext, System.currentTimeMillis())
-        WidgetRefreshCoordinator.refreshOverview(applicationContext)
         var syncSucceeded = false
         var syncError = "SYNC_UNKNOWN: QLĐT chưa trả kết quả."
         var reminderSemester: String? = null
