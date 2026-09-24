@@ -150,6 +150,7 @@ private class HeadlessQldtSync(private val context: Context) {
     private val sessionProbeStarted = AtomicBoolean(false)
     private val stage = AtomicReference("PAGE_LOAD")
     private val pendingEnvelope = AtomicReference<String>()
+    private val pendingRegistration = AtomicReference<String>()
     private val registrationRequested = AtomicBoolean(false)
     private val result = AtomicReference<Result>()
     private val latch = CountDownLatch(1)
@@ -205,11 +206,14 @@ private class HeadlessQldtSync(private val context: Context) {
                     onSchedule = { envelope ->
                         mainHandler.post {
                             pendingEnvelope.set(envelope)
-                            requestRegistration(webView)
+                            completeWhenBothReady()
                         }
                     },
                     onRegistration = { registration ->
-                        pendingEnvelope.get()?.let { complete(Result.Success(it, registration)) }
+                        mainHandler.post {
+                            pendingRegistration.set(registration)
+                            completeWhenBothReady()
+                        }
                     },
                     onError = { code ->
                         val message = when (code) {
@@ -408,6 +412,7 @@ private class HeadlessQldtSync(private val context: Context) {
                 if (syncRequested.compareAndSet(false, true)) {
                     stage.set("SCHEDULE")
                     requestSchedule(webView)
+                    requestRegistration(webView)
                 }
                 return@evaluateJavascript
             }
@@ -488,6 +493,12 @@ private class HeadlessQldtSync(private val context: Context) {
         if (completed.get() || !registrationRequested.compareAndSet(false, true)) return
         stage.set("REGISTRATION")
         webView.evaluateJavascript(REGISTRATION_SCRIPT, null)
+    }
+
+    private fun completeWhenBothReady() {
+        val envelope = pendingEnvelope.get() ?: return
+        val registration = pendingRegistration.get() ?: return
+        complete(Result.Success(envelope, registration))
     }
 
     private fun currentAcademicYearRange(): Pair<String, String> {

@@ -30,7 +30,7 @@
         android:clickable="true"
         android:clipChildren="true"
         android:clipToPadding="true"
-        android:loopViews="true" />
+        android:loopViews="false" />
 
     <!--
       Atomic refresh cover. During collection/theme invalidation Samsung Launcher can
