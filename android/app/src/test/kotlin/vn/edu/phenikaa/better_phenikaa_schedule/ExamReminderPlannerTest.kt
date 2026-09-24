@@ -36,7 +36,7 @@ class ExamReminderPlannerTest {
 
     @Test fun deliveredMilestoneIsNeverScheduledAgain() {
         val first = ExamReminderPlanner.plan(semester(), now, emptySet(), emptySet())
-        val delivered = setOf(first.schedule.first.key)
+        val delivered = setOf(first.schedule.first().key)
         val repeated = ExamReminderPlanner.plan(semester(), now, emptySet(), delivered)
         assertEquals(2, repeated.schedule.size)
     }
