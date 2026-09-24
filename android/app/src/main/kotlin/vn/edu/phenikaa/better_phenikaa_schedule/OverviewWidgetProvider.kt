@@ -165,6 +165,16 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         views.setTextViewText(R.id.overview_empty,
             if (examMode) "Không có lịch thi" else "Không có lịch học")
         val lastPage = OverviewPager.lastPage(items.size, size)
+        val showProgress = !examMode && lastPage == 0 && items.isNotEmpty() &&
+            (error.isNullOrEmpty() || started <= succeeded)
+        views.setViewVisibility(R.id.overview_progress,
+            if (showProgress) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.overview_status,
+            if (showProgress) View.GONE else View.VISIBLE)
+        if (showProgress) {
+            views.setImageViewBitmap(R.id.overview_progress,
+                ScheduleWidgetProvider().overviewProgress(context, width - 24, items.size))
+        }
         views.setViewVisibility(R.id.overview_navigation,
             if (lastPage == 0) View.GONE else View.VISIBLE)
         views.setViewVisibility(R.id.overview_previous,

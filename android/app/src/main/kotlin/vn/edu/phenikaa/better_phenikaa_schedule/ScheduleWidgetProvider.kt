@@ -72,6 +72,34 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         return bitmap
     }
 
+    internal fun overviewProgress(context: Context, widthDp: Int, count: Int): Bitmap {
+        val density = context.resources.displayMetrics.density
+        val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
+        val height = (29 * density).roundToInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val theme = readThemeColors(context)
+        val y = height / 2f
+        val left = 10f * density
+        val right = width - left
+        val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = theme.iconColor
+            alpha = 170
+            strokeWidth = 1.5f * density
+        }
+        canvas.drawLine(left, y, right, y, line)
+        repeat(count.coerceAtMost(5)) { index ->
+            val x = left + (right - left) * (index + 0.5f) / count
+            val accent = if (theme.key == "classic") {
+                intArrayOf(0xFF12CCFA.toInt(), 0xFF6578FF.toInt(), 0xFFC375E8.toInt(),
+                    0xFFFA67BA.toInt(), 0xFFFF557C.toInt())[index]
+            } else blend(theme.startColor, theme.endColor, index / 4f)
+            val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
+            canvas.drawCircle(x, y, 5f * density, dot)
+        }
+        return bitmap
+    }
+
     private fun blend(from: Int, to: Int, ratio: Float): Int {
         val t = ratio.coerceIn(0f, 1f)
         return Color.argb(
