@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import android.os.Build
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
@@ -33,9 +35,11 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             } else {
                 val direction = intent.getIntExtra(EXTRA_DIRECTION, 0).coerceIn(-1, 1)
                 val items = WidgetSnapshotStore.readOverview(context, id, state.getBoolean(modeKey(id), false))
-                val height = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
-                    .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160)
-                val size = OverviewPager.pageSize(height)
+                val options = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
+                val size = OverviewPager.pageSize(
+                    options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320),
+                    options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160),
+                )
                 val next = OverviewPager.clamp(state.getInt(pageKey(id), 0) + direction, items.size, size)
                 state.edit().putInt(pageKey(id), next).apply()
             }
@@ -69,7 +73,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
         val height = manager.getAppWidgetOptions(id)
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
-        val size = OverviewPager.pageSize(height)
+        val columns = OverviewPager.columns(width)
+        val size = OverviewPager.pageSize(width, height)
         val page = WidgetRefreshDecision.overviewPage(
             state.getInt(pageKey(id), 0), items.size, size,
         )
@@ -91,12 +96,14 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val started = status["lastStartedAtMillis"] as? Long ?: 0L
         val succeeded = status["lastSuccessAtMillis"] as? Long ?: 0L
         views.setTextViewText(R.id.overview_title, when {
+            examMode -> "Lịch thi · Học kỳ hiện tại"
+            else -> "${if (selected == today) "Hôm nay" else "Ngày $date"} · $date"
+        })
+        views.setTextViewText(R.id.overview_subtitle,
+            if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học")
+        views.setTextViewText(R.id.overview_status, when {
             !error.isNullOrEmpty() && started > succeeded -> "Đồng bộ lỗi · Bấm ↻ thử lại"
             started > succeeded -> "Đang đồng bộ QLĐT..."
-            examMode -> "Lịch thi sắp tới · ${items.size} ca"
-            else -> "${if (selected == today) "Hôm nay" else "Ngày $date"} · ${items.size} môn"
-        })
-        views.setTextViewText(R.id.overview_status, when {
             examMode && items.isNotEmpty() -> {
                 val first = items.first()
                 val target = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(first.dateKey)
@@ -111,32 +118,48 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 if (days == 0L) "Có ca thi hôm nay" else "Còn $days ngày đến ca thi đầu tiên"
             }
             examMode -> "Chưa có ca thi sắp tới"
-            selected == today -> "Lịch học trong ngày"
+            selected == today -> "Lịch học hôm nay"
             else -> "Lịch học ngày $date"
         })
-        views.setImageViewResource(R.id.overview_mode,
-            if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
+        views.setImageViewResource(R.id.overview_mode, R.drawable.ic_widget_switch)
         views.setContentDescription(R.id.overview_mode,
             if (examMode) "Về lịch học" else "Xem lịch thi")
-        listOf(R.id.overview_title,
+        listOf(R.id.overview_title, R.id.overview_subtitle,
             R.id.overview_status, R.id.overview_previous, R.id.overview_next,
             R.id.overview_page, R.id.overview_empty).forEach {
             views.setTextColor(it, textColor)
         }
         views.setInt(R.id.overview_calendar, "setColorFilter", iconColor)
+        views.setInt(R.id.overview_emblem, "setColorFilter", iconColor)
         views.setInt(R.id.overview_mode, "setColorFilter", iconColor)
         views.setTextColor(R.id.overview_reload, iconColor)
         views.removeAllViews(R.id.overview_cards)
-        OverviewPager.visible(items, page, size).forEach { item ->
-            val card = RemoteViews(context.packageName, R.layout.overview_widget_card)
-            card.setTextViewText(R.id.overview_card_time, item.startAt.drop(11).take(5))
-            card.setTextViewText(R.id.overview_card_subject, item.subject)
-            val itemDate = item.dateKey.takeIf { examMode || it != today }
-                ?.let { " · ${it.substring(8, 10)}/${it.substring(5, 7)}" }.orEmpty()
-            card.setTextViewText(R.id.overview_card_room, "${item.room}$itemDate")
-            listOf(R.id.overview_card_time, R.id.overview_card_subject,
-                R.id.overview_card_room).forEach { card.setTextColor(it, textColor) }
-            views.addView(R.id.overview_cards, card)
+        OverviewPager.visible(items, page, size).chunked(columns).forEachIndexed { rowIndex, rowItems ->
+            val row = RemoteViews(context.packageName, R.layout.overview_widget_row)
+            rowItems.forEachIndexed { columnIndex, item ->
+                val card = RemoteViews(context.packageName, R.layout.overview_widget_card)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    card.setViewLayoutHeight(R.id.overview_card_root,
+                        if (height >= 180) 76f else 63f, TypedValue.COMPLEX_UNIT_DIP)
+                }
+                val colorIndex = page * size + rowIndex * columns + columnIndex
+                card.setImageViewBitmap(R.id.overview_card_background,
+                    ScheduleWidgetProvider().overviewCardBackground(context, colorIndex))
+                card.setTextViewText(R.id.overview_card_date,
+                    if (examMode) "${item.dateKey.substring(8, 10)}/${item.dateKey.substring(5, 7)}"
+                    else "")
+                card.setViewVisibility(R.id.overview_card_date,
+                    if (examMode) View.VISIBLE else View.GONE)
+                card.setTextViewText(R.id.overview_card_time, item.startAt.drop(11).take(5))
+                card.setTextViewText(R.id.overview_card_subject, item.subject)
+                card.setTextViewText(R.id.overview_card_room, item.room)
+                listOf(R.id.overview_card_date, R.id.overview_card_time,
+                    R.id.overview_card_subject, R.id.overview_card_room).forEach {
+                    card.setTextColor(it, textColor)
+                }
+                row.addView(R.id.overview_row, card)
+            }
+            views.addView(R.id.overview_cards, row)
         }
         views.setViewVisibility(R.id.overview_empty, if (items.isEmpty()) View.VISIBLE else View.GONE)
         views.setTextViewText(R.id.overview_empty,

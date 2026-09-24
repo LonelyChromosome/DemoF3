@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
@@ -30,8 +31,56 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         return colors.textColor to colors.iconColor
     }
 
-    internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int): Bitmap =
-        renderThemeBackground(context, widthDp, heightDp, readThemeColors(context))
+    internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int): Bitmap {
+        val theme = readThemeColors(context)
+        if (theme.key != "classic") {
+            return renderThemeBackground(context, widthDp, heightDp, theme)
+        }
+        val density = context.resources.displayMetrics.density
+        val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
+        val height = (heightDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
+                theme.startColor, 0xFF992C71.toInt(), Shader.TileMode.CLAMP)
+        }
+        Canvas(bitmap).drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+        return bitmap
+    }
+
+    internal fun overviewCardBackground(context: Context, index: Int): Bitmap {
+        val theme = readThemeColors(context)
+        val density = context.resources.displayMetrics.density
+        val width = (110 * density).roundToInt().coerceAtLeast(1)
+        val height = (76 * density).roundToInt().coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        // The five accent stops follow the reference mockup. For other themes
+        // interpolate the active Theme Engine's own gradient endpoints.
+        val accent = if (theme.key == "classic") {
+            intArrayOf(0xFF0874CA.toInt(), 0xFF334AA9.toInt(), 0xFF7644B3.toInt(),
+                0xFFAD478E.toInt(), 0xFFC24178.toInt())[index % 5]
+        } else {
+            blend(theme.startColor, theme.endColor, (index % 5) / 4f)
+        }
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
+                blend(accent, theme.startColor, 0.4f), accent, Shader.TileMode.CLAMP)
+        }
+        val radius = 12f * density
+        Canvas(bitmap).drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(),
+            radius, radius, paint)
+        return bitmap
+    }
+
+    private fun blend(from: Int, to: Int, ratio: Float): Int {
+        val t = ratio.coerceIn(0f, 1f)
+        return Color.argb(
+            255,
+            (Color.red(from) * (1 - t) + Color.red(to) * t).roundToInt(),
+            (Color.green(from) * (1 - t) + Color.green(to) * t).roundToInt(),
+            (Color.blue(from) * (1 - t) + Color.blue(to) * t).roundToInt(),
+        )
+    }
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == ACTION_SMALL_RELOAD) {
@@ -273,8 +322,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         views.setInt(R.id.widget_mode, "setColorFilter", theme.iconColor)
         views.setTextColor(R.id.widget_reload, theme.iconColor)
         val examMode = SmallWidgetMode.isExam(context, widgetId)
-        views.setImageViewResource(R.id.widget_mode,
-            if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
+        views.setImageViewResource(R.id.widget_mode, R.drawable.ic_widget_switch)
         views.setContentDescription(R.id.widget_mode,
             if (examMode) "Về lịch học" else "Xem lịch thi")
         views.setTextViewText(R.id.widget_empty,

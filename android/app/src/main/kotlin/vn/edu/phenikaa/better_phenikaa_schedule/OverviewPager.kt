@@ -1,9 +1,14 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 internal object OverviewPager {
-    // 40dp header + 22dp status + 30dp navigation + 12dp outer padding.
-    // Each compact row takes 60dp plus 4dp spacing.
-    fun pageSize(heightDp: Int): Int = ((heightDp - 104) / 64).coerceIn(1, 5)
+    // The mockup has five cards across at tablet width. A phone shows two
+    // columns in two rows when its widget is tall enough, without dead space.
+    fun columns(widthDp: Int): Int = ((widthDp - 24) / 110).coerceIn(1, 5)
+
+    fun rows(heightDp: Int): Int = if (heightDp >= 258) 2 else 1
+
+    fun pageSize(widthDp: Int, heightDp: Int): Int =
+        columns(widthDp) * rows(heightDp)
 
     fun lastPage(itemCount: Int, pageSize: Int): Int =
         if (itemCount == 0) 0 else (itemCount - 1) / pageSize

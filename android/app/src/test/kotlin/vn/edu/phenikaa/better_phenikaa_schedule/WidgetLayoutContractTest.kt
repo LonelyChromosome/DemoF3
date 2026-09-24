@@ -36,12 +36,14 @@ class WidgetLayoutContractTest {
             .getAttributeNS(androidNamespace, "layout_marginEnd"))
     }
 
-    @Test fun overviewRowsAreVerticalAndLongNamesCanUseTwoLines() {
+    @Test fun overviewMatchesMockupCardStripAndLongNamesCanUseTwoLines() {
         val root = layout("overview_widget").documentElement
         assertEquals("vertical", element("overview_cards", root)
             .getAttributeNS(androidNamespace, "orientation"))
         val card = layout("overview_widget_card").documentElement
-        assertEquals("60dp", card.getAttributeNS(androidNamespace, "layout_height"))
+        assertEquals("63dp", card.getAttributeNS(androidNamespace, "layout_height"))
+        assertEquals("horizontal", layout("overview_widget_row").documentElement
+            .getAttributeNS(androidNamespace, "orientation"))
         assertEquals("2", element("overview_card_subject", card)
             .getAttributeNS(androidNamespace, "maxLines"))
         assertTrue(element("overview_navigation", root)
