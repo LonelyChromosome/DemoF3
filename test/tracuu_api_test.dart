@@ -79,14 +79,33 @@ void main() {
           {
             'ID': 'new-plan',
             'DAOTAO_THOIGIANDAOTAO_ID': 'new',
-            'MAKEHOACH': 'label A',
+            'MAKEHOACH': '2026_2027_1,1',
+            'TENKEHOACH': 'label A',
           },
           {
             'ID': 'new-plan',
             'DAOTAO_THOIGIANDAOTAO_ID': 'new',
-            'MAKEHOACH': 'label B',
+            'MAKEHOACH': '2026_2027_1,1',
+            'TENKEHOACH': 'label B',
           },
         ],
+      ),
+    );
+    expect(parsed.id, '2026_2027_1');
+    expect(parsed.subjectNames, ['Thiết kế web nâng cao']);
+  });
+
+  test('accepts the scoped plan with a different internal semester ID', () {
+    final parsed = api.parse(
+      sample(
+        plans: [
+          {
+            'ID': 'new-plan',
+            'DAOTAO_THOIGIANDAOTAO_ID': 'plan-sem',
+            'MAKEHOACH': '2026_2027_1,1',
+          },
+        ],
+        registrations: [row(semester: 'plan-sem')],
       ),
     );
     expect(parsed.id, '2026_2027_1');
@@ -108,8 +127,16 @@ void main() {
       () => api.parse(
         sample(
           plans: [
-            {'ID': 'new-plan', 'DAOTAO_THOIGIANDAOTAO_ID': 'new'},
-            {'ID': 'another-plan', 'DAOTAO_THOIGIANDAOTAO_ID': 'new'},
+            {
+              'ID': 'new-plan',
+              'DAOTAO_THOIGIANDAOTAO_ID': 'new',
+              'MAKEHOACH': '2026_2027_1,1',
+            },
+            {
+              'ID': 'another-plan',
+              'DAOTAO_THOIGIANDAOTAO_ID': 'new',
+              'MAKEHOACH': '2026_2027_1,2',
+            },
           ],
         ),
       ),

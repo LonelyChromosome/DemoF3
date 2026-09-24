@@ -114,16 +114,22 @@ final class TracuuApi {
                   }))
                 } : null
               };
-              const planIds = [...new Set(plans.Data
-                .filter(row => row && String(row.DAOTAO_THOIGIANDAOTAO_ID || '').trim() === String(latest.id).trim())
+              const matchingPlans = rows.filter(row => row && row.ID &&
+                (String(row.MAKEHOACH || '').trim() === latest.name ||
+                  String(row.MAKEHOACH || '').trim().startsWith(latest.name + ',')));
+              const planIds = [...new Set(matchingPlans
                 .map(row => String(row.ID || '').trim())
                 .filter(Boolean))];
+              const planSemesterIds = [...new Set(matchingPlans
+                .map(row => String(row.DAOTAO_THOIGIANDAOTAO_ID || '').trim())
+                .filter(Boolean))];
               diagnostic.matchingRecordIndexes = rows.flatMap((row, index) =>
-                String(row && row.DAOTAO_THOIGIANDAOTAO_ID || '').trim() ===
-                  String(latest.id).trim() ? [index] : []);
+                matchingPlans.includes(row) ? [index] : []);
               diagnostic.computedPlanIdCount = planIds.length;
               diagnostic.computedPlanIds = planIds.slice(0, 200).map(id);
-              if (planIds.length !== 1) { fail('PLAN_AMBIGUOUS', diagnostic); return; }
+              if (planIds.length !== 1 || planSemesterIds.length !== 1) {
+                fail('PLAN_AMBIGUOUS', diagnostic); return;
+              }
               stage('subjects');
               call('DKH_Chung_MH/DSA4CiQ1EDQgBSAvJgo4DS4xCS4iESkgLwPP',
                 'pkg_dangkyhoc_chung.LayKetQuaDangKyLopHocPhan',
@@ -169,21 +175,30 @@ final class TracuuApi {
       return year != 0 ? year : b.$4.compareTo(a.$4);
     });
     final latest = candidates.first;
-    final planIds = _data(payload['plans'])
-        .where((row) => _string(row['DAOTAO_THOIGIANDAOTAO_ID']) == latest.$1)
+    final plans = _data(payload['plans']).where((row) {
+      final code = _string(row['MAKEHOACH']);
+      return code == latest.$2 || code.startsWith('${latest.$2},');
+    }).toList();
+    final planIds = plans
         .map((row) => _string(row['ID']))
         .where((id) => id.isNotEmpty)
         .toSet();
-    if (planIds.length != 1) {
+    final planSemesterIds = plans
+        .map((row) => _string(row['DAOTAO_THOIGIANDAOTAO_ID']))
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (planIds.length != 1 || planSemesterIds.length != 1) {
       throw const FormatException('Không xác định được một kế hoạch đăng ký.');
     }
     final planId = planIds.single;
+    final planSemesterId = planSemesterIds.single;
     final rows = _data(payload['registrations']);
     final subjects = <String, String>{};
     final sections = <String, Map<String, RegisteredClassSection>>{};
     for (final row in rows) {
+      final rowSemesterId = _string(row['DAOTAO_THOIGIANDAOTAO_ID']);
       if (_string(row['DANGKY_KEHOACHDANGKY_ID']) != planId ||
-          _string(row['DAOTAO_THOIGIANDAOTAO_ID']) != latest.$1) {
+          (rowSemesterId != latest.$1 && rowSemesterId != planSemesterId)) {
         throw const FormatException(
           'TraCuu trả lớp khác học kỳ hoặc kế hoạch.',
         );

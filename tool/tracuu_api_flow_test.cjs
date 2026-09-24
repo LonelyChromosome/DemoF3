@@ -15,7 +15,8 @@ const nativeScript = kotlin.split('const val REGISTRATION_SCRIPT = """')[1]
 assert.ok(nativeScript, 'native registration script is present');
 
 function run({failAt, noCallback, empty = false, oldPlan = false,
-  duplicatePlan = false, extraPlan = false, planName = 'metadata only'} = {}) {
+  duplicatePlan = false, extraPlan = false, differentForeignKey = false,
+  planName = '2026_2027_1,1'} = {}) {
   const calls = [];
   const stages = [];
   const data = {
@@ -24,15 +25,19 @@ function run({failAt, noCallback, empty = false, oldPlan = false,
       {ID: 'new', THOIGIAN: '2026_2027_1'},
     ]},
     LayDSKeHoachDangKyCaNhan: {Success: true, Data: [
-      {ID: 'plan', DAOTAO_THOIGIANDAOTAO_ID: oldPlan ? 'old' : 'new',
-        MAKEHOACH: planName},
-      ...(duplicatePlan ? [{ID: 'plan', DAOTAO_THOIGIANDAOTAO_ID: 'new',
-        MAKEHOACH: 'other metadata'}] : []),
+      {ID: 'plan', DAOTAO_THOIGIANDAOTAO_ID: oldPlan ? 'old' :
+        differentForeignKey ? 'plan-sem' : 'new',
+        MAKEHOACH: oldPlan ? '2025_2026_3,1' : planName},
+      ...(duplicatePlan ? [{ID: 'plan', DAOTAO_THOIGIANDAOTAO_ID:
+        differentForeignKey ? 'plan-sem' : 'new',
+        MAKEHOACH: planName, TENKEHOACH: 'other metadata'}] : []),
       ...(extraPlan ? [{ID: 'other', DAOTAO_THOIGIANDAOTAO_ID: 'new',
-        TENKEHOACH: 'Kế hoạch phụ', NGUOITAO_ID: 'private-student-id'}] : []),
+        MAKEHOACH: planName, TENKEHOACH: 'Kế hoạch phụ',
+        NGUOITAO_ID: 'private-student-id'}] : []),
     ]},
     LayKetQuaDangKyLopHocPhan: {Success: true, Data: empty ? [] : [
-      {DANGKY_KEHOACHDANGKY_ID: 'plan', DAOTAO_THOIGIANDAOTAO_ID: 'new',
+      {DANGKY_KEHOACHDANGKY_ID: 'plan',
+        DAOTAO_THOIGIANDAOTAO_ID: differentForeignKey ? 'plan-sem' : 'new',
         DAOTAO_HOCPHAN_ID: 'subject', DAOTAO_HOCPHAN_TEN: 'Thiết kế web nâng cao',
         DANGKY_LOPHOCPHAN_ID: 'class', DANGKY_LOPHOCPHAN_TEN: 'WEB-2026-LT',
         NGAYBATDAU: '17/08/2026', NGAYKETTHUC: '01/11/2026'},
@@ -77,6 +82,15 @@ test('deduplicates the same plan ID and fetches registrations once', () => {
   assert.equal(stages.at(-1).name, 'betterPhenikaaRegistrationResult');
 });
 
+test('uses the observed plan code when the plan foreign key differs', () => {
+  const {calls, stages} = run({differentForeignKey: true});
+  assert.equal(calls.length, 3);
+  assert.equal(calls[1].strDaoTao_ThoiGianDaoTao_Id, 'new');
+  assert.equal(calls[2].strDangKy_KeHoachDangKy_Id, 'plan');
+  assert.equal(calls[2].strDaoTao_ThoiGianDaoTao_Id, 'new');
+  assert.equal(stages.at(-1).name, 'betterPhenikaaRegistrationResult');
+});
+
 test('rejects ambiguous plan, network error and missing callback', () => {
   assert.equal(run({oldPlan: true}).stages.at(-1).value, 'PLAN_AMBIGUOUS');
   assert.equal(run({extraPlan: true}).stages.at(-1).value, 'PLAN_AMBIGUOUS');
@@ -117,6 +131,8 @@ test('native worker uses the same three verified calls without page navigation',
   }
   assert.equal(nativeScript.includes('querySelector'), false);
   assert.equal(nativeScript.includes('MutationObserver'), false);
-  assert.ok(nativeScript.includes('new Set(plans'));
+  assert.ok(nativeScript.includes('new Set(matchingPlans'));
+  assert.ok(nativeScript.includes("startsWith(latest.name + ',')"));
+  assert.ok(nativeScript.includes('row.DAOTAO_THOIGIANDAOTAO_ID !== planSemesterIds[0]'));
   assert.ok(nativeScript.includes('strDangKy_KeHoachDangKy_Id: planIds[0]'));
 });
