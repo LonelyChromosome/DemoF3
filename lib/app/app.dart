@@ -64,7 +64,9 @@ class _AppRoot extends StatefulWidget {
 class _AppRootState extends State<_AppRoot> {
   static const _storageKey = 'better_phenikaa_snapshot_v1';
   static const _routeKey = 'better_phenikaa_qldt_registration_route_v1';
-  static const _widgetSessionChannel = MethodChannel('better_phenikaa/widget_session');
+  static const _widgetSessionChannel = MethodChannel(
+    'better_phenikaa/widget_session',
+  );
 
   bool _booting = true;
   bool _syncing = false;

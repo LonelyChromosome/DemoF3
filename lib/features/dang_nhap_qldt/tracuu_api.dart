@@ -262,12 +262,19 @@ final class TracuuApi {
     final semesters = _data(payload['semesters']);
     final plans = _data(payload['plans']);
     final registration = parse(raw);
-    final latest = semesters.where((row) => _string(row['THOIGIAN']) == registration.id)
-        .map((row) => _string(row['ID'])).toSet();
-    final matching = plans.where((row) {
-      final name = _string(row['MAKEHOACH']);
-      return name == registration.name || name.startsWith('${registration.name},');
-    }).map((row) => _string(row['ID'])).where((id) => id.isNotEmpty).toSet();
+    final latest = semesters
+        .where((row) => _string(row['THOIGIAN']) == registration.id)
+        .map((row) => _string(row['ID']))
+        .toSet();
+    final matching = plans
+        .where((row) {
+          final name = _string(row['MAKEHOACH']);
+          return name == registration.name ||
+              name.startsWith('${registration.name},');
+        })
+        .map((row) => _string(row['ID']))
+        .where((id) => id.isNotEmpty)
+        .toSet();
     if (userId.isEmpty || latest.length != 1 || matching.length != 1) {
       throw const FormatException('Không xác minh được đường dẫn đăng ký.');
     }
