@@ -29,10 +29,12 @@ import kotlin.math.roundToInt
 class ScheduleWidgetProvider : HomeWidgetProvider() {
     internal fun restoreDisplay(context: Context, manager: AppWidgetManager, ids: IntArray) {
         val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
+        val visible = context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
         ids.forEach { id ->
             // Rebind the StackView adapter and select the relevant child. The
             // selected calendar date and study/exam mode remain independent.
             state.edit().remove(contentTokenKey(id)).apply()
+            visible.edit().remove(visiblePositionKey(id)).apply()
             renderWidget(context, manager, id)
         }
     }
@@ -203,6 +205,15 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         widgetData: SharedPreferences,
     ) {
         appWidgetIds.forEach { widgetId ->
+            val known = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
+                .contains(contentTokenKey(widgetId))
+            if (!known) {
+                context.getSharedPreferences(WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE)
+                    .edit().remove(selectedDateKey(widgetId)).putBoolean(resetChildKey(widgetId), true)
+                    .apply()
+                context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
+                    .edit().remove(visiblePositionKey(widgetId)).apply()
+            }
             renderWidget(context, appWidgetManager, widgetId)
         }
     }

@@ -141,6 +141,12 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         }
         val (textColor, iconColor) = ScheduleWidgetProvider().overviewColors(context)
         val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        val openApp = PendingIntent.getActivity(
+            context, id, Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                data = Uri.parse("better-phenikaa://overview/$id/open")
+            }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         views.setFloat(R.id.overview_root, "setAlpha", initialAlpha)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             views.setViewLayoutHeight(R.id.overview_panel, panelHeight.toFloat(),
@@ -242,6 +248,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 card.setTextViewText(R.id.overview_card_subject,
                     OverviewPager.compactSubject(item.subject, (width - 24) / columns))
                 card.setContentDescription(R.id.overview_card_root, item.subject)
+                card.setOnClickPendingIntent(R.id.overview_card_root, openApp)
                 // The header already shows the selected date, and exam cards have their own date.
                 // Keeping only the room makes four fixed slots readable on a phone.
                 card.setTextViewText(R.id.overview_card_room, item.room.substringBefore(" • "))
@@ -286,6 +293,11 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         views.setOnClickPendingIntent(R.id.overview_next, action(context, id, ACTION_PAGE, 1))
         views.setOnClickPendingIntent(R.id.overview_mode, action(context, id, ACTION_MODE, 0))
         views.setOnClickPendingIntent(R.id.overview_reload, action(context, id, ACTION_RELOAD, 0))
+        views.setOnClickPendingIntent(R.id.overview_panel, openApp)
+        views.setOnClickPendingIntent(R.id.overview_empty, openApp)
+        views.setOnClickPendingIntent(R.id.overview_emblem, openApp)
+        views.setOnClickPendingIntent(R.id.overview_title, openApp)
+        views.setOnClickPendingIntent(R.id.overview_subtitle, openApp)
         val dateIntent = Intent(context, WidgetDatePickerActivity::class.java).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
             data = Uri.parse("better-phenikaa://overview/$id/date-picker")

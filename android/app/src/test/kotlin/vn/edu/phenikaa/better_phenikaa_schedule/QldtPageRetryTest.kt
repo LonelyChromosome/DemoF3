@@ -17,4 +17,10 @@ class QldtPageRetryTest {
             WebViewClient.ERROR_FAILED_SSL_HANDSHAKE, 0, true))
         assertNull(QldtPageRetry.delayMillis(WebViewClient.ERROR_HOST_LOOKUP, 0, false))
     }
+
+    @Test fun dnsLookupGetsBoundedRecoveryWindow() {
+        assertEquals(1_500L, QldtPageRetry.delayMillis(WebViewClient.ERROR_HOST_LOOKUP, 0, true))
+        assertEquals(15_000L, QldtPageRetry.delayMillis(WebViewClient.ERROR_HOST_LOOKUP, 4, true))
+        assertNull(QldtPageRetry.delayMillis(WebViewClient.ERROR_HOST_LOOKUP, 5, true))
+    }
 }

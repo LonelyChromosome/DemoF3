@@ -64,10 +64,11 @@ internal object WidgetSnapshotStore {
                 parseClass(record)?.let(items::add)
             }
 
-            if (items.none { it.dateKey == selectedDate }) {
-                items.add(emptyDay(selectedDate, today))
+            val visibleItems = WidgetTimeline.fromDate(items, selectedDate).toMutableList()
+            if (visibleItems.none { it.dateKey == selectedDate }) {
+                visibleItems.add(emptyDay(selectedDate, today))
             }
-            WidgetTimeline.arrange(items, selectedDate, today, now)
+            WidgetTimeline.arrange(visibleItems, selectedDate, today, now)
         }.getOrElse { WidgetCollection.empty() }
     }
 
@@ -132,6 +133,9 @@ internal object WidgetSnapshotStore {
 
 /** Chronological, non-looping timeline shared with native regression tests. */
 internal object WidgetTimeline {
+    fun fromDate(items: List<WidgetClass>, selectedDate: String): List<WidgetClass> =
+        items.filter { it.dateKey >= selectedDate }
+
     fun arrange(
         sourceItems: List<WidgetClass>,
         selectedDate: String,
