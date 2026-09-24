@@ -220,14 +220,18 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                                 }
                               },
                               onLoadStop: (controller, url) {
-                                unawaited(_handleLoginPage(controller, url?.toString()));
+                                unawaited(
+                                  _handleLoginPage(controller, url?.toString()),
+                                );
                                 if (_pendingSchedule == null &&
                                     !_autoSyncStarted) {
                                   _beginReadinessChecks();
                                 }
                               },
                               onUpdateVisitedHistory: (controller, url, _) {
-                                unawaited(_handleLoginPage(controller, url?.toString()));
+                                unawaited(
+                                  _handleLoginPage(controller, url?.toString()),
+                                );
                                 unawaited(_updateBackState());
                               },
                               onReceivedError: (_, request, error) {
@@ -416,7 +420,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   Future<void> _loadSavedCredentials() async {
     try {
-      final saved = await _credentialChannel.invokeMapMethod<String, String>('read');
+      final saved = await _credentialChannel.invokeMapMethod<String, String>(
+        'read',
+      );
       if (!mounted || saved == null) return;
       _savedUsername = saved['username'];
       _savedPassword = saved['password'];
@@ -438,7 +444,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     // Capture only the values in the existing Microsoft form at submit time.
     // No input or keystroke listeners, and no credential data in diagnostics.
     try {
-      await controller.evaluateJavascript(source: r'''
+      await controller.evaluateJavascript(
+        source: r'''
         (function () {
           if (!['login.microsoftonline.com', 'login.live.com'].includes(location.hostname) &&
               !location.hostname.endsWith('.microsoftonline.com')) return;
@@ -459,11 +466,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             if (event.target.closest('#idSIButton9, button[type="submit"], input[type="submit"]')) capture();
           }, true);
         })();
-      ''');
+      ''',
+      );
       final username = _savedUsername;
       final password = _savedPassword;
       if (username == null || password == null) return;
-      await controller.evaluateJavascript(source: '''
+      await controller.evaluateJavascript(
+        source:
+            '''
         (function () {
           if (!['login.microsoftonline.com', 'login.live.com'].includes(location.hostname) &&
               !location.hostname.endsWith('.microsoftonline.com')) return;
@@ -500,7 +510,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             }
           }, 250);
         })();
-      ''');
+      ''',
+      );
     } on Object {
       // The original form stays usable if a provider changes its markup.
     }
@@ -511,8 +522,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaAutoStep',
       callback: (arguments) {
-        if (arguments.isNotEmpty && arguments.first == 'email') _autoEmailSubmitted = true;
-        if (arguments.isNotEmpty && arguments.first == 'password') _autoPasswordSubmitted = true;
+        if (arguments.isNotEmpty && arguments.first == 'email')
+          _autoEmailSubmitted = true;
+        if (arguments.isNotEmpty && arguments.first == 'password')
+          _autoPasswordSubmitted = true;
         return null;
       },
     );
