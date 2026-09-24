@@ -10,8 +10,9 @@ const script = dart.match(/String get _script => r'''([\s\S]*?)'''/)[1]
   .replaceAll('__ATTEMPT__', '3');
 const kotlin = fs.readFileSync(path.join(__dirname,
   '../android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/QldtDailySyncWorker.kt'), 'utf8');
-const nativeScript = kotlin.match(/const val REGISTRATION_SCRIPT = """([\s\S]*?)"""/)[1]
-  .replaceAll("${'$'}", '$');
+const nativeScript = kotlin.split('const val REGISTRATION_SCRIPT = """')[1]
+  ?.split('"""')[0].replaceAll("${'$'}", '$');
+assert.ok(nativeScript, 'native registration script is present');
 
 function run({failAt, noCallback, empty = false, oldPlan = false} = {}) {
   const calls = [];
