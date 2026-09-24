@@ -35,6 +35,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         configureDailySyncChannel(flutterEngine)
+        configureQldtCredentialChannel(flutterEngine)
         configureLocalFileChannel(flutterEngine)
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -233,6 +234,34 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun configureQldtCredentialChannel(flutterEngine: FlutterEngine) {
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, QLDT_CREDENTIAL_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "save" -> {
+                            val username = call.argument<String>("username").orEmpty()
+                            val password = call.argument<String>("password").orEmpty()
+                            result.success(QldtCredentialVault.save(this, username, password))
+                        }
+                        "read" -> {
+                            val credentials = QldtCredentialVault.read(this)
+                            result.success(credentials?.let {
+                                mapOf("username" to it.username, "password" to it.password)
+                            })
+                        }
+                        "clear" -> {
+                            QldtCredentialVault.clear(this)
+                            result.success(null)
+                        }
+                        else -> result.notImplemented()
+                    }
+                } catch (_: Exception) {
+                    result.error("qldt_credentials", "Không thể dùng thông tin đăng nhập đã lưu.", null)
+                }
+            }
+    }
+
     private fun configureLocalFileChannel(flutterEngine: FlutterEngine) {
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -379,6 +408,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val DAILY_SYNC_CHANNEL = "better_phenikaa/daily_sync"
+        private const val QLDT_CREDENTIAL_CHANNEL = "better_phenikaa/qldt_credentials"
         private const val WIDGET_THEME_CHANNEL = "better_phenikaa/widget_theme"
         private const val LOCAL_FILE_CHANNEL = "better_phenikaa/local_files"
         private const val FLUTTER_PREFS = "FlutterSharedPreferences"

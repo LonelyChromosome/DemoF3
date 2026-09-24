@@ -158,6 +158,8 @@ private class HeadlessQldtSync(private val context: Context) {
     private var readinessAttempt = 0
     private var pageLoadRetries = 0
     private var pageRetryPending = false
+    private var authEmailSubmitted = false
+    private var authPasswordSubmitted = false
 
     fun run(): Result {
         mainHandler.post(::createAndLoadWebView)
@@ -223,17 +225,26 @@ private class HeadlessQldtSync(private val context: Context) {
                         }
                         complete(Result.Failure(message))
                     },
+                    onAuthStep = { step ->
+                        if (step == "email") authEmailSubmitted = true
+                        if (step == "password") authPasswordSubmitted = true
+                    },
                 ),
                 JAVASCRIPT_BRIDGE,
             )
             webView.webViewClient = object : WebViewClient() {
                 override fun onPageCommitVisible(view: WebView, url: String?) {
                     super.onPageCommitVisible(view, url)
+                    if (isMicrosoftLogin(url)) {
+                        sessionProbeStarted.set(false)
+                        stage.set("AUTH")
+                    }
                     beginReadinessProbe(view, url)
                 }
 
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
+                    if (isMicrosoftLogin(url)) attemptAutoLogin(view)
                     beginReadinessProbe(view, url)
                 }
 
@@ -330,6 +341,59 @@ private class HeadlessQldtSync(private val context: Context) {
         stage.set("SESSION_READY")
         readinessAttempt = 0
         checkSessionReady(webView)
+    }
+
+    private fun isMicrosoftLogin(url: String?): Boolean {
+        val host = url?.let { Uri.parse(it).host?.lowercase(Locale.ROOT) } ?: return false
+        return host == "login.microsoftonline.com" || host == "login.live.com" ||
+            host.endsWith(".microsoftonline.com")
+    }
+
+    private fun attemptAutoLogin(webView: WebView) {
+        if (completed.get()) return
+        val credentials = QldtCredentialVault.read(context)
+        if (credentials == null) {
+            complete(Result.Failure("AUTO_LOGIN_MISSING: Mở app và đăng nhập QLĐT một lần."))
+            return
+        }
+        val username = JSONObject.quote(credentials.username)
+        val password = JSONObject.quote(credentials.password)
+        val emailDone = authEmailSubmitted
+        val passwordDone = authPasswordSubmitted
+        webView.evaluateJavascript("""
+            (function () {
+              if (!['login.microsoftonline.com', 'login.live.com'].includes(location.hostname) &&
+                  !location.hostname.endsWith('.microsoftonline.com')) return;
+              if (window.__betterPhenikaaAutoLogin) return;
+              window.__betterPhenikaaAutoLogin = true;
+              var attempts = 0, emailDone = $emailDone, passwordDone = $passwordDone;
+              var timer = setInterval(function () {
+                if (++attempts > 80 || (emailDone && passwordDone)) { clearInterval(timer); return; }
+                var field = document.querySelector('input[type="password"]');
+                if (field && !passwordDone) {
+                  passwordDone = true;
+                  var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                  setter.call(field, $password);
+                  field.dispatchEvent(new Event('input', { bubbles: true }));
+                  field.dispatchEvent(new Event('change', { bubbles: true }));
+                  BetterPhenikaaNative.onAuthStep('password');
+                  setTimeout(function () { document.querySelector('#idSIButton9, button[type="submit"], input[type="submit"]')?.click(); }, 100);
+                  clearInterval(timer);
+                } else if (!emailDone) {
+                  field = document.querySelector('input[type="email"], input[name="loginfmt"], #i0116');
+                  if (!field) return;
+                  emailDone = true;
+                  var setter2 = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                  setter2.call(field, $username);
+                  field.dispatchEvent(new Event('input', { bubbles: true }));
+                  field.dispatchEvent(new Event('change', { bubbles: true }));
+                  BetterPhenikaaNative.onAuthStep('email');
+                  setTimeout(function () { document.querySelector('#idSIButton9, button[type="submit"], input[type="submit"]')?.click(); }, 100);
+                  clearInterval(timer);
+                }
+              }, 250);
+            })();
+        """.trimIndent(), null)
     }
 
     private fun checkSessionReady(webView: WebView) {
@@ -477,6 +541,7 @@ private class HeadlessQldtSync(private val context: Context) {
         private val onSchedule: (String) -> Unit,
         private val onRegistration: (String) -> Unit,
         private val onError: (String) -> Unit,
+        private val onAuthStep: (String) -> Unit,
     ) {
         @JavascriptInterface
         fun onSchedule(envelope: String) {
@@ -491,6 +556,11 @@ private class HeadlessQldtSync(private val context: Context) {
         @JavascriptInterface
         fun onError(message: String) {
             onError(message)
+        }
+
+        @JavascriptInterface
+        fun onAuthStep(step: String) {
+            onAuthStep(step)
         }
     }
 

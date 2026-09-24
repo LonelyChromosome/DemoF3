@@ -16,9 +16,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 const bool supportsLiveQldtLogin = true;
 const _sessionKey = 'qldt_verified_session';
 const _portalPathKey = 'qldt_verified_portal_path';
+const _credentialChannel = MethodChannel('better_phenikaa/qldt_credentials');
 
 Future<void> clearQldtSession() async {
   await CookieManager.instance().deleteAllCookies();
+  await _credentialChannel.invokeMethod<void>('clear');
   final prefs = await SharedPreferences.getInstance();
   await prefs.remove(_sessionKey);
   await prefs.remove(_portalPathKey);
@@ -83,6 +85,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   bool _webCanGoBack = false;
   bool _allowRoutePop = false;
   bool _showWebPage = false;
+  String? _submittedUsername;
+  String? _submittedPassword;
+  String? _savedUsername;
+  String? _savedPassword;
+  bool _autoEmailSubmitted = false;
+  bool _autoPasswordSubmitted = false;
   final bool _hybridComposition = true;
   int _webViewGeneration = 0;
   int _readinessAttempt = 0;
@@ -91,6 +99,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   @override
   void initState() {
     super.initState();
+    unawaited(_loadSavedCredentials());
     _showWebPage = !widget.cachedSession;
     if (widget.cachedSession) {
       _status = 'Đang kiểm tra phiên QLĐT và đồng bộ...';
@@ -210,13 +219,15 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                                   });
                                 }
                               },
-                              onLoadStop: (_, _) {
+                              onLoadStop: (controller, url) {
+                                unawaited(_handleLoginPage(controller, url?.toString()));
                                 if (_pendingSchedule == null &&
                                     !_autoSyncStarted) {
                                   _beginReadinessChecks();
                                 }
                               },
-                              onUpdateVisitedHistory: (_, _, _) {
+                              onUpdateVisitedHistory: (controller, url, _) {
+                                unawaited(_handleLoginPage(controller, url?.toString()));
                                 unawaited(_updateBackState());
                               },
                               onReceivedError: (_, request, error) {
@@ -396,8 +407,128 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     await _controller?.reload();
   }
 
+  bool _isMicrosoftLogin(String? url) {
+    final host = Uri.tryParse(url ?? '')?.host.toLowerCase();
+    return host == 'login.microsoftonline.com' ||
+        host == 'login.live.com' ||
+        (host?.endsWith('.microsoftonline.com') ?? false);
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    try {
+      final saved = await _credentialChannel.invokeMapMethod<String, String>('read');
+      if (!mounted || saved == null) return;
+      _savedUsername = saved['username'];
+      _savedPassword = saved['password'];
+      final controller = _controller;
+      if (controller != null) {
+        final url = await controller.getUrl();
+        await _handleLoginPage(controller, url?.toString());
+      }
+    } on Object {
+      // Manual Microsoft login remains available if the local key is unavailable.
+    }
+  }
+
+  Future<void> _handleLoginPage(
+    InAppWebViewController controller,
+    String? url,
+  ) async {
+    if (!_isMicrosoftLogin(url) || widget.testHtml != null) return;
+    // Capture only the values in the existing Microsoft form at submit time.
+    // No input or keystroke listeners, and no credential data in diagnostics.
+    try {
+      await controller.evaluateJavascript(source: r'''
+        (function () {
+          if (!['login.microsoftonline.com', 'login.live.com'].includes(location.hostname) &&
+              !location.hostname.endsWith('.microsoftonline.com')) return;
+          if (window.__betterPhenikaaSubmittedCapture) return;
+          window.__betterPhenikaaSubmittedCapture = true;
+          function capture() {
+            var password = document.querySelector('input[type="password"]');
+            var email = document.querySelector('input[type="email"], input[name="loginfmt"], #i0116');
+            if (email && email.value) {
+              window.flutter_inappwebview.callHandler('betterPhenikaaLoginSubmitted', 'username', email.value);
+            }
+            if (password && password.value) {
+              window.flutter_inappwebview.callHandler('betterPhenikaaLoginSubmitted', 'password', password.value);
+            }
+          }
+          document.addEventListener('submit', capture, true);
+          document.addEventListener('click', function (event) {
+            if (event.target.closest('#idSIButton9, button[type="submit"], input[type="submit"]')) capture();
+          }, true);
+        })();
+      ''');
+      final username = _savedUsername;
+      final password = _savedPassword;
+      if (username == null || password == null) return;
+      await controller.evaluateJavascript(source: '''
+        (function () {
+          if (!['login.microsoftonline.com', 'login.live.com'].includes(location.hostname) &&
+              !location.hostname.endsWith('.microsoftonline.com')) return;
+          if (window.__betterPhenikaaAutoLogin) return;
+          window.__betterPhenikaaAutoLogin = true;
+          var emailDone = ${_autoEmailSubmitted ? 'true' : 'false'};
+          var passwordDone = ${_autoPasswordSubmitted ? 'true' : 'false'};
+          var username = ${jsonEncode(username)};
+          var password = ${jsonEncode(password)};
+          var attempts = 0;
+          var timer = setInterval(function () {
+            if (++attempts > 80 || (emailDone && passwordDone)) { clearInterval(timer); return; }
+            var field = document.querySelector('input[type="password"]');
+            if (field && !passwordDone) {
+              passwordDone = true;
+              var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+              setter.call(field, password);
+              field.dispatchEvent(new Event('input', { bubbles: true }));
+              field.dispatchEvent(new Event('change', { bubbles: true }));
+              window.flutter_inappwebview.callHandler('betterPhenikaaAutoStep', 'password');
+              setTimeout(function () { document.querySelector('#idSIButton9, button[type="submit"], input[type="submit"]')?.click(); }, 100);
+              clearInterval(timer);
+            } else if (!emailDone) {
+              field = document.querySelector('input[type="email"], input[name="loginfmt"], #i0116');
+              if (!field) return;
+              emailDone = true;
+              var setter2 = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+              setter2.call(field, username);
+              field.dispatchEvent(new Event('input', { bubbles: true }));
+              field.dispatchEvent(new Event('change', { bubbles: true }));
+              window.flutter_inappwebview.callHandler('betterPhenikaaAutoStep', 'email');
+              setTimeout(function () { document.querySelector('#idSIButton9, button[type="submit"], input[type="submit"]')?.click(); }, 100);
+              clearInterval(timer);
+            }
+          }, 250);
+        })();
+      ''');
+    } on Object {
+      // The original form stays usable if a provider changes its markup.
+    }
+  }
+
   void _onWebViewCreated(InAppWebViewController controller) {
     _controller = controller;
+    controller.addJavaScriptHandler(
+      handlerName: 'betterPhenikaaAutoStep',
+      callback: (arguments) {
+        if (arguments.isNotEmpty && arguments.first == 'email') _autoEmailSubmitted = true;
+        if (arguments.isNotEmpty && arguments.first == 'password') _autoPasswordSubmitted = true;
+        return null;
+      },
+    );
+    controller.addJavaScriptHandler(
+      handlerName: 'betterPhenikaaLoginSubmitted',
+      callback: (arguments) {
+        if (arguments.length != 2 || arguments[1] is! String) return null;
+        final value = arguments[1] as String;
+        if (arguments[0] == 'username' && value.length <= 256) {
+          _submittedUsername = value.trim();
+        } else if (arguments[0] == 'password' && value.length <= 512) {
+          _submittedPassword = value;
+        }
+        return null;
+      },
+    );
     if (!_syncing) {
       _diagnostics.start(QldtSyncPhase.session);
     }
@@ -619,6 +750,17 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       } on Object {
         // A cache failure must not discard a verified schedule.
       }
+      if (_submittedUsername != null && _submittedPassword != null) {
+        try {
+          await _credentialChannel.invokeMethod<void>('save', <String, String>{
+            'username': _submittedUsername!,
+            'password': _submittedPassword!,
+          });
+        } on Object {
+          // A credential-store failure must not discard a verified schedule.
+        }
+      }
+      _submittedPassword = null;
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
       _phaseTimer?.cancel();
       _syncWatchdog?.cancel();
