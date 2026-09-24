@@ -58,6 +58,7 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/overview_widget_info" />
         </receiver>
+        <receiver android:name=".WidgetSyncTimeoutReceiver" android:exported="false" />
         <service
             android:name=".ScheduleWidgetService"
             android:exported="false"
