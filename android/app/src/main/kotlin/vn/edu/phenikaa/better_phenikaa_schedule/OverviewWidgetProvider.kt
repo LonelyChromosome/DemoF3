@@ -110,7 +110,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 R.id.overview_card_room).forEach { card.setTextColor(it, textColor) }
             views.addView(R.id.overview_cards, card)
         }
-        views.setViewVisibility(R.id.overview_empty, if (items.isEmpty) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.overview_empty, if (items.isEmpty()) View.VISIBLE else View.GONE)
         views.setTextViewText(R.id.overview_empty,
             if (examMode) "Không có lịch thi" else "Không có lịch học")
         views.setViewVisibility(R.id.overview_previous, if (page == 0) View.INVISIBLE else View.VISIBLE)
