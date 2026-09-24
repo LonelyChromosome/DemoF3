@@ -72,7 +72,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         return bitmap
     }
 
-    internal fun overviewProgress(context: Context, widthDp: Int, count: Int): Bitmap {
+    internal fun overviewProgress(context: Context, widthDp: Int, count: Int, slots: Int): Bitmap {
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (29 * density).roundToInt().coerceAtLeast(1)
@@ -89,7 +89,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         }
         canvas.drawLine(left, y, right, y, line)
         repeat(count.coerceAtMost(5)) { index ->
-            val x = left + (right - left) * (index + 0.5f) / count
+            val x = left + (right - left) * (index + 0.5f) / slots.coerceAtLeast(1)
             val accent = if (theme.key == "classic") {
                 intArrayOf(0xFF12CCFA.toInt(), 0xFF6578FF.toInt(), 0xFFC375E8.toInt(),
                     0xFFFA67BA.toInt(), 0xFFFF557C.toInt())[index]
@@ -425,13 +425,13 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             chooseDateIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        views.setOnClickPendingIntent(R.id.widget_calendar, chooseDate)
+        views.setOnClickPendingIntent(R.id.widget_calendar_hit, chooseDate)
         val modeIntent = Intent(context, ScheduleWidgetProvider::class.java).apply {
             action = ACTION_SMALL_MODE
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
             data = Uri.parse("better-phenikaa://widget/$widgetId/mode")
         }
-        views.setOnClickPendingIntent(R.id.widget_mode,
+        views.setOnClickPendingIntent(R.id.widget_mode_hit,
             PendingIntent.getBroadcast(context, widgetId, modeIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
         val reloadIntent = Intent(context, ScheduleWidgetProvider::class.java).apply {
@@ -439,7 +439,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
             data = Uri.parse("better-phenikaa://widget/$widgetId/reload")
         }
-        views.setOnClickPendingIntent(R.id.widget_reload,
+        views.setOnClickPendingIntent(R.id.widget_reload_hit,
             PendingIntent.getBroadcast(context, widgetId + RELOAD_REQUEST_CODE_BASE, reloadIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
 

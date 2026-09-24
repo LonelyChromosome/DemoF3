@@ -61,6 +61,8 @@ class QldtDailySyncWorker(
                 activeSync = null
             }
             if (isStopped) {
+                DailySyncScheduler.recordFailure(applicationContext, "Đồng bộ bị dừng. Hãy thử lại.")
+                WidgetRefreshCoordinator.refreshOverview(applicationContext)
                 return Result.success()
             }
 
@@ -89,11 +91,11 @@ class QldtDailySyncWorker(
                         WidgetRefreshCoordinator.refreshOverview(applicationContext)
                         return Result.success()
                     }
-                    WidgetRefreshCoordinator.refreshData(applicationContext)
                     DailySyncScheduler.recordSuccess(
                         applicationContext,
                         System.currentTimeMillis(),
                     )
+                    WidgetRefreshCoordinator.refreshData(applicationContext)
                     runCatching {
                         ExamReminderScheduler.reconcile(applicationContext, bundle.semester)
                     }.onFailure {

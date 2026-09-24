@@ -34,16 +34,24 @@ class OverviewPagerTest {
         }
     }
 
-    @Test fun fiveMockupCardsFitAcrossAndPhoneUsesTwoCompactRows() {
-        assertEquals(2, OverviewPager.pageSize(320, 160))
-        assertEquals(2, OverviewPager.pageSize(320, 270))
-        assertEquals(180, OverviewPager.panelHeight(270))
+    @Test fun fourFixedSlotsDoNotChangeWithItemCountOrHostHeight() {
+        assertEquals(4, OverviewPager.pageSize(320, 160))
+        assertEquals(4, OverviewPager.pageSize(320, 270))
+        assertEquals(140, OverviewPager.panelHeight(270))
+        assertEquals(120, OverviewPager.panelHeight(120))
         assertEquals(5, OverviewPager.pageSize(620, 180))
-        assertEquals(2, OverviewPager.columns(320))
+        assertEquals(4, OverviewPager.columns(320))
         assertEquals(5, OverviewPager.columns(620))
         assertEquals(1, OverviewPager.rows(180))
-        assertEquals(2, OverviewPager.rows(270))
+        assertEquals(1, OverviewPager.rows(270))
         assertEquals(listOf("5", "6"), OverviewPager.visible(items(7), 1, 5).map { it.id })
         assertEquals(1, OverviewPager.clamp(50, 7, 5))
+    }
+
+    @Test fun narrowCardsUseReadableAbbreviationWithoutChangingSource() {
+        assertEquals("PTTKPM", OverviewPager.compactSubject("Phân tích và thiết kế phần mềm", 75))
+        assertEquals("KTPM", OverviewPager.compactSubject("Kỹ thuật phần mềm", 75))
+        assertEquals("Phân tích và thiết kế phần mềm",
+            OverviewPager.compactSubject("Phân tích và thiết kế phần mềm", 120))
     }
 }

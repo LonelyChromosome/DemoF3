@@ -55,7 +55,7 @@
         android:layout_height="match_parent"
         android:gravity="center"
         android:paddingStart="18dp"
-        android:paddingEnd="34dp"
+        android:paddingEnd="44dp"
         android:text="Không có lịch học"
         android:textColor="#FFFFFFFF"
         android:textSize="14sp"
@@ -72,39 +72,59 @@
         android:focusable="false"
         android:visibility="gone" />
 
-    <ImageView
-        android:id="@+id/widget_calendar"
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:layout_gravity="top|end"
-        android:layout_marginTop="1dp"
-        android:layout_marginEnd="5dp"
-        android:background="@android:color/transparent"
-        android:clickable="true"
-        android:contentDescription="Chọn ngày hiển thị"
-        android:focusable="true"
-        android:padding="2dp"
-        android:src="@drawable/ic_widget_calendar" />
+    <LinearLayout
+        android:id="@+id/widget_actions"
+        android:layout_width="44dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:orientation="vertical">
 
-    <ImageView
-        android:id="@+id/widget_reload"
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:layout_gravity="top|end"
-        android:layout_marginTop="22dp"
-        android:layout_marginEnd="5dp"
-        android:contentDescription="Đồng bộ QLĐT"
-        android:padding="2dp"
-        android:src="@drawable/ic_widget_reload" />
+        <FrameLayout
+            android:id="@+id/widget_calendar_hit"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:contentDescription="Chọn ngày hiển thị">
+            <ImageView
+                android:id="@+id/widget_calendar"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center"
+                android:clickable="false"
+                android:src="@drawable/ic_widget_calendar" />
+        </FrameLayout>
 
-    <ImageView
-        android:id="@+id/widget_mode"
-        android:layout_width="20dp"
-        android:layout_height="20dp"
-        android:layout_gravity="top|end"
-        android:layout_marginTop="43dp"
-        android:layout_marginEnd="5dp"
-        android:contentDescription="Chuyển lịch học và lịch thi"
-        android:padding="2dp"
-        android:src="@drawable/ic_widget_bell" />
+        <FrameLayout
+            android:id="@+id/widget_reload_hit"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:contentDescription="Đồng bộ QLĐT">
+            <ImageView
+                android:id="@+id/widget_reload"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center"
+                android:clickable="false"
+                android:src="@drawable/ic_widget_reload" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/widget_mode_hit"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:contentDescription="Chuyển lịch học và lịch thi">
+            <ImageView
+                android:id="@+id/widget_mode"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="center"
+                android:clickable="false"
+                android:src="@drawable/ic_widget_bell" />
+        </FrameLayout>
+    </LinearLayout>
 </FrameLayout>

@@ -38,6 +38,7 @@
             android:value="2" />
         <receiver
             android:name=".ScheduleWidgetProvider"
+            android:label="@string/widget_small_name"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -48,6 +49,7 @@
         </receiver>
         <receiver
             android:name=".OverviewWidgetProvider"
+            android:label="@string/widget_overview_name"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

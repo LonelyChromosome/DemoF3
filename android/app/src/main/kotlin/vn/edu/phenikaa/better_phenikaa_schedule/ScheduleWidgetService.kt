@@ -196,7 +196,7 @@ private fun renderWidgetSlide(
 
     val left = widthPx * CONTENT_LEFT_FRACTION
     // The three actions form a narrow vertical rail at the right edge.
-    val titleRight = minOf(widthPx * TITLE_RIGHT_FRACTION, widthPx - 32f * density)
+    val titleRight = minOf(widthPx * TITLE_RIGHT_FRACTION, widthPx - 50f * density)
     val detailRight = widthPx * DETAIL_RIGHT_FRACTION
 
     val subjectPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {

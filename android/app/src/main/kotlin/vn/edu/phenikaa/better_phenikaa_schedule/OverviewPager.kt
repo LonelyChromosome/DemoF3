@@ -1,13 +1,25 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 internal object OverviewPager {
-    fun panelHeight(hostHeightDp: Int): Int = hostHeightDp.coerceAtMost(180).coerceAtLeast(160)
+    fun panelHeight(hostHeightDp: Int): Int = hostHeightDp.coerceIn(120, 140)
 
-    // The mockup has five cards across at tablet width. A phone shows two
-    // columns in two rows when its widget is tall enough, without dead space.
-    fun columns(widthDp: Int): Int = ((widthDp - 24) / 110).coerceIn(1, 5)
+    // Fixed slots: one or two subjects must not expand to fill the entire row.
+    fun columns(widthDp: Int): Int = when {
+        widthDp >= 540 -> 5
+        widthDp >= 300 -> 4
+        else -> 3
+    }
 
-    fun rows(heightDp: Int): Int = if (heightDp >= 258) 2 else 1
+    fun rows(heightDp: Int): Int = 1
+
+    fun compactSubject(subject: String, slotWidthDp: Int): String {
+        if (slotWidthDp >= 100 || subject.length <= 14) return subject
+        val words = subject.split(Regex("\\s+")).filterNot {
+            it.equals("và", true) || it.equals("cho", true) || it.equals("của", true)
+        }
+        return words.mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("")
+            .ifEmpty { subject }
+    }
 
     fun pageSize(widthDp: Int, heightDp: Int): Int =
         columns(widthDp) * rows(panelHeight(heightDp))

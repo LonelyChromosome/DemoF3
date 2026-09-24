@@ -74,6 +74,9 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val height = manager.getAppWidgetOptions(id)
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
         val panelHeight = OverviewPager.panelHeight(height)
+        val headerHeight = if (panelHeight >= 140) 42 else 36
+        val footerHeight = if (panelHeight >= 140) 24 else 20
+        val cardHeight = panelHeight - 10 - headerHeight - footerHeight - 5
         val columns = OverviewPager.columns(width)
         val size = OverviewPager.pageSize(width, height)
         val page = WidgetRefreshDecision.overviewPage(
@@ -86,6 +89,10 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val views = RemoteViews(context.packageName, R.layout.overview_widget)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             views.setViewLayoutHeight(R.id.overview_panel, panelHeight.toFloat(),
+                TypedValue.COMPLEX_UNIT_DIP)
+            views.setViewLayoutHeight(R.id.overview_header, headerHeight.toFloat(),
+                TypedValue.COMPLEX_UNIT_DIP)
+            views.setViewLayoutHeight(R.id.overview_footer, footerHeight.toFloat(),
                 TypedValue.COMPLEX_UNIT_DIP)
         }
         views.setImageViewBitmap(R.id.overview_background,
@@ -102,7 +109,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val succeeded = status["lastSuccessAtMillis"] as? Long ?: 0L
         views.setTextViewText(R.id.overview_title, when {
             examMode -> "Lịch thi · Học kỳ hiện tại"
-            else -> "${if (selected == today) "Hôm nay" else "Ngày $date"} · $date"
+            else -> if (selected == today) "Hôm nay · $date" else "Ngày $date"
         })
         views.setTextViewText(R.id.overview_subtitle,
             if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học")
@@ -138,7 +145,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         views.setInt(R.id.overview_calendar, "setColorFilter", iconColor)
         views.setInt(R.id.overview_emblem, "setColorFilter", iconColor)
         views.setInt(R.id.overview_mode, "setColorFilter", iconColor)
-        views.setTextColor(R.id.overview_reload, iconColor)
+        views.setInt(R.id.overview_reload, "setColorFilter", iconColor)
         views.removeAllViews(R.id.overview_cards)
         OverviewPager.visible(items, page, size).chunked(columns).forEachIndexed { rowIndex, rowItems ->
             val row = RemoteViews(context.packageName, R.layout.overview_widget_row)
@@ -146,7 +153,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 val card = RemoteViews(context.packageName, R.layout.overview_widget_card)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     card.setViewLayoutHeight(R.id.overview_card_root,
-                        if (panelHeight >= 180) 76f else 63f, TypedValue.COMPLEX_UNIT_DIP)
+                        cardHeight.toFloat(), TypedValue.COMPLEX_UNIT_DIP)
                 }
                 val colorIndex = page * size + rowIndex * columns + columnIndex
                 card.setImageViewBitmap(R.id.overview_card_background,
@@ -157,13 +164,23 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 card.setViewVisibility(R.id.overview_card_date,
                     if (examMode) View.VISIBLE else View.GONE)
                 card.setTextViewText(R.id.overview_card_time, item.startAt.drop(11).take(5))
-                card.setTextViewText(R.id.overview_card_subject, item.subject)
+                card.setTextViewText(R.id.overview_card_subject,
+                    OverviewPager.compactSubject(item.subject, (width - 24) / columns))
+                card.setContentDescription(R.id.overview_card_root, item.subject)
                 card.setTextViewText(R.id.overview_card_room, item.room)
                 listOf(R.id.overview_card_date, R.id.overview_card_time,
                     R.id.overview_card_subject, R.id.overview_card_room).forEach {
                     card.setTextColor(it, textColor)
                 }
                 row.addView(R.id.overview_row, card)
+            }
+            repeat(columns - rowItems.size) {
+                val spacer = RemoteViews(context.packageName, R.layout.overview_widget_spacer)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    spacer.setViewLayoutHeight(R.id.overview_spacer_root,
+                        cardHeight.toFloat(), TypedValue.COMPLEX_UNIT_DIP)
+                }
+                row.addView(R.id.overview_row, spacer)
             }
             views.addView(R.id.overview_cards, row)
         }
@@ -179,7 +196,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             if (showProgress) View.GONE else View.VISIBLE)
         if (showProgress) {
             views.setImageViewBitmap(R.id.overview_progress,
-                ScheduleWidgetProvider().overviewProgress(context, width - 24, items.size))
+                ScheduleWidgetProvider().overviewProgress(context, width - 24, items.size, columns))
         }
         views.setViewVisibility(R.id.overview_navigation,
             if (lastPage == 0) View.GONE else View.VISIBLE)

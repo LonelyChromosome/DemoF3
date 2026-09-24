@@ -28,18 +28,13 @@ class WidgetLayoutContractTest {
         val stack = element("widget_list", root)
         assertEquals("match_parent", stack.getAttributeNS(androidNamespace, "layout_height"))
         assertEquals("true", stack.getAttributeNS(androidNamespace, "loopViews"))
-        assertEquals("5dp", element("widget_calendar", root)
-            .getAttributeNS(androidNamespace, "layout_marginEnd"))
-        assertEquals("5dp", element("widget_reload", root)
-            .getAttributeNS(androidNamespace, "layout_marginEnd"))
-        assertEquals("5dp", element("widget_mode", root)
-            .getAttributeNS(androidNamespace, "layout_marginEnd"))
-        assertEquals("1dp", element("widget_calendar", root)
-            .getAttributeNS(androidNamespace, "layout_marginTop"))
-        assertEquals("22dp", element("widget_reload", root)
-            .getAttributeNS(androidNamespace, "layout_marginTop"))
-        assertEquals("43dp", element("widget_mode", root)
-            .getAttributeNS(androidNamespace, "layout_marginTop"))
+        assertEquals("44dp", element("widget_actions", root)
+            .getAttributeNS(androidNamespace, "layout_width"))
+        for (name in listOf("widget_calendar_hit", "widget_reload_hit", "widget_mode_hit")) {
+            assertEquals("1", element(name, root).getAttributeNS(androidNamespace, "layout_weight"))
+            assertEquals("match_parent", element(name, root)
+                .getAttributeNS(androidNamespace, "layout_width"))
+        }
         assertEquals("gone", element("widget_empty", root)
             .getAttributeNS(androidNamespace, "visibility"))
     }
@@ -51,9 +46,11 @@ class WidgetLayoutContractTest {
         assertEquals("vertical", element("overview_cards", root)
             .getAttributeNS(androidNamespace, "orientation"))
         val card = layout("overview_widget_card").documentElement
-        assertEquals("63dp", card.getAttributeNS(androidNamespace, "layout_height"))
+        assertEquals("59dp", card.getAttributeNS(androidNamespace, "layout_height"))
         assertEquals("horizontal", layout("overview_widget_row").documentElement
             .getAttributeNS(androidNamespace, "orientation"))
+        assertEquals("1", layout("overview_widget_spacer").documentElement
+            .getAttributeNS(androidNamespace, "layout_weight"))
         assertEquals("2", element("overview_card_subject", card)
             .getAttributeNS(androidNamespace, "maxLines"))
         assertTrue(element("overview_navigation", root)
