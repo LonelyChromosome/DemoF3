@@ -69,6 +69,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   final QldtSyncDiagnostics _diagnostics = QldtSyncDiagnostics();
   QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
+  String? _pendingRegistrationRaw;
   int _syncEpoch = 0;
   bool _pageReady = false;
   bool _syncing = false;
@@ -397,6 +398,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             return null;
           }
           _pendingSchedule = data;
+          final registrationRaw = _pendingRegistrationRaw;
+          _pendingRegistrationRaw = null;
           setState(() {
             _showWebPage = false;
             _status = 'Đang lấy học kỳ và môn đăng ký từ QLĐT...';
@@ -406,6 +409,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             const Duration(seconds: 20),
             epoch,
           );
+          if (registrationRaw != null) {
+            unawaited(_completeRegistration(epoch, registrationRaw));
+          }
         } on Object {
           _stopSync(
             epoch,
@@ -473,56 +479,17 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       callback: (arguments) async {
         if (!mounted ||
             !_syncing ||
-            _pendingSchedule == null ||
             arguments.length < 2 ||
             arguments.first?.toString() != '$_syncEpoch') {
           return null;
         }
         final epoch = _syncEpoch;
-        try {
-          final registration = const TracuuApi().parse(arguments[1] as String);
-          final schedule = _pendingSchedule!;
-          final verified = const SemesterScheduleVerifier().verify(
-            registration: registration,
-            schedule: schedule,
-          );
-          final semester = const SemesterDataBuilder().build(
-            registration: registration,
-            studySchedules: verified.studySchedules,
-            examSchedules: verified.examSchedules,
-            displayName: schedule.displayName,
-            syncedAt: schedule.syncedAt,
-          );
-          _startPhase(
-            QldtSyncPhase.sessionCache,
-            const Duration(seconds: 10),
-            epoch,
-          );
-          try {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.setBool(_sessionKey, true);
-          } on Object {
-            // A cache failure must not discard a verified schedule.
-          }
-          if (!mounted || !_syncing || epoch != _syncEpoch) return null;
-          _phaseTimer?.cancel();
-          _syncWatchdog?.cancel();
-          _diagnostics.finish('OK');
-          try {
-            await _diagnostics.flushed.timeout(const Duration(seconds: 2));
-          } on Object {
-            // Diagnostic persistence cannot block a verified schedule.
-          }
-          if (!mounted || !_syncing || epoch != _syncEpoch) return null;
-          Navigator.of(context).pop(
-            QldtLoginResult(
-              schedule: semester.toImportedScheduleData(),
-              semester: semester,
-            ),
-          );
-        } on Object catch (error) {
-          _stopSync(epoch, _verificationErrorMessage(error));
+        final raw = arguments[1]?.toString() ?? '';
+        if (_pendingSchedule == null) {
+          _pendingRegistrationRaw = raw;
+          return null;
         }
+        await _completeRegistration(epoch, raw);
         return null;
       },
     );
@@ -559,6 +526,54 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         return null;
       },
     );
+  }
+
+  Future<void> _completeRegistration(int epoch, String raw) async {
+    if (!mounted || !_syncing || epoch != _syncEpoch) return;
+    try {
+      final registration = const TracuuApi().parse(raw);
+      final schedule = _pendingSchedule!;
+      final verified = const SemesterScheduleVerifier().verify(
+        registration: registration,
+        schedule: schedule,
+      );
+      final semester = const SemesterDataBuilder().build(
+        registration: registration,
+        studySchedules: verified.studySchedules,
+        examSchedules: verified.examSchedules,
+        displayName: schedule.displayName,
+        syncedAt: schedule.syncedAt,
+      );
+      _startPhase(
+        QldtSyncPhase.sessionCache,
+        const Duration(seconds: 10),
+        epoch,
+      );
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_sessionKey, true);
+      } on Object {
+        // A cache failure must not discard a verified schedule.
+      }
+      if (!mounted || !_syncing || epoch != _syncEpoch) return;
+      _phaseTimer?.cancel();
+      _syncWatchdog?.cancel();
+      _diagnostics.finish('OK');
+      try {
+        await _diagnostics.flushed.timeout(const Duration(seconds: 2));
+      } on Object {
+        // Diagnostic persistence cannot block a verified schedule.
+      }
+      if (!mounted || !_syncing || epoch != _syncEpoch) return;
+      Navigator.of(context).pop(
+        QldtLoginResult(
+          schedule: semester.toImportedScheduleData(),
+          semester: semester,
+        ),
+      );
+    } on Object catch (error) {
+      _stopSync(epoch, _verificationErrorMessage(error));
+    }
   }
 
   String _verificationErrorMessage(Object error) {
@@ -667,6 +682,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       _status = 'Đang lấy lịch cá nhân từ QLĐT...';
     });
     _pendingSchedule = null;
+    _pendingRegistrationRaw = null;
 
     final now = DateTime.now();
     final academicStartYear = now.month >= 8 ? now.year : now.year - 1;
@@ -717,13 +733,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                 'betterPhenikaaSyncResult',
                 $epoch,
                 JSON.stringify({name: name, response: response})
-              ).then(function () {
+              );
+              try {
                 $registrationScript
-              }, function () {
+              } catch (_) {
                 window.flutter_inappwebview.callHandler(
                   'betterPhenikaaRegistrationError', $epoch, 'REQUEST_ERROR'
                 );
-              });
+              }
             },
             error: function () {
               window.flutter_inappwebview.callHandler(
@@ -777,6 +794,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _phaseTimer?.cancel();
     _diagnostics.finish(code);
     _pendingSchedule = null;
+    _pendingRegistrationRaw = null;
     setState(() {
       _syncing = false;
       _status = status;
