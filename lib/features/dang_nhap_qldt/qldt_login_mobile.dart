@@ -442,7 +442,16 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           return null;
         }
         final stage = arguments[1]?.toString();
-        _diagnostics.mark('REG_STAGE_${stage ?? 'UNKNOWN'}');
+        final safeStage = switch (stage) {
+          'scriptStart' ||
+          'semesterRequest' ||
+          'semesterResponse' ||
+          'semesterPlan' ||
+          'subjects' ||
+          'verification' => stage,
+          _ => 'UNKNOWN',
+        };
+        _diagnostics.mark('REG_STAGE_$safeStage');
         if (stage == 'semesterPlan') {
           _startPhase(
             QldtSyncPhase.semesterPlan,
@@ -530,7 +539,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             _syncing &&
             arguments.length >= 2 &&
             arguments.first?.toString() == '$_syncEpoch') {
-          final code = arguments[1].toString();
+          final code = switch (arguments[1].toString()) {
+            'SESSION_EXPIRED' => 'SESSION_EXPIRED',
+            'NETWORK_ERROR' => 'NETWORK_ERROR',
+            'REQUEST_ERROR' => 'REQUEST_ERROR',
+            'NO_SEMESTER' => 'NO_SEMESTER',
+            'PLAN_AMBIGUOUS' => 'PLAN_AMBIGUOUS',
+            _ => 'INVALID_RESPONSE',
+          };
           final reason = switch (code) {
             'SESSION_EXPIRED' => 'Phiên QLĐT đã hết hạn.',
             'NETWORK_ERROR' ||
@@ -576,10 +592,17 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     }
     try {
       _diagnostics.mark('REG_EVAL_START');
-      await controller.evaluateJavascript(
+      final result = await controller.evaluateJavascript(
         source: const TracuuApi().scriptForAttempt(epoch),
       );
-      _diagnostics.mark('REG_EVAL_RETURN');
+      final code = switch (result?.toString()) {
+        'REG_SCRIPT_SUBMITTED' => 'REG_EVAL_SUBMITTED',
+        'BRIDGE_MISSING' => 'REG_BRIDGE_MISSING',
+        'BRIDGE_EXCEPTION' => 'REG_BRIDGE_EXCEPTION',
+        'SESSION_EXPIRED' => 'REG_SESSION_EXPIRED',
+        _ => 'REG_EVAL_UNEXPECTED',
+      };
+      _diagnostics.mark(code);
     } on Object {
       _stopSync(
         epoch,

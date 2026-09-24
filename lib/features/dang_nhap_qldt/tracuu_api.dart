@@ -13,6 +13,7 @@ final class TracuuApi {
       const attempt = __ATTEMPT__;
       const bridge = window.flutter_inappwebview;
       const system = window.edu && edu.system;
+      if (!bridge || typeof bridge.callHandler !== 'function') return 'BRIDGE_MISSING';
       const send = (handler, value) => bridge.callHandler(handler, attempt, value);
       let done = false;
       const fail = code => {
@@ -21,10 +22,11 @@ final class TracuuApi {
         send('betterPhenikaaRegistrationError', code);
       };
       const stage = value => send('betterPhenikaaRegistrationStage', value);
+      try { stage('scriptStart'); } catch (_) { return 'BRIDGE_EXCEPTION'; }
       if (!bridge || !system || !system.userId || system.iM == null ||
           typeof system.makeRequest !== 'function') {
         fail('SESSION_EXPIRED');
-        return;
+        return 'SESSION_EXPIRED';
       }
       const call = (action, func, data, next) => {
         const payload = Object.assign({action, func, iM: system.iM,
@@ -33,6 +35,9 @@ final class TracuuApi {
           system.makeRequest({
             success: response => {
               if (done) return;
+              if (func === 'pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan') {
+                stage('semesterResponse');
+              }
               if (!response || response.Success !== true || !Array.isArray(response.Data)) {
                 fail('INVALID_RESPONSE');
                 return;
@@ -44,6 +49,7 @@ final class TracuuApi {
           }, false, false, false, null);
         } catch (_) { fail('REQUEST_ERROR'); }
       };
+      stage('semesterRequest');
       call('DKH_ThongTin_MH/DSA4FSkuKAYoIC8FIC8mCjgCIA8pIC8P',
         'pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan',
         {strDaoTao_ThoiGianDaoTao_Id: null}, semesters => {
@@ -78,6 +84,7 @@ final class TracuuApi {
                 });
             });
         });
+      return 'REG_SCRIPT_SUBMITTED';
     })();
   ''';
 
