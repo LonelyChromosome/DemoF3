@@ -33,6 +33,12 @@ if [[ "${needs_android}" == true || "${needs_web}" == true ]]; then
     "${tmp_dir}/scaffold"
 
   if [[ "${needs_android}" == true ]]; then
+    if [[ -d android/app/src ]]; then
+      cp -R android/app/src "${tmp_dir}/preserved-app-src"
+    fi
+    if [[ -f android/app/build.gradle.kts ]]; then
+      cp android/app/build.gradle.kts "${tmp_dir}/preserved-app-build.gradle.kts"
+    fi
     rm -rf android
     cp -R "${tmp_dir}/scaffold/android" ./android
   fi
@@ -129,7 +135,15 @@ PY
 fi
 
 if [[ -d platform/android_widget/app ]]; then
-  cp -R platform/android_widget/app/. android/app/
+  if [[ "${needs_android}" == true ]]; then
+    cp -R platform/android_widget/app/. android/app/
+    if [[ -d "${tmp_dir}/preserved-app-src" ]]; then
+      cp -R "${tmp_dir}/preserved-app-src/." android/app/src/
+    fi
+    if [[ -f "${tmp_dir}/preserved-app-build.gradle.kts" ]]; then
+      cp "${tmp_dir}/preserved-app-build.gradle.kts" android/app/build.gradle.kts
+    fi
+  fi
 
   python3 - <<'PY'
 from pathlib import Path
