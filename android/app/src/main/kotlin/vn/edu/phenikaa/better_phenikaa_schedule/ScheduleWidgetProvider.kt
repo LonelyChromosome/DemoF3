@@ -27,6 +27,16 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 class ScheduleWidgetProvider : HomeWidgetProvider() {
+    internal fun restoreDisplay(context: Context, manager: AppWidgetManager, ids: IntArray) {
+        val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
+        ids.forEach { id ->
+            // Rebind the StackView adapter and select the relevant child. The
+            // selected calendar date and study/exam mode remain independent.
+            state.edit().remove(contentTokenKey(id)).apply()
+            renderWidget(context, manager, id)
+        }
+    }
+
     internal fun overviewColors(context: Context): Pair<Int, Int> {
         val colors = readThemeColors(context)
         return colors.textColor to colors.iconColor

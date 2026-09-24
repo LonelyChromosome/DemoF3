@@ -46,7 +46,7 @@ class WidgetLayoutContractTest {
         assertEquals("vertical", element("overview_cards", root)
             .getAttributeNS(androidNamespace, "orientation"))
         val card = layout("overview_widget_card").documentElement
-        assertEquals("59dp", card.getAttributeNS(androidNamespace, "layout_height"))
+        assertEquals("47dp", card.getAttributeNS(androidNamespace, "layout_height"))
         assertEquals("horizontal", layout("overview_widget_row").documentElement
             .getAttributeNS(androidNamespace, "orientation"))
         assertEquals("1", layout("overview_widget_spacer").documentElement

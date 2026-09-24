@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
@@ -17,6 +19,52 @@ import java.util.Date
 import java.util.Locale
 
 class OverviewWidgetProvider : HomeWidgetProvider() {
+    internal fun stageThemeTransition(context: Context, manager: AppWidgetManager, ids: IntArray) {
+        ids.forEach { id ->
+            val frame = RemoteViews(context.packageName, R.layout.overview_widget)
+            frame.setFloat(R.id.overview_root, "setAlpha", 1f)
+            manager.partiallyUpdateAppWidget(id, frame)
+        }
+    }
+
+    internal fun animateThemeTransition(context: Context, manager: AppWidgetManager, ids: IntArray) {
+        val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        ids.forEach { id ->
+            val generation = state.getInt(transitionKey(id), 0) + 1
+            state.edit().putInt(transitionKey(id), generation).apply()
+            fadeThemeFrame(context, manager, id, generation, 0, fadeIn = false)
+        }
+    }
+
+    private fun fadeThemeFrame(
+        context: Context, manager: AppWidgetManager, id: Int,
+        generation: Int, frame: Int, fadeIn: Boolean,
+    ) {
+        val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        if (state.getInt(transitionKey(id), 0) != generation) return
+        val progress = frame.toFloat() / (THEME_FRAME_COUNT - 1)
+        val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        views.setFloat(R.id.overview_root, "setAlpha", if (fadeIn) progress else 1f - progress)
+        manager.partiallyUpdateAppWidget(id, views)
+        if (frame + 1 < THEME_FRAME_COUNT) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                fadeThemeFrame(context, manager, id, generation, frame + 1, fadeIn)
+            }, THEME_FRAME_DELAY_MS)
+        } else if (!fadeIn) {
+            // Bind the new Theme Engine frame while invisible, then reveal it.
+            render(context, manager, id, initialAlpha = 0f)
+            fadeThemeFrame(context, manager, id, generation, 0, fadeIn = true)
+        }
+    }
+
+    internal fun restoreDisplay(context: Context, manager: AppWidgetManager, ids: IntArray) {
+        val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        ids.forEach { id ->
+            state.edit().putInt(pageKey(id), 0).apply()
+            render(context, manager, id)
+        }
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == ACTION_RELOAD) {
             WidgetManualSync.request(context)
@@ -61,11 +109,15 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         super.onDeleted(context, appWidgetIds)
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE).edit()
-        appWidgetIds.forEach { id -> state.remove(pageKey(id)).remove(modeKey(id)) }
+        appWidgetIds.forEach { id ->
+            state.remove(pageKey(id)).remove(modeKey(id)).remove(transitionKey(id))
+        }
         state.apply()
     }
 
-    private fun render(context: Context, manager: AppWidgetManager, id: Int) {
+    private fun render(
+        context: Context, manager: AppWidgetManager, id: Int, initialAlpha: Float = 1f,
+    ) {
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
         val examMode = state.getBoolean(modeKey(id), false)
         val items = WidgetSnapshotStore.readOverview(context, id, examMode)
@@ -74,9 +126,11 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val height = manager.getAppWidgetOptions(id)
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
         val panelHeight = OverviewPager.panelHeight(height)
-        val headerHeight = if (panelHeight >= 140) 42 else 36
-        val footerHeight = if (panelHeight >= 140) 24 else 20
-        val cardHeight = panelHeight - 10 - headerHeight - footerHeight - 5
+        val compact = panelHeight < 120
+        val headerHeight = if (compact) 32 else if (panelHeight >= 140) 42 else 36
+        val footerHeight = if (compact) 16 else if (panelHeight >= 140) 24 else 20
+        val verticalPadding = if (compact) 4 else 10
+        val cardHeight = panelHeight - verticalPadding - headerHeight - footerHeight - 5
         val columns = OverviewPager.columns(width)
         val size = OverviewPager.pageSize(width, height)
         val page = WidgetRefreshDecision.overviewPage(
@@ -87,14 +141,27 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         }
         val (textColor, iconColor) = ScheduleWidgetProvider().overviewColors(context)
         val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        views.setFloat(R.id.overview_root, "setAlpha", initialAlpha)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             views.setViewLayoutHeight(R.id.overview_panel, panelHeight.toFloat(),
                 TypedValue.COMPLEX_UNIT_DIP)
+            val density = context.resources.displayMetrics.density
+            views.setViewPadding(R.id.overview_content, (12 * density).toInt(),
+                ((if (compact) 2 else 6) * density).toInt(), (12 * density).toInt(),
+                ((if (compact) 2 else 4) * density).toInt())
             views.setViewLayoutHeight(R.id.overview_header, headerHeight.toFloat(),
                 TypedValue.COMPLEX_UNIT_DIP)
             views.setViewLayoutHeight(R.id.overview_footer, footerHeight.toFloat(),
                 TypedValue.COMPLEX_UNIT_DIP)
         }
+        views.setTextViewTextSize(R.id.overview_title, TypedValue.COMPLEX_UNIT_SP,
+            if (compact) 14f else 16f)
+        views.setTextViewTextSize(R.id.overview_subtitle, TypedValue.COMPLEX_UNIT_SP,
+            if (compact) 10f else 11f)
+        views.setTextViewTextSize(R.id.overview_previous, TypedValue.COMPLEX_UNIT_SP,
+            if (compact) 18f else 25f)
+        views.setTextViewTextSize(R.id.overview_next, TypedValue.COMPLEX_UNIT_SP,
+            if (compact) 18f else 25f)
         views.setImageViewBitmap(R.id.overview_background,
             ScheduleWidgetProvider().overviewBackground(context, width, panelHeight))
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
@@ -155,6 +222,14 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                     card.setViewLayoutHeight(R.id.overview_card_root,
                         cardHeight.toFloat(), TypedValue.COMPLEX_UNIT_DIP)
                 }
+                card.setTextViewTextSize(R.id.overview_card_date,
+                    TypedValue.COMPLEX_UNIT_SP, if (compact) 9f else 10f)
+                card.setTextViewTextSize(R.id.overview_card_time,
+                    TypedValue.COMPLEX_UNIT_SP, if (compact) 13f else 17f)
+                card.setTextViewTextSize(R.id.overview_card_subject,
+                    TypedValue.COMPLEX_UNIT_SP, if (compact) 10f else 11f)
+                card.setTextViewTextSize(R.id.overview_card_room,
+                    TypedValue.COMPLEX_UNIT_SP, if (compact) 9f else 10f)
                 val colorIndex = page * size + rowIndex * columns + columnIndex
                 card.setImageViewBitmap(R.id.overview_card_background,
                     ScheduleWidgetProvider().overviewCardBackground(context, colorIndex))
@@ -238,7 +313,10 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         const val ACTION_RELOAD = "vn.edu.phenikaa.better_phenikaa_schedule.OVERVIEW_RELOAD"
         const val EXTRA_DIRECTION = "direction"
         const val STATE_PREFS = "better_phenikaa_overview_state"
+        const val THEME_FRAME_COUNT = 9
+        const val THEME_FRAME_DELAY_MS = 30L
         fun pageKey(id: Int) = WidgetRefreshDecision.overviewPageKey(id)
         fun modeKey(id: Int) = WidgetRefreshDecision.overviewModeKey(id)
+        fun transitionKey(id: Int) = "theme_transition_$id"
     }
 }

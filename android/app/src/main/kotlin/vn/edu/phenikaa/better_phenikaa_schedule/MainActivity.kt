@@ -52,17 +52,22 @@ class MainActivity : FlutterActivity() {
             val manager = AppWidgetManager.getInstance(this)
             val component = ComponentName(this, ScheduleWidgetProvider::class.java)
             val widgetIds = manager.getAppWidgetIds(component)
+            val overviewIds = manager.getAppWidgetIds(
+                ComponentName(this, OverviewWidgetProvider::class.java),
+            )
 
-            if (widgetIds.isNotEmpty() && currentToken != request.token) {
+            if ((widgetIds.isNotEmpty() || overviewIds.isNotEmpty()) &&
+                currentToken != request.token) {
                 // The target palette is committed only between fade-out and
                 // collection refresh, keeping the old widget frame intact.
                 pendingWidgetFromToken = currentToken
                 pendingWidgetRequest = request
                 pendingWidgetApply?.let(widgetHandler::removeCallbacks)
-            } else if (widgetIds.isEmpty() || currentToken != request.token) {
+            } else if ((widgetIds.isEmpty() && overviewIds.isEmpty()) ||
+                currentToken != request.token) {
                 commitWidgetTheme(prefs, request)
             }
-            result.success(widgetIds.size)
+            result.success(widgetIds.size + overviewIds.size)
         }
     }
 
@@ -125,19 +130,25 @@ class MainActivity : FlutterActivity() {
             val manager = AppWidgetManager.getInstance(this)
             val component = ComponentName(this, ScheduleWidgetProvider::class.java)
             val widgetIds = manager.getAppWidgetIds(component)
+            val overviewIds = manager.getAppWidgetIds(
+                ComponentName(this, OverviewWidgetProvider::class.java),
+            )
 
-            if (widgetIds.isEmpty()) {
+            if (widgetIds.isEmpty() && overviewIds.isEmpty()) {
                 commitWidgetTheme(prefs, request)
                 clearPendingWidgetTheme(fromToken, request.token)
                 return@Runnable
             }
 
             val provider = ScheduleWidgetProvider()
+            val overview = OverviewWidgetProvider()
             provider.stageThemeTransition(this, manager, widgetIds, fromToken, request.token)
+            overview.stageThemeTransition(this, manager, overviewIds)
             widgetHandler.postDelayed({
-                commitWidgetTheme(prefs, request)
+                commitWidgetTheme(prefs, request, refreshOverview = false)
                 provider.stageThemeTransition(this, manager, widgetIds, fromToken, request.token)
                 provider.refreshHiddenCollection(this, manager, widgetIds, fromToken, request.token)
+                overview.animateThemeTransition(this, manager, overviewIds)
                 clearPendingWidgetTheme(fromToken, request.token)
             }, THEME_FREEZE_SETTLE_MS)
         }
@@ -160,6 +171,7 @@ class MainActivity : FlutterActivity() {
     private fun commitWidgetTheme(
         prefs: android.content.SharedPreferences,
         request: WidgetThemeRequest,
+        refreshOverview: Boolean = true,
     ) {
         prefs.edit()
             .putString(THEME_KEY, request.theme)
@@ -170,7 +182,7 @@ class MainActivity : FlutterActivity() {
             .putInt(CUSTOM_SUBTEXT_KEY, request.subtextColor)
             .putInt(CUSTOM_ICON_KEY, request.iconColor)
             .commit()
-        WidgetRefreshCoordinator.refreshOverview(this)
+        if (refreshOverview) WidgetRefreshCoordinator.refreshOverview(this)
     }
 
     private fun configureDailySyncChannel(flutterEngine: FlutterEngine) {

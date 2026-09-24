@@ -1,7 +1,7 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 internal object OverviewPager {
-    fun panelHeight(hostHeightDp: Int): Int = hostHeightDp.coerceIn(120, 140)
+    fun panelHeight(hostHeightDp: Int): Int = hostHeightDp.coerceIn(104, 140)
 
     // Fixed slots: one or two subjects must not expand to fill the entire row.
     fun columns(widthDp: Int): Int = when {

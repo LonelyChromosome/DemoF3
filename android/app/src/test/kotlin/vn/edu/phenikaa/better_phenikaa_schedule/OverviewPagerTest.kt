@@ -39,6 +39,7 @@ class OverviewPagerTest {
         assertEquals(4, OverviewPager.pageSize(320, 270))
         assertEquals(140, OverviewPager.panelHeight(270))
         assertEquals(120, OverviewPager.panelHeight(120))
+        assertEquals(104, OverviewPager.panelHeight(100))
         assertEquals(5, OverviewPager.pageSize(620, 180))
         assertEquals(4, OverviewPager.columns(320))
         assertEquals(5, OverviewPager.columns(620))
