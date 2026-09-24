@@ -6,10 +6,10 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class QldtPageRetryTest {
-    @Test fun transientPortalFailureRetriesOnlyTwice() {
+    @Test fun transientTimeoutRetriesOnlyTwice() {
         assertEquals(1_500L, QldtPageRetry.delayMillis(WebViewClient.ERROR_CONNECT, 0, true))
         assertEquals(3_000L, QldtPageRetry.delayMillis(WebViewClient.ERROR_TIMEOUT, 1, true))
-        assertNull(QldtPageRetry.delayMillis(WebViewClient.ERROR_CONNECT, 2, true))
+        assertNull(QldtPageRetry.delayMillis(WebViewClient.ERROR_TIMEOUT, 2, true))
     }
 
     @Test fun certificateAndUnrelatedHostFailuresDoNotRetry() {
@@ -22,5 +22,7 @@ class QldtPageRetryTest {
         assertEquals(1_500L, QldtPageRetry.delayMillis(WebViewClient.ERROR_HOST_LOOKUP, 0, true))
         assertEquals(15_000L, QldtPageRetry.delayMillis(WebViewClient.ERROR_HOST_LOOKUP, 4, true))
         assertNull(QldtPageRetry.delayMillis(WebViewClient.ERROR_HOST_LOOKUP, 5, true))
+        assertEquals(10_000L, QldtPageRetry.delayMillis(WebViewClient.ERROR_CONNECT, 3, true))
+        assertNull(QldtPageRetry.delayMillis(WebViewClient.ERROR_CONNECT, 5, true))
     }
 }
