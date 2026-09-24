@@ -219,6 +219,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         views.setInt(R.id.overview_emblem, "setColorFilter", iconColor)
         views.setInt(R.id.overview_mode, "setColorFilter", iconColor)
         views.setInt(R.id.overview_reload, "setColorFilter", iconColor)
+        WidgetSyncIndicator.applyToOverview(context, views)
         views.removeAllViews(R.id.overview_cards)
         OverviewPager.visible(items, page, size).chunked(columns).forEachIndexed { rowIndex, rowItems ->
             val row = RemoteViews(context.packageName, R.layout.overview_widget_row)

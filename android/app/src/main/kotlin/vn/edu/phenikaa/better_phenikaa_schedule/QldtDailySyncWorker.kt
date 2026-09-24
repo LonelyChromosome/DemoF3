@@ -41,6 +41,7 @@ class QldtDailySyncWorker(
 
         DailySyncScheduler.recordStarted(applicationContext, System.currentTimeMillis())
         WidgetRefreshCoordinator.refreshOverview(applicationContext)
+        var syncSucceeded = false
         try {
             val preferences = applicationContext.getSharedPreferences(
                 FLUTTER_PREFERENCES,
@@ -96,6 +97,7 @@ class QldtDailySyncWorker(
                         System.currentTimeMillis(),
                     )
                     WidgetRefreshCoordinator.refreshData(applicationContext)
+                    syncSucceeded = true
                     runCatching {
                         ExamReminderScheduler.reconcile(applicationContext, bundle.semester)
                     }.onFailure {
@@ -125,12 +127,15 @@ class QldtDailySyncWorker(
                 "Dữ liệu QLĐT không hợp lệ hoặc chưa tải đủ. Hãy thử lại trong ứng dụng.",
             )
             WidgetRefreshCoordinator.refreshOverview(applicationContext)
+        } finally {
+            WidgetSyncIndicator.finish(applicationContext, syncSucceeded)
         }
         return Result.success()
     }
 
     override fun onStopped() {
         activeSync?.cancel()
+        WidgetSyncIndicator.finish(applicationContext, false)
         super.onStopped()
     }
 

@@ -11,6 +11,7 @@ internal object WidgetManualSync {
         // A tap always repairs the visible widget immediately, even if the
         // network task is already running or eventually fails.
         WidgetRefreshCoordinator.manualRefresh(context.applicationContext)
+        WidgetSyncIndicator.start(context.applicationContext)
         val work = OneTimeWorkRequestBuilder<QldtDailySyncWorker>()
             .setInputData(workDataOf("manual" to true))
             .build()

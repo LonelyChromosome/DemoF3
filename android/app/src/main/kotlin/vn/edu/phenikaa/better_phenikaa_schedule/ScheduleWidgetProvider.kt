@@ -420,6 +420,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         views.setInt(R.id.widget_calendar, "setColorFilter", theme.iconColor)
         views.setInt(R.id.widget_mode, "setColorFilter", theme.iconColor)
         views.setInt(R.id.widget_reload, "setColorFilter", theme.iconColor)
+        WidgetSyncIndicator.applyToSmall(context, views)
         val examMode = SmallWidgetMode.isExam(context, widgetId)
         views.setImageViewResource(R.id.widget_mode,
             if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
