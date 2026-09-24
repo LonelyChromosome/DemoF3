@@ -22,12 +22,12 @@ class WidgetLayoutContractTest {
             .map { root.getElementsByTagName("*").item(it) as Element }
             .first { it.getAttributeNS(androidNamespace, "id") == "@+id/$name" }
 
-    @Test fun legacySmallFrameRemainsFlatAndSwipeableWithSeparatedActions() {
+    @Test fun smallFrameStopsAtTimelineEndsWithSeparatedActions() {
         val root = layout("schedule_widget").documentElement
         assertEquals("@+id/widget_root", root.getAttributeNS(androidNamespace, "id"))
         val stack = element("widget_list", root)
         assertEquals("match_parent", stack.getAttributeNS(androidNamespace, "layout_height"))
-        assertEquals("true", stack.getAttributeNS(androidNamespace, "loopViews"))
+        assertEquals("false", stack.getAttributeNS(androidNamespace, "loopViews"))
         assertEquals("44dp", element("widget_actions", root)
             .getAttributeNS(androidNamespace, "layout_width"))
         for (name in listOf("widget_calendar_hit", "widget_reload_hit", "widget_mode_hit")) {
