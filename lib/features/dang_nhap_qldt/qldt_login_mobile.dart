@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
@@ -6,6 +7,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagn
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/tracuu_api.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/verification_diagnostics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -71,7 +73,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
   String? _pendingRegistrationRaw;
-  String? _planDiagnosticsJson;
+  String? _failureDiagnosticsJson;
+  final List<String> _scheduleStages = <String>[];
   int _syncEpoch = 0;
   bool _pageReady = false;
   bool _syncing = false;
@@ -302,7 +305,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                   ),
                 ),
               ),
-            if (_planDiagnosticsJson != null && !_syncing)
+            if (_failureDiagnosticsJson != null && !_syncing)
               SafeArea(
                 top: false,
                 child: Padding(
@@ -312,17 +315,17 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                     child: OutlinedButton.icon(
                       onPressed: () async {
                         await Clipboard.setData(
-                          ClipboardData(text: _planDiagnosticsJson!),
+                          ClipboardData(text: _failureDiagnosticsJson!),
                         );
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Đã sao chép chẩn đoán TraCuu.'),
+                            content: Text('Đã sao chép chẩn đoán QLĐT.'),
                           ),
                         );
                       },
                       icon: const Icon(Icons.copy_rounded),
-                      label: const Text('Sao chép chẩn đoán TraCuu'),
+                      label: const Text('Sao chép chẩn đoán QLĐT'),
                     ),
                   ),
                 ),
@@ -408,6 +411,26 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         });
       });
     }
+    controller.addJavaScriptHandler(
+      handlerName: 'betterPhenikaaScheduleStage',
+      callback: (arguments) {
+        if (mounted &&
+            _syncing &&
+            arguments.length >= 2 &&
+            arguments.first?.toString() == '$_syncEpoch') {
+          final stage = arguments[1]?.toString();
+          if (<String>{
+            'request',
+            'success',
+            'error',
+            'exception',
+          }.contains(stage)) {
+            _scheduleStages.add(stage!);
+          }
+        }
+        return null;
+      },
+    );
     controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaSyncResult',
       callback: (arguments) async {
@@ -537,11 +560,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           };
           if (code == 'PLAN_AMBIGUOUS' && arguments.length >= 3) {
             try {
-              _planDiagnosticsJson = QldtSyncDiagnostics.sanitizePlanSnapshot(
-                arguments[2].toString(),
-              );
+              _failureDiagnosticsJson =
+                  QldtSyncDiagnostics.sanitizePlanSnapshot(
+                    arguments[2].toString(),
+                  );
             } on Object {
-              _planDiagnosticsJson = null;
+              _failureDiagnosticsJson = null;
             }
           }
           final reason = switch (code) {
@@ -566,13 +590,17 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   Future<void> _completeRegistration(int epoch, String raw) async {
     if (!mounted || !_syncing || epoch != _syncEpoch) return;
+    RegisteredSemester? registration;
+    var verificationStage = 'registration_parse';
     try {
-      final registration = const TracuuApi().parse(raw);
+      registration = const TracuuApi().parse(raw);
       final schedule = _pendingSchedule!;
+      verificationStage = 'schedule_verify';
       final verified = const SemesterScheduleVerifier().verify(
         registration: registration,
         schedule: schedule,
       );
+      verificationStage = 'semester_build';
       final semester = const SemesterDataBuilder().build(
         registration: registration,
         studySchedules: verified.studySchedules,
@@ -608,8 +636,73 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         ),
       );
     } on Object catch (error) {
+      final currentSchedule = _pendingSchedule;
+      if (registration != null && currentSchedule != null) {
+        try {
+          final snapshot = jsonDecode(
+            const VerificationDiagnostics().capture(
+              registration: registration,
+              schedule: currentSchedule,
+            ),
+          ) as Map<String, dynamic>;
+          snapshot['stage'] = verificationStage;
+          snapshot['errorCategory'] = _verificationErrorCategory(error);
+          snapshot['errorSubtype'] = _verificationErrorSubtype(error);
+          _failureDiagnosticsJson = jsonEncode(snapshot);
+        } on Object {
+          _failureDiagnosticsJson = null;
+        }
+      }
+      if (_failureDiagnosticsJson == null) {
+        final report = <String, Object?>{
+          'version': 1,
+          'kind': 'verification',
+          'stage': verificationStage,
+          'errorCategory': _verificationErrorCategory(error),
+          'errorSubtype': _verificationErrorSubtype(error),
+        };
+        if (verificationStage == 'registration_parse') {
+          try {
+            report['registrationScope'] = jsonDecode(
+              const VerificationDiagnostics().captureRegistrationScope(raw),
+            );
+          } on Object {
+            report['registrationScope'] = 'unavailable';
+          }
+        }
+        _failureDiagnosticsJson = jsonEncode(report);
+      }
       _stopSync(epoch, _verificationErrorMessage(error));
     }
+  }
+
+  String _verificationErrorCategory(Object error) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('lớp')) return 'class';
+    if (message.contains('kế hoạch')) return 'plan';
+    if (message.contains('học kỳ')) return 'semester';
+    if (message.contains('môn')) return 'subject';
+    return 'other';
+  }
+
+  String _verificationErrorSubtype(Object error) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('lớp khác học kỳ hoặc kế hoạch')) {
+      return 'registration_scope_mismatch';
+    }
+    if (message.contains('môn hoặc lớp thiếu trường')) {
+      return 'registration_required_field';
+    }
+    if (message.contains('id lớp với dữ liệu khác nhau')) {
+      return 'registration_class_conflict';
+    }
+    if (message.contains('không xác minh được lớp của lịch')) {
+      return 'schedule_class_mismatch';
+    }
+    if (message.contains('buổi học ngoài khoảng ngày lớp')) {
+      return 'study_outside_class_dates';
+    }
+    return 'other';
   }
 
   String _verificationErrorMessage(Object error) {
@@ -719,7 +812,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     });
     _pendingSchedule = null;
     _pendingRegistrationRaw = null;
-    _planDiagnosticsJson = null;
+    _failureDiagnosticsJson = null;
+    _scheduleStages.clear();
 
     final now = DateTime.now();
     final academicStartYear = now.month >= 8 ? now.year : now.year - 1;
@@ -732,6 +826,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     final script =
         '''
       (function () {
+        function scheduleStage(value) {
+          try {
+            window.flutter_inappwebview.callHandler(
+              'betterPhenikaaScheduleStage', $epoch, value
+            );
+          } catch (_) {}
+        }
         try {
           if (!(window.edu && edu.system && edu.system.userId &&
                 edu.system.iM != null && typeof edu.system.makeRequest === 'function')) {
@@ -752,8 +853,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             strNgayKetThuc: '$endText'
           };
 
+          scheduleStage('request');
           edu.system.makeRequest({
             success: function (response) {
+              scheduleStage('success');
               var nameNode = document.querySelector('#lblHoTenNguoiDangNhap');
               var name = nameNode ? (nameNode.textContent || '').trim() : '';
               if (!name) {
@@ -780,6 +883,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
               }
             },
             error: function () {
+              scheduleStage('error');
               window.flutter_inappwebview.callHandler(
                 'betterPhenikaaSyncError',
                 $epoch,
@@ -793,6 +897,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             fakedb: []
           }, false, false, false, null);
         } catch (error) {
+          scheduleStage('exception');
           window.flutter_inappwebview.callHandler(
             'betterPhenikaaSyncError',
             $epoch,
@@ -830,6 +935,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
     _diagnostics.finish(code);
+    _failureDiagnosticsJson ??= jsonEncode(<String, Object?>{
+      'version': 1,
+      'kind': 'sync_stage',
+      'failureCode': RegExp(r'^[A-Z_]{1,40}$').hasMatch(code) ? code : 'FAILED',
+      'phase': _currentPhase?.name,
+      'scheduleStages': _scheduleStages,
+      'pageReady': _pageReady,
+    });
     _pendingSchedule = null;
     _pendingRegistrationRaw = null;
     setState(() {
