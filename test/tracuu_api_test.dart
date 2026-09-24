@@ -51,13 +51,14 @@ void main() {
     ),
   });
 
-  test('uses verified API functions without page selectors', () {
+  test('uses verified APIs and reads dropdown only for diagnostics', () {
     final script = api.scriptForAttempt(7);
     expect(script, contains('LayThoiGianDangKyCaNhan'));
     expect(script, contains('LayDSKeHoachDangKyCaNhan'));
     expect(script, contains('LayKetQuaDangKyLopHocPhan'));
     expect(script, contains('strQLSV_NguoiHoc_Id: system.userId'));
-    expect(script, isNot(contains('querySelector')));
+    expect(script, contains("document.querySelector('#dropSearch_KeHoach')"));
+    expect(script, isNot(contains('dispatchEvent')));
   });
 
   test(
