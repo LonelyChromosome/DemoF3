@@ -27,18 +27,24 @@ void main() {
     'NGAYKETTHUC': '01/11/2026',
   };
 
-  String sample({List<Map<String, Object?>>? registrations}) => jsonEncode({
+  String sample({
+    List<Map<String, Object?>>? registrations,
+    List<Map<String, Object?>>? plans,
+  }) => jsonEncode({
     'semesters': envelope([
       {'ID': 'old', 'THOIGIAN': '2025_2026_3'},
       {'ID': 'new', 'THOIGIAN': '2026_2027_1'},
     ]),
-    'plans': envelope([
-      {
-        'ID': 'new-plan',
-        'DAOTAO_THOIGIANDAOTAO_ID': 'new',
-        'MAKEHOACH': '2026_2027_1,1',
-      },
-    ]),
+    'plans': envelope(
+      plans ??
+          [
+            {
+              'ID': 'new-plan',
+              'DAOTAO_THOIGIANDAOTAO_ID': 'new',
+              'MAKEHOACH': '2026_2027_1,1',
+            },
+          ],
+    ),
     'registrations': envelope(
       registrations ??
           [row(), row(section: 'web-th', className: 'WEB-2026-TH')],
@@ -63,6 +69,52 @@ void main() {
       expect(parsed.classSections['Thiết kế web nâng cao'], hasLength(2));
     },
   );
+
+  test('deduplicates one plan ID despite different auxiliary metadata', () {
+    final parsed = api.parse(
+      sample(
+        plans: [
+          {'ID': 'old-plan', 'DAOTAO_THOIGIANDAOTAO_ID': 'old'},
+          {
+            'ID': 'new-plan',
+            'DAOTAO_THOIGIANDAOTAO_ID': 'new',
+            'MAKEHOACH': 'label A',
+          },
+          {
+            'ID': 'new-plan',
+            'DAOTAO_THOIGIANDAOTAO_ID': 'new',
+            'MAKEHOACH': 'label B',
+          },
+        ],
+      ),
+    );
+    expect(parsed.id, '2026_2027_1');
+    expect(parsed.subjectNames, ['Thiết kế web nâng cao']);
+  });
+
+  test('rejects missing or distinct plans for the latest semester', () {
+    expect(
+      () => api.parse(
+        sample(
+          plans: [
+            {'ID': 'old-plan', 'DAOTAO_THOIGIANDAOTAO_ID': 'old'},
+          ],
+        ),
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => api.parse(
+        sample(
+          plans: [
+            {'ID': 'new-plan', 'DAOTAO_THOIGIANDAOTAO_ID': 'new'},
+            {'ID': 'another-plan', 'DAOTAO_THOIGIANDAOTAO_ID': 'new'},
+          ],
+        ),
+      ),
+      throwsFormatException,
+    );
+  });
 
   test('rejects a same-name class belonging to an old semester', () {
     expect(

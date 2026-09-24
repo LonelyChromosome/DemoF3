@@ -519,20 +519,20 @@ private class HeadlessQldtSync(private val context: Context) {
                   call('DKH_ThongTin_MH/DSA4BRIKJAkuICIpBSAvJgo4AiAPKSAv',
                     'pkg_dangkyhoc_thongtin.LayDSKeHoachDangKyCaNhan',
                     {strDaoTao_ThoiGianDaoTao_Id: latest.id}, plans => {
-                      const matching = plans.filter(row =>
-                        row.DAOTAO_THOIGIANDAOTAO_ID === latest.id && row.ID &&
-                        (row.MAKEHOACH === latest.name ||
-                          String(row.MAKEHOACH || '').startsWith(latest.name + ',')));
-                      if (matching.length !== 1) { fail('PLAN_AMBIGUOUS'); return; }
+                      const planIds = [...new Set(plans
+                        .filter(row => String(row.DAOTAO_THOIGIANDAOTAO_ID || '').trim() === String(latest.id).trim())
+                        .map(row => String(row.ID || '').trim())
+                        .filter(Boolean))];
+                      if (planIds.length !== 1) { fail('PLAN_AMBIGUOUS'); return; }
                       call('DKH_Chung_MH/DSA4CiQ1EDQgBSAvJgo4DS4xCS4iESkgLwPP',
                         'pkg_dangkyhoc_chung.LayKetQuaDangKyLopHocPhan',
                         {strDaoTao_ChuongTrinh_Id: '',
-                          strDangKy_KeHoachDangKy_Id: matching[0].ID,
+                          strDangKy_KeHoachDangKy_Id: planIds[0],
                           strNguoiThucHien_Id: system.userId,
                           strDaoTao_ThoiGianDaoTao_Id: latest.id}, rows => {
                           const subjects = new Map();
                           for (const row of rows) {
-                            if (row.DANGKY_KEHOACHDANGKY_ID !== matching[0].ID ||
+                            if (row.DANGKY_KEHOACHDANGKY_ID !== planIds[0] ||
                                 row.DAOTAO_THOIGIANDAOTAO_ID !== latest.id ||
                                 !row.DAOTAO_HOCPHAN_ID || !row.DAOTAO_HOCPHAN_TEN ||
                                 !row.DANGKY_LOPHOCPHAN_ID || !row.DANGKY_LOPHOCPHAN_TEN) {

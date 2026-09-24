@@ -14,7 +14,8 @@ const nativeScript = kotlin.split('const val REGISTRATION_SCRIPT = """')[1]
   ?.split('"""')[0].replaceAll("${'$'}", '$');
 assert.ok(nativeScript, 'native registration script is present');
 
-function run({failAt, noCallback, empty = false, oldPlan = false} = {}) {
+function run({failAt, noCallback, empty = false, oldPlan = false,
+  duplicatePlan = false, extraPlan = false, planName = 'metadata only'} = {}) {
   const calls = [];
   const stages = [];
   const data = {
@@ -24,7 +25,10 @@ function run({failAt, noCallback, empty = false, oldPlan = false} = {}) {
     ]},
     LayDSKeHoachDangKyCaNhan: {Success: true, Data: [
       {ID: 'plan', DAOTAO_THOIGIANDAOTAO_ID: oldPlan ? 'old' : 'new',
-        MAKEHOACH: '2026_2027_1,1'},
+        MAKEHOACH: planName},
+      ...(duplicatePlan ? [{ID: 'plan', DAOTAO_THOIGIANDAOTAO_ID: 'new',
+        MAKEHOACH: 'other metadata'}] : []),
+      ...(extraPlan ? [{ID: 'other', DAOTAO_THOIGIANDAOTAO_ID: 'new'}] : []),
     ]},
     LayKetQuaDangKyLopHocPhan: {Success: true, Data: empty ? [] : [
       {DANGKY_KEHOACHDANGKY_ID: 'plan', DAOTAO_THOIGIANDAOTAO_ID: 'new',
@@ -58,8 +62,16 @@ test('reads latest semester, plan and registered classes through verified method
   assert.equal(JSON.parse(stages.at(-1).value).registrations.Data.length, 1);
 });
 
+test('deduplicates the same plan ID and fetches registrations once', () => {
+  const {calls, stages} = run({duplicatePlan: true});
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2].strDangKy_KeHoachDangKy_Id, 'plan');
+  assert.equal(stages.at(-1).name, 'betterPhenikaaRegistrationResult');
+});
+
 test('rejects ambiguous plan, network error and missing callback', () => {
   assert.equal(run({oldPlan: true}).stages.at(-1).value, 'PLAN_AMBIGUOUS');
+  assert.equal(run({extraPlan: true}).stages.at(-1).value, 'PLAN_AMBIGUOUS');
   assert.equal(run({failAt: 'LayKetQuaDangKyLopHocPhan'}).stages.at(-1).value,
     'NETWORK_ERROR');
   const hanging = run({noCallback: 'LayDSKeHoachDangKyCaNhan'});
@@ -81,4 +93,6 @@ test('native worker uses the same three verified calls without page navigation',
   }
   assert.equal(nativeScript.includes('querySelector'), false);
   assert.equal(nativeScript.includes('MutationObserver'), false);
+  assert.ok(nativeScript.includes('new Set(plans'));
+  assert.ok(nativeScript.includes('strDangKy_KeHoachDangKy_Id: planIds[0]'));
 });

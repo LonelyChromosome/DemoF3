@@ -65,16 +65,16 @@ final class TracuuApi {
           call('DKH_ThongTin_MH/DSA4BRIKJAkuICIpBSAvJgo4AiAPKSAv',
             'pkg_dangkyhoc_thongtin.LayDSKeHoachDangKyCaNhan',
             {strDaoTao_ThoiGianDaoTao_Id: latest.id}, plans => {
-              const matches = plans.Data.filter(row =>
-                row.DAOTAO_THOIGIANDAOTAO_ID === latest.id && row.ID &&
-                (row.MAKEHOACH === latest.name ||
-                  String(row.MAKEHOACH || '').startsWith(latest.name + ',')));
-              if (matches.length !== 1) { fail('PLAN_AMBIGUOUS'); return; }
+              const planIds = [...new Set(plans.Data
+                .filter(row => String(row.DAOTAO_THOIGIANDAOTAO_ID || '').trim() === String(latest.id).trim())
+                .map(row => String(row.ID || '').trim())
+                .filter(Boolean))];
+              if (planIds.length !== 1) { fail('PLAN_AMBIGUOUS'); return; }
               stage('subjects');
               call('DKH_Chung_MH/DSA4CiQ1EDQgBSAvJgo4DS4xCS4iESkgLwPP',
                 'pkg_dangkyhoc_chung.LayKetQuaDangKyLopHocPhan',
                 {strDaoTao_ChuongTrinh_Id: '',
-                  strDangKy_KeHoachDangKy_Id: matches[0].ID,
+                  strDangKy_KeHoachDangKy_Id: planIds[0],
                   strNguoiThucHien_Id: system.userId,
                   strDaoTao_ThoiGianDaoTao_Id: latest.id}, registrations => {
                   stage('verification');
@@ -115,18 +115,15 @@ final class TracuuApi {
       return year != 0 ? year : b.$4.compareTo(a.$4);
     });
     final latest = candidates.first;
-    final plans = _data(payload['plans'])
-        .where(
-          (row) =>
-              _string(row['DAOTAO_THOIGIANDAOTAO_ID']) == latest.$1 &&
-              (_string(row['MAKEHOACH']) == latest.$2 ||
-                  _string(row['MAKEHOACH']).startsWith('${latest.$2},')),
-        )
-        .toList();
-    if (plans.length != 1 || _string(plans.single['ID']).isEmpty) {
+    final planIds = _data(payload['plans'])
+        .where((row) => _string(row['DAOTAO_THOIGIANDAOTAO_ID']) == latest.$1)
+        .map((row) => _string(row['ID']))
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (planIds.length != 1) {
       throw const FormatException('Không xác định được một kế hoạch đăng ký.');
     }
-    final planId = _string(plans.single['ID']);
+    final planId = planIds.single;
     final rows = _data(payload['registrations']);
     final subjects = <String, String>{};
     final sections = <String, Map<String, RegisteredClassSection>>{};

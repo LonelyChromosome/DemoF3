@@ -35,6 +35,10 @@ void main() {
     final initial = await coordinator.sync(() async => build('A1'));
     expect(initial.initial, isTrue);
     expect(initial.hasChanges, isFalse);
+    expect(
+      (await store.read())!.subjects.single.studySchedules.single.room,
+      'A1',
+    );
     final unchanged = await coordinator.sync(() async => build('A1'));
     expect(unchanged.initial, isFalse);
     expect(unchanged.hasChanges, isFalse);
@@ -53,6 +57,14 @@ void main() {
       await coordinator.sync(() async => build('A1'));
       await expectLater(
         coordinator.sync(() async => throw const FormatException('Mất mạng')),
+        throwsFormatException,
+      );
+      await expectLater(
+        coordinator.sync(
+          () async => throw const FormatException(
+            'Không xác định được một kế hoạch đăng ký.',
+          ),
+        ),
         throwsFormatException,
       );
       await expectLater(
