@@ -51,6 +51,9 @@ jobs:
       - name: TraCuu browser-flow simulation
         run: node --test tool/tracuu_probe_test.cjs
 
+      - name: TraCuu verified API simulation
+        run: node --test tool/tracuu_api_flow_test.cjs
+
       - name: TraCuu inspector redaction
         run: node --test tools/tracuu_inspector/capture_test.cjs
 

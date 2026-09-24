@@ -13,7 +13,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'missing callback ends loading and retry uses loaded registration',
+    'missing callback ends loading and retry reads TraCuu without DOM',
     (tester) async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       final response = jsonEncode(<String, Object>{
@@ -32,31 +32,58 @@ void main() {
           },
         ],
       });
+      final semesters = jsonEncode(<String, Object>{
+        'Success': true,
+        'Data': <Map<String, String>>[
+          <String, String>{'ID': 'old', 'THOIGIAN': '2025_2026_3'},
+          <String, String>{'ID': 'new', 'THOIGIAN': '2026_2027_1'},
+        ],
+      });
+      final plans = jsonEncode(<String, Object>{
+        'Success': true,
+        'Data': <Map<String, String>>[
+          <String, String>{
+            'ID': 'new-plan',
+            'DAOTAO_THOIGIANDAOTAO_ID': 'new',
+            'MAKEHOACH': '2026_2027_1,1',
+          },
+        ],
+      });
+      final registrations = jsonEncode(<String, Object>{
+        'Success': true,
+        'Data': <Map<String, String>>[
+          <String, String>{
+            'DANGKY_KEHOACHDANGKY_ID': 'new-plan',
+            'DAOTAO_THOIGIANDAOTAO_ID': 'new',
+            'DAOTAO_HOCPHAN_ID': 'web',
+            'DAOTAO_HOCPHAN_TEN': 'Thiết kế web nâng cao',
+            'DANGKY_LOPHOCPHAN_ID': 'web-lt',
+            'DANGKY_LOPHOCPHAN_TEN': 'WEB-2026-LT',
+            'NGAYBATDAU': '17/08/2026',
+            'NGAYKETTHUC': '01/11/2026',
+          },
+        ],
+      });
       final html =
           '''
       <!doctype html><html><body>
-      <select id="dropSearch_HocKy">
-        <option value="old">2025_2026_3</option>
-        <option value="new" selected>2026_2027_1</option>
-      </select>
-      <select id="dropSearch_KeHoach">
-        <option value="new-plan" selected>2026_2027_1,1 Đăng ký HK1</option>
-      </select>
-      <a id="btnXemKetQuaDangKy">Xem</a>
-      <div id="zoneKetQuaDangKy"><div id="zonemasonrybq">
-        <div class="subject-item"><h4>Môn Thiết kế web nâng cao</h4>
-          <div class="classroom-section-item">
-            <a class="btnChiTietLopHocPhan">WEB-2026-LT</a>
-            <div class="classroom-day">17/08/2026 - 01/11/2026</div>
-          </div>
-        </div>
-      </div></div>
       <script>
         let calls = 0;
         window.edu = {system: {userId: 'fixture', iM: 1,
           makeRequest: function (options) {
             calls++;
-            if (calls > 1) options.success($response);
+            if (calls === 1) return;
+            switch (options.data.func) {
+              case 'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan':
+                options.success($response); break;
+              case 'pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan':
+                options.success($semesters); break;
+              case 'pkg_dangkyhoc_thongtin.LayDSKeHoachDangKyCaNhan':
+                options.success($plans); break;
+              case 'pkg_dangkyhoc_chung.LayKetQuaDangKyLopHocPhan':
+                options.success($registrations); break;
+              default: options.error();
+            }
           }
         }};
       </script>

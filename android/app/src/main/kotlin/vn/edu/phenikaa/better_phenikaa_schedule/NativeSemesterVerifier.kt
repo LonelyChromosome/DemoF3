@@ -25,7 +25,9 @@ internal object NativeSemesterVerifier {
         }
         val registered = registration.optJSONArray("subjects")
             ?: throw IllegalArgumentException("TraCuu chưa tải danh sách môn.")
-        require(registered.length() > 0) { "TraCuu chưa xác nhận danh sách môn rỗng." }
+        require(registered.length() > 0 || registration.optBoolean("confirmedEmpty", false)) {
+            "TraCuu chưa xác nhận danh sách môn rỗng."
+        }
         val response = JSONObject(envelopeJson).optJSONObject("response")
             ?: throw IllegalArgumentException("QLĐT không trả lịch hợp lệ.")
         val raw = response.optJSONArray("Data")

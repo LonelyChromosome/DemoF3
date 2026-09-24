@@ -145,13 +145,11 @@ private class HeadlessQldtSync(private val context: Context) {
     private val syncRequested = AtomicBoolean(false)
     private val pendingEnvelope = AtomicReference<String>()
     private val registrationRequested = AtomicBoolean(false)
-    private val navigationRequested = AtomicBoolean(false)
     private val result = AtomicReference<Result>()
     private val latch = CountDownLatch(1)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val webViewReference = AtomicReference<WebView>()
     private var readinessAttempt = 0
-    private var registrationAttempt = 0
 
     fun run(): Result {
         mainHandler.post(::createAndLoadWebView)
@@ -196,13 +194,22 @@ private class HeadlessQldtSync(private val context: Context) {
                     onSchedule = { envelope ->
                         mainHandler.post {
                             pendingEnvelope.set(envelope)
-                            checkRegistrationPage(webView)
+                            requestRegistration(webView)
                         }
                     },
                     onRegistration = { registration ->
                         pendingEnvelope.get()?.let { complete(Result.Success(it, registration)) }
                     },
-                    onError = { complete(Result.Failure("Không xác minh được dữ liệu QLĐT hoặc TraCuu. Hãy thử lại.")) },
+                    onError = { code ->
+                        val message = when (code) {
+                            "SESSION_EXPIRED" -> "Phiên QLĐT đã hết hạn. Hãy đăng nhập lại trong app."
+                            "NETWORK_ERROR", "REQUEST_ERROR" -> "Yêu cầu QLĐT thất bại. Hãy thử lại."
+                            "NO_SEMESTER" -> "TraCuu không trả học kỳ hợp lệ."
+                            "PLAN_AMBIGUOUS" -> "Không xác định được kế hoạch đăng ký duy nhất."
+                            else -> "QLĐT trả dữ liệu thiếu hoặc không hợp lệ. Hãy thử lại."
+                        }
+                        complete(Result.Failure(message))
+                    },
                 ),
                 JAVASCRIPT_BRIDGE,
             )
@@ -213,19 +220,7 @@ private class HeadlessQldtSync(private val context: Context) {
                         if (pendingEnvelope.get() == null) {
                             readinessAttempt = 0
                             checkSessionReady(view)
-                        } else {
-                            navigationRequested.set(false)
-                            checkRegistrationPage(view)
                         }
-                    }
-                }
-
-                override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
-                    super.doUpdateVisitedHistory(view, url, isReload)
-                    if (pendingEnvelope.get() != null && url != null &&
-                        Uri.parse(url).host == QLDT_HOST) {
-                        navigationRequested.set(false)
-                        checkRegistrationPage(view)
                     }
                 }
 
@@ -279,8 +274,7 @@ private class HeadlessQldtSync(private val context: Context) {
             val sessionPrefs = context.getSharedPreferences(
                 "FlutterSharedPreferences", Context.MODE_PRIVATE,
             )
-            val portalPath = sessionPrefs.getString("flutter.qldt_verified_tracuu_path", null)
-                ?: sessionPrefs.getString("flutter.qldt_verified_portal_path", null)
+            val portalPath = sessionPrefs.getString("flutter.qldt_verified_portal_path", null)
             val portalUrl = if (portalPath != null && portalPath.startsWith("/") &&
                 !portalPath.startsWith("//")) {
                 Uri.parse(QLDT_URL).buildUpon().path(portalPath).build().toString()
@@ -384,39 +378,9 @@ private class HeadlessQldtSync(private val context: Context) {
         webView.evaluateJavascript(script, null)
     }
 
-    private fun checkRegistrationPage(webView: WebView) {
-        if (completed.get() || registrationRequested.get()) return
-        webView.evaluateJavascript(
-            "Boolean(document.querySelector('#dropSearch_HocKy') && " +
-                "document.querySelector('#dropSearch_KeHoach') && " +
-                "document.querySelector('#btnXemKetQuaDangKy') && " +
-                "document.querySelector('#zoneKetQuaDangKy'))",
-        ) { ready ->
-            if (completed.get() || registrationRequested.get()) return@evaluateJavascript
-            if (ready == "true") {
-                registrationRequested.set(true)
-                webView.evaluateJavascript(REGISTRATION_SCRIPT, null)
-                return@evaluateJavascript
-            }
-            if (navigationRequested.compareAndSet(false, true)) {
-                webView.evaluateJavascript(NAVIGATE_TRACUU_SCRIPT) { navigated ->
-                    if (navigated != "true") {
-                        navigationRequested.set(false)
-                    }
-                    retryRegistration(webView)
-                }
-            } else {
-                retryRegistration(webView)
-            }
-        }
-    }
-
-    private fun retryRegistration(webView: WebView) {
-        if (++registrationAttempt >= 200) {
-            complete(Result.Failure("TraCuu chưa sẵn sàng sau 60 giây."))
-        } else {
-            mainHandler.postDelayed({ checkRegistrationPage(webView) }, 300L)
-        }
+    private fun requestRegistration(webView: WebView) {
+        if (completed.get() || !registrationRequested.compareAndSet(false, true)) return
+        webView.evaluateJavascript(REGISTRATION_SCRIPT, null)
     }
 
     private fun currentAcademicYearRange(): Pair<String, String> {
@@ -501,110 +465,107 @@ private class HeadlessQldtSync(private val context: Context) {
               edu.system.iM != null && typeof edu.system.makeRequest === 'function'
             );
         """
-        const val NAVIGATE_TRACUU_SCRIPT = """
-            (function () {
-              const candidates = [...document.querySelectorAll('a')].filter(node => {
-                const label = (node.textContent || '').toLocaleLowerCase('vi');
-                return (label.includes('tra cứu') && label.includes('đăng ký')) ||
-                  label.trim() === 'đăng ký học';
-              });
-              if (candidates.length !== 1) return false;
-              candidates[0].click();
-              return true;
-            })();
-        """
         const val REGISTRATION_SCRIPT = """
-            (async function () {
-              const fail = message => window.BetterPhenikaaNative.onError(message);
-              const waitFor = async predicate => {
-                for (let attempt = 0; attempt < 300; attempt++) {
-                  const value = predicate();
-                  if (value) return value;
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                }
-                throw Error('TraCuu chưa tải xong. Hãy thử lại.');
+            (function () {
+              const bridge = window.BetterPhenikaaNative;
+              const system = window.edu && edu.system;
+              let finished = false;
+              const fail = code => {
+                if (finished) return;
+                finished = true;
+                bridge.onError(code);
+              };
+              if (!system || !system.userId || system.iM == null ||
+                  typeof system.makeRequest !== 'function') {
+                fail('SESSION_EXPIRED'); return;
+              }
+              const call = (action, func, fields, next) => {
+                const payload = Object.assign({action, func, iM: system.iM,
+                  strQLSV_NguoiHoc_Id: system.userId}, fields);
+                try {
+                  system.makeRequest({
+                    success: response => {
+                      if (finished) return;
+                      if (!response || response.Success !== true || !Array.isArray(response.Data)) {
+                        fail('INVALID_RESPONSE'); return;
+                      }
+                      try { next(response.Data); } catch (_) { fail('INVALID_RESPONSE'); }
+                    },
+                    error: () => fail('NETWORK_ERROR'),
+                    type: 'POST', action, contentType: true, data: payload, fakedb: []
+                  }, false, false, false, null);
+                } catch (_) { fail('REQUEST_ERROR'); }
               };
               const date = value => {
                 const match = /^(\d{2})\/(\d{2})\/(\d{4})${'$'}/.exec(value);
-                if (!match) throw Error('TraCuu thiếu ngày của lớp.');
+                if (!match) throw Error('DATE_INVALID');
                 const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
                 if (parsed.getFullYear() !== Number(match[3]) ||
                     parsed.getMonth() + 1 !== Number(match[2]) ||
-                    parsed.getDate() !== Number(match[1])) throw Error('TraCuu có ngày không hợp lệ.');
+                    parsed.getDate() !== Number(match[1])) throw Error('DATE_INVALID');
                 return match[3] + '-' + match[2] + '-' + match[1];
               };
-              try {
-                const semester = document.querySelector('#dropSearch_HocKy');
-                const plan = document.querySelector('#dropSearch_KeHoach');
-                const results = document.querySelector('#zoneKetQuaDangKy');
-                const view = document.querySelector('#btnXemKetQuaDangKy');
-                if (!semester || !plan || !results || !view) throw Error('Trang TraCuu chưa sẵn sàng.');
-                const options = [...semester.options].map(option => {
-                  const name = option.textContent.trim();
-                  const match = /^(\d{4})_(\d{4})_(\d+)${'$'}/.exec(name);
-                  return match && Number(match[2]) === Number(match[1]) + 1 && option.value
-                    ? {value: option.value, name, year: Number(match[1]), term: Number(match[3])}
-                    : null;
-                }).filter(Boolean).sort((a, b) => b.year - a.year || b.term - a.term);
-                if (!options.length) throw Error('TraCuu chưa có học kỳ hợp lệ.');
-                const latest = options[0];
-                const initialSemester = semester.value;
-                const initialPlan = plan.value;
-                semester.value = latest.value;
-                semester.dispatchEvent(new Event('change', {bubbles: true}));
-                const plans = await waitFor(() => {
-                  const choices = [...plan.options].filter(option => option.value &&
-                    (option.textContent.trim() === latest.name ||
-                     option.textContent.trim().startsWith(latest.name + ',')));
-                  return choices.length ? choices : null;
+              call('DKH_ThongTin_MH/DSA4FSkuKAYoIC8FIC8mCjgCIA8pIC8P',
+                'pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan',
+                {strDaoTao_ThoiGianDaoTao_Id: null}, semesters => {
+                  const choices = semesters.map(row => {
+                    const match = /^(\d{4})_(\d{4})_(\d+)${'$'}/.exec(row.THOIGIAN);
+                    return match && Number(match[2]) === Number(match[1]) + 1 && row.ID
+                      ? {id: row.ID, name: row.THOIGIAN, year: Number(match[1]), term: Number(match[3])}
+                      : null;
+                  }).filter(Boolean).sort((a, b) => b.year - a.year || b.term - a.term);
+                  if (!choices.length) { fail('NO_SEMESTER'); return; }
+                  const latest = choices[0];
+                  call('DKH_ThongTin_MH/DSA4BRIKJAkuICIpBSAvJgo4AiAPKSAv',
+                    'pkg_dangkyhoc_thongtin.LayDSKeHoachDangKyCaNhan',
+                    {strDaoTao_ThoiGianDaoTao_Id: latest.id}, plans => {
+                      const matching = plans.filter(row =>
+                        row.DAOTAO_THOIGIANDAOTAO_ID === latest.id && row.ID &&
+                        (row.MAKEHOACH === latest.name ||
+                          String(row.MAKEHOACH || '').startsWith(latest.name + ',')));
+                      if (matching.length !== 1) { fail('PLAN_AMBIGUOUS'); return; }
+                      call('DKH_Chung_MH/DSA4CiQ1EDQgBSAvJgo4DS4xCS4iESkgLwPP',
+                        'pkg_dangkyhoc_chung.LayKetQuaDangKyLopHocPhan',
+                        {strDaoTao_ChuongTrinh_Id: '',
+                          strDangKy_KeHoachDangKy_Id: matching[0].ID,
+                          strNguoiThucHien_Id: system.userId,
+                          strDaoTao_ThoiGianDaoTao_Id: latest.id}, rows => {
+                          const subjects = new Map();
+                          for (const row of rows) {
+                            if (row.DANGKY_KEHOACHDANGKY_ID !== matching[0].ID ||
+                                row.DAOTAO_THOIGIANDAOTAO_ID !== latest.id ||
+                                !row.DAOTAO_HOCPHAN_ID || !row.DAOTAO_HOCPHAN_TEN ||
+                                !row.DANGKY_LOPHOCPHAN_ID || !row.DANGKY_LOPHOCPHAN_TEN) {
+                              fail('INVALID_REGISTRATION'); return;
+                            }
+                            const key = row.DAOTAO_HOCPHAN_ID;
+                            const start = date(row.NGAYBATDAU);
+                            const end = date(row.NGAYKETTHUC);
+                            if (end < start) { fail('INVALID_DATE'); return; }
+                            if (!subjects.has(key)) subjects.set(key, {
+                              name: row.DAOTAO_HOCPHAN_TEN, classes: []
+                            });
+                            const subject = subjects.get(key);
+                            if (subject.name !== row.DAOTAO_HOCPHAN_TEN) {
+                              fail('INVALID_SUBJECT'); return;
+                            }
+                            if (!subject.classes.some(item => item.id === row.DANGKY_LOPHOCPHAN_ID)) {
+                              subject.classes.push({id: row.DANGKY_LOPHOCPHAN_ID,
+                                name: row.DANGKY_LOPHOCPHAN_TEN, startsOn: start, endsOn: end});
+                            }
+                          }
+                          finished = true;
+                          bridge.onRegistration(JSON.stringify({id: latest.name,
+                            name: latest.name,
+                            confirmedEmpty: rows.length === 0,
+                            subjects: [...subjects.values()].map(subject => ({
+                              name: subject.name,
+                              classes: subject.classes.map(({name, startsOn, endsOn}) =>
+                                ({name, startsOn, endsOn}))
+                            }))}));
+                        });
+                    });
                 });
-                if (plans.length !== 1) throw Error('Không xác định được một kế hoạch duy nhất.');
-                plan.value = plans[0].value;
-                plan.dispatchEvent(new Event('change', {bubbles: true}));
-                const existing = initialSemester === latest.value &&
-                  initialPlan === plans[0].value && results.querySelector('.subject-item');
-                if (!existing) {
-                  let changed = false;
-                  const observer = new MutationObserver(() => { changed = true; });
-                  observer.observe(results, {childList: true, subtree: true, characterData: true});
-                  try {
-                    view.click();
-                    await waitFor(() => changed && results.querySelector('.subject-item'));
-                  } finally {
-                    observer.disconnect();
-                  }
-                }
-                let previous = '';
-                let stable = 0;
-                await waitFor(() => {
-                  const current = results.innerHTML;
-                  stable = current === previous ? stable + 1 : 0;
-                  previous = current;
-                  return stable >= 4;
-                });
-                if (semester.value !== latest.value || plan.value !== plans[0].value) {
-                  throw Error('TraCuu đã đổi học kỳ hoặc kế hoạch.');
-                }
-                const subjects = [...results.querySelectorAll('.subject-item')].map(item => {
-                  const heading = item.querySelector('h4');
-                  const name = heading ? heading.textContent.trim().replace(/^Môn\s+/i, '').trim() : '';
-                  if (!name) throw Error('TraCuu có môn thiếu tên.');
-                  const classes = [...item.querySelectorAll('.classroom-section-item')].map(section => {
-                    const classNode = section.querySelector('.btnChiTietLopHocPhan');
-                    const name = classNode ? classNode.textContent.trim() : '';
-                    const dateNode = section.querySelector('.classroom-day');
-                    const match = dateNode && /(\d{2}\/\d{2}\/\d{4})\s*-\s*(\d{2}\/\d{2}\/\d{4})/.exec(dateNode.textContent);
-                    if (!name || !match) throw Error('TraCuu thiếu lớp hoặc khoảng ngày.');
-                    return {name, startsOn: date(match[1]), endsOn: date(match[2])};
-                  });
-                  return {name, classes};
-                });
-                window.BetterPhenikaaNative.onRegistration(JSON.stringify({
-                  id: latest.name, name: latest.name, subjects
-                }));
-              } catch (error) {
-                fail(error.message || 'Không xác minh được dữ liệu TraCuu.');
-              }
             })();
         """
     }

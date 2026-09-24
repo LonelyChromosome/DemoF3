@@ -5,7 +5,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dar
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/tracuu_webview_probe.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/tracuu_api.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,14 +13,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 const bool supportsLiveQldtLogin = true;
 const _sessionKey = 'qldt_verified_session';
 const _portalPathKey = 'qldt_verified_portal_path';
-const _tracuuPathKey = 'qldt_verified_tracuu_path';
 
 Future<void> clearQldtSession() async {
   await CookieManager.instance().deleteAllCookies();
   final prefs = await SharedPreferences.getInstance();
   await prefs.remove(_sessionKey);
   await prefs.remove(_portalPathKey);
-  await prefs.remove(_tracuuPathKey);
 }
 
 Future<QldtLoginResult?> openQldtLogin(
@@ -30,8 +28,7 @@ Future<QldtLoginResult?> openQldtLogin(
   final prefs = await SharedPreferences.getInstance();
   if (!context.mounted) return null;
   final cached = prefs.getBool(_sessionKey) ?? false;
-  final portalPath =
-      prefs.getString(_tracuuPathKey) ?? prefs.getString(_portalPathKey);
+  final portalPath = prefs.getString(_portalPathKey);
   return await Navigator.of(context).push<QldtLoginResult>(
     MaterialPageRoute<QldtLoginResult>(
       fullscreenDialog: true,
@@ -66,7 +63,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   InAppWebViewController? _controller;
   Timer? _readinessTimer;
-  Timer? _registrationTimer;
   Timer? _syncWatchdog;
   Timer? _phaseTimer;
   Timer? _sessionTimer;
@@ -74,10 +70,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
   int _syncEpoch = 0;
-  bool _registrationRequested = false;
-  bool _registrationProbeStarted = false;
-  bool _registrationChecking = false;
-  bool _registrationNavigationFound = false;
   bool _pageReady = false;
   bool _syncing = false;
   bool _autoSyncStarted = false;
@@ -102,7 +94,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   @override
   void dispose() {
     _readinessTimer?.cancel();
-    _registrationTimer?.cancel();
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
     _sessionTimer?.cancel();
@@ -217,17 +208,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                                 if (_pendingSchedule == null &&
                                     !_autoSyncStarted) {
                                   _beginReadinessChecks();
-                                } else if (_pendingSchedule != null) {
-                                  _registrationRequested = false;
-                                  unawaited(_checkRegistrationPage());
                                 }
                               },
                               onUpdateVisitedHistory: (_, _, _) {
                                 unawaited(_updateBackState());
-                                if (_pendingSchedule != null) {
-                                  _registrationRequested = false;
-                                  unawaited(_checkRegistrationPage());
-                                }
                               },
                               onReceivedError: (_, request, error) {
                                 if (request.isForMainFrame == true && mounted) {
@@ -346,18 +330,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     }
   }
 
-  Future<void> _rememberVerifiedTracuu() async {
-    final uri = Uri.tryParse((await _controller?.getUrl())?.toString() ?? '');
-    if (uri == null ||
-        uri.host != _qldtUri.host ||
-        uri.hasQuery ||
-        uri.hasFragment) {
-      return;
-    }
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tracuuPathKey, uri.path);
-  }
-
   Future<void> _handleBack() async {
     final controller = _controller;
     if (controller != null && await controller.canGoBack()) {
@@ -425,19 +397,16 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             return null;
           }
           _pendingSchedule = data;
-          _registrationRequested = false;
-          _registrationProbeStarted = false;
-          _registrationNavigationFound = false;
           setState(() {
             _showWebPage = false;
-            _status = 'Đang xác minh học kỳ và môn đã đăng ký trên TraCuu...';
+            _status = 'Đang lấy học kỳ và môn đăng ký từ QLĐT...';
           });
           _startPhase(
-            QldtSyncPhase.navigation,
+            QldtSyncPhase.semesterPlan,
             const Duration(seconds: 20),
             epoch,
           );
-          await _checkRegistrationPage();
+          await _requestRegistration(epoch);
         } on Object {
           _stopSync(
             epoch,
@@ -468,7 +437,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           return null;
         }
         final stage = arguments[1]?.toString();
-        if (stage == 'subjects') {
+        if (stage == 'semesterPlan') {
+          _startPhase(
+            QldtSyncPhase.semesterPlan,
+            const Duration(seconds: 20),
+            _syncEpoch,
+          );
+        } else if (stage == 'subjects') {
           _startPhase(
             QldtSyncPhase.subjects,
             const Duration(seconds: 20),
@@ -496,9 +471,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         }
         final epoch = _syncEpoch;
         try {
-          final registration = const TracuuWebViewProbe().parseResult(
-            arguments[1] as String,
-          );
+          final registration = const TracuuApi().parse(arguments[1] as String);
           final schedule = _pendingSchedule!;
           final verified = const SemesterScheduleVerifier().verify(
             registration: registration,
@@ -519,7 +492,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           try {
             final prefs = await SharedPreferences.getInstance();
             await prefs.setBool(_sessionKey, true);
-            await _rememberVerifiedTracuu();
           } on Object {
             // A cache failure must not discard a verified schedule.
           }
@@ -552,13 +524,21 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             _syncing &&
             arguments.length >= 2 &&
             arguments.first?.toString() == '$_syncEpoch') {
-          final reason = arguments[1].toString();
-          final status = reason.contains('kế hoạch')
-              ? 'TraCuu chưa tải hoặc có nhiều kế hoạch đăng ký. Dữ liệu cũ được giữ nguyên.'
-              : reason.contains('học kỳ')
-              ? 'TraCuu không xác định được học kỳ mới nhất. Dữ liệu cũ được giữ nguyên.'
-              : 'TraCuu chưa tải đủ danh sách môn hoặc yêu cầu Xem thất bại. Dữ liệu cũ được giữ nguyên.';
-          _stopSync(_syncEpoch, status);
+          final code = arguments[1].toString();
+          final reason = switch (code) {
+            'SESSION_EXPIRED' => 'Phiên QLĐT đã hết hạn.',
+            'NETWORK_ERROR' ||
+            'REQUEST_ERROR' => 'Yêu cầu dữ liệu TraCuu thất bại.',
+            'NO_SEMESTER' => 'TraCuu không trả học kỳ hợp lệ.',
+            'PLAN_AMBIGUOUS' =>
+              'Không xác định được kế hoạch đăng ký duy nhất.',
+            _ => 'TraCuu trả dữ liệu không hợp lệ.',
+          };
+          _stopSync(
+            _syncEpoch,
+            '$reason Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
+            code: code,
+          );
         }
         return null;
       },
@@ -583,102 +563,21 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     unawaited(_checkReady());
   }
 
-  Future<void> _checkRegistrationPage() async {
+  Future<void> _requestRegistration(int epoch) async {
     final controller = _controller;
-    if (controller == null ||
-        !_syncing ||
-        _pendingSchedule == null ||
-        !mounted ||
-        _registrationProbeStarted ||
-        _registrationChecking) {
+    if (controller == null || !mounted || !_syncing || epoch != _syncEpoch) {
       return;
     }
-    final epoch = _syncEpoch;
-    _registrationChecking = true;
-    _registrationTimer?.cancel();
-    var operation = 'DOM_CHECK';
     try {
-      final ready = await controller.evaluateJavascript(
-        source: '''
-        Boolean(document.querySelector('#dropSearch_HocKy') &&
-          document.querySelector('#dropSearch_KeHoach') &&
-          document.querySelector('#btnXemKetQuaDangKy'));
-      ''',
+      await controller.evaluateJavascript(
+        source: const TracuuApi().scriptForAttempt(epoch),
       );
-      if (!mounted ||
-          !_syncing ||
-          epoch != _syncEpoch ||
-          _pendingSchedule == null) {
-        return;
-      }
-      if (ready == true || ready?.toString() == 'true') {
-        _registrationTimer?.cancel();
-        _registrationNavigationFound = true;
-        _registrationProbeStarted = true;
-        _startPhase(
-          QldtSyncPhase.semesterPlan,
-          const Duration(seconds: 15),
-          epoch,
-        );
-        operation = 'PROBE_START';
-        await controller.evaluateJavascript(
-          source: const TracuuWebViewProbe().scriptForAttempt(epoch),
-        );
-        return;
-      }
-      if (!_registrationRequested) {
-        _registrationRequested = true;
-        operation = 'NAVIGATION';
-        final navigated = await controller.evaluateJavascript(
-          source: '''
-          (function () {
-            const links = [...document.querySelectorAll('a')];
-            const candidates = links.filter(node => {
-              const label = (node.textContent || '').toLocaleLowerCase('vi');
-              return (label.includes('tra cứu') && label.includes('đăng ký')) ||
-                label.trim() === 'đăng ký học';
-            });
-            if (candidates.length !== 1) return false;
-            candidates[0].click();
-            return true;
-          })();
-        ''',
-        );
-        if (!mounted || !_syncing || epoch != _syncEpoch) return;
-        if (navigated != true && navigated?.toString() != 'true') {
-          _registrationRequested = false;
-        } else {
-          _registrationNavigationFound = true;
-        }
-      }
-      _registrationTimer = Timer(const Duration(milliseconds: 300), () {
-        if (mounted) unawaited(_checkRegistrationPage());
-      });
-    } on Object catch (error) {
-      if (controller != _controller &&
-          mounted &&
-          _syncing &&
-          epoch == _syncEpoch) {
-        _registrationTimer?.cancel();
-        _registrationTimer = Timer(const Duration(milliseconds: 300), () {
-          if (mounted) unawaited(_checkRegistrationPage());
-        });
-        return;
-      }
-      if (mounted && _syncing && epoch == _syncEpoch) {
-        final reason = switch (operation) {
-          'DOM_CHECK' => 'Không đọc được cấu trúc trang TraCuu.',
-          'PROBE_START' => 'Không khởi chạy được bước tải đăng ký trên TraCuu.',
-          _ => 'Không mở được TraCuu trong phiên QLĐT.',
-        };
-        _stopSync(
-          epoch,
-          '$reason Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
-          code: '${operation}_${error.runtimeType}',
-        );
-      }
-    } finally {
-      if (epoch == _syncEpoch) _registrationChecking = false;
+    } on Object {
+      _stopSync(
+        epoch,
+        'Không gọi được dữ liệu TraCuu trong phiên QLĐT. Hãy thử lại.',
+        code: 'REGISTRATION_REQUEST_ERROR',
+      );
     }
   }
 
@@ -770,11 +669,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       _status = 'Đang lấy lịch cá nhân từ QLĐT...';
     });
     _pendingSchedule = null;
-    _registrationTimer?.cancel();
-    _registrationRequested = false;
-    _registrationProbeStarted = false;
-    _registrationChecking = false;
-    _registrationNavigationFound = false;
 
     final now = DateTime.now();
     final academicStartYear = now.month >= 8 ? now.year : now.year - 1;
@@ -863,9 +757,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _diagnostics.start(phase);
     _phaseTimer = Timer(limit, () {
       final reason =
-          phase == QldtSyncPhase.navigation && !_registrationNavigationFound
-          ? 'Không tìm thấy đường vào TraCuu trong cổng sinh viên.'
-          : '${phase.name} không phản hồi trong ${limit.inSeconds} giây.';
+          '${phase.name} không phản hồi trong ${limit.inSeconds} giây.';
       _stopSync(
         epoch,
         '$reason Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
@@ -878,11 +770,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     if (!mounted || epoch != _syncEpoch) return;
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
-    _registrationTimer?.cancel();
     _diagnostics.finish(code);
     _pendingSchedule = null;
-    _registrationProbeStarted = false;
-    _registrationChecking = false;
     setState(() {
       _syncing = false;
       _status = status;
