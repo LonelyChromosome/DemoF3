@@ -65,4 +65,20 @@ class NativeSemesterVerifierTest {
         assertEquals(1, subject.getJSONArray("examSchedules").length())
         assertEquals(1, JSONObject(result.widgetSnapshot).getJSONArray("exams").length())
     }
+
+    @Test fun attendanceMarkupIsIgnoredButAnotherClassIsStillRejected() {
+        val actual = registration.replace("WEB-2026-LT", "Kỹ thuật phần mềm-1-1-26(COUR02)")
+            .replace("Thiết kế web nâng cao", "Môn Kỹ thuật phần mềm-1-1-26(COUR02)")
+        val row = envelope(section = "Kỹ thuật phần mềm-1-1-26(COUR02)<br>Có mặt<br>")
+            .replace("Thiết kế web nâng cao", "Môn Kỹ thuật phần mềm-1-1-26(COUR02)")
+        val result = NativeSemesterVerifier.verify(row, actual, "")
+        val subject = JSONObject(result.semester).getJSONArray("subjects").getJSONObject(0)
+        assertEquals("Kỹ thuật phần mềm", subject.getString("name"))
+        assertEquals(1, subject.getJSONArray("studySchedules").length())
+        assertThrows(IllegalArgumentException::class.java) {
+            NativeSemesterVerifier.verify(
+                row.replace("(COUR02)<br>", "(COUR03)<br>"), actual, "",
+            )
+        }
+    }
 }

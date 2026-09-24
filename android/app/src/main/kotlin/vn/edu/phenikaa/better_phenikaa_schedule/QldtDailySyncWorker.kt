@@ -89,7 +89,7 @@ class QldtDailySyncWorker(
                         WidgetRefreshCoordinator.refreshOverview(applicationContext)
                         return Result.success()
                     }
-                    WidgetRefreshCoordinator.refreshToday(applicationContext)
+                    WidgetRefreshCoordinator.refreshData(applicationContext)
                     DailySyncScheduler.recordSuccess(
                         applicationContext,
                         System.currentTimeMillis(),
@@ -642,7 +642,7 @@ internal object QldtSnapshotEncoder {
     }
 
     private fun parseRecord(item: JSONObject): JSONObject? {
-        val subjectName = jsonString(item, "TENHOCPHAN")
+        val subjectName = widgetSubjectName(jsonString(item, "TENHOCPHAN"))
         val dateText = jsonString(item, "NGAYHOC")
         val date = parseVietnameseDate(dateText)
         if (subjectName.isEmpty() || date == null) {
@@ -673,6 +673,7 @@ internal object QldtSnapshotEncoder {
         if (endAt <= startAt) {
             return null
         }
+        val className = widgetClassName(jsonString(item, "TENLOPHOCPHAN"))
         val idPrefix = if (isExam) "exam" else "class"
         val id = listOf(
             idPrefix,
@@ -680,7 +681,7 @@ internal object QldtSnapshotEncoder {
             subjectName,
             "$startHour:$startMinute",
             room,
-            jsonString(item, "TENLOPHOCPHAN"),
+            className,
         ).joinToString("|")
 
         return JSONObject()
@@ -690,7 +691,7 @@ internal object QldtSnapshotEncoder {
             .put("room", room)
             .put("startAt", startAt)
             .put("endAt", endAt)
-            .put("className", jsonString(item, "TENLOPHOCPHAN"))
+            .put("className", className)
             .put("examForm", jsonString(item, "DANGKY_LOPHOCPHAN_TEN"))
             .put("periodStart", jsonInt(item, "TIETBATDAU") ?: JSONObject.NULL)
             .put("periodEnd", jsonInt(item, "TIETKETTHUC") ?: JSONObject.NULL)

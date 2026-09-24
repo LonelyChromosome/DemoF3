@@ -10,6 +10,7 @@ import android.view.View
 import android.widget.RemoteViews
 import es.antonborri.home_widget.HomeWidgetProvider
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -32,9 +33,9 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             } else {
                 val direction = intent.getIntExtra(EXTRA_DIRECTION, 0).coerceIn(-1, 1)
                 val items = WidgetSnapshotStore.readOverview(context, id, state.getBoolean(modeKey(id), false))
-                val width = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
-                    .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
-                val size = OverviewPager.pageSize(width)
+                val height = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
+                    .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160)
+                val size = OverviewPager.pageSize(height)
                 val next = OverviewPager.clamp(state.getInt(pageKey(id), 0) + direction, items.size, size)
                 state.edit().putInt(pageKey(id), next).apply()
             }
@@ -68,8 +69,13 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
         val height = manager.getAppWidgetOptions(id)
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
-        val size = OverviewPager.pageSize(width)
-        val page = OverviewPager.clamp(state.getInt(pageKey(id), 0), items.size, size)
+        val size = OverviewPager.pageSize(height)
+        val page = WidgetRefreshDecision.overviewPage(
+            state.getInt(pageKey(id), 0), items.size, size,
+        )
+        if (page != state.getInt(pageKey(id), 0)) {
+            state.edit().putInt(pageKey(id), page).apply()
+        }
         val (textColor, iconColor) = ScheduleWidgetProvider().overviewColors(context)
         val views = RemoteViews(context.packageName, R.layout.overview_widget)
         views.setImageViewBitmap(R.id.overview_background,
@@ -90,22 +96,44 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             examMode -> "Lịch thi sắp tới · ${items.size} ca"
             else -> "${if (selected == today) "Hôm nay" else "Ngày $date"} · ${items.size} môn"
         })
+        views.setTextViewText(R.id.overview_status, when {
+            examMode && items.isNotEmpty() -> {
+                val first = items.first()
+                val target = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(first.dateKey)
+                val todayStart = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                val days = if (target == null) 0L else
+                    ((target.time - todayStart) / 86_400_000L).coerceAtLeast(0L)
+                if (days == 0L) "Có ca thi hôm nay" else "Còn $days ngày đến ca thi đầu tiên"
+            }
+            examMode -> "Chưa có ca thi sắp tới"
+            selected == today -> "Lịch học trong ngày"
+            else -> "Lịch học ngày $date"
+        })
         views.setImageViewResource(R.id.overview_mode,
             if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
         views.setContentDescription(R.id.overview_mode,
             if (examMode) "Về lịch học" else "Xem lịch thi")
-        listOf(R.id.overview_title, R.id.overview_reload,
-            R.id.overview_previous, R.id.overview_next, R.id.overview_empty).forEach {
+        listOf(R.id.overview_title,
+            R.id.overview_status, R.id.overview_previous, R.id.overview_next,
+            R.id.overview_page, R.id.overview_empty).forEach {
             views.setTextColor(it, textColor)
         }
         views.setInt(R.id.overview_calendar, "setColorFilter", iconColor)
         views.setInt(R.id.overview_mode, "setColorFilter", iconColor)
+        views.setTextColor(R.id.overview_reload, iconColor)
         views.removeAllViews(R.id.overview_cards)
         OverviewPager.visible(items, page, size).forEach { item ->
             val card = RemoteViews(context.packageName, R.layout.overview_widget_card)
             card.setTextViewText(R.id.overview_card_time, item.startAt.drop(11).take(5))
             card.setTextViewText(R.id.overview_card_subject, item.subject)
-            card.setTextViewText(R.id.overview_card_room, item.room)
+            val itemDate = item.dateKey.takeIf { examMode || it != today }
+                ?.let { " · ${it.substring(8, 10)}/${it.substring(5, 7)}" }.orEmpty()
+            card.setTextViewText(R.id.overview_card_room, "${item.room}$itemDate")
             listOf(R.id.overview_card_time, R.id.overview_card_subject,
                 R.id.overview_card_room).forEach { card.setTextColor(it, textColor) }
             views.addView(R.id.overview_cards, card)
@@ -113,9 +141,14 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         views.setViewVisibility(R.id.overview_empty, if (items.isEmpty()) View.VISIBLE else View.GONE)
         views.setTextViewText(R.id.overview_empty,
             if (examMode) "Không có lịch thi" else "Không có lịch học")
-        views.setViewVisibility(R.id.overview_previous, if (page == 0) View.INVISIBLE else View.VISIBLE)
+        val lastPage = OverviewPager.lastPage(items.size, size)
+        views.setViewVisibility(R.id.overview_navigation,
+            if (lastPage == 0) View.GONE else View.VISIBLE)
+        views.setViewVisibility(R.id.overview_previous,
+            if (page == 0) View.INVISIBLE else View.VISIBLE)
         views.setViewVisibility(R.id.overview_next,
-            if (page >= OverviewPager.lastPage(items.size, size)) View.INVISIBLE else View.VISIBLE)
+            if (page >= lastPage) View.INVISIBLE else View.VISIBLE)
+        views.setTextViewText(R.id.overview_page, "${page + 1}/${lastPage + 1}")
         views.setOnClickPendingIntent(R.id.overview_previous, action(context, id, ACTION_PAGE, -1))
         views.setOnClickPendingIntent(R.id.overview_next, action(context, id, ACTION_PAGE, 1))
         views.setOnClickPendingIntent(R.id.overview_mode, action(context, id, ACTION_MODE, 0))
@@ -147,7 +180,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         const val ACTION_RELOAD = "vn.edu.phenikaa.better_phenikaa_schedule.OVERVIEW_RELOAD"
         const val EXTRA_DIRECTION = "direction"
         const val STATE_PREFS = "better_phenikaa_overview_state"
-        fun pageKey(id: Int) = "page_$id"
-        fun modeKey(id: Int) = "mode_$id"
+        fun pageKey(id: Int) = WidgetRefreshDecision.overviewPageKey(id)
+        fun modeKey(id: Int) = WidgetRefreshDecision.overviewModeKey(id)
     }
 }

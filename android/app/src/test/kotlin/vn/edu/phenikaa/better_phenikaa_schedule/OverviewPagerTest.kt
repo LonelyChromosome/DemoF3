@@ -17,9 +17,9 @@ class OverviewPagerTest {
     }
 
     @Test fun everySubjectIsVisibleExactlyOnceAcrossPages() {
-        for (width in listOf(110, 250, 320, 470)) {
-            val size = OverviewPager.pageSize(width)
-            for (count in listOf(0, 1, 4, 5, 17, 101)) {
+        for (height in listOf(160, 240, 360, 424, 540)) {
+            val size = OverviewPager.pageSize(height)
+            for (count in listOf(0, 1, 2, 4, 5, 6, 17, 101)) {
                 val source = items(count)
                 val pages = (0..OverviewPager.lastPage(count, size)).flatMap { page ->
                     OverviewPager.visible(source, page, size)
@@ -32,5 +32,12 @@ class OverviewPagerTest {
                 )
             }
         }
+    }
+
+    @Test fun fiveCompactRowsFitTheLargeWidgetAndTheLastPageNeverLoops() {
+        assertEquals(1, OverviewPager.pageSize(160))
+        assertEquals(5, OverviewPager.pageSize(424))
+        assertEquals(listOf("5", "6"), OverviewPager.visible(items(7), 1, 5).map { it.id })
+        assertEquals(1, OverviewPager.clamp(50, 7, 5))
     }
 }

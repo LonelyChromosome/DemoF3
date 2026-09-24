@@ -49,7 +49,7 @@ internal object NativeSemesterVerifier {
         for (index in 0 until registered.length()) {
             val subject = registered.optJSONObject(index)
                 ?: throw IllegalArgumentException("TraCuu có môn không hợp lệ.")
-            val name = subject.optString("name").trim()
+            val name = widgetSubjectName(subject.optString("name"))
             val normalized = normalize(name)
             require(normalized.isNotEmpty() && !lookup.containsKey(normalized)) {
                 "TraCuu có tên môn trống hoặc trùng."
@@ -59,7 +59,7 @@ internal object NativeSemesterVerifier {
             for (sectionIndex in 0 until classes.length()) {
                 val section = classes.optJSONObject(sectionIndex)
                     ?: throw IllegalArgumentException("TraCuu có lớp không hợp lệ.")
-                val className = normalize(section.optString("name"))
+                val className = normalize(widgetClassName(section.optString("name")))
                 val start = section.optString("startsOn")
                 val end = section.optString("endsOn")
                 require(className.isNotEmpty() && !sectionLookup.containsKey(className) &&
@@ -84,9 +84,9 @@ internal object NativeSemesterVerifier {
         val widgetExams = JSONArray()
         for (index in 0 until records.length()) {
             val row = records.getJSONObject(index)
-            val subjectName = normalize(row.getString("subjectName"))
+            val subjectName = normalize(widgetSubjectName(row.getString("subjectName")))
             val subject = lookup[subjectName] ?: continue
-            val className = normalize(row.optString("className"))
+            val className = normalize(widgetClassName(row.optString("className")))
             val range = sections[subjectName]?.get(className)
                 ?: throw IllegalArgumentException("Không xác minh được lớp của lịch.")
             val start = range.substringBefore('|')
@@ -155,3 +155,11 @@ internal object NativeSemesterVerifier {
         return output.toString()
     }
 }
+
+internal fun widgetSubjectName(value: String): String = value.trim()
+    .replaceFirst(Regex("^Môn\\s+", RegexOption.IGNORE_CASE), "")
+    .replaceFirst(Regex("-\\d+-\\d+-\\d+\\([^)]*\\)(?:\\.[A-Za-z0-9_]+)?$"), "")
+    .trim()
+
+internal fun widgetClassName(value: String): String =
+    value.split(Regex("<br\\s*/?>", RegexOption.IGNORE_CASE)).first().trim()

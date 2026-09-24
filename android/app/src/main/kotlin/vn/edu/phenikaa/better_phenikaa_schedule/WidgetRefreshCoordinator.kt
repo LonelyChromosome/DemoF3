@@ -6,6 +6,20 @@ import android.content.Context
 
 /** Resets every widget to the device's current local day and refreshes its data. */
 internal object WidgetRefreshCoordinator {
+    fun refreshData(context: Context) {
+        val appContext = context.applicationContext
+        val manager = AppWidgetManager.getInstance(appContext)
+        val smallIds = manager.getAppWidgetIds(
+            ComponentName(appContext, ScheduleWidgetProvider::class.java),
+        )
+        val overviewIds = manager.getAppWidgetIds(
+            ComponentName(appContext, OverviewWidgetProvider::class.java),
+        )
+        val data = appContext.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        ScheduleWidgetProvider().onUpdate(appContext, manager, smallIds, data)
+        OverviewWidgetProvider().onUpdate(appContext, manager, overviewIds, data)
+    }
+
     fun refreshOverview(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
         val ids = manager.getAppWidgetIds(ComponentName(context, OverviewWidgetProvider::class.java))

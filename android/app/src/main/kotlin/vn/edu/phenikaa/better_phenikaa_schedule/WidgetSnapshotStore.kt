@@ -73,12 +73,11 @@ internal object WidgetSnapshotStore {
 
     private fun selectedDate(context: Context, widgetId: Int, today: String): String {
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return today
-        return context.getSharedPreferences(
+        val chosen = context.getSharedPreferences(
             ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
             Context.MODE_PRIVATE,
         ).getString(ScheduleWidgetProvider.selectedDateKey(widgetId), null)
-            ?.takeIf(::isIsoDate)
-            ?: today
+        return WidgetRefreshDecision.selectedDate(chosen, today)
     }
 
     private fun parseClass(record: JSONObject): WidgetClass? {

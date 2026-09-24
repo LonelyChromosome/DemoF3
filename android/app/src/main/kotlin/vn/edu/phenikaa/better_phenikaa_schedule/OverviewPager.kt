@@ -1,7 +1,9 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 internal object OverviewPager {
-    fun pageSize(widthDp: Int): Int = ((widthDp - 56) / 62).coerceIn(1, 5)
+    // 40dp header + 22dp status + 30dp navigation + 12dp outer padding.
+    // Each compact row takes 60dp plus 4dp spacing.
+    fun pageSize(heightDp: Int): Int = ((heightDp - 104) / 64).coerceIn(1, 5)
 
     fun lastPage(itemCount: Int, pageSize: Int): Int =
         if (itemCount == 0) 0 else (itemCount - 1) / pageSize
