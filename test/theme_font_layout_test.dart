@@ -5,6 +5,12 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('wide font fits theme editor', (tester) async {
+    final previousErrorHandler = FlutterError.onError;
+    FlutterError.onError = (details) {
+      debugPrint(details.toString());
+      previousErrorHandler?.call(details);
+    };
+    addTearDown(() => FlutterError.onError = previousErrorHandler);
     tester.view.physicalSize = const Size(720, 1600);
     tester.view.devicePixelRatio = 2;
     addTearDown(() {
