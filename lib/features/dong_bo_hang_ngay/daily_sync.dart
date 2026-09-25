@@ -51,7 +51,7 @@ abstract final class DailySync {
 
   static Future<String?> examNotice() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
-    return _channel.invokeMethod<String>('examNotice');
+    return await _channel.invokeMethod<String>('examNotice');
   }
 
   static Future<void> ackExamNotice() async {
