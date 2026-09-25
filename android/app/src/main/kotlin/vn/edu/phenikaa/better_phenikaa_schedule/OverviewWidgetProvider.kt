@@ -98,6 +98,14 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == ACTION_RELOAD) {
+            val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
+                AppWidgetManager.INVALID_APPWIDGET_ID)
+            if (id != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                context.getSharedPreferences(ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
+                    Context.MODE_PRIVATE).edit()
+                    .remove(ScheduleWidgetProvider.selectedDateKey(id)).apply()
+                restoreDisplay(context, AppWidgetManager.getInstance(context), intArrayOf(id))
+            }
             WidgetManualSync.request(context)
             return
         }
