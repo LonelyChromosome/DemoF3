@@ -413,6 +413,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         widgetId: Int,
         contentToken: String,
     ) {
+        // Keep the aligned cover until StackView finishes its own perspective
+        // animation after the adapter and selected child become ready.
         Handler(Looper.getMainLooper()).postDelayed({
             val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
             if (state.getString(contentTokenKey(widgetId), null) != contentToken) return@postDelayed
@@ -426,7 +428,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             reveal.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
             reveal.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
             manager.partiallyUpdateAppWidget(widgetId, reveal)
-        }, 360L)
+        }, 700L)
     }
 
     private fun applyPendingSelection(context: Context, manager: AppWidgetManager, widgetId: Int) {
