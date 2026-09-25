@@ -274,8 +274,9 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 card.setTextViewTextSize(R.id.overview_card_form,
                     TypedValue.COMPLEX_UNIT_SP, if (compact) 9f else 10f)
                 val colorIndex = page * size + rowIndex * columns + columnIndex
+                val active = rowIndex == 0 && columnIndex == 0
                 card.setImageViewBitmap(R.id.overview_card_background,
-                    ScheduleWidgetProvider().overviewCardBackground(context, colorIndex))
+                    ScheduleWidgetProvider().overviewCardBackground(context, colorIndex, active))
                 card.setTextViewText(R.id.overview_card_date, WidgetFont.text(context,
                     if (examMode) "${item.dateKey.substring(8, 10)}/${item.dateKey.substring(5, 7)}"
                     else ""))
@@ -294,10 +295,12 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 // Keeping only the room makes four fixed slots readable on a phone.
                 card.setTextViewText(R.id.overview_card_room,
                     WidgetFont.text(context, item.room.substringBefore(" • ")))
-                listOf(R.id.overview_card_date, R.id.overview_card_time,
-                    R.id.overview_card_subject, R.id.overview_card_form,
+                card.setTextColor(R.id.overview_card_time,
+                    ScheduleWidgetProvider().overviewTimeColor(context, colorIndex, active))
+                card.setTextColor(R.id.overview_card_subject, textColor)
+                listOf(R.id.overview_card_date, R.id.overview_card_form,
                     R.id.overview_card_room).forEach {
-                    card.setTextColor(it, textColor)
+                    card.setTextColor(it, WidgetVisualPalette.withAlpha(textColor, 210))
                 }
                 row.addView(R.id.overview_row, card)
             }
@@ -325,7 +328,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         if (showProgress) {
             views.setImageViewBitmap(R.id.overview_progress,
                 ScheduleWidgetProvider().overviewProgress(context, width - 24,
-                    OverviewPager.visible(items, page, size).size, columns))
+                    OverviewPager.visible(items, page, size).size, columns, page * size))
         }
         views.setViewVisibility(R.id.overview_navigation,
             if (lastPage == 0) View.GONE else View.VISIBLE)
