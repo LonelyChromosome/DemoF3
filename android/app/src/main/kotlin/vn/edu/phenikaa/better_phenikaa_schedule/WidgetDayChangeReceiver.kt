@@ -19,7 +19,8 @@ class WidgetDayChangeReceiver : BroadcastReceiver() {
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val state = appContext.getSharedPreferences("better_phenikaa_widget_day", Context.MODE_PRIVATE)
         val previous = state.getString("last_day", null)
-        if (WidgetRefreshDecision.dayChanged(previous, today)) {
+        if (intent?.action == Intent.ACTION_MY_PACKAGE_REPLACED ||
+            WidgetRefreshDecision.dayChanged(previous, today)) {
             WidgetRefreshCoordinator.refreshToday(appContext)
         } else {
             WidgetRefreshCoordinator.refreshData(appContext)
