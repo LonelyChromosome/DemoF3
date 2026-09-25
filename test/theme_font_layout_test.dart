@@ -15,10 +15,7 @@ void main() {
     final palette = appThemePalettes[AppThemeId.minecraft]!;
     final theme = buildBetterTheme(palette);
     await tester.pumpWidget(
-      MaterialApp(
-        theme: theme,
-        home: const CustomThemeEditor(),
-      ),
+      MaterialApp(theme: theme, home: const CustomThemeEditor()),
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

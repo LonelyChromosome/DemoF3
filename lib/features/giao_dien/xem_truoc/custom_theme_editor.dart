@@ -524,10 +524,7 @@ class _SectionTitle extends StatelessWidget {
     final heading = Theme.of(context).textTheme.titleMedium;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        text,
-        style: heading?.copyWith(fontWeight: FontWeight.w800),
-      ),
+      child: Text(text, style: heading?.copyWith(fontWeight: FontWeight.w800)),
     );
   }
 }
