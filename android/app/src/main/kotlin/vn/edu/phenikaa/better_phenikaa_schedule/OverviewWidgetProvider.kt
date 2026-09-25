@@ -249,7 +249,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         views.setInt(R.id.overview_calendar, "setColorFilter", iconColor)
         views.setInt(R.id.overview_emblem, "setColorFilter", iconColor)
         views.setInt(R.id.overview_mode, "setColorFilter",
-            if (!examMode && ExamChangeNotifier.pending(context) != null) 0xFFFF4C5B.toInt()
+            if (!examMode && WidgetSnapshotStore.readOverview(context, id, true).isNotEmpty())
+                0xFFFF4C5B.toInt()
             else iconColor)
         views.setInt(R.id.overview_reload, "setColorFilter", iconColor)
         WidgetSyncIndicator.applyToOverview(context, views)
