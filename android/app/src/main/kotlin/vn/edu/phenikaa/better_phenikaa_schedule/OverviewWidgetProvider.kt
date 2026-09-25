@@ -36,6 +36,35 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         }
     }
 
+    private fun animateModeTransition(context: Context, manager: AppWidgetManager, id: Int) {
+        val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        val generation = state.getInt(transitionKey(id), 0) + 1
+        state.edit().putInt(transitionKey(id), generation).apply()
+        fadeModeFrame(context, manager, id, generation, 0, false)
+    }
+
+    private fun fadeModeFrame(
+        context: Context, manager: AppWidgetManager, id: Int,
+        generation: Int, frame: Int, fadeIn: Boolean,
+    ) {
+        val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        if (state.getInt(transitionKey(id), 0) != generation) return
+        val progress = frame.toFloat() / (THEME_FRAME_COUNT - 1)
+        val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        views.setFloat(R.id.overview_root, "setAlpha", if (fadeIn) progress else 1f - progress)
+        manager.partiallyUpdateAppWidget(id, views)
+        if (frame + 1 < THEME_FRAME_COUNT) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                fadeModeFrame(context, manager, id, generation, frame + 1, fadeIn)
+            }, THEME_FRAME_DELAY_MS)
+        } else if (!fadeIn) {
+            state.edit().putBoolean(modeKey(id), !state.getBoolean(modeKey(id), false))
+                .putInt(pageKey(id), 0).apply()
+            render(context, manager, id, initialAlpha = 0f)
+            fadeModeFrame(context, manager, id, generation, 0, true)
+        }
+    }
+
     private fun fadeThemeFrame(
         context: Context, manager: AppWidgetManager, id: Int,
         generation: Int, frame: Int, fadeIn: Boolean,
@@ -78,13 +107,13 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
             val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
             if (intent.action == ACTION_MODE) {
-                state.edit().putBoolean(modeKey(id), !state.getBoolean(modeKey(id), false))
-                    .putInt(pageKey(id), 0).apply()
+                animateModeTransition(context, AppWidgetManager.getInstance(context), id)
+                return
             } else {
                 val direction = intent.getIntExtra(EXTRA_DIRECTION, 0).coerceIn(-1, 1)
                 val items = WidgetSnapshotStore.readOverview(context, id, state.getBoolean(modeKey(id), false))
                 val options = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
-                val size = if (state.getBoolean(modeKey(id), false)) 2 else OverviewPager.pageSize(
+                val size = OverviewPager.pageSize(
                     options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320),
                     options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160),
                 )
@@ -131,8 +160,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val footerHeight = if (compact) 16 else if (panelHeight >= 140) 24 else 20
         val verticalPadding = if (compact) 4 else 10
         val cardHeight = panelHeight - verticalPadding - headerHeight - footerHeight - 5
-        val columns = if (examMode) 2 else OverviewPager.columns(width)
-        val size = if (examMode) 2 else OverviewPager.pageSize(width, height)
+        val columns = OverviewPager.columns(width)
+        val size = OverviewPager.pageSize(width, height)
         val page = WidgetRefreshDecision.overviewPage(
             state.getInt(pageKey(id), 0), items.size, size,
         )
@@ -251,13 +280,10 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 card.setTextViewText(R.id.overview_card_time,
                     WidgetFont.text(context, item.startAt.drop(11).take(5)))
                 card.setTextViewText(R.id.overview_card_subject,
-                    WidgetFont.text(context,
-                        OverviewPager.compactSubject(item.subject, (width - 24) / columns)))
-                val examForm = item.examForm.ifBlank { "Chưa rõ hình thức thi" }
-                card.setTextViewText(R.id.overview_card_form,
-                    WidgetFont.text(context, "Thi: $examForm"))
-                card.setViewVisibility(R.id.overview_card_form,
-                    if (examMode) View.VISIBLE else View.GONE)
+                    WidgetFont.text(context, if (examMode)
+                        OverviewPager.examLabel(item.subject, item.examForm)
+                    else OverviewPager.compactSubject(item.subject, (width - 24) / columns)))
+                card.setViewVisibility(R.id.overview_card_form, View.GONE)
                 card.setContentDescription(R.id.overview_card_root, item.subject)
                 card.setOnClickPendingIntent(R.id.overview_card_root, openApp)
                 // The header already shows the selected date, and exam cards have their own date.
@@ -286,15 +312,16 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             WidgetFont.text(context,
                 if (examMode) "Không có lịch thi" else "Không có lịch học"))
         val lastPage = OverviewPager.lastPage(items.size, size)
-        val showProgress = !examMode && lastPage == 0 && items.isNotEmpty() &&
-            (error.isNullOrEmpty() || started <= succeeded)
+        val showProgress = items.isNotEmpty() &&
+            (examMode || (lastPage == 0 && (error.isNullOrEmpty() || started <= succeeded)))
         views.setViewVisibility(R.id.overview_progress,
             if (showProgress) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.overview_status,
             if (showProgress) View.GONE else View.VISIBLE)
         if (showProgress) {
             views.setImageViewBitmap(R.id.overview_progress,
-                ScheduleWidgetProvider().overviewProgress(context, width - 24, items.size, columns))
+                ScheduleWidgetProvider().overviewProgress(context, width - 24,
+                    OverviewPager.visible(items, page, size).size, columns))
         }
         views.setViewVisibility(R.id.overview_navigation,
             if (lastPage == 0) View.GONE else View.VISIBLE)
