@@ -502,7 +502,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         views.setInt(R.id.widget_calendar, "setColorFilter", theme.iconColor)
         val examMode = SmallWidgetMode.isExam(context, widgetId)
         views.setInt(R.id.widget_mode, "setColorFilter",
-            if (!examMode && ExamChangeNotifier.pending(context) != null) 0xFFFF4C5B.toInt()
+            if (!examMode && WidgetSnapshotStore.readOverview(context, widgetId, true).isNotEmpty())
+                0xFFFF4C5B.toInt()
             else theme.iconColor)
         views.setInt(R.id.widget_reload, "setColorFilter", theme.iconColor)
         WidgetSyncIndicator.applyToSmall(context, views)
