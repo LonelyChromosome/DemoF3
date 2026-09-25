@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
@@ -276,13 +277,34 @@ internal fun renderWidgetRefreshCover(
     themeOverrideKey: String? = null,
 ): Bitmap? {
     val current = currentWidgetClass(context, widgetId) ?: return null
-    return renderWidgetSlide(
+    return renderWidgetStackCover(
         context,
         current,
         renderWidthDp,
         renderHeightDp,
         themeOverrideKey,
     )
+}
+
+/** Match the resting StackView card, including its 10% perspective inset and frame padding. */
+internal fun renderWidgetStackCover(
+    context: Context,
+    item: WidgetClass,
+    renderWidthDp: Int,
+    renderHeightDp: Int,
+    themeOverrideKey: String? = null,
+): Bitmap {
+    val source = renderWidgetSlide(context, item, renderWidthDp, renderHeightDp, themeOverrideKey)
+    val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+    val density = context.resources.displayMetrics.density
+    val inset = kotlin.math.ceil(4f * density).toFloat()
+    val cardWidth = source.width * 0.9f
+    val cardHeight = source.height * 0.9f
+    Canvas(output).drawBitmap(source, null, RectF(
+        inset, source.height * 0.1f + inset,
+        cardWidth - inset, source.height * 0.1f + cardHeight - inset,
+    ), Paint(Paint.FILTER_BITMAP_FLAG))
+    return output
 }
 
 internal fun renderWidgetTransitionFrame(
