@@ -10,6 +10,12 @@ import java.io.File
 
 /** RemoteViews accepts parcelable character styles even though it cannot set a Typeface directly. */
 internal object WidgetFont {
+    fun hasSelectedFont(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        return !prefs.getString(MainActivity.WIDGET_FONT_FAMILY_KEY, "").isNullOrBlank() ||
+            !prefs.getString(MainActivity.WIDGET_FONT_PATH_KEY, "").isNullOrBlank()
+    }
+
     fun typeface(context: Context, weight: Int = Typeface.NORMAL): Typeface {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val family = prefs.getString(MainActivity.WIDGET_FONT_FAMILY_KEY, "").orEmpty()

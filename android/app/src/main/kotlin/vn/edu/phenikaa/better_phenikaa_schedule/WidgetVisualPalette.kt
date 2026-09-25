@@ -40,8 +40,8 @@ internal class WidgetVisualPalette(
         Color.HSVToColor(hsv)
     }
 
-    val backgroundStart: Int = mix(dominant, if (lightText) Color.BLACK else Color.WHITE, 0.08f)
-    val backgroundEnd: Int = mix(end, if (lightText) Color.BLACK else Color.WHITE, 0.08f)
+    val backgroundStart: Int = backgroundCorner(start, vibrant = true)
+    val backgroundEnd: Int = backgroundCorner(end, vibrant = false)
     val surface: Int = mix(dominant, if (lightText) Color.BLACK else Color.WHITE,
         if (lightText) 0.29f else 0.31f)
 
@@ -70,6 +70,28 @@ internal class WidgetVisualPalette(
 
     fun trackStart(): Int = withAlpha(mix(primaryText, accent(0), 0.35f), 125)
     fun trackEnd(): Int = withAlpha(mix(primaryText, accent(4), 0.35f), 125)
+
+    private fun backgroundCorner(color: Int, vibrant: Boolean): Int {
+        val hsv = FloatArray(3)
+        Color.colorToHSV(color, hsv)
+        if (hsv[1] < 0.12f) hsv[0] = anchorHue
+        hsv[1] = if (vibrant) (hsv[1] * 1.25f).coerceIn(0.48f, 0.86f)
+            else (hsv[1] * 0.96f).coerceIn(0.34f, 0.78f)
+        hsv[2] = if (lightText) {
+            if (vibrant) (hsv[2] * 1.16f).coerceIn(0.44f, 0.68f)
+            else (hsv[2] * 0.66f).coerceIn(0.23f, 0.39f)
+        } else {
+            if (vibrant) (hsv[2] * 1.08f).coerceIn(0.88f, 0.99f)
+            else (hsv[2] * 0.82f).coerceIn(0.72f, 0.84f)
+        }
+        var result = Color.HSVToColor(hsv)
+        // The vivid corner must still keep the selected foreground readable.
+        repeat(8) {
+            if (contrast(primaryText, result) >= 4.5) return result
+            result = mix(result, if (lightText) Color.BLACK else Color.WHITE, 0.14f)
+        }
+        return result
+    }
 
     private fun readable(color: Int): Int {
         var result = color

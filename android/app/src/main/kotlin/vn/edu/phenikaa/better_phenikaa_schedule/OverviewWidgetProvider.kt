@@ -171,6 +171,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         }
         val (textColor, iconColor) = ScheduleWidgetProvider().overviewColors(context)
         val betterDefault = ScheduleWidgetProvider().isBetterDefault(context)
+        val bitmapFont = WidgetFont.hasSelectedFont(context)
         val views = RemoteViews(context.packageName, R.layout.overview_widget)
         val openApp = PendingIntent.getActivity(
             context, id, Intent(context, MainActivity::class.java).apply {
@@ -211,14 +212,14 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val error = status["lastError"] as? String
         val started = status["lastStartedAtMillis"] as? Long ?: 0L
         val succeeded = status["lastSuccessAtMillis"] as? Long ?: 0L
-        views.setTextViewText(R.id.overview_title, WidgetFont.text(context, when {
+        val title = when {
             examMode -> "Lịch thi · Học kỳ hiện tại"
             else -> if (selected == today) "Hôm nay · $date" else "Ngày $date"
-        }))
-        views.setTextViewText(R.id.overview_subtitle,
-            WidgetFont.text(context,
-                if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học"))
-        views.setTextViewText(R.id.overview_status, WidgetFont.text(context, when {
+        }
+        val subtitle = if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học"
+        views.setTextViewText(R.id.overview_title, WidgetFont.text(context, title))
+        views.setTextViewText(R.id.overview_subtitle, WidgetFont.text(context, subtitle))
+        val statusLabel = when {
             !error.isNullOrEmpty() && started > succeeded -> error
             started > succeeded -> "Đang đồng bộ QLĐT..."
             examMode && items.isNotEmpty() -> {
@@ -237,7 +238,14 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             examMode -> "Chưa có ca thi sắp tới"
             selected == today -> "Lịch học hôm nay"
             else -> "Lịch học ngày $date"
-        }))
+        }
+        views.setTextViewText(R.id.overview_status, WidgetFont.text(context, statusLabel))
+        if (bitmapFont) {
+            views.setImageViewBitmap(R.id.overview_header_font,
+                OverviewFontBitmap.header(context, (width - 24 - 34 - 93).coerceAtLeast(1),
+                    headerHeight, title, subtitle, textColor, compact))
+            views.setViewVisibility(R.id.overview_header_font, View.VISIBLE)
+        }
         views.setImageViewResource(R.id.overview_mode,
             if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
         views.setContentDescription(R.id.overview_mode,
@@ -304,6 +312,24 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                     card.setTextColor(it, if (betterDefault)
                         textColor else WidgetVisualPalette.withAlpha(textColor, 210))
                 }
+                if (bitmapFont) {
+                    val dateLabel = if (examMode)
+                        "${item.dateKey.substring(8, 10)}/${item.dateKey.substring(5, 7)}" else null
+                    val subjectLabel = if (examMode)
+                        OverviewPager.examLabel(item.subject, item.examForm)
+                    else OverviewPager.compactSubject(item.subject, (width - 24) / columns)
+                    card.setImageViewBitmap(R.id.overview_card_font, OverviewFontBitmap.card(
+                        context, ((width - 24) / columns - 4).coerceAtLeast(1), cardHeight,
+                        dateLabel, item.startAt.drop(11).take(5), subjectLabel,
+                        item.room.substringBefore(" • "), textColor,
+                        ScheduleWidgetProvider().overviewTimeColor(context, colorIndex, active),
+                        compact, betterDefault))
+                    card.setViewVisibility(R.id.overview_card_font, View.VISIBLE)
+                    listOf(R.id.overview_card_date, R.id.overview_card_time,
+                        R.id.overview_card_subject, R.id.overview_card_room).forEach {
+                        card.setTextColor(it, android.graphics.Color.TRANSPARENT)
+                    }
+                }
                 row.addView(R.id.overview_row, card)
             }
             repeat(columns - rowItems.size) {
@@ -317,9 +343,16 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             views.addView(R.id.overview_cards, row)
         }
         views.setViewVisibility(R.id.overview_empty, if (items.isEmpty()) View.VISIBLE else View.GONE)
-        views.setTextViewText(R.id.overview_empty,
-            WidgetFont.text(context,
-                if (examMode) "Không có lịch thi" else "Không có lịch học"))
+        val emptyLabel = if (examMode) "Không có lịch thi" else "Không có lịch học"
+        views.setTextViewText(R.id.overview_empty, WidgetFont.text(context, emptyLabel))
+        if (bitmapFont && items.isEmpty()) {
+            views.setImageViewBitmap(R.id.overview_empty_font,
+                OverviewFontBitmap.centered(context, width - 24,
+                    (panelHeight - verticalPadding - headerHeight - footerHeight).coerceAtLeast(1),
+                    emptyLabel, 14f, textColor))
+            views.setViewVisibility(R.id.overview_empty_font, View.VISIBLE)
+            views.setTextColor(R.id.overview_empty, android.graphics.Color.TRANSPARENT)
+        }
         val lastPage = OverviewPager.lastPage(items.size, size)
         val showProgress = items.isNotEmpty() &&
             (examMode || (lastPage == 0 && (error.isNullOrEmpty() || started <= succeeded)))
@@ -340,6 +373,24 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             if (page >= lastPage) View.INVISIBLE else View.VISIBLE)
         views.setTextViewText(R.id.overview_page,
             WidgetFont.text(context, "${page + 1}/${lastPage + 1}"))
+        if (bitmapFont) {
+            listOf(R.id.overview_title, R.id.overview_subtitle, R.id.overview_status)
+                .forEach { views.setTextColor(it, android.graphics.Color.TRANSPARENT) }
+            if (lastPage > 0) {
+                views.setImageViewBitmap(R.id.overview_page_font,
+                    OverviewFontBitmap.centered(context, 30, footerHeight,
+                        "${page + 1}/${lastPage + 1}", 10f, textColor))
+                views.setViewVisibility(R.id.overview_page_font, View.VISIBLE)
+                views.setTextColor(R.id.overview_page, android.graphics.Color.TRANSPARENT)
+            }
+            if (!showProgress) {
+                views.setImageViewBitmap(R.id.overview_status_font,
+                    OverviewFontBitmap.status(context,
+                        (width - 24).coerceAtLeast(1),
+                        footerHeight, statusLabel, textColor, if (lastPage == 0) 0 else 90))
+                views.setViewVisibility(R.id.overview_status_font, View.VISIBLE)
+            }
+        }
         views.setOnClickPendingIntent(R.id.overview_previous, action(context, id, ACTION_PAGE, -1))
         views.setOnClickPendingIntent(R.id.overview_next, action(context, id, ACTION_PAGE, 1))
         views.setOnClickPendingIntent(R.id.overview_mode, action(context, id, ACTION_MODE, 0))
