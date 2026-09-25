@@ -107,6 +107,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
             val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
             if (intent.action == ACTION_MODE) {
+                if (!state.getBoolean(modeKey(id), false)) ExamChangeNotifier.acknowledge(context)
                 animateModeTransition(context, AppWidgetManager.getInstance(context), id)
                 return
             } else {
@@ -247,7 +248,9 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         }
         views.setInt(R.id.overview_calendar, "setColorFilter", iconColor)
         views.setInt(R.id.overview_emblem, "setColorFilter", iconColor)
-        views.setInt(R.id.overview_mode, "setColorFilter", iconColor)
+        views.setInt(R.id.overview_mode, "setColorFilter",
+            if (!examMode && ExamChangeNotifier.pending(context) != null) 0xFFFF4C5B.toInt()
+            else iconColor)
         views.setInt(R.id.overview_reload, "setColorFilter", iconColor)
         WidgetSyncIndicator.applyToOverview(context, views)
         views.removeAllViews(R.id.overview_cards)
