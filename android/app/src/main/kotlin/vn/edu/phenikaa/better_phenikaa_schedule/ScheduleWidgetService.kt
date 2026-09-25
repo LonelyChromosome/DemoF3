@@ -87,7 +87,6 @@ private class ScheduleWidgetFactory(
             R.id.widget_slide_image,
             renderSlide(item),
         )
-        rememberVisiblePosition(position)
         signalReadyOnce()
         views.setOnClickFillInIntent(
             R.id.widget_slide_item,
@@ -130,19 +129,6 @@ private class ScheduleWidgetFactory(
         items = WidgetSnapshotStore.read(context, widgetId).items
     }
 
-    private fun rememberVisiblePosition(position: Int) {
-        if (
-            widgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
-            widgetThemeTransitionActive(context, widgetId)
-        ) {
-            return
-        }
-        context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putInt(visiblePositionKey(widgetId), position)
-            .apply()
-    }
-
     private fun signalReadyOnce() {
         if (readySignalSent || widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             return
@@ -162,7 +148,7 @@ private class ScheduleWidgetFactory(
         renderWidgetSlide(context, item, renderWidthDp, renderHeightDp)
 }
 
-private fun renderWidgetSlide(
+internal fun renderWidgetSlide(
     context: Context,
     item: WidgetClass,
     renderWidthDp: Int,
@@ -230,9 +216,20 @@ private fun renderWidgetSlide(
     canvas.drawText(
         subject.toString(),
         left,
-        heightPx * SUBJECT_BASELINE_HEIGHT_FRACTION,
+        heightPx * (if (item.isExam) 0.29f else SUBJECT_BASELINE_HEIGHT_FRACTION),
         subjectPaint,
     )
+
+    if (item.isExam) {
+        val formPaint = TextPaint(detailPaint).apply {
+            color = theme.textColor
+            textSize = heightPx * 0.145f
+            typeface = themedTypeface(context, theme, Typeface.BOLD)
+        }
+        val label = "Thi: ${item.examForm.ifBlank { "Chưa rõ hình thức" }}"
+        canvas.drawText(TextUtils.ellipsize(label, formPaint, titleMaxWidth,
+            TextUtils.TruncateAt.END).toString(), left, heightPx * 0.56f, formPaint)
+    }
 
     var timeWidth = detailPaint.measureText(item.time)
     val availableDetailWidth = (detailRight - left).coerceAtLeast(1f)
@@ -256,14 +253,14 @@ private fun renderWidgetSlide(
     canvas.drawText(
         room.toString(),
         left,
-        heightPx * DETAIL_BASELINE_HEIGHT_FRACTION,
+        heightPx * (if (item.isExam) 0.84f else DETAIL_BASELINE_HEIGHT_FRACTION),
         detailPaint,
     )
     if (item.time.isNotBlank()) {
         canvas.drawText(
             item.time,
             detailRight - timeWidth,
-            heightPx * DETAIL_BASELINE_HEIGHT_FRACTION,
+            heightPx * (if (item.isExam) 0.84f else DETAIL_BASELINE_HEIGHT_FRACTION),
             detailPaint,
         )
     }
@@ -402,14 +399,7 @@ private fun currentWidgetClass(context: Context, widgetId: Int): WidgetClass? {
     val collection = WidgetSnapshotStore.read(context, widgetId)
     val items = collection.items
     if (items.isEmpty()) return null
-    val position = if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-        collection.selectedIndex
-    } else {
-        context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
-            .getInt(visiblePositionKey(widgetId), collection.selectedIndex)
-            .coerceIn(0, items.lastIndex)
-    }
-    return items.getOrNull(position) ?: items.firstOrNull()
+    return items.getOrNull(collection.selectedIndex) ?: items.firstOrNull()
 }
 
 private fun widgetThemeTransitionActive(context: Context, widgetId: Int): Boolean =
