@@ -183,6 +183,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
             val manager = AppWidgetManager.getInstance(context)
             val before = WidgetSnapshotStore.read(context, id).let { it.items.getOrNull(it.selectedIndex) }
+            if (!SmallWidgetMode.isExam(context, id)) ExamChangeNotifier.acknowledge(context)
             SmallWidgetMode.toggle(context, id)
             context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
                 .edit()
@@ -499,10 +500,12 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             renderThemeBackground(context, renderWidthDp, renderHeightDp, theme),
         )
         views.setInt(R.id.widget_calendar, "setColorFilter", theme.iconColor)
-        views.setInt(R.id.widget_mode, "setColorFilter", theme.iconColor)
+        val examMode = SmallWidgetMode.isExam(context, widgetId)
+        views.setInt(R.id.widget_mode, "setColorFilter",
+            if (!examMode && ExamChangeNotifier.pending(context) != null) 0xFFFF4C5B.toInt()
+            else theme.iconColor)
         views.setInt(R.id.widget_reload, "setColorFilter", theme.iconColor)
         WidgetSyncIndicator.applyToSmall(context, views)
-        val examMode = SmallWidgetMode.isExam(context, widgetId)
         views.setImageViewResource(R.id.widget_mode,
             if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
         views.setContentDescription(R.id.widget_mode,
