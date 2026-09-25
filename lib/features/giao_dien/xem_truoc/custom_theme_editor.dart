@@ -279,12 +279,18 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
                 ButtonSegment(
                   value: ThemeSourceKind.image,
                   icon: Icon(Icons.image_outlined),
-                  label: Text('Ảnh'),
+                  label: SizedBox(
+                    width: 76,
+                    child: FittedBox(child: Text('Ảnh')),
+                  ),
                 ),
                 ButtonSegment(
                   value: ThemeSourceKind.colorMix,
                   icon: Icon(Icons.palette_outlined),
-                  label: Text('Phối màu'),
+                  label: SizedBox(
+                    width: 76,
+                    child: FittedBox(child: Text('Phối màu')),
+                  ),
                 ),
               ],
               selected: <ThemeSourceKind>{_kind},
@@ -387,14 +393,16 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: _busy ? null : () => _save(apply: false),
-                  child: const Text('Lưu theme'),
+                  child: const FittedBox(child: Text('Lưu theme')),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
                   onPressed: _busy ? null : () => _save(apply: true),
-                  child: Text(_busy ? 'Đang xử lý…' : 'Lưu & Áp dụng'),
+                  child: FittedBox(
+                    child: Text(_busy ? 'Đang xử lý…' : 'Lưu & Áp dụng'),
+                  ),
                 ),
               ),
             ],
