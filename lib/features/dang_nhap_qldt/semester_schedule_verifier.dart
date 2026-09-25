@@ -54,11 +54,13 @@ final class SemesterScheduleVerifier {
         // Only accept a recognizable format when the subject and semester
         // have already been verified; a different class code is still wrong.
         final examLabel = normalizeClassName(row.examForm);
-        final isExamFormat = className.isNotEmpty &&
+        final isExamFormat =
+            className.isNotEmpty &&
             (className == examLabel && examLabel.isNotEmpty ||
-                RegExp(r'trắc nghiệm|tự luận|vấn đáp|bài thi|thi |trên máy|thực hành|online',
-                        caseSensitive: false)
-                    .hasMatch(className));
+                RegExp(
+                  'trắc nghiệm|tự luận|vấn đáp|bài thi|thi |trên máy|thực hành|online',
+                  caseSensitive: false,
+                ).hasMatch(className));
         if (!subject.containsKey(className) && !isExamFormat) {
           throw FormatException(
             'Không xác minh được lớp của lịch: ${row.subjectName}',
