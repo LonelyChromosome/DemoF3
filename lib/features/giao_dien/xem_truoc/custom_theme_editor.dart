@@ -281,7 +281,11 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
                   icon: Icon(Icons.image_outlined),
                   label: SizedBox(
                     width: 76,
-                    child: FittedBox(child: Text('Ảnh')),
+                    child: Text(
+                      'Ảnh',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
                 ButtonSegment(
@@ -289,7 +293,11 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
                   icon: Icon(Icons.palette_outlined),
                   label: SizedBox(
                     width: 76,
-                    child: FittedBox(child: Text('Phối màu')),
+                    child: Text(
+                      'Phối màu',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ],
@@ -400,15 +408,21 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: _busy ? null : () => _save(apply: false),
-                  child: const FittedBox(child: Text('Lưu theme')),
+                  child: const Text(
+                    'Lưu theme',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
                   onPressed: _busy ? null : () => _save(apply: true),
-                  child: FittedBox(
-                    child: Text(_busy ? 'Đang xử lý…' : 'Lưu & Áp dụng'),
+                  child: Text(
+                    _busy ? 'Đang xử lý…' : 'Lưu & Áp dụng',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),

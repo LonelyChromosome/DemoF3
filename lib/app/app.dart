@@ -472,18 +472,25 @@ class _SplashScreen extends StatelessWidget {
         children: <Widget>[
           const _AppMark(size: 76),
           const SizedBox(height: 26),
-          Text(
-            themedHeading('Better Phenikaa App', palette),
-            style: TextStyle(
-              color: palette.textPrimary,
-              fontSize: 30,
-              fontWeight: FontWeight.w900,
-              letterSpacing: themeLetterSpacing(palette),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                themedHeading('Better Phenikaa App', palette),
+                maxLines: 1,
+                style: TextStyle(
+                  color: palette.textPrimary,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: themeLetterSpacing(palette),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 7),
           Text(
-            '2.1.0 • Lịch học & Lịch thi',
+            '2.1.1 • Lịch học & Lịch thi',
             style: TextStyle(color: palette.textSecondary, fontSize: 15),
           ),
           const SizedBox(height: 120),
