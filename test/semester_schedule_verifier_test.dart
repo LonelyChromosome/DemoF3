@@ -142,6 +142,84 @@ void main() {
     );
   });
 
+  test('accepts QLĐT timetable boundaries and an exam-format label', () {
+    final actual = RegisteredSemester(
+      id: '2026_2027_1',
+      name: '2026_2027_1',
+      subjectNames: const <String>[
+        'An toàn và bảo mật thông tin',
+        'Lịch sử Đảng cộng sản Việt Nam',
+      ],
+      classSections: <String, List<RegisteredClassSection>>{
+        'An toàn và bảo mật thông tin': <RegisteredClassSection>[
+          RegisteredClassSection(
+            name: 'An toàn và bảo mật thông tin-1-1-26(N05)',
+            startsOn: DateTime(2026, 8, 24),
+            endsOn: DateTime(2026, 10, 25),
+          ),
+        ],
+        'Lịch sử Đảng cộng sản Việt Nam': <RegisteredClassSection>[
+          RegisteredClassSection(
+            name: 'Lịch sử Đảng cộng sản Việt Nam-1-1-26(N02).ELN',
+            startsOn: DateTime(2026, 8, 17),
+            endsOn: DateTime(2026, 10, 25),
+          ),
+        ],
+      },
+    );
+    ScheduleRecord record(String id, String subject, String className,
+            DateTime date, {bool exam = false}) =>
+        ScheduleRecord(
+          id: id,
+          isExam: exam,
+          subjectName: subject,
+          className: className,
+          room: 'A1',
+          startAt: date,
+          endAt: date.add(const Duration(hours: 1)),
+        );
+    final schedules = ImportedScheduleData(
+      displayName: 'Sinh viên',
+      syncedAt: DateTime(2026, 9, 25),
+      records: <ScheduleRecord>[
+        record('early', 'An toàn và bảo mật thông tin',
+            'An toàn và bảo mật thông tin-1-1-26(N05)', DateTime(2026, 8, 17)),
+        record('late', 'An toàn và bảo mật thông tin',
+            'An toàn và bảo mật thông tin-1-1-26(N05)', DateTime(2026, 10, 26)),
+        record('exam', 'Lịch sử Đảng cộng sản Việt Nam',
+            'Trắc nghiệm trên máy 30p', DateTime(2026, 10, 24), exam: true),
+      ],
+    );
+    final verified = verifier.verify(registration: actual, schedule: schedules);
+    expect(verified.studySchedules, hasLength(2));
+    expect(verified.examSchedules, hasLength(1));
+
+    final wrongClass = ImportedScheduleData(
+      displayName: schedules.displayName,
+      syncedAt: schedules.syncedAt,
+      records: <ScheduleRecord>[
+        record('wrong', 'An toàn và bảo mật thông tin',
+            'An toàn và bảo mật thông tin-1-1-26(N06)', DateTime(2026, 9, 25)),
+      ],
+    );
+    expect(
+      () => verifier.verify(registration: actual, schedule: wrongClass),
+      throwsFormatException,
+    );
+    final distant = ImportedScheduleData(
+      displayName: schedules.displayName,
+      syncedAt: schedules.syncedAt,
+      records: <ScheduleRecord>[
+        record('old', 'An toàn và bảo mật thông tin',
+            'An toàn và bảo mật thông tin-1-1-26(N05)', DateTime(2025, 9, 25)),
+      ],
+    );
+    expect(
+      () => verifier.verify(registration: actual, schedule: distant),
+      throwsFormatException,
+    );
+  });
+
   test('rejects partial or malformed API response before linking', () {
     final incomplete = <String, dynamic>{
       'Success': true,
