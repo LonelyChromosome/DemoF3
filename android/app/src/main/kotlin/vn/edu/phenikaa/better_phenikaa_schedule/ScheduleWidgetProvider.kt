@@ -176,7 +176,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         if (drawTrack && trackRight > trackLeft)
             canvas.drawLine(trackLeft, y, trackRight, y, line)
         if (drawDots) repeat(count.coerceAtMost(5)) { index ->
-            val x = left + (right - left) * (index + 0.5f) / slots.coerceAtLeast(1)
+            val x = trackLeft + (trackRight - trackLeft) * (index + 0.5f) / slotsSafe
             val accent = palette.timelineDot(startIndex + index,
                 WidgetVisualPalette.mix(palette.backgroundStart, palette.backgroundEnd,
                     (index + 0.5f) / slots.coerceAtLeast(1)))
