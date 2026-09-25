@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/schedule_difference_sheet.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_sync_message.dart';
 import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
@@ -77,6 +79,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _showPastExams = false;
   String? _errorMessage;
   String? _examNotice;
+  SemesterDifference? _latestDifference;
+  bool _unreadDifference = false;
+  static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
 
   @override
   void initState() {
@@ -103,6 +108,35 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed || _data == null) return;
     unawaited(_refreshExamNotice());
+    unawaited(_refreshDifference());
+  }
+
+  Future<void> _refreshDifference() async {
+    final difference = await SemesterDifferenceStore().read();
+    final prefs = await SharedPreferences.getInstance();
+    final unread = difference?.hasChanges == true &&
+        prefs.getString(_seenDifferenceKey) != jsonEncode(difference!.toJson());
+    if (mounted) setState(() {
+      _latestDifference = difference;
+      _unreadDifference = unread;
+    });
+  }
+
+  Future<void> _showDifferences() async {
+    await _refreshDifference();
+    if (!mounted) return;
+    final difference = _latestDifference;
+    if (difference != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_seenDifferenceKey, jsonEncode(difference.toJson()));
+      if (mounted) setState(() => _unreadDifference = false);
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => ScheduleDifferenceSheet(difference: difference),
+    );
   }
 
   Future<void> _refreshExamNotice() async {
@@ -136,6 +170,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         }
         await DailySync.disable();
         _examNotice = await DailySync.examNotice();
+        await _refreshDifference();
       }
     } on Object catch (error) {
       _errorMessage = 'Không đọc được dữ liệu cục bộ: $error';
@@ -278,6 +313,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
             _page = _AppPage.timetable;
           });
           if (difference != null) {
+            await _refreshDifference();
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
@@ -337,6 +373,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         _page = _AppPage.timetable;
         _errorMessage = null;
         _examNotice = null;
+        _latestDifference = null;
+        _unreadDifference = false;
       });
     }
   }
@@ -435,6 +473,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                               syncing: _syncing,
                               errorMessage: _errorMessage,
                               examNotice: _examNotice,
+                              unreadDifference: _unreadDifference,
+                              onOpenDifferences: _showDifferences,
                               onTogglePanel: () =>
                                   setState(() => _panelOpen = !_panelOpen),
                               onOpenPage: _openPage,
@@ -626,6 +666,8 @@ class _MainShell extends StatelessWidget {
     required this.syncing,
     required this.errorMessage,
     required this.examNotice,
+    required this.unreadDifference,
+    required this.onOpenDifferences,
     required this.onTogglePanel,
     required this.onOpenPage,
     required this.onSync,
@@ -643,6 +685,8 @@ class _MainShell extends StatelessWidget {
   final bool syncing;
   final String? errorMessage;
   final String? examNotice;
+  final bool unreadDifference;
+  final VoidCallback onOpenDifferences;
   final VoidCallback onTogglePanel;
   final ValueChanged<_AppPage> onOpenPage;
   final VoidCallback onSync;
@@ -659,11 +703,15 @@ class _MainShell extends StatelessWidget {
         data: data,
         selectedDate: selectedDate,
         onDateChanged: onDateChanged,
+        unreadDifference: unreadDifference,
+        onOpenDifferences: onOpenDifferences,
       ),
       _AppPage.exam => _ExamScreen(
         data: data,
         showPast: showPastExams,
         onTabChanged: onExamTabChanged,
+        unreadDifference: unreadDifference,
+        onOpenDifferences: onOpenDifferences,
       ),
       _AppPage.account => _AccountScreen(
         data: data,
@@ -782,11 +830,15 @@ class _TimetableScreen extends StatefulWidget {
     required this.data,
     required this.selectedDate,
     required this.onDateChanged,
+    required this.unreadDifference,
+    required this.onOpenDifferences,
   });
 
   final ImportedScheduleData data;
   final DateTime selectedDate;
   final ValueChanged<DateTime> onDateChanged;
+  final bool unreadDifference;
+  final VoidCallback onOpenDifferences;
 
   @override
   State<_TimetableScreen> createState() => _TimetableScreenState();
@@ -876,6 +928,8 @@ class _TimetableScreenState extends State<_TimetableScreen>
             _TopTitle(
               title: 'Lịch học',
               badge: null,
+              unreadDifference: widget.unreadDifference,
+              onNotificationTap: widget.onOpenDifferences,
               onCalendarTap: () => _weekly
                   ? _pickWeek()
                   : _showCalendarPicker(
@@ -992,11 +1046,15 @@ class _ExamScreen extends StatelessWidget {
     required this.data,
     required this.showPast,
     required this.onTabChanged,
+    required this.unreadDifference,
+    required this.onOpenDifferences,
   });
 
   final ImportedScheduleData data;
   final bool showPast;
   final ValueChanged<bool> onTabChanged;
+  final bool unreadDifference;
+  final VoidCallback onOpenDifferences;
 
   @override
   Widget build(BuildContext context) {
@@ -1014,7 +1072,9 @@ class _ExamScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _TopTitle(title: 'Lịch thi', badge: null),
+          _TopTitle(title: 'Lịch thi', badge: null,
+            unreadDifference: unreadDifference,
+            onNotificationTap: onOpenDifferences),
           const SizedBox(height: 20),
           _SegmentTabs(showPast: showPast, onChanged: onTabChanged),
           const SizedBox(height: 18),
@@ -1141,24 +1201,31 @@ class _AccountScreen extends StatelessWidget {
 }
 
 class _TopTitle extends StatelessWidget {
-  const new({required this.title, this.badge, this.onCalendarTap});
+  const new({required this.title, this.badge, this.onCalendarTap,
+    this.onNotificationTap, this.unreadDifference = false});
 
   final String title;
   final String? badge;
   final VoidCallback? onCalendarTap;
+  final VoidCallback? onNotificationTap;
+  final bool unreadDifference;
 
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
     return Row(
       children: <Widget>[
-        Text(
-          themedHeading(title, palette),
-          style: TextStyle(
-            color: palette.textPrimary,
-            fontSize: 25,
-            fontWeight: FontWeight.w900,
-            letterSpacing: themeLetterSpacing(palette),
+        Flexible(
+          child: Text(
+            themedHeading(title, palette),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: palette.textPrimary,
+              fontSize: 25,
+              fontWeight: FontWeight.w900,
+              letterSpacing: themeLetterSpacing(palette),
+            ),
           ),
         ),
         if (badge != null) ...<Widget>[
@@ -1183,6 +1250,18 @@ class _TopTitle extends StatelessWidget {
           ),
         ],
         const Spacer(),
+        if (onNotificationTap != null)
+          IconButton(
+            tooltip: 'Thông báo thay đổi lịch',
+            onPressed: onNotificationTap,
+            icon: Stack(clipBehavior: Clip.none, children: <Widget>[
+              Icon(Icons.notifications_none_rounded, color: palette.primary),
+              if (unreadDifference) const Positioned(
+                right: 0, top: 0,
+                child: CircleAvatar(radius: 4.5, backgroundColor: Color(0xFFE53945)),
+              ),
+            ]),
+          ),
         if (onCalendarTap == null)
           Icon(Icons.calendar_month_outlined, color: palette.primary)
         else

@@ -51,6 +51,7 @@ internal object NativeSemesterDifference {
             if (index < 0) unmatched.add(row) else remaining.removeAt(index)
         }
         var modified = 0
+        val changed = mutableListOf<JSONObject>()
         for (row in unmatched.toList()) {
             val sameDay = remaining.indexOfFirst {
                 norm(it.getString("subjectName")) == norm(row.getString("subjectName")) &&
@@ -62,14 +63,25 @@ internal object NativeSemesterDifference {
             ) 0 else -1
             if (match >= 0) {
                 modified++
+                changed.add(change("modified", row, remaining[match]))
                 remaining.removeAt(match)
                 unmatched.remove(row)
             }
         }
         val addedCount = remaining.size + added.values.sumOf { it.getJSONArray(field).length() }
         val removedCount = unmatched.size + removed.values.sumOf { it.getJSONArray(field).length() }
-        return counts(addedCount, removedCount, modified)
+        val details = JSONArray()
+        changed.forEach { details.put(it) }
+        remaining.forEach { details.put(change("added", null, it)) }
+        unmatched.forEach { details.put(change("removed", it, null)) }
+        added.values.flatMap { rows(it, field) }.forEach { details.put(change("added", null, it)) }
+        removed.values.flatMap { rows(it, field) }.forEach { details.put(change("removed", it, null)) }
+        return counts(addedCount, removedCount, modified).put("details", details)
     }
+
+    private fun change(kind: String, before: JSONObject?, after: JSONObject?): JSONObject =
+        JSONObject().put("kind", kind).put("before", before ?: JSONObject.NULL)
+            .put("after", after ?: JSONObject.NULL)
 
     private fun rows(subject: JSONObject, field: String): List<JSONObject> {
         val array = subject.getJSONArray(field)

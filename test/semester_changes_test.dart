@@ -92,6 +92,9 @@ void main() {
         expect(diff.addedSubjects, isEmpty);
         expect(diff.removedSubjects, isEmpty);
         expect(diff.study.modified, 1);
+        expect(diff.study.details.single.kind, 'modified');
+        expect(diff.study.details.single.before!.room, 'A1');
+        expect(diff.study.details.single.after!.room, changed.room);
       }
     },
   );
@@ -110,6 +113,7 @@ void main() {
       ],
     );
     expect(detector.compare(before, moved).exams.modified, 1);
+    expect(detector.compare(before, moved).exams.details.single.after!.startAt.day, 24);
     expect(detector.compare(before, before).hasChanges, isFalse);
   });
 
@@ -124,6 +128,8 @@ void main() {
       );
       await store.save(detector.compare(previous, next));
       expect((await store.read())!.study.added, 1);
+      expect((await store.read())!.study.details.single.after!.subjectName,
+          'Thiết kế web nâng cao');
       await store.save(detector.compare(next, next));
       expect((await store.read())!.hasChanges, isFalse);
     },

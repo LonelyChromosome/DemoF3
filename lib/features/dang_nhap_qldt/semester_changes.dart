@@ -9,24 +9,52 @@ final class ScheduleDifference {
     required this.added,
     required this.removed,
     required this.modified,
+    this.details = const <ScheduleChange>[],
   });
 
   factory fromJson(Map<String, dynamic> json) => ScheduleDifference(
     added: json['added'] as int,
     removed: json['removed'] as int,
     modified: json['modified'] as int,
+    details: (json['details'] as List<dynamic>? ?? const <dynamic>[])
+        .map((item) => ScheduleChange.fromJson(Map<String, dynamic>.from(item as Map)))
+        .toList(growable: false),
   );
 
   final int added;
   final int removed;
   final int modified;
+  final List<ScheduleChange> details;
 
   bool get hasChanges => added + removed + modified > 0;
 
-  Map<String, int> toJson() => <String, int>{
+  Map<String, Object> toJson() => <String, Object>{
     'added': added,
     'removed': removed,
     'modified': modified,
+    'details': details.map((item) => item.toJson()).toList(),
+  };
+}
+
+final class ScheduleChange {
+  const new({required this.kind, this.before, this.after});
+
+  factory fromJson(Map<String, dynamic> json) => ScheduleChange(
+    kind: json['kind'] as String,
+    before: json['before'] == null ? null : ScheduleRecord.fromJson(
+      Map<String, Object?>.from(json['before'] as Map)),
+    after: json['after'] == null ? null : ScheduleRecord.fromJson(
+      Map<String, Object?>.from(json['after'] as Map)),
+  );
+
+  final String kind;
+  final ScheduleRecord? before;
+  final ScheduleRecord? after;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'kind': kind,
+    'before': before?.toJson(),
+    'after': after?.toJson(),
   };
 }
 
@@ -161,6 +189,13 @@ final class SemesterChangeDetector {
                 .where((item) => !newSubjects.containsKey(item.subjectId))
                 .fold<int>(0, (sum, item) => sum + item.studySchedules.length),
         modified: study.modified,
+        details: <ScheduleChange>[
+          ...study.details,
+          for (final item in next.subjects.where((item) => !oldSubjects.containsKey(item.subjectId)))
+            for (final row in item.studySchedules) ScheduleChange(kind: 'added', after: row),
+          for (final item in previous.subjects.where((item) => !newSubjects.containsKey(item.subjectId)))
+            for (final row in item.studySchedules) ScheduleChange(kind: 'removed', before: row),
+        ],
       ),
       exams: ScheduleDifference(
         added:
@@ -174,6 +209,13 @@ final class SemesterChangeDetector {
                 .where((item) => !newSubjects.containsKey(item.subjectId))
                 .fold<int>(0, (sum, item) => sum + item.examSchedules.length),
         modified: exams.modified,
+        details: <ScheduleChange>[
+          ...exams.details,
+          for (final item in next.subjects.where((item) => !oldSubjects.containsKey(item.subjectId)))
+            for (final row in item.examSchedules) ScheduleChange(kind: 'added', after: row),
+          for (final item in previous.subjects.where((item) => !newSubjects.containsKey(item.subjectId)))
+            for (final row in item.examSchedules) ScheduleChange(kind: 'removed', before: row),
+        ],
       ),
     );
   }
@@ -193,6 +235,7 @@ final class SemesterChangeDetector {
       }
     }
     var modified = 0;
+    final details = <ScheduleChange>[];
     for (final row in unmatched.toList()) {
       final sameDay = remaining.indexWhere(
         (item) =>
@@ -208,6 +251,7 @@ final class SemesterChangeDetector {
           : -1;
       if (match >= 0) {
         modified++;
+        details.add(ScheduleChange(kind: 'modified', before: row, after: remaining[match]));
         remaining.removeAt(match);
         unmatched.remove(row);
       }
@@ -216,6 +260,11 @@ final class SemesterChangeDetector {
       added: remaining.length,
       removed: unmatched.length,
       modified: modified,
+      details: <ScheduleChange>[
+        ...details,
+        for (final row in remaining) ScheduleChange(kind: 'added', after: row),
+        for (final row in unmatched) ScheduleChange(kind: 'removed', before: row),
+      ],
     );
   }
 

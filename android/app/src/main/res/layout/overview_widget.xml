@@ -34,12 +34,12 @@
    <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center_vertical" android:orientation="horizontal">
    <TextView android:id="@+id/overview_status" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:ellipsize="end" android:gravity="center_vertical" android:paddingStart="30dp" android:paddingEnd="30dp" android:maxLines="1" android:textSize="11sp"/>
    <LinearLayout android:id="@+id/overview_navigation" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center_vertical" android:orientation="horizontal">
-    <ImageView android:id="@+id/overview_previous" android:layout_width="30dp" android:layout_height="match_parent" android:contentDescription="Ngày hoặc nhóm trước" android:paddingStart="9dp" android:paddingEnd="9dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:src="@drawable/ic_overview_chevron_left"/>
+    <ImageView android:id="@+id/overview_previous" android:layout_width="40dp" android:layout_height="match_parent" android:contentDescription="Ngày hoặc nhóm trước" android:paddingStart="14dp" android:paddingEnd="14dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:src="@drawable/ic_overview_chevron_left"/>
     <FrameLayout android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1">
      <ImageView android:id="@+id/overview_page_font" android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitXY" android:visibility="gone" android:contentDescription="@null"/>
      <TextView android:id="@+id/overview_page" android:layout_width="match_parent" android:layout_height="match_parent" android:gravity="center" android:textSize="10sp"/>
     </FrameLayout>
-    <ImageView android:id="@+id/overview_next" android:layout_width="30dp" android:layout_height="match_parent" android:contentDescription="Ngày hoặc nhóm tiếp" android:paddingStart="9dp" android:paddingEnd="9dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:src="@drawable/ic_overview_chevron_right"/>
+    <ImageView android:id="@+id/overview_next" android:layout_width="40dp" android:layout_height="match_parent" android:contentDescription="Ngày hoặc nhóm tiếp" android:paddingStart="14dp" android:paddingEnd="14dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:src="@drawable/ic_overview_chevron_right"/>
    </LinearLayout>
    </LinearLayout>
   </FrameLayout>

@@ -148,13 +148,17 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val y = height / 2f
         val left = 10f * density
         val right = width - left
+        // Leave clear space around the navigation chevrons; dots keep their slot positions.
+        val trackLeft = 42f * density
+        val trackRight = width - trackLeft
         if (theme.key == "classic") {
             val track = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = theme.iconColor
                 alpha = 170
                 strokeWidth = 1.5f * density
             }
-            if (drawTrack) canvas.drawLine(left, y, right, y, track)
+            if (drawTrack && trackRight > trackLeft)
+                canvas.drawLine(trackLeft, y, trackRight, y, track)
             val dots = intArrayOf(0xFF12CCFA.toInt(), 0xFF6578FF.toInt(),
                 0xFFC375E8.toInt(), 0xFFFA67BA.toInt(), 0xFFFF557C.toInt())
             if (drawDots) repeat(count.coerceAtMost(5)) { index ->
@@ -165,11 +169,12 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             return bitmap
         }
         val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(left, y, right, y,
+            shader = LinearGradient(trackLeft, y, trackRight.coerceAtLeast(trackLeft + 1f), y,
                 palette.trackStart(), palette.trackEnd(), Shader.TileMode.CLAMP)
             strokeWidth = 1.7f * density
         }
-        if (drawTrack) canvas.drawLine(left, y, right, y, line)
+        if (drawTrack && trackRight > trackLeft)
+            canvas.drawLine(trackLeft, y, trackRight, y, line)
         if (drawDots) repeat(count.coerceAtMost(5)) { index ->
             val x = left + (right - left) * (index + 0.5f) / slots.coerceAtLeast(1)
             val accent = palette.timelineDot(startIndex + index,

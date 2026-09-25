@@ -30,6 +30,9 @@ class NativeSemesterDifferenceTest {
         ))
         assertEquals(1, changed.getJSONObject("study").getInt("modified"))
         assertEquals(1, changed.getJSONObject("exams").getInt("modified"))
+        val room = changed.getJSONObject("study").getJSONArray("details").getJSONObject(0)
+        assertEquals("A1", room.getJSONObject("before").getString("room"))
+        assertEquals("B2", room.getJSONObject("after").getString("room"))
     }
 
     @Test fun addingAndRemovingSubjectsIncludesTheirSchedules() {
@@ -38,6 +41,8 @@ class NativeSemesterDifferenceTest {
         assertEquals(1, added.getJSONArray("addedSubjects").length())
         assertEquals(1, added.getJSONObject("study").getInt("added"))
         assertEquals(1, added.getJSONObject("exams").getInt("added"))
+        assertEquals("added", added.getJSONObject("study").getJSONArray("details")
+            .getJSONObject(0).getString("kind"))
         val removed = JSONObject(NativeSemesterDifference.compare(semester(), empty))
         assertEquals(1, removed.getJSONArray("removedSubjects").length())
         assertEquals(1, removed.getJSONObject("exams").getInt("removed"))
