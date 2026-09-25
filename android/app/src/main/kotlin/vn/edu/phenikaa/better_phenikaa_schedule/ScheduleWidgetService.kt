@@ -7,7 +7,6 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -168,34 +167,15 @@ internal fun renderWidgetSlide(
     val heightPx = height.toFloat()
     val theme = themeOverrideKey?.let { widgetThemeForKey(context, it) }
         ?: readWidgetTheme(context)
-    val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
-        theme.textColor, theme.subtextColor, theme.key)
-    val visualAccent = palette.accent(if (item.isExam) 4 else 0)
-
     val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = LinearGradient(
-            0f, 0f, widthPx, if (theme.key == "classic") 0f else heightPx,
-            if (theme.key == "classic") theme.startColor
-                else palette.cardStart(if (item.isExam) 4 else 0, true),
-            if (theme.key == "classic") theme.endColor
-                else palette.cardEnd(if (item.isExam) 4 else 0, true),
+            0f, 0f, widthPx, 0f,
+            theme.startColor,
+            theme.endColor,
             Shader.TileMode.CLAMP,
         )
     }
     canvas.drawRect(0f, 0f, widthPx, heightPx, backgroundPaint)
-    if (theme.key != "classic") {
-        val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient(widthPx * 0.16f, heightPx * 0.1f, widthPx * 0.58f,
-                intArrayOf(WidgetVisualPalette.withAlpha(visualAccent, 44),
-                    WidgetVisualPalette.withAlpha(visualAccent, 0)), null, Shader.TileMode.CLAMP)
-        }
-        canvas.drawRect(0f, 0f, widthPx, heightPx, glow)
-        val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = WidgetVisualPalette.withAlpha(visualAccent, if (item.isExam) 150 else 105)
-        }
-        canvas.drawRoundRect(widthPx * 0.054f, heightPx * 0.22f,
-            widthPx * 0.058f + density, heightPx * 0.78f, density, density, accentPaint)
-    }
 
     val left = widthPx * CONTENT_LEFT_FRACTION
     // The three actions form a narrow vertical rail at the right edge.
@@ -391,11 +371,8 @@ private fun readWidgetTheme(context: Context): WidgetTheme {
 }
 
 private fun widgetThemeForKey(context: Context, key: String): WidgetTheme {
-    if (key.startsWith("custom:")) {
-        val colors = key.split(':').drop(1).map(String::toIntOrNull)
-        if (colors.size == 5 && colors.all { it != null }) {
-            return WidgetTheme(key, colors[0]!!, colors[1]!!, colors[2]!!, colors[3]!!)
-        }
+    WidgetVisualPalette.customColors(key)?.let { colors ->
+        return WidgetTheme(key, colors[0], colors[1], colors[2], colors[3])
     }
     if (key == "custom") {
         val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)

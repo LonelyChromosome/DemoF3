@@ -496,8 +496,6 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
             reveal.setViewVisibility(R.id.widget_list, if (hasItems) View.VISIBLE else View.GONE)
             reveal.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
-            reveal.setViewVisibility(R.id.widget_empty_background,
-                if (hasItems) View.GONE else View.VISIBLE)
             reveal.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
             manager.partiallyUpdateAppWidget(widgetId, reveal)
         }, 700L)
@@ -569,9 +567,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         }
 
         val theme = readThemeColors(context)
-        val background = renderThemeBackground(context, renderWidthDp, renderHeightDp, theme)
-        views.setImageViewBitmap(R.id.widget_theme_background, background)
-        views.setImageViewBitmap(R.id.widget_empty_background, background)
+        views.setImageViewBitmap(R.id.widget_theme_background,
+            renderThemeBackground(context, renderWidthDp, renderHeightDp, theme))
         views.setInt(R.id.widget_calendar, "setColorFilter", theme.iconColor)
         val examMode = SmallWidgetMode.isExam(context, widgetId)
         views.setInt(R.id.widget_mode, "setColorFilter",
@@ -593,8 +590,6 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         views.setFloat(R.id.widget_root, "setAlpha", if (waitingForTheme) 0f else 1f)
         val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
         views.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
-        views.setViewVisibility(R.id.widget_empty_background,
-            if (hasItems) View.GONE else View.VISIBLE)
 
         if (showRefreshCover && hasItems && !waitingForTheme) {
             val cover = renderWidgetRefreshCover(
@@ -732,9 +727,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val heightDp = size.height.roundToInt().coerceAtLeast(1)
         val targetTheme = themeColorsForKey(context, targetThemeKey)
         val hiddenTarget = RemoteViews(context.packageName, R.layout.schedule_widget)
-        val targetBackground = renderThemeBackground(context, widthDp, heightDp, targetTheme)
-        hiddenTarget.setImageViewBitmap(R.id.widget_theme_background, targetBackground)
-        hiddenTarget.setImageViewBitmap(R.id.widget_empty_background, targetBackground)
+        hiddenTarget.setImageViewBitmap(R.id.widget_theme_background,
+            renderThemeBackground(context, widthDp, heightDp, targetTheme))
         hiddenTarget.setInt(R.id.widget_calendar, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setInt(R.id.widget_mode, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setInt(R.id.widget_reload, "setColorFilter", targetTheme.iconColor)
@@ -744,8 +738,6 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
         hiddenTarget.setViewVisibility(R.id.widget_list, if (hasItems) View.VISIBLE else View.GONE)
         hiddenTarget.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
-        hiddenTarget.setViewVisibility(R.id.widget_empty_background,
-            if (hasItems) View.GONE else View.VISIBLE)
         manager.partiallyUpdateAppWidget(widgetId, hiddenTarget)
 
         state.edit().putString(transitionPhaseKey(widgetId), PHASE_WAITING_TARGET).apply()
@@ -834,17 +826,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
     }
 
     private fun themeColorsForKey(context: Context, key: String): ThemeColors {
-        if (key.startsWith("custom:")) {
-            val colors = key.split(':').drop(1).take(5).map(String::toIntOrNull)
-            if (colors.size == 5 && colors.all { it != null }) {
-                return ThemeColors(
-                    key,
-                    colors[0]!!,
-                    colors[1]!!,
-                    colors[2]!!,
-                    colors[4]!!,
-                )
-            }
+        WidgetVisualPalette.customColors(key)?.let { colors ->
+            return ThemeColors(key, colors[0], colors[1], colors[2], colors[4])
         }
         if (key == "custom") {
             val prefs = context.getSharedPreferences(
@@ -879,40 +862,23 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         heightDp: Int,
         theme: ThemeColors,
     ): Bitmap {
-        val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
-            theme.textColor, theme.textColor, theme.key)
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (heightDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        if (theme.key == "classic") {
-            Canvas(bitmap).drawRect(0f, 0f, width.toFloat(), height.toFloat(),
-                Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    shader = LinearGradient(0f, 0f, width.toFloat(), 0f,
-                        theme.startColor, theme.endColor, Shader.TileMode.CLAMP)
-                })
-            return bitmap
-        }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(
                 0f,
                 0f,
                 width.toFloat(),
-                height.toFloat(),
-                palette.backgroundStart,
-                palette.backgroundEnd,
+                0f,
+                theme.startColor,
+                theme.endColor,
                 Shader.TileMode.CLAMP,
             )
         }
         val canvas = Canvas(bitmap)
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-        val softLight = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = RadialGradient(width * 0.22f, -height * 0.35f, width * 0.7f,
-                intArrayOf(WidgetVisualPalette.withAlpha(theme.textColor, 30),
-                    WidgetVisualPalette.withAlpha(theme.textColor, 0)),
-                null, Shader.TileMode.CLAMP)
-        }
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), softLight)
         return bitmap
     }
 

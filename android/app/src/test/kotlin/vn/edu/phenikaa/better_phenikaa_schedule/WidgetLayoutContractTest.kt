@@ -37,15 +37,6 @@ class WidgetLayoutContractTest {
         }
         assertEquals("gone", element("widget_empty", root)
             .getAttributeNS(androidNamespace, "visibility"))
-        val layers = (0 until root.childNodes.length)
-            .mapNotNull { root.childNodes.item(it) as? Element }
-            .map { it.getAttributeNS(androidNamespace, "id") }
-        assertTrue(layers.indexOf("@+id/widget_list") <
-            layers.indexOf("@+id/widget_empty_background"))
-        assertTrue(layers.indexOf("@+id/widget_empty_background") <
-            layers.indexOf("@+id/widget_empty"))
-        assertEquals("gone", element("widget_empty_background", root)
-            .getAttributeNS(androidNamespace, "visibility"))
     }
 
     @Test fun overviewMatchesMockupCardStripAndLongNamesCanUseTwoLines() {

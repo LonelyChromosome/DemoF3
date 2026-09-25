@@ -82,6 +82,14 @@ internal class WidgetVisualPalette(
     }
 
     companion object {
+        /** Theme tokens may append font hashes after the five color values. */
+        fun customColors(key: String): IntArray? {
+            if (!key.startsWith("custom:")) return null
+            val values = key.split(':').drop(1).take(5).map(String::toIntOrNull)
+            if (values.size != 5 || values.any { it == null }) return null
+            return values.filterNotNull().toIntArray()
+        }
+
         fun withAlpha(color: Int, alpha: Int): Int =
             Color.argb(alpha.coerceIn(0, 255), Color.red(color), Color.green(color), Color.blue(color))
 

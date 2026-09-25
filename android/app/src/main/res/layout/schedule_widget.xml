@@ -49,16 +49,6 @@
         android:scaleType="fitXY"
         android:visibility="gone" />
 
-    <ImageView
-        android:id="@+id/widget_empty_background"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clickable="false"
-        android:contentDescription="@null"
-        android:focusable="false"
-        android:scaleType="fitXY"
-        android:visibility="gone" />
-
     <TextView
         android:id="@+id/widget_empty"
         android:layout_width="match_parent"
