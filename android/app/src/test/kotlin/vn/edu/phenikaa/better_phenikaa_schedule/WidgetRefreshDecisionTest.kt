@@ -5,6 +5,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Calendar
+import java.util.TimeZone
 
 class WidgetRefreshDecisionTest {
     @Test fun widgetModesUseSeparateKeysPerWidgetId() {
@@ -51,5 +53,20 @@ class WidgetRefreshDecisionTest {
         assertEquals("2026-09-24", WidgetRefreshDecision.selectedDate("invalid", "2026-09-24"))
         assertFalse(WidgetRefreshDecision.dayChanged("2026-09-24", "2026-09-24"))
         assertTrue(WidgetRefreshDecision.dayChanged("2026-09-24", "2026-09-25"))
+    }
+
+    @Test fun midnightAlarmUsesTheDeviceLocalNextDay() {
+        val zone = TimeZone.getTimeZone("Asia/Bangkok")
+        val now = Calendar.getInstance(zone).apply {
+            set(2026, Calendar.SEPTEMBER, 25, 23, 59, 59)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val next = Calendar.getInstance(zone).apply {
+            timeInMillis = WidgetDayChangeReceiver.nextMidnight(now)
+        }
+        assertEquals(26, next.get(Calendar.DAY_OF_MONTH))
+        assertEquals(0, next.get(Calendar.HOUR_OF_DAY))
+        assertEquals(0, next.get(Calendar.MINUTE))
+        assertEquals(5, next.get(Calendar.SECOND))
     }
 }

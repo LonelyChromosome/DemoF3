@@ -144,6 +144,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: SharedPreferences,
     ) {
+        if (appWidgetIds.isNotEmpty()) WidgetDayChangeReceiver.scheduleNext(context)
         appWidgetIds.forEach { id ->
             val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
             val selected = selectedDate(context, id)

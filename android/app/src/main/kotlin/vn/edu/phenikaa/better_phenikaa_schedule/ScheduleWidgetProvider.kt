@@ -306,6 +306,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: SharedPreferences,
     ) {
+        if (appWidgetIds.isNotEmpty()) WidgetDayChangeReceiver.scheduleNext(context)
         appWidgetIds.forEach { widgetId ->
             val known = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
                 .contains(contentTokenKey(widgetId))

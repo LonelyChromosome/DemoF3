@@ -75,6 +75,8 @@ internal object WidgetRefreshCoordinator {
             Context.MODE_PRIVATE,
         )
         ScheduleWidgetProvider().onUpdate(appContext, manager, widgetIds, widgetData)
-        OverviewWidgetProvider().onUpdate(appContext, manager, overviewIds, widgetData)
+        // A date broadcast may end the process immediately after onReceive returns.
+        // Render today's overview synchronously instead of leaving its fade on a Handler.
+        OverviewWidgetProvider().restoreDisplay(appContext, manager, overviewIds)
     }
 }
