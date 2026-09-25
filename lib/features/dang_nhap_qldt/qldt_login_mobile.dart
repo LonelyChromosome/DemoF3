@@ -263,7 +263,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                                   setState(() {
                                     _pageReady = false;
                                     _showWebPage = true;
-                                    _status = 'QLĐT trả lỗi HTTP ${response.statusCode}. Hãy thử tải lại.';
+                                    _status =
+                                        'QLĐT trả lỗi HTTP ${response.statusCode}. Hãy thử tải lại.';
                                   });
                                 }
                               },
@@ -315,7 +316,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                     width: double.infinity,
                     height: 48,
                     child: OutlinedButton.icon(
-                      onPressed: _pageReady && _scheduleStages.contains('request')
+                      onPressed:
+                          _pageReady && _scheduleStages.contains('request')
                           ? _sync
                           : _reload,
                       icon: const Icon(Icons.refresh_rounded),
