@@ -167,27 +167,44 @@ void main() {
         ],
       },
     );
-    ScheduleRecord record(String id, String subject, String className,
-            DateTime date, {bool exam = false}) =>
-        ScheduleRecord(
-          id: id,
-          isExam: exam,
-          subjectName: subject,
-          className: className,
-          room: 'A1',
-          startAt: date,
-          endAt: date.add(const Duration(hours: 1)),
-        );
+    ScheduleRecord record(
+      String id,
+      String subject,
+      String className,
+      DateTime date, {
+      bool exam = false,
+    }) => ScheduleRecord(
+      id: id,
+      isExam: exam,
+      subjectName: subject,
+      className: className,
+      room: 'A1',
+      startAt: date,
+      endAt: date.add(const Duration(hours: 1)),
+    );
     final schedules = ImportedScheduleData(
       displayName: 'Sinh viên',
       syncedAt: DateTime(2026, 9, 25),
       records: <ScheduleRecord>[
-        record('early', 'An toàn và bảo mật thông tin',
-            'An toàn và bảo mật thông tin-1-1-26(N05)', DateTime(2026, 8, 17)),
-        record('late', 'An toàn và bảo mật thông tin',
-            'An toàn và bảo mật thông tin-1-1-26(N05)', DateTime(2026, 10, 26)),
-        record('exam', 'Lịch sử Đảng cộng sản Việt Nam',
-            'Trắc nghiệm trên máy 30p', DateTime(2026, 10, 24), exam: true),
+        record(
+          'early',
+          'An toàn và bảo mật thông tin',
+          'An toàn và bảo mật thông tin-1-1-26(N05)',
+          DateTime(2026, 8, 17),
+        ),
+        record(
+          'late',
+          'An toàn và bảo mật thông tin',
+          'An toàn và bảo mật thông tin-1-1-26(N05)',
+          DateTime(2026, 10, 26),
+        ),
+        record(
+          'exam',
+          'Lịch sử Đảng cộng sản Việt Nam',
+          'Trắc nghiệm trên máy 30p',
+          DateTime(2026, 10, 24),
+          exam: true,
+        ),
       ],
     );
     final verified = verifier.verify(registration: actual, schedule: schedules);
@@ -198,8 +215,12 @@ void main() {
       displayName: schedules.displayName,
       syncedAt: schedules.syncedAt,
       records: <ScheduleRecord>[
-        record('wrong', 'An toàn và bảo mật thông tin',
-            'An toàn và bảo mật thông tin-1-1-26(N06)', DateTime(2026, 9, 25)),
+        record(
+          'wrong',
+          'An toàn và bảo mật thông tin',
+          'An toàn và bảo mật thông tin-1-1-26(N06)',
+          DateTime(2026, 9, 25),
+        ),
       ],
     );
     expect(
@@ -210,8 +231,12 @@ void main() {
       displayName: schedules.displayName,
       syncedAt: schedules.syncedAt,
       records: <ScheduleRecord>[
-        record('old', 'An toàn và bảo mật thông tin',
-            'An toàn và bảo mật thông tin-1-1-26(N05)', DateTime(2025, 9, 25)),
+        record(
+          'old',
+          'An toàn và bảo mật thông tin',
+          'An toàn và bảo mật thông tin-1-1-26(N05)',
+          DateTime(2025, 9, 25),
+        ),
       ],
     );
     expect(
