@@ -25,6 +25,16 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 8421 &&
+            grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            ExamChangeNotifier.publishPending(applicationContext)
+        }
+    }
+
     private val widgetHandler = Handler(Looper.getMainLooper())
     private val fileExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var pendingWidgetFromToken: String? = null
@@ -35,6 +45,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        ExamChangeNotifier.recoverExisting(applicationContext)
         configureDailySyncChannel(flutterEngine)
         configureQldtCredentialChannel(flutterEngine)
         configureWidgetSessionChannel(flutterEngine)
@@ -231,6 +242,7 @@ class MainActivity : FlutterActivity() {
                         getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
                     }
                     File(filesDir, "theme_imports").deleteRecursively()
+                    ExamChangeNotifier.clear(applicationContext)
                     WidgetRefreshCoordinator.refreshData(applicationContext)
                     result.success(null)
                 }
@@ -257,7 +269,18 @@ class MainActivity : FlutterActivity() {
                 "status" -> result.success(DailySyncScheduler.status(applicationContext))
                 "recordAppSyncSuccess" -> {
                     DailySyncScheduler.recordSuccess(applicationContext, System.currentTimeMillis())
+                    val prefs = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+                    val semester = prefs.getString("flutter.better_phenikaa_current_semester_v1", null)
+                    val difference = prefs.getString("flutter.better_phenikaa_semester_difference_v1", null)
+                    if (semester != null && difference != null) {
+                        runCatching { ExamChangeNotifier.record(applicationContext, semester, difference) }
+                    }
                     WidgetRefreshCoordinator.refreshOverview(applicationContext)
+                    result.success(null)
+                }
+                "examNotice" -> result.success(ExamChangeNotifier.pending(applicationContext))
+                "ackExamNotice" -> {
+                    ExamChangeNotifier.acknowledge(applicationContext)
                     result.success(null)
                 }
                 "syncReminders" -> {
@@ -280,6 +303,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "clearReminders" -> {
                     ExamReminderScheduler.clear(applicationContext)
+                    ExamChangeNotifier.clear(applicationContext)
                     result.success(null)
                 }
                 else -> result.notImplemented()
