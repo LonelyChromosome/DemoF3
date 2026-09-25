@@ -55,4 +55,11 @@ class OverviewPagerTest {
         assertEquals("Phân tích và thiết kế phần mềm",
             OverviewPager.compactSubject("Phân tích và thiết kế phần mềm", 120))
     }
+
+    @Test fun examCardsAlwaysUseShortSubjectAndRecognizedForm() {
+        val subject = "Phân tích và thiết kế phần mềm"
+        assertEquals("PTTKPM (TN)", OverviewPager.examLabel(subject, "Trắc nghiệm trên máy 30p"))
+        assertEquals("PTTKPM (TL)", OverviewPager.examLabel(subject, "Tự luận tại phòng"))
+        assertEquals("PTTKPM (TN+TL)", OverviewPager.examLabel(subject, "Trắc nghiệm + Tự luận"))
+    }
 }
