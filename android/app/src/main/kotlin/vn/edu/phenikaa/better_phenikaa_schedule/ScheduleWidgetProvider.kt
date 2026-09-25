@@ -450,9 +450,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val size = legacyWidgetSize(manager.getAppWidgetOptions(id))
         val width = size.width.roundToInt().coerceAtLeast(1)
         val height = size.height.roundToInt().coerceAtLeast(1)
-        val oldFrame = renderWidgetSlide(context, before, width, height)
-        val nextFrame = renderWidgetSlide(context, after, width, height)
-        val count = 7
+        val oldFrame = renderWidgetStackCover(context, before, width, height)
+        val nextFrame = renderWidgetStackCover(context, after, width, height)
+        val count = 13
         repeat(count) { frame ->
             Handler(Looper.getMainLooper()).postDelayed({
                 if (state.getInt("mode_generation_$id", 0) != generation ||
@@ -469,7 +469,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 views.setViewVisibility(R.id.widget_refresh_cover, View.VISIBLE)
                 views.setViewVisibility(R.id.widget_list, View.INVISIBLE)
                 manager.partiallyUpdateAppWidget(id, views)
-            }, frame * 38L)
+            }, frame * 20L)
         }
     }
 
