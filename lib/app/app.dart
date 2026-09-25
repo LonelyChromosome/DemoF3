@@ -114,12 +114,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   Future<void> _refreshDifference() async {
     final difference = await SemesterDifferenceStore().read();
     final prefs = await SharedPreferences.getInstance();
-    final unread = difference?.hasChanges == true &&
+    final unread =
+        difference?.hasChanges == true &&
         prefs.getString(_seenDifferenceKey) != jsonEncode(difference!.toJson());
-    if (mounted) setState(() {
-      _latestDifference = difference;
-      _unreadDifference = unread;
-    });
+    if (mounted)
+      setState(() {
+        _latestDifference = difference;
+        _unreadDifference = unread;
+      });
   }
 
   Future<void> _showDifferences() async {
@@ -128,7 +130,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     final difference = _latestDifference;
     if (difference != null) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_seenDifferenceKey, jsonEncode(difference.toJson()));
+      await prefs.setString(
+        _seenDifferenceKey,
+        jsonEncode(difference.toJson()),
+      );
       if (mounted) setState(() => _unreadDifference = false);
     }
     if (!mounted) return;
@@ -1072,9 +1077,12 @@ class _ExamScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          _TopTitle(title: 'Lịch thi', badge: null,
+          _TopTitle(
+            title: 'Lịch thi',
+            badge: null,
             unreadDifference: unreadDifference,
-            onNotificationTap: onOpenDifferences),
+            onNotificationTap: onOpenDifferences,
+          ),
           const SizedBox(height: 20),
           _SegmentTabs(showPast: showPast, onChanged: onTabChanged),
           const SizedBox(height: 18),
@@ -1201,8 +1209,13 @@ class _AccountScreen extends StatelessWidget {
 }
 
 class _TopTitle extends StatelessWidget {
-  const new({required this.title, this.badge, this.onCalendarTap,
-    this.onNotificationTap, this.unreadDifference = false});
+  const new({
+    required this.title,
+    this.badge,
+    this.onCalendarTap,
+    this.onNotificationTap,
+    this.unreadDifference = false,
+  });
 
   final String title;
   final String? badge;
@@ -1254,13 +1267,21 @@ class _TopTitle extends StatelessWidget {
           IconButton(
             tooltip: 'Thông báo thay đổi lịch',
             onPressed: onNotificationTap,
-            icon: Stack(clipBehavior: Clip.none, children: <Widget>[
-              Icon(Icons.notifications_none_rounded, color: palette.primary),
-              if (unreadDifference) const Positioned(
-                right: 0, top: 0,
-                child: CircleAvatar(radius: 4.5, backgroundColor: Color(0xFFE53945)),
-              ),
-            ]),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: <Widget>[
+                Icon(Icons.notifications_none_rounded, color: palette.primary),
+                if (unreadDifference)
+                  const Positioned(
+                    right: 0,
+                    top: 0,
+                    child: CircleAvatar(
+                      radius: 4.5,
+                      backgroundColor: Color(0xFFE53945),
+                    ),
+                  ),
+              ],
+            ),
           ),
         if (onCalendarTap == null)
           Icon(Icons.calendar_month_outlined, color: palette.primary)
