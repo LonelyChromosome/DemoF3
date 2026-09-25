@@ -134,7 +134,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
     }
 
     internal fun overviewProgress(context: Context, widthDp: Int, count: Int,
-                                  slots: Int, startIndex: Int): Bitmap {
+                                  slots: Int, startIndex: Int,
+                                  drawTrack: Boolean = true,
+                                  drawDots: Boolean = true): Bitmap {
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (29 * density).roundToInt().coerceAtLeast(1)
@@ -152,10 +154,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 alpha = 170
                 strokeWidth = 1.5f * density
             }
-            canvas.drawLine(left, y, right, y, track)
+            if (drawTrack) canvas.drawLine(left, y, right, y, track)
             val dots = intArrayOf(0xFF12CCFA.toInt(), 0xFF6578FF.toInt(),
                 0xFFC375E8.toInt(), 0xFFFA67BA.toInt(), 0xFFFF557C.toInt())
-            repeat(count.coerceAtMost(5)) { index ->
+            if (drawDots) repeat(count.coerceAtMost(5)) { index ->
                 val x = left + (right - left) * (index + 0.5f) / slots.coerceAtLeast(1)
                 canvas.drawCircle(x, y, 5f * density,
                     Paint(Paint.ANTI_ALIAS_FLAG).apply { color = dots[(startIndex + index) % 5] })
@@ -167,8 +169,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 palette.trackStart(), palette.trackEnd(), Shader.TileMode.CLAMP)
             strokeWidth = 1.7f * density
         }
-        canvas.drawLine(left, y, right, y, line)
-        repeat(count.coerceAtMost(5)) { index ->
+        if (drawTrack) canvas.drawLine(left, y, right, y, line)
+        if (drawDots) repeat(count.coerceAtMost(5)) { index ->
             val x = left + (right - left) * (index + 0.5f) / slots.coerceAtLeast(1)
             val accent = palette.timelineDot(startIndex + index,
                 WidgetVisualPalette.mix(palette.backgroundStart, palette.backgroundEnd,

@@ -5,6 +5,8 @@ import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -59,7 +61,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             }, THEME_FRAME_DELAY_MS)
         } else if (!fadeIn) {
             state.edit().putBoolean(modeKey(id), !state.getBoolean(modeKey(id), false))
-                .putInt(pageKey(id), 0).apply()
+                .putInt(windowKey(id), 0).apply()
             render(context, manager, id, initialAlpha = 0f)
             fadeModeFrame(context, manager, id, generation, 0, true)
         }
@@ -89,7 +91,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
     internal fun restoreDisplay(context: Context, manager: AppWidgetManager, ids: IntArray) {
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
         ids.forEach { id ->
-            state.edit().putInt(pageKey(id), 0).apply()
+            state.edit().putInt(windowKey(id), 0).apply()
             render(context, manager, id)
         }
     }
@@ -112,14 +114,23 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 return
             } else {
                 val direction = intent.getIntExtra(EXTRA_DIRECTION, 0).coerceIn(-1, 1)
-                val items = WidgetSnapshotStore.readOverview(context, id, state.getBoolean(modeKey(id), false))
-                val options = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
-                val size = OverviewPager.pageSize(
-                    options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320),
-                    options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160),
-                )
-                val next = OverviewPager.clamp(state.getInt(pageKey(id), 0) + direction, items.size, size)
-                state.edit().putInt(pageKey(id), next).apply()
+                if (direction == 0) return
+                val manager = AppWidgetManager.getInstance(context)
+                if (state.contains(renderedDateKey(id)) &&
+                    state.getString(renderedDateKey(id), null) != selectedDate(context, id)) {
+                    animateDate(context, manager, id, 0)
+                    return
+                }
+                val items = WidgetSnapshotStore.readOverview(context, id,
+                    state.getBoolean(modeKey(id), false))
+                val start = OverviewWindow.clamp(state.getInt(windowKey(id), 0), items.size)
+                val next = OverviewWindow.withinDay(start, items.size, direction)
+                if (next != null) {
+                    animateWindow(context, manager, id, next, direction)
+                } else {
+                    animateDate(context, manager, id, direction)
+                }
+                return
             }
             render(context, AppWidgetManager.getInstance(context), id)
             return
@@ -133,144 +144,175 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: SharedPreferences,
     ) {
-        appWidgetIds.forEach { render(context, appWidgetManager, it) }
+        appWidgetIds.forEach { id ->
+            val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+            val selected = selectedDate(context, id)
+            if (state.contains(renderedDateKey(id)) &&
+                state.getString(renderedDateKey(id), null) != selected) {
+                animateDate(context, appWidgetManager, id, 0)
+            } else {
+                cancelNavigation(state, id)
+                render(context, appWidgetManager, id)
+            }
+        }
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         super.onDeleted(context, appWidgetIds)
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE).edit()
         appWidgetIds.forEach { id ->
-            state.remove(pageKey(id)).remove(modeKey(id)).remove(transitionKey(id))
+            state.remove(pageKey(id)).remove(windowKey(id)).remove(renderedDateKey(id))
+                .remove(navigationKey(id)).remove(modeKey(id)).remove(transitionKey(id))
         }
         state.apply()
     }
 
-    private fun render(
-        context: Context, manager: AppWidgetManager, id: Int, initialAlpha: Float = 1f,
-    ) {
+    private fun selectedDate(context: Context, id: Int): String {
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        val chosen = context.getSharedPreferences(
+            ScheduleWidgetProvider.WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE,
+        ).getString(ScheduleWidgetProvider.selectedDateKey(id), null)
+        return WidgetRefreshDecision.selectedDate(chosen, today)
+    }
+
+    private fun cancelNavigation(state: SharedPreferences, id: Int): Int {
+        val generation = state.getInt(navigationKey(id), 0) + 1
+        state.edit().putInt(navigationKey(id), generation).apply()
+        return generation
+    }
+
+    private fun contentFrame(context: Context, manager: AppWidgetManager, id: Int,
+                             alpha: Float, offsetDp: Float = 0f, date: Boolean = false) {
+        val frame = RemoteViews(context.packageName, R.layout.overview_widget)
+        if (date) {
+            frame.setFloat(R.id.overview_content, "setAlpha", alpha)
+        } else {
+            frame.setFloat(R.id.overview_cards, "setAlpha", alpha)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                frame.setFloat(R.id.overview_cards, "setTranslationX", offsetDp *
+                    context.resources.displayMetrics.density)
+            }
+        }
+        manager.partiallyUpdateAppWidget(id, frame)
+    }
+
+    private fun animateWindow(context: Context, manager: AppWidgetManager, id: Int,
+                              next: Int, direction: Int) {
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
-        val examMode = state.getBoolean(modeKey(id), false)
-        val items = WidgetSnapshotStore.readOverview(context, id, examMode)
+        val generation = cancelNavigation(state, id)
+        val handler = Handler(Looper.getMainLooper())
+        val offset = if (direction > 0) -1f else 1f
+        val items = WidgetSnapshotStore.readOverview(context, id,
+            state.getBoolean(modeKey(id), false))
+        val old = OverviewWindow.clamp(state.getInt(windowKey(id), 0), items.size)
         val width = manager.getAppWidgetOptions(id)
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
-        val height = manager.getAppWidgetOptions(id)
-            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
-        // Use available 4x2 launcher height for typography without changing page capacity.
-        val panelHeight = height.coerceIn(104, 156)
-        val compact = panelHeight < 120
-        val headerHeight = if (compact) 32 else if (panelHeight >= 140) 42 else 36
-        val footerHeight = if (compact) 16 else if (panelHeight >= 140) 24 else 20
-        val verticalPadding = if (compact) 4 else 10
-        val cardHeight = panelHeight - verticalPadding - headerHeight - footerHeight - 5
         val columns = OverviewPager.columns(width)
-        val size = OverviewPager.pageSize(width, height)
-        val page = WidgetRefreshDecision.overviewPage(
-            state.getInt(pageKey(id), 0), items.size, size,
-        )
-        if (page != state.getInt(pageKey(id), 0)) {
-            state.edit().putInt(pageKey(id), page).apply()
-        }
-        val (textColor, iconColor) = ScheduleWidgetProvider().overviewColors(context)
-        val betterDefault = ScheduleWidgetProvider().isBetterDefault(context)
-        val bitmapFont = WidgetFont.hasSelectedFont(context)
-        val views = RemoteViews(context.packageName, R.layout.overview_widget)
-        // Launchers may reapply RemoteViews to existing children; XML defaults are not a reset.
-        listOf(R.id.overview_header_font, R.id.overview_empty_font,
-            R.id.overview_status_font, R.id.overview_page_font).forEach {
-            views.setViewVisibility(it, View.GONE)
-        }
-        val openApp = PendingIntent.getActivity(
-            context, id, Intent(context, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                data = Uri.parse("better-phenikaa://overview/$id/open")
-            }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        views.setFloat(R.id.overview_root, "setAlpha", initialAlpha)
+        val distance = kotlin.math.abs(next - old) * (width - 44f) / columns
+        windowFrame(context, manager, id, items, width, columns, old, next,
+            .33f, .8f, offset * distance * .33f)
+        handler.postDelayed({
+            if (state.getInt(navigationKey(id), 0) != generation) return@postDelayed
+            windowFrame(context, manager, id, items, width, columns, old, next,
+                .67f, 0f, offset * distance * .67f)
+            state.edit().putInt(windowKey(id), next).apply()
+            // Replace the one row; the stationary track receives no action.
+            renderWindow(context, manager, id, -offset * distance * .33f)
+            handler.postDelayed({
+                if (state.getInt(navigationKey(id), 0) == generation) {
+                    windowFrame(context, manager, id, items, width, columns, old, next,
+                        1f, .8f, -offset * distance * .15f)
+                    handler.postDelayed({
+                        if (state.getInt(navigationKey(id), 0) == generation) {
+                            contentFrame(context, manager, id, 1f)
+                        }
+                    }, NAV_FRAME_DELAY_MS)
+                }
+            }, NAV_FRAME_DELAY_MS)
+        }, NAV_FRAME_DELAY_MS)
+    }
+
+    /** Draw the moving dots as one bitmap; the track view remains untouched. */
+    private fun windowFrame(context: Context, manager: AppWidgetManager, id: Int,
+                            items: List<WidgetClass>, width: Int, columns: Int,
+                            old: Int, next: Int, progress: Float,
+                            cardAlpha: Float, cardOffsetDp: Float) {
+        val first = minOf(old, next)
+        val last = maxOf(old, next)
+        val provider = ScheduleWidgetProvider()
+        val before = provider.overviewProgress(context, width - 24,
+            OverviewWindow.visible(items, first).size, columns, first, drawTrack = false)
+        val after = provider.overviewProgress(context, width - 24,
+            OverviewWindow.visible(items, last).size, columns, last, drawTrack = false)
+        val result = Bitmap.createBitmap(before.width, before.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result)
+        val density = context.resources.displayMetrics.density
+        val span = before.width - 20f * density
+        val shift = (last - first) * span / columns
+        val fraction = if (next > old) progress else 1f - progress
+        canvas.drawBitmap(before, -shift * fraction, 0f, null)
+        val incomingX = shift * (1f - fraction)
+        canvas.save()
+        canvas.clipRect(incomingX + 10f * density +
+            (OverviewWindow.SLOTS - (last - first)) * span / columns, 0f,
+            result.width.toFloat(), result.height.toFloat())
+        canvas.drawBitmap(after, incomingX, 0f, null)
+        canvas.restore()
+        val frame = RemoteViews(context.packageName, R.layout.overview_widget)
+        frame.setImageViewBitmap(R.id.overview_dots, result)
+        frame.setFloat(R.id.overview_cards, "setAlpha", cardAlpha)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            views.setViewLayoutHeight(R.id.overview_panel, panelHeight.toFloat(),
-                TypedValue.COMPLEX_UNIT_DIP)
-            val density = context.resources.displayMetrics.density
-            views.setViewPadding(R.id.overview_content, (12 * density).toInt(),
-                ((if (compact) 2 else 6) * density).toInt(), (12 * density).toInt(),
-                ((if (compact) 2 else 4) * density).toInt())
-            views.setViewLayoutHeight(R.id.overview_header, headerHeight.toFloat(),
-                TypedValue.COMPLEX_UNIT_DIP)
-            views.setViewLayoutHeight(R.id.overview_footer, footerHeight.toFloat(),
-                TypedValue.COMPLEX_UNIT_DIP)
+            frame.setFloat(R.id.overview_cards, "setTranslationX",
+                cardOffsetDp * density)
         }
-        views.setTextViewTextSize(R.id.overview_title, TypedValue.COMPLEX_UNIT_SP,
-            if (compact) 14f else 16f)
-        views.setTextViewTextSize(R.id.overview_subtitle, TypedValue.COMPLEX_UNIT_SP,
-            if (compact) 10f else 11f)
-        views.setTextViewTextSize(R.id.overview_previous, TypedValue.COMPLEX_UNIT_SP,
-            if (compact) 18f else 25f)
-        views.setTextViewTextSize(R.id.overview_next, TypedValue.COMPLEX_UNIT_SP,
-            if (compact) 18f else 25f)
-        views.setImageViewBitmap(R.id.overview_background,
-            ScheduleWidgetProvider().overviewBackground(context, width, panelHeight))
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        val selected = context.getSharedPreferences(
-            ScheduleWidgetProvider.WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE,
-        ).getString(ScheduleWidgetProvider.selectedDateKey(id), today) ?: today
-        val date = if (selected.length == 10) "${selected.substring(8, 10)}/${selected.substring(5, 7)}"
-            else SimpleDateFormat("dd/MM", Locale.getDefault()).format(Date())
-        val status = DailySyncScheduler.status(context)
-        val error = status["lastError"] as? String
-        val started = status["lastStartedAtMillis"] as? Long ?: 0L
-        val succeeded = status["lastSuccessAtMillis"] as? Long ?: 0L
-        val title = when {
-            examMode -> "Lịch thi · Học kỳ hiện tại"
-            else -> if (selected == today) "Hôm nay · $date" else "Ngày $date"
-        }
-        val subtitle = if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học"
-        views.setTextViewText(R.id.overview_title, WidgetFont.text(context, title))
-        views.setTextViewText(R.id.overview_subtitle, WidgetFont.text(context, subtitle))
-        val statusLabel = when {
-            !error.isNullOrEmpty() && started > succeeded -> error
-            started > succeeded -> "Đang đồng bộ QLĐT..."
-            examMode && items.isNotEmpty() -> {
-                val first = items.first()
-                val target = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(first.dateKey)
-                val todayStart = Calendar.getInstance().apply {
-                    set(Calendar.HOUR_OF_DAY, 0)
-                    set(Calendar.MINUTE, 0)
-                    set(Calendar.SECOND, 0)
-                    set(Calendar.MILLISECOND, 0)
-                }.timeInMillis
-                val days = if (target == null) 0L else
-                    ((target.time - todayStart) / 86_400_000L).coerceAtLeast(0L)
-                if (days == 0L) "Có ca thi hôm nay" else "Còn $days ngày đến ca thi đầu tiên"
+        manager.partiallyUpdateAppWidget(id, frame)
+    }
+
+    private fun animateDate(context: Context, manager: AppWidgetManager, id: Int,
+                            direction: Int) {
+        val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        val generation = cancelNavigation(state, id)
+        val handler = Handler(Looper.getMainLooper())
+        contentFrame(context, manager, id, .55f, date = true)
+        handler.postDelayed({
+            if (state.getInt(navigationKey(id), 0) != generation) return@postDelayed
+            contentFrame(context, manager, id, 0f, date = true)
+            if (direction != 0) {
+                val calendar = Calendar.getInstance().apply {
+                    time = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(
+                        selectedDate(context, id)) ?: Date()
+                    add(Calendar.DAY_OF_YEAR, direction)
+                }
+                val target = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.time)
+                context.getSharedPreferences(ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
+                    Context.MODE_PRIVATE).edit()
+                    .putString(ScheduleWidgetProvider.selectedDateKey(id), target).apply()
             }
-            examMode -> "Chưa có ca thi sắp tới"
-            selected == today -> "Lịch học hôm nay"
-            else -> "Lịch học ngày $date"
-        }
-        views.setTextViewText(R.id.overview_status, WidgetFont.text(context, statusLabel))
-        if (bitmapFont) {
-            views.setImageViewBitmap(R.id.overview_header_font,
-                OverviewFontBitmap.header(context, (width - 24 - 34 - 93).coerceAtLeast(1),
-                    headerHeight, title, subtitle, textColor, compact))
-            views.setViewVisibility(R.id.overview_header_font, View.VISIBLE)
-        }
-        views.setImageViewResource(R.id.overview_mode,
-            if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
-        views.setContentDescription(R.id.overview_mode,
-            if (examMode) "Về lịch học" else "Xem lịch thi")
-        listOf(R.id.overview_title, R.id.overview_subtitle,
-            R.id.overview_status, R.id.overview_previous, R.id.overview_next,
-            R.id.overview_page, R.id.overview_empty).forEach {
-            views.setTextColor(it, textColor)
-        }
-        views.setInt(R.id.overview_calendar, "setColorFilter", iconColor)
-        views.setInt(R.id.overview_emblem, "setColorFilter", iconColor)
-        views.setInt(R.id.overview_mode, "setColorFilter",
-            if (!examMode && WidgetSnapshotStore.readOverview(context, id, true).isNotEmpty())
-                0xFFFF4C5B.toInt()
-            else iconColor)
-        views.setInt(R.id.overview_reload, "setColorFilter", iconColor)
-        WidgetSyncIndicator.applyToOverview(context, views)
+            val count = WidgetSnapshotStore.readOverview(context, id,
+                state.getBoolean(modeKey(id), false)).size
+            state.edit().putInt(windowKey(id),
+                if (direction < 0) OverviewWindow.lastStart(count) else 0).apply()
+            render(context, manager, id, contentAlpha = 0f)
+            handler.postDelayed({
+                if (state.getInt(navigationKey(id), 0) == generation) {
+                    contentFrame(context, manager, id, .55f, date = true)
+                    handler.postDelayed({
+                        if (state.getInt(navigationKey(id), 0) == generation) {
+                            contentFrame(context, manager, id, 1f, date = true)
+                        }
+                    }, NAV_FRAME_DELAY_MS)
+                }
+            }, NAV_FRAME_DELAY_MS)
+        }, NAV_FRAME_DELAY_MS)
+    }
+
+    private fun populateCards(context: Context, views: RemoteViews,
+                              items: List<WidgetClass>, start: Int, columns: Int,
+                              width: Int, cardHeight: Int, compact: Boolean,
+                              examMode: Boolean, textColor: Int, betterDefault: Boolean,
+                              bitmapFont: Boolean, openApp: PendingIntent) {
         views.removeAllViews(R.id.overview_cards)
-        OverviewPager.visible(items, page, size).chunked(columns).forEachIndexed { rowIndex, rowItems ->
+        OverviewWindow.visible(items, start).chunked(columns).forEachIndexed { rowIndex, rowItems ->
             val row = RemoteViews(context.packageName, R.layout.overview_widget_row)
             rowItems.forEachIndexed { columnIndex, item ->
                 val card = RemoteViews(context.packageName, R.layout.overview_widget_card)
@@ -289,7 +331,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                     TypedValue.COMPLEX_UNIT_SP, if (compact) 9f else 10f)
                 card.setTextViewTextSize(R.id.overview_card_form,
                     TypedValue.COMPLEX_UNIT_SP, if (compact) 9f else 10f)
-                val colorIndex = page * size + rowIndex * columns + columnIndex
+                val colorIndex = start + rowIndex * columns + columnIndex
                 val active = rowIndex == 0 && columnIndex == 0
                 card.setImageViewBitmap(R.id.overview_card_background,
                     ScheduleWidgetProvider().overviewCardBackground(context, colorIndex, active))
@@ -349,6 +391,170 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             }
             views.addView(R.id.overview_cards, row)
         }
+    }
+
+    /** Replace only the subject row and dots. The existing track view is untouched. */
+    private fun renderWindow(context: Context, manager: AppWidgetManager, id: Int,
+                             initialOffsetDp: Float) {
+        val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        val examMode = state.getBoolean(modeKey(id), false)
+        val items = WidgetSnapshotStore.readOverview(context, id, examMode)
+        val width = manager.getAppWidgetOptions(id)
+            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
+        val height = manager.getAppWidgetOptions(id)
+            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
+        val panelHeight = height.coerceIn(104, 156)
+        val compact = panelHeight < 120
+        val headerHeight = if (compact) 32 else if (panelHeight >= 140) 42 else 36
+        val footerHeight = if (compact) 16 else if (panelHeight >= 140) 24 else 20
+        val verticalPadding = if (compact) 4 else 10
+        val cardHeight = panelHeight - verticalPadding - headerHeight - footerHeight - 5
+        val columns = OverviewPager.columns(width)
+        val start = OverviewWindow.clamp(state.getInt(windowKey(id), 0), items.size)
+        val (textColor, _) = ScheduleWidgetProvider().overviewColors(context)
+        val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        val openApp = PendingIntent.getActivity(context, id,
+            Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                data = Uri.parse("better-phenikaa://overview/$id/open")
+            }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        views.setFloat(R.id.overview_cards, "setAlpha", 0f)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            views.setFloat(R.id.overview_cards, "setTranslationX",
+                initialOffsetDp * context.resources.displayMetrics.density)
+        }
+        populateCards(context, views, items, start, columns, width, cardHeight,
+            compact, examMode, textColor, ScheduleWidgetProvider().isBetterDefault(context),
+            WidgetFont.hasSelectedFont(context), openApp)
+        manager.partiallyUpdateAppWidget(id, views)
+    }
+
+    private fun render(
+        context: Context, manager: AppWidgetManager, id: Int, initialAlpha: Float = 1f,
+        contentAlpha: Float = 1f,
+    ) {
+        val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        val examMode = state.getBoolean(modeKey(id), false)
+        val items = WidgetSnapshotStore.readOverview(context, id, examMode)
+        val width = manager.getAppWidgetOptions(id)
+            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
+        val height = manager.getAppWidgetOptions(id)
+            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
+        // Use available 4x2 launcher height for typography without changing page capacity.
+        val panelHeight = height.coerceIn(104, 156)
+        val compact = panelHeight < 120
+        val headerHeight = if (compact) 32 else if (panelHeight >= 140) 42 else 36
+        val footerHeight = if (compact) 16 else if (panelHeight >= 140) 24 else 20
+        val verticalPadding = if (compact) 4 else 10
+        val cardHeight = panelHeight - verticalPadding - headerHeight - footerHeight - 5
+        val columns = OverviewPager.columns(width)
+        val start = OverviewWindow.clamp(state.getInt(windowKey(id), 0), items.size)
+        if (start != state.getInt(windowKey(id), 0)) {
+            state.edit().putInt(windowKey(id), start).apply()
+        }
+        val (textColor, iconColor) = ScheduleWidgetProvider().overviewColors(context)
+        val betterDefault = ScheduleWidgetProvider().isBetterDefault(context)
+        val bitmapFont = WidgetFont.hasSelectedFont(context)
+        val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        // Launchers may reapply RemoteViews to existing children; XML defaults are not a reset.
+        listOf(R.id.overview_header_font, R.id.overview_empty_font,
+            R.id.overview_status_font, R.id.overview_page_font).forEach {
+            views.setViewVisibility(it, View.GONE)
+        }
+        val openApp = PendingIntent.getActivity(
+            context, id, Intent(context, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                data = Uri.parse("better-phenikaa://overview/$id/open")
+            }, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        views.setFloat(R.id.overview_root, "setAlpha", initialAlpha)
+        views.setFloat(R.id.overview_content, "setAlpha", contentAlpha)
+        listOf(R.id.overview_cards, R.id.overview_dots).forEach { view ->
+            views.setFloat(view, "setAlpha", 1f)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                views.setFloat(view, "setTranslationX", 0f)
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            views.setViewLayoutHeight(R.id.overview_panel, panelHeight.toFloat(),
+                TypedValue.COMPLEX_UNIT_DIP)
+            val density = context.resources.displayMetrics.density
+            views.setViewPadding(R.id.overview_content, (12 * density).toInt(),
+                ((if (compact) 2 else 6) * density).toInt(), (12 * density).toInt(),
+                ((if (compact) 2 else 4) * density).toInt())
+            views.setViewLayoutHeight(R.id.overview_header, headerHeight.toFloat(),
+                TypedValue.COMPLEX_UNIT_DIP)
+            views.setViewLayoutHeight(R.id.overview_footer, footerHeight.toFloat(),
+                TypedValue.COMPLEX_UNIT_DIP)
+        }
+        views.setTextViewTextSize(R.id.overview_title, TypedValue.COMPLEX_UNIT_SP,
+            if (compact) 14f else 16f)
+        views.setTextViewTextSize(R.id.overview_subtitle, TypedValue.COMPLEX_UNIT_SP,
+            if (compact) 10f else 11f)
+        views.setImageViewBitmap(R.id.overview_background,
+            ScheduleWidgetProvider().overviewBackground(context, width, panelHeight))
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        val selected = selectedDate(context, id)
+        val date = if (selected.length == 10) "${selected.substring(8, 10)}/${selected.substring(5, 7)}"
+            else SimpleDateFormat("dd/MM", Locale.getDefault()).format(Date())
+        val status = DailySyncScheduler.status(context)
+        val error = status["lastError"] as? String
+        val started = status["lastStartedAtMillis"] as? Long ?: 0L
+        val succeeded = status["lastSuccessAtMillis"] as? Long ?: 0L
+        val title = when {
+            examMode -> "Lịch thi · Học kỳ hiện tại"
+            else -> if (selected == today) "Hôm nay · $date" else "Ngày $date"
+        }
+        val subtitle = if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học"
+        views.setTextViewText(R.id.overview_title, WidgetFont.text(context, title))
+        views.setTextViewText(R.id.overview_subtitle, WidgetFont.text(context, subtitle))
+        val statusLabel = when {
+            !error.isNullOrEmpty() && started > succeeded -> error
+            started > succeeded -> "Đang đồng bộ QLĐT..."
+            examMode && items.isNotEmpty() -> {
+                val first = items.first()
+                val target = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(first.dateKey)
+                val todayStart = Calendar.getInstance().apply {
+                    set(Calendar.HOUR_OF_DAY, 0)
+                    set(Calendar.MINUTE, 0)
+                    set(Calendar.SECOND, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }.timeInMillis
+                val days = if (target == null) 0L else
+                    ((target.time - todayStart) / 86_400_000L).coerceAtLeast(0L)
+                if (days == 0L) "Có ca thi hôm nay" else "Còn $days ngày đến ca thi đầu tiên"
+            }
+            examMode -> "Chưa có ca thi sắp tới"
+            selected == today -> "Lịch học hôm nay"
+            else -> "Lịch học ngày $date"
+        }
+        views.setTextViewText(R.id.overview_status, WidgetFont.text(context, statusLabel))
+        if (bitmapFont) {
+            views.setImageViewBitmap(R.id.overview_header_font,
+                OverviewFontBitmap.header(context, (width - 24 - 34 - 93).coerceAtLeast(1),
+                    headerHeight, title, subtitle, textColor, compact))
+            views.setViewVisibility(R.id.overview_header_font, View.VISIBLE)
+        }
+        views.setImageViewResource(R.id.overview_mode,
+            if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
+        views.setContentDescription(R.id.overview_mode,
+            if (examMode) "Về lịch học" else "Xem lịch thi")
+        listOf(R.id.overview_title, R.id.overview_subtitle,
+            R.id.overview_status, R.id.overview_page, R.id.overview_empty).forEach {
+            views.setTextColor(it, textColor)
+        }
+        views.setInt(R.id.overview_previous, "setColorFilter", iconColor)
+        views.setInt(R.id.overview_next, "setColorFilter", iconColor)
+        views.setInt(R.id.overview_calendar, "setColorFilter", iconColor)
+        views.setInt(R.id.overview_emblem, "setColorFilter", iconColor)
+        views.setInt(R.id.overview_mode, "setColorFilter",
+            if (!examMode && WidgetSnapshotStore.readOverview(context, id, true).isNotEmpty())
+                0xFFFF4C5B.toInt()
+            else iconColor)
+        views.setInt(R.id.overview_reload, "setColorFilter", iconColor)
+        WidgetSyncIndicator.applyToOverview(context, views)
+        populateCards(context, views, items, start, columns, width, cardHeight,
+            compact, examMode, textColor, betterDefault, bitmapFont, openApp)
         views.setViewVisibility(R.id.overview_empty, if (items.isEmpty()) View.VISIBLE else View.GONE)
         val emptyLabel = if (examMode) "Không có lịch thi" else "Không có lịch học"
         views.setTextViewText(R.id.overview_empty, WidgetFont.text(context, emptyLabel))
@@ -360,41 +566,36 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             views.setViewVisibility(R.id.overview_empty_font, View.VISIBLE)
             views.setTextColor(R.id.overview_empty, android.graphics.Color.TRANSPARENT)
         }
-        val lastPage = OverviewPager.lastPage(items.size, size)
         val showProgress = items.isNotEmpty() &&
-            (examMode || (lastPage == 0 && (error.isNullOrEmpty() || started <= succeeded)))
+            (examMode || error.isNullOrEmpty() || started <= succeeded)
         views.setViewVisibility(R.id.overview_progress,
+            if (showProgress) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.overview_dots,
             if (showProgress) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.overview_status,
             if (showProgress) View.GONE else View.VISIBLE)
         if (showProgress) {
             views.setImageViewBitmap(R.id.overview_progress,
                 ScheduleWidgetProvider().overviewProgress(context, width - 24,
-                    OverviewPager.visible(items, page, size).size, columns, page * size))
+                    OverviewWindow.visible(items, start).size, columns, start,
+                    drawDots = false))
+            views.setImageViewBitmap(R.id.overview_dots,
+                ScheduleWidgetProvider().overviewProgress(context, width - 24,
+                    OverviewWindow.visible(items, start).size, columns, start,
+                    drawTrack = false))
         }
-        views.setViewVisibility(R.id.overview_navigation,
-            if (lastPage == 0) View.GONE else View.VISIBLE)
-        views.setViewVisibility(R.id.overview_previous,
-            if (page == 0) View.INVISIBLE else View.VISIBLE)
-        views.setViewVisibility(R.id.overview_next,
-            if (page >= lastPage) View.INVISIBLE else View.VISIBLE)
-        views.setTextViewText(R.id.overview_page,
-            WidgetFont.text(context, "${page + 1}/${lastPage + 1}"))
+        views.setViewVisibility(R.id.overview_navigation, View.VISIBLE)
+        views.setViewVisibility(R.id.overview_previous, View.VISIBLE)
+        views.setViewVisibility(R.id.overview_next, View.VISIBLE)
+        views.setViewVisibility(R.id.overview_page, View.GONE)
         if (bitmapFont) {
             listOf(R.id.overview_title, R.id.overview_subtitle, R.id.overview_status)
                 .forEach { views.setTextColor(it, android.graphics.Color.TRANSPARENT) }
-            if (lastPage > 0) {
-                views.setImageViewBitmap(R.id.overview_page_font,
-                    OverviewFontBitmap.centered(context, 30, footerHeight,
-                        "${page + 1}/${lastPage + 1}", 10f, textColor))
-                views.setViewVisibility(R.id.overview_page_font, View.VISIBLE)
-                views.setTextColor(R.id.overview_page, android.graphics.Color.TRANSPARENT)
-            }
             if (!showProgress) {
                 views.setImageViewBitmap(R.id.overview_status_font,
                     OverviewFontBitmap.status(context,
-                        (width - 24).coerceAtLeast(1),
-                        footerHeight, statusLabel, textColor, if (lastPage == 0) 0 else 90))
+                        (width - 84).coerceAtLeast(1),
+                        footerHeight, statusLabel, textColor, 0))
                 views.setViewVisibility(R.id.overview_status_font, View.VISIBLE)
             }
         }
@@ -415,6 +616,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             PendingIntent.getActivity(context, id, dateIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
         manager.updateAppWidget(id, views)
+        state.edit().putString(renderedDateKey(id), selected).apply()
     }
 
     private fun action(context: Context, id: Int, type: String, direction: Int): PendingIntent {
@@ -436,7 +638,11 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         const val STATE_PREFS = "better_phenikaa_overview_state"
         const val THEME_FRAME_COUNT = 9
         const val THEME_FRAME_DELAY_MS = 30L
+        const val NAV_FRAME_DELAY_MS = 38L
         fun pageKey(id: Int) = WidgetRefreshDecision.overviewPageKey(id)
+        fun windowKey(id: Int) = "window_start_$id"
+        fun renderedDateKey(id: Int) = "rendered_date_$id"
+        fun navigationKey(id: Int) = "navigation_transition_$id"
         fun modeKey(id: Int) = WidgetRefreshDecision.overviewModeKey(id)
         fun transitionKey(id: Int) = "theme_transition_$id"
     }
