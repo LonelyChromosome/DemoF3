@@ -461,7 +461,10 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: active.border),
             ),
-            child: const Text('Chưa chọn ảnh / screenshot / wallpaper'),
+            child: const Text(
+              'Chưa chọn ảnh / screenshot / wallpaper',
+              textAlign: TextAlign.center,
+            ),
           ),
         if (_imageName != null) ...<Widget>[
           const SizedBox(height: 6),

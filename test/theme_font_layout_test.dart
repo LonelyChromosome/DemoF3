@@ -19,6 +19,13 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    await tester.tap(find.text('Ảnh'));
+    await tester.pumpAndSettle();
+    final emptyImage = tester.widget<Text>(
+      find.text('Chưa chọn ảnh / screenshot / wallpaper'),
+    );
+    expect(emptyImage.textAlign, TextAlign.center);
+    expect(tester.takeException(), isNull);
     await tester.drag(find.byType(ListView), const Offset(0, -650));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

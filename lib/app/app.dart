@@ -490,7 +490,7 @@ class _SplashScreen extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            '2.1.1 • Lịch học & Lịch thi',
+            '2.1.2 • Lịch học & Lịch thi',
             style: TextStyle(color: palette.textSecondary, fontSize: 15),
           ),
           const SizedBox(height: 120),
