@@ -26,19 +26,18 @@ class WidgetTimelineDateTest {
                 "2026-08-17").map { it.dateKey })
     }
 
-    @Test fun downwardSwipeFromTodayMovesToNextDayAndStopsAtEnd() {
-        val ordered = WidgetTimeline.arrange(
-            WidgetTimeline.fromDate(
-                listOf(item("2026-09-24"), item("2026-09-25"), item("2026-10-31")),
-                "2026-09-24",
-            ),
-            "2026-09-24", "2026-09-24", "2026-09-24T08:00:00",
+    @Test fun timelineIncludesEveryDayAndKeepsBothSwipeDirectionsBounded() {
+        val days = WidgetTimeline.withCalendarDays(
+            listOf(item("2026-09-24"), item("2026-09-27")), "2026-09-25",
+        ) { date -> item(date).copy(subject = "Không có lịch học") }
+        assertEquals(listOf("2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27"),
+            days.map { it.dateKey })
+        val stack = WidgetTimeline.arrange(
+            days, "2026-09-25", "2026-09-25", "2026-09-25T08:00:00",
         )
-        val stack = WidgetTimeline.forDownwardSwipe(ordered)
-        assertEquals(listOf("2026-10-31", "2026-09-25", "2026-09-24"),
-            stack.items.map { it.dateKey })
-        assertEquals(2, stack.selectedIndex)
-        assertEquals("2026-09-25", stack.items[stack.selectedIndex - 1].dateKey)
-        assertEquals("2026-10-31", stack.items.first().dateKey)
+        assertEquals(1, stack.selectedIndex)
+        assertEquals("2026-09-24", stack.items[stack.selectedIndex - 1].dateKey)
+        assertEquals("2026-09-26", stack.items[stack.selectedIndex + 1].dateKey)
+        assertEquals("2026-09-27", stack.items.last().dateKey)
     }
 }
