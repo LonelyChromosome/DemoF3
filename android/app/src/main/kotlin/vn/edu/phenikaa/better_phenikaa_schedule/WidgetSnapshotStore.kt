@@ -5,6 +5,7 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -28,7 +29,7 @@ internal object WidgetSnapshotStore {
                 if (normalized == null && record.optBoolean("isExam", false) != examMode) {
                     return@mapNotNull null
                 }
-                parseClass(record)
+                parseClass(record, examMode)
             }.filter { item ->
                 if (examMode) item.dateKey >= today else item.dateKey == date
             }.sortedWith(compareBy(WidgetClass::startAt, WidgetClass::id))
@@ -38,7 +39,7 @@ internal object WidgetSnapshotStore {
     fun read(context: Context, widgetId: Int): WidgetCollection {
         if (SmallWidgetMode.isExam(context, widgetId)) {
             val exams = readOverview(context, widgetId, true)
-            return WidgetTimeline.forDownwardSwipe(WidgetCollection(exams, 0))
+            return WidgetCollection(exams, 0)
         }
         val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
         val normalized = preferences.getString(WIDGET_SNAPSHOT_KEY, null)
@@ -64,12 +65,11 @@ internal object WidgetSnapshotStore {
                 parseClass(record)?.let(items::add)
             }
 
-            val visibleItems = WidgetTimeline.fromDate(items, selectedDate).toMutableList()
-            if (visibleItems.none { it.dateKey == selectedDate }) {
-                visibleItems.add(emptyDay(selectedDate, today))
+            val days = WidgetTimeline.withCalendarDays(items, selectedDate) { date ->
+                emptyDay(date, today)
             }
-            WidgetTimeline.forDownwardSwipe(
-                WidgetTimeline.arrange(visibleItems, selectedDate, today, now),
+            WidgetTimeline.arrange(
+                days, selectedDate, today, now,
             )
         }.getOrElse { WidgetCollection.empty() }
     }
@@ -83,7 +83,7 @@ internal object WidgetSnapshotStore {
         return WidgetRefreshDecision.selectedDate(chosen, today)
     }
 
-    private fun parseClass(record: JSONObject): WidgetClass? {
+    private fun parseClass(record: JSONObject, examMode: Boolean = false): WidgetClass? {
         val startAt = record.optString("startAt")
         val endAt = record.optString("endAt")
         if (startAt.length < 16 || endAt.length < 16) return null
@@ -102,6 +102,11 @@ internal object WidgetSnapshotStore {
             startAt = startAt,
             endAt = endAt,
             dateKey = dateKey,
+            examForm = record.optString("className").takeIf { label ->
+                examMode && listOf("thi", "trắc nghiệm", "tự luận", "vấn đáp", "thực hành", "online", "trên máy")
+                    .any { label.contains(it, ignoreCase = true) }
+            } ?: record.optString("examForm"),
+            isExam = examMode || record.optBoolean("isExam", false),
         )
     }
 
@@ -156,13 +161,35 @@ internal object WidgetTimeline {
         return WidgetCollection(items, selectedIndex)
     }
 
-    /** StackView swiping down selects the previous adapter item. */
-    fun forDownwardSwipe(collection: WidgetCollection): WidgetCollection {
-        if (collection.items.isEmpty()) return collection
-        return WidgetCollection(
-            collection.items.asReversed(),
-            collection.items.lastIndex - collection.selectedIndex,
-        )
+    fun withCalendarDays(
+        items: List<WidgetClass>, selectedDate: String,
+        emptyDay: (String) -> WidgetClass,
+    ): List<WidgetClass> {
+        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+        val chosen = parser.parse(selectedDate) ?: return items
+        val start = Calendar.getInstance().apply {
+            time = chosen
+            add(Calendar.DAY_OF_MONTH, -1)
+        }
+        val end = Calendar.getInstance().apply {
+            time = chosen
+            add(Calendar.DAY_OF_MONTH, 1)
+        }
+        items.forEach { item ->
+            val date = parser.parse(item.dateKey) ?: return@forEach
+            if (date.before(start.time)) start.time = date
+            if (date.after(end.time)) end.time = date
+        }
+        val byDay = items.groupBy(WidgetClass::dateKey)
+        val result = ArrayList<WidgetClass>()
+        val cursor = start.clone() as Calendar
+        repeat(370) {
+            if (cursor.after(end)) return result
+            val day = parser.format(cursor.time)
+            result.addAll(byDay[day].orEmpty().ifEmpty { listOf(emptyDay(day)) })
+            cursor.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return result
     }
 }
 
@@ -183,6 +210,8 @@ internal data class WidgetClass(
     val startAt: String,
     val endAt: String,
     val dateKey: String,
+    val examForm: String = "",
+    val isExam: Boolean = false,
 ) {
     val stableId: Long
         get() = id.hashCode().toLong()
