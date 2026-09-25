@@ -5,6 +5,7 @@
   <TextView android:id="@+id/overview_card_date" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:textSize="9sp"/>
   <TextView android:id="@+id/overview_card_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:includeFontPadding="false" android:maxLines="1" android:textSize="13sp" android:textStyle="bold"/>
   <TextView android:id="@+id/overview_card_subject" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="2" android:textSize="10sp" android:textStyle="bold"/>
+  <TextView android:id="@+id/overview_card_form" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:textSize="9sp" android:visibility="gone"/>
   <TextView android:id="@+id/overview_card_room" android:layout_width="match_parent" android:layout_height="wrap_content" android:ellipsize="end" android:includeFontPadding="false" android:maxLines="1" android:textSize="9sp"/>
  </LinearLayout>
 </FrameLayout>
