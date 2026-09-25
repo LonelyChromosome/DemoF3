@@ -695,7 +695,7 @@ class _HsvColorPickerState extends State<_HsvColorPicker> {
   }
 
   void _setHex(String value) {
-    final hex = value.trim().replaceFirst(RegExp(r'^#'), '');
+    final hex = value.trim().replaceFirst(RegExp('^#'), '');
     if (!RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(hex)) {
       setState(() => _hexError = 'Nhập 6 ký tự HEX, ví dụ #1747B5');
       return;
