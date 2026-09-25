@@ -181,6 +181,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 AppWidgetManager.INVALID_APPWIDGET_ID,
             )
             if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
+            val manager = AppWidgetManager.getInstance(context)
+            val before = WidgetSnapshotStore.read(context, id).let { it.items.getOrNull(it.selectedIndex) }
             SmallWidgetMode.toggle(context, id)
             context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
                 .edit()
@@ -190,7 +192,14 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 .apply()
             context.getSharedPreferences(WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE)
                 .edit().putBoolean(resetChildKey(id), true).apply()
-            renderWidget(context, AppWidgetManager.getInstance(context), id)
+            context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
+                .edit().remove(visiblePositionKey(id)).apply()
+            val after = WidgetSnapshotStore.read(context, id).let { it.items.getOrNull(it.selectedIndex) }
+            renderWidget(context, manager, id)
+            if (before != null && after != null) {
+                animateModeSlide(context, manager, id, before, after,
+                    SmallWidgetMode.isExam(context, id))
+            }
             return
         }
         if (intent.action == ACTION_COLLECTION_FRAME_READY) {
@@ -316,7 +325,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         )
         val contentToken = collectionContentToken(context, widgetId, options)
         val previousToken = renderStatePrefs.getString(contentTokenKey(widgetId), null)
-        val orderChanged = previousToken != null && !previousToken.endsWith("|downward-v1")
+        val orderChanged = previousToken != null && !previousToken.endsWith("|calendar-v2")
         if (orderChanged) {
             context.getSharedPreferences(WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE)
                 .edit().putBoolean(resetChildKey(widgetId), true).apply()
@@ -405,6 +414,39 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             reveal.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
             manager.partiallyUpdateAppWidget(widgetId, reveal)
         }, 360L)
+    }
+
+    private fun animateModeSlide(
+        context: Context, manager: AppWidgetManager, id: Int,
+        before: WidgetClass, after: WidgetClass, examMode: Boolean,
+    ) {
+        val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
+        val generation = state.getInt("mode_generation_$id", 0) + 1
+        state.edit().putInt("mode_generation_$id", generation).apply()
+        val size = legacyWidgetSize(manager.getAppWidgetOptions(id))
+        val width = size.width.roundToInt().coerceAtLeast(1)
+        val height = size.height.roundToInt().coerceAtLeast(1)
+        val oldFrame = renderWidgetSlide(context, before, width, height)
+        val nextFrame = renderWidgetSlide(context, after, width, height)
+        val count = 7
+        repeat(count) { frame ->
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (state.getInt("mode_generation_$id", 0) != generation ||
+                    SmallWidgetMode.isExam(context, id) != examMode) return@postDelayed
+                val p = frame.toFloat() / (count - 1)
+                val direction = if (examMode) -1f else 1f
+                val bitmap = Bitmap.createBitmap(nextFrame.width, nextFrame.height,
+                    Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                canvas.drawBitmap(oldFrame, direction * p * bitmap.width, 0f, null)
+                canvas.drawBitmap(nextFrame, direction * (p - 1f) * bitmap.width, 0f, null)
+                val views = RemoteViews(context.packageName, R.layout.schedule_widget)
+                views.setImageViewBitmap(R.id.widget_refresh_cover, bitmap)
+                views.setViewVisibility(R.id.widget_refresh_cover, View.VISIBLE)
+                views.setViewVisibility(R.id.widget_list, View.INVISIBLE)
+                manager.partiallyUpdateAppWidget(id, views)
+            }, frame * 38L)
+        }
     }
 
     private fun buildWidgetViews(
@@ -783,7 +825,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             (root.optJSONArray(if (examMode) "exams" else "classes")
                 ?: root.optJSONArray("records"))?.toString() ?: snapshot
         }.getOrDefault(snapshot)
-        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|downward-v1"
+        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|calendar-v2"
     }
 
     private fun contentTokenKey(widgetId: Int): String = "content_token_$widgetId"
