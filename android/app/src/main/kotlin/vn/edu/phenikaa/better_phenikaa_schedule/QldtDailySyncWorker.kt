@@ -96,6 +96,7 @@ class QldtDailySyncWorker(
                         syncError = "SYNC_SAVE: Không thể lưu dữ liệu đồng bộ."
                         return Result.success()
                     }
+                    runCatching { ExamChangeNotifier.record(applicationContext, bundle.semester, difference) }
                     WidgetRefreshCoordinator.refreshData(applicationContext)
                     syncSucceeded = true
                     reminderSemester = bundle.semester
