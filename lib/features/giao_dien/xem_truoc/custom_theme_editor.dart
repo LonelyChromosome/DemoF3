@@ -520,15 +520,16 @@ class _SectionTitle extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Text(
-      text,
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w800,
+  Widget build(BuildContext context) {
+    final heading = Theme.of(context).textTheme.titleMedium;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        text,
+        style: heading?.copyWith(fontWeight: FontWeight.w800),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _SwatchRow extends StatelessWidget {

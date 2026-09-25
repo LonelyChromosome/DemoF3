@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('font rộng giữ được bố cục tạo theme trên màn hình hẹp', (
-    tester,
-  ) async {
+  testWidgets('wide font fits theme editor', (tester) async {
     tester.view.physicalSize = const Size(720, 1600);
     tester.view.devicePixelRatio = 2;
     addTearDown(() {
