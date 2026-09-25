@@ -280,7 +280,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           if (difference != null) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(_examNotice ?? SemesterSyncMessage.from(difference)),
+                content: Text(
+                  _examNotice ?? SemesterSyncMessage.from(difference),
+                ),
               ),
             );
           }
