@@ -49,6 +49,16 @@ abstract final class DailySync {
     await _channel.invokeMethod<void>('recordAppSyncSuccess');
   }
 
+  static Future<String?> examNotice() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
+    return _channel.invokeMethod<String>('examNotice');
+  }
+
+  static Future<void> ackExamNotice() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('ackExamNotice');
+  }
+
   static Future<void> clearReminders() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     await _channel.invokeMethod<void>('clearReminders');
