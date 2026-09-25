@@ -54,13 +54,22 @@ final class SemesterScheduleVerifier {
         // Only accept a recognizable format when the subject and semester
         // have already been verified; a different class code is still wrong.
         final examLabel = normalizeClassName(row.examForm);
+        const examFormats = <String>[
+          'trắc nghiệm',
+          'tự luận',
+          'vấn đáp',
+          'bài thi',
+          'thi ',
+          'trên máy',
+          'thực hành',
+          'online',
+        ];
         final isExamFormat =
             className.isNotEmpty &&
             (className == examLabel && examLabel.isNotEmpty ||
-                RegExp(
-                  'trắc nghiệm|tự luận|vấn đáp|bài thi|thi |trên máy|thực hành|online',
-                  caseSensitive: false,
-                ).hasMatch(className));
+                examFormats.any(
+                  (label) => className.contains(normalizeClassName(label)),
+                ));
         if (!subject.containsKey(className) && !isExamFormat) {
           throw FormatException(
             'Không xác minh được lớp của lịch: ${row.subjectName}',
