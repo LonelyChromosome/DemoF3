@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
@@ -167,19 +168,30 @@ internal fun renderWidgetSlide(
     val heightPx = height.toFloat()
     val theme = themeOverrideKey?.let { widgetThemeForKey(context, it) }
         ?: readWidgetTheme(context)
+    val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
+        theme.textColor, theme.subtextColor)
+    val visualAccent = palette.accent(if (item.isExam) 4 else 0)
 
     val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = LinearGradient(
-            0f,
-            0f,
-            widthPx,
-            0f,
-            theme.startColor,
-            theme.endColor,
+            0f, 0f, widthPx, heightPx,
+            WidgetVisualPalette.withAlpha(palette.cardStart(if (item.isExam) 4 else 0, true), 64),
+            WidgetVisualPalette.withAlpha(palette.cardEnd(if (item.isExam) 4 else 0, true), 22),
             Shader.TileMode.CLAMP,
         )
     }
     canvas.drawRect(0f, 0f, widthPx, heightPx, backgroundPaint)
+    val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = RadialGradient(widthPx * 0.16f, heightPx * 0.1f, widthPx * 0.58f,
+            intArrayOf(WidgetVisualPalette.withAlpha(visualAccent, 44),
+                WidgetVisualPalette.withAlpha(visualAccent, 0)), null, Shader.TileMode.CLAMP)
+    }
+    canvas.drawRect(0f, 0f, widthPx, heightPx, glow)
+    val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = WidgetVisualPalette.withAlpha(visualAccent, if (item.isExam) 150 else 105)
+    }
+    canvas.drawRoundRect(widthPx * 0.054f, heightPx * 0.22f,
+        widthPx * 0.058f + density, heightPx * 0.78f, density, density, accentPaint)
 
     val left = widthPx * CONTENT_LEFT_FRACTION
     // The three actions form a narrow vertical rail at the right edge.
