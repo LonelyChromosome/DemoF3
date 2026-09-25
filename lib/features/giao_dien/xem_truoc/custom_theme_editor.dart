@@ -347,15 +347,22 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
             const SizedBox(height: 12),
             _SectionTitle('Font'),
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _font.kind == AppFontKind.imported
                   ? 'imported'
                   : _font.id,
               decoration: const InputDecoration(border: OutlineInputBorder()),
               items: <DropdownMenuItem<String>>[
                 for (final item in AppFontChoice.builtIns)
-                  DropdownMenuItem(value: item.id, child: Text(item.label)),
+                  DropdownMenuItem(
+                    value: item.id,
+                    child: Text(item.label, overflow: TextOverflow.ellipsis),
+                  ),
                 if (_font.kind == AppFontKind.imported)
-                  DropdownMenuItem(value: 'imported', child: Text(_font.label)),
+                  DropdownMenuItem(
+                    value: 'imported',
+                    child: Text(_font.label, overflow: TextOverflow.ellipsis),
+                  ),
               ],
               onChanged: (value) {
                 if (value == null || value == 'imported') return;
