@@ -258,12 +258,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                                       'QLĐT trả lỗi HTTP ${response.statusCode}.',
                                       code: 'HTTP_ERROR',
                                     );
-                                  } else {
-                                    setState(
-                                      () => _status =
-                                          'QLĐT trả lỗi HTTP ${response.statusCode}.',
-                                    );
                                   }
+                                  _readinessTimer?.cancel();
+                                  setState(() {
+                                    _pageReady = false;
+                                    _showWebPage = true;
+                                    _status = 'QLĐT trả lỗi HTTP ${response.statusCode}. Hãy thử tải lại.';
+                                  });
                                 }
                               },
                               onRenderProcessGone: (_, detail) {
@@ -304,7 +305,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                       ],
                     ),
             ),
-            if (_pageReady && !_syncing && _autoSyncStarted)
+            if (!_syncing &&
+                (_autoSyncStarted || _failureDiagnosticsJson != null))
               SafeArea(
                 top: false,
                 child: Padding(
@@ -313,7 +315,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                     width: double.infinity,
                     height: 48,
                     child: OutlinedButton.icon(
-                      onPressed: _sync,
+                      onPressed: _pageReady && _scheduleStages.contains('request')
+                          ? _sync
+                          : _reload,
                       icon: const Icon(Icons.refresh_rounded),
                       label: const Text('Thử đồng bộ lại'),
                     ),
@@ -399,6 +403,20 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   Future<void> _reload() async {
     _readinessTimer?.cancel();
+    _phaseTimer?.cancel();
+    _syncWatchdog?.cancel();
+    _sessionTimer?.cancel();
+    ++_syncEpoch;
+    _autoSyncStarted = false;
+    _pendingSchedule = null;
+    _pendingRegistrationRaw = null;
+    _currentPhase = null;
+    setState(() {
+      _syncing = false;
+      _pageReady = false;
+      _showWebPage = false;
+      _status = 'Đang tải lại QLĐT...';
+    });
     if (_rendererGone) {
       setState(() {
         _rendererGone = false;
@@ -972,6 +990,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _pendingRegistrationRaw = null;
     _failureDiagnosticsJson = null;
     _scheduleStages.clear();
+    _scheduleStages.add('dispatch');
 
     final now = DateTime.now();
     final academicStartYear = now.month >= 8 ? now.year : now.year - 1;
