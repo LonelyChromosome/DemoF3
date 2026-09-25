@@ -1,5 +1,8 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
+import java.text.Normalizer
+import java.util.Locale
+
 internal object OverviewPager {
     fun panelHeight(hostHeightDp: Int): Int = hostHeightDp.coerceIn(104, 140)
 
@@ -19,6 +22,24 @@ internal object OverviewPager {
         }
         return words.mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("")
             .ifEmpty { subject }
+    }
+
+    fun examLabel(subject: String, form: String): String {
+        val acronym = subject.split(Regex("\\s+")).filterNot {
+            it.equals("và", true) || it.equals("cho", true) || it.equals("của", true)
+        }.mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("")
+            .ifEmpty { subject }
+        val normalized = Normalizer.normalize(form.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+            .replace(Regex("\\p{M}+"), "").replace('đ', 'd')
+        val tn = "trac nghiem" in normalized
+        val tl = "tu luan" in normalized
+        val suffix = when {
+            tn && tl -> "TN+TL"
+            tn -> "TN"
+            tl -> "TL"
+            else -> "?"
+        }
+        return "$acronym ($suffix)"
     }
 
     fun pageSize(widthDp: Int, heightDp: Int): Int =
