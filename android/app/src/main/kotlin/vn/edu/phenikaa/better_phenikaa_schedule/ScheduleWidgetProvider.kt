@@ -10,6 +10,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
@@ -44,73 +46,108 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         return colors.textColor to colors.iconColor
     }
 
+    internal fun overviewTimeColor(context: Context, index: Int, active: Boolean): Int {
+        val theme = readThemeColors(context)
+        return WidgetVisualPalette(theme.startColor, theme.endColor,
+            theme.textColor, theme.textColor).timeText(index, active)
+    }
+
     internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int): Bitmap {
         val theme = readThemeColors(context)
+        val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
+            theme.textColor, theme.textColor)
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (heightDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            val end = if (theme.key == "classic") 0xFF992C71.toInt() else theme.endColor
             shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
-                intArrayOf(theme.startColor, blend(theme.startColor, end, 0.48f), end),
-                floatArrayOf(0f, 0.52f, 1f), Shader.TileMode.CLAMP)
+                intArrayOf(palette.backgroundStart,
+                    blend(palette.backgroundStart, palette.backgroundEnd, 0.48f),
+                    palette.backgroundEnd),
+                floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
         }
-        Canvas(bitmap).drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+        val canvas = Canvas(bitmap)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+        val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient(width * 0.22f, -height * 0.2f, width * 0.82f,
+                intArrayOf(WidgetVisualPalette.withAlpha(theme.textColor, 34),
+                    WidgetVisualPalette.withAlpha(theme.textColor, 0)),
+                null, Shader.TileMode.CLAMP)
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), glow)
         return bitmap
     }
 
-    internal fun overviewCardBackground(context: Context, index: Int): Bitmap {
+    internal fun overviewCardBackground(context: Context, index: Int, active: Boolean): Bitmap {
         val theme = readThemeColors(context)
+        val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
+            theme.textColor, theme.textColor)
         val density = context.resources.displayMetrics.density
         val width = (110 * density).roundToInt().coerceAtLeast(1)
         val height = (76 * density).roundToInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        // The five accent stops follow the reference mockup. Other themes derive
-        // their card contrast from the active Theme Engine's own colors.
-        val accent = if (theme.key == "classic") {
-            intArrayOf(0xFF0874CA.toInt(), 0xFF334AA9.toInt(), 0xFF7644B3.toInt(),
-                0xFFAD478E.toInt(), 0xFFC24178.toInt())[index % 5]
-        } else {
-            overviewAccent(theme, index)
-        }
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
-                blend(accent, theme.startColor, if (theme.key == "classic") 0.4f else 0.10f),
-                accent, Shader.TileMode.CLAMP)
-        }
+        val canvas = Canvas(bitmap)
         val radius = 12f * density
-        Canvas(bitmap).drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(),
-            radius, radius, paint)
+        val edge = (if (active) 3f else 2f) * density
+        val bounds = RectF(edge, edge, width - edge, height - edge)
+        val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.glow(index, active) }
+        canvas.drawRoundRect(RectF(0f, 0f, width.toFloat(), height.toFloat()),
+            radius + edge, radius + edge, halo)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(edge, edge, width.toFloat(), height.toFloat(),
+                intArrayOf(palette.cardStart(index, active),
+                    blend(palette.cardStart(index, active), palette.cardEnd(index, active), 0.5f),
+                    palette.cardEnd(index, active)), null, Shader.TileMode.CLAMP)
+        }
+        canvas.drawRoundRect(bounds, radius, radius, paint)
+        val sheen = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(0f, edge, 0f, height * 0.68f,
+                WidgetVisualPalette.withAlpha(theme.textColor, if (active) 31 else 17),
+                WidgetVisualPalette.withAlpha(theme.textColor, 0), Shader.TileMode.CLAMP)
+        }
+        canvas.drawRoundRect(bounds, radius, radius, sheen)
+        val border = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = palette.cardBorder(index, active)
+            style = Paint.Style.STROKE
+            strokeWidth = (if (active) 1.3f else 0.8f) * density
+        }
+        canvas.drawRoundRect(bounds, radius, radius, border)
         return bitmap
     }
 
-    internal fun overviewProgress(context: Context, widthDp: Int, count: Int, slots: Int): Bitmap {
+    internal fun overviewProgress(context: Context, widthDp: Int, count: Int,
+                                  slots: Int, startIndex: Int): Bitmap {
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (29 * density).roundToInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val theme = readThemeColors(context)
+        val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
+            theme.textColor, theme.textColor)
         val y = height / 2f
         val left = 10f * density
         val right = width - left
         val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = theme.iconColor
-            alpha = 170
-            strokeWidth = 1.5f * density
+            shader = LinearGradient(left, y, right, y,
+                palette.trackStart(), palette.trackEnd(), Shader.TileMode.CLAMP)
+            strokeWidth = 1.7f * density
         }
         canvas.drawLine(left, y, right, y, line)
         repeat(count.coerceAtMost(5)) { index ->
             val x = left + (right - left) * (index + 0.5f) / slots.coerceAtLeast(1)
-            val accent = if (theme.key == "classic") {
-                intArrayOf(0xFF12CCFA.toInt(), 0xFF6578FF.toInt(), 0xFFC375E8.toInt(),
-                    0xFFFA67BA.toInt(), 0xFFFF557C.toInt())[index]
-            } else {
-                overviewAccent(theme, index)
+            val accent = palette.accent(startIndex + index)
+            if (index == 0) {
+                val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = palette.glow(startIndex + index, true)
+                    style = Paint.Style.STROKE
+                    strokeWidth = 3.5f * density
+                }
+                canvas.drawCircle(x, y, 7f * density, ring)
             }
             val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
-            canvas.drawCircle(x, y, 5f * density, dot)
+            canvas.drawCircle(x, y, (if (index == 0) 5.5f else 4.5f) * density, dot)
         }
         return bitmap
     }
@@ -805,6 +842,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         heightDp: Int,
         theme: ThemeColors,
     ): Bitmap {
+        val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
+            theme.textColor, theme.textColor)
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (heightDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
@@ -814,13 +853,21 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 0f,
                 0f,
                 width.toFloat(),
-                0f,
-                theme.startColor,
-                theme.endColor,
+                height.toFloat(),
+                palette.backgroundStart,
+                palette.backgroundEnd,
                 Shader.TileMode.CLAMP,
             )
         }
-        Canvas(bitmap).drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+        val canvas = Canvas(bitmap)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+        val softLight = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient(width * 0.22f, -height * 0.35f, width * 0.7f,
+                intArrayOf(WidgetVisualPalette.withAlpha(theme.textColor, 30),
+                    WidgetVisualPalette.withAlpha(theme.textColor, 0)),
+                null, Shader.TileMode.CLAMP)
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), softLight)
         return bitmap
     }
 
