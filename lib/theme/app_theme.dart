@@ -799,9 +799,7 @@ double themeFontSizeFactor(String? family) {
   if (selected.width <= 0 || selected.height <= 0) return 1;
   final widthRatio = standard.width / selected.width;
   final heightRatio = standard.height / selected.height;
-  return (widthRatio < heightRatio ? widthRatio : heightRatio)
-      .clamp(0.5, 1.1)
-      .toDouble();
+  return (widthRatio < heightRatio ? widthRatio : heightRatio).clamp(0.5, 1.1);
 }
 
 OutlinedBorder themeButtonShape(AppThemePalette palette) {
