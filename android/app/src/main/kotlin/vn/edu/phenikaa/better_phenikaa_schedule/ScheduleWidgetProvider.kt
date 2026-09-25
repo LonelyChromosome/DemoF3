@@ -146,10 +146,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
             theme.textColor, theme.textColor, theme.key)
         val y = height / 2f
-        val left = 10f * density
-        val right = width - left
-        // Leave clear space around the navigation chevrons; dots keep their slot positions.
-        val trackLeft = 42f * density
+        val slotsSafe = slots.coerceAtLeast(1)
+        // Keep the track centered under the card slots; arrows retain their own hitboxes.
+        val slotWidth = width.toFloat() / slotsSafe
+        val trackLeft = slotWidth * 0.5f
         val trackRight = width - trackLeft
         if (theme.key == "classic") {
             val track = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -162,7 +162,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             val dots = intArrayOf(0xFF12CCFA.toInt(), 0xFF6578FF.toInt(),
                 0xFFC375E8.toInt(), 0xFFFA67BA.toInt(), 0xFFFF557C.toInt())
             if (drawDots) repeat(count.coerceAtMost(5)) { index ->
-                val x = left + (right - left) * (index + 0.5f) / slots.coerceAtLeast(1)
+                val x = trackLeft + (trackRight - trackLeft) * (index + 0.5f) / slotsSafe
                 canvas.drawCircle(x, y, 5f * density,
                     Paint(Paint.ANTI_ALIAS_FLAG).apply { color = dots[(startIndex + index) % 5] })
             }
