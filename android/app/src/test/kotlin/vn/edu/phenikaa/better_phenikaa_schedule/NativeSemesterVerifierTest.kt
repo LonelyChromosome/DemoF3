@@ -66,6 +66,32 @@ class NativeSemesterVerifierTest {
         assertEquals(1, JSONObject(result.widgetSnapshot).getJSONArray("exams").length())
     }
 
+    @Test fun anExamFormatLabelAndNearbyClassDatesAreVerified() {
+        val before = NativeSemesterVerifier.verify(
+            envelope(date = "10/08/2026"), registration, "",
+        )
+        assertEquals(1, JSONObject(before.widgetSnapshot).getJSONArray("classes").length())
+        val after = NativeSemesterVerifier.verify(
+            envelope(date = "02/11/2026"), registration, "",
+        )
+        assertEquals(1, JSONObject(after.widgetSnapshot).getJSONArray("classes").length())
+        val exam = envelope(date = "24/10/2026", section = "Trắc nghiệm trên máy 30p")
+            .replace("LICHHOC", "LICHTHI")
+        val result = NativeSemesterVerifier.verify(exam, registration, "")
+        val widget = JSONObject(result.widgetSnapshot).getJSONArray("exams").getJSONObject(0)
+        assertEquals("Trắc nghiệm trên máy 30p", widget.getString("examForm"))
+        assertThrows(IllegalArgumentException::class.java) {
+            NativeSemesterVerifier.verify(
+                exam.replace("Trắc nghiệm trên máy 30p", "WEB-2025-LT"), registration, "",
+            )
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            NativeSemesterVerifier.verify(
+                envelope(date = "01/07/2026"), registration, "",
+            )
+        }
+    }
+
     @Test fun attendanceMarkupIsIgnoredButAnotherClassIsStillRejected() {
         val actual = registration.replace("WEB-2026-LT", "Kỹ thuật phần mềm-1-1-26(COUR02)")
             .replace("Thiết kế web nâng cao", "Môn Kỹ thuật phần mềm-1-1-26(COUR02)")
