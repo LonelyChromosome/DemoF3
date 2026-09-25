@@ -169,29 +169,33 @@ internal fun renderWidgetSlide(
     val theme = themeOverrideKey?.let { widgetThemeForKey(context, it) }
         ?: readWidgetTheme(context)
     val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
-        theme.textColor, theme.subtextColor)
+        theme.textColor, theme.subtextColor, theme.key)
     val visualAccent = palette.accent(if (item.isExam) 4 else 0)
 
     val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = LinearGradient(
-            0f, 0f, widthPx, heightPx,
-            WidgetVisualPalette.withAlpha(palette.cardStart(if (item.isExam) 4 else 0, true), 64),
-            WidgetVisualPalette.withAlpha(palette.cardEnd(if (item.isExam) 4 else 0, true), 22),
+            0f, 0f, widthPx, if (theme.key == "classic") 0f else heightPx,
+            if (theme.key == "classic") theme.startColor
+                else palette.cardStart(if (item.isExam) 4 else 0, true),
+            if (theme.key == "classic") theme.endColor
+                else palette.cardEnd(if (item.isExam) 4 else 0, true),
             Shader.TileMode.CLAMP,
         )
     }
     canvas.drawRect(0f, 0f, widthPx, heightPx, backgroundPaint)
-    val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        shader = RadialGradient(widthPx * 0.16f, heightPx * 0.1f, widthPx * 0.58f,
-            intArrayOf(WidgetVisualPalette.withAlpha(visualAccent, 44),
-                WidgetVisualPalette.withAlpha(visualAccent, 0)), null, Shader.TileMode.CLAMP)
+    if (theme.key != "classic") {
+        val glow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient(widthPx * 0.16f, heightPx * 0.1f, widthPx * 0.58f,
+                intArrayOf(WidgetVisualPalette.withAlpha(visualAccent, 44),
+                    WidgetVisualPalette.withAlpha(visualAccent, 0)), null, Shader.TileMode.CLAMP)
+        }
+        canvas.drawRect(0f, 0f, widthPx, heightPx, glow)
+        val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = WidgetVisualPalette.withAlpha(visualAccent, if (item.isExam) 150 else 105)
+        }
+        canvas.drawRoundRect(widthPx * 0.054f, heightPx * 0.22f,
+            widthPx * 0.058f + density, heightPx * 0.78f, density, density, accentPaint)
     }
-    canvas.drawRect(0f, 0f, widthPx, heightPx, glow)
-    val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = WidgetVisualPalette.withAlpha(visualAccent, if (item.isExam) 150 else 105)
-    }
-    canvas.drawRoundRect(widthPx * 0.054f, heightPx * 0.22f,
-        widthPx * 0.058f + density, heightPx * 0.78f, density, density, accentPaint)
 
     val left = widthPx * CONTENT_LEFT_FRACTION
     // The three actions form a narrow vertical rail at the right edge.
@@ -201,13 +205,13 @@ internal fun renderWidgetSlide(
     val subjectPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = theme.textColor
         textSize = heightPx * SUBJECT_TEXT_HEIGHT_FRACTION
-        typeface = themedTypeface(context, theme, Typeface.BOLD)
+        typeface = WidgetFont.typeface(context, Typeface.BOLD)
         setShadowLayer(heightPx * 0.018f, 0f, heightPx * 0.008f, 0x66000000)
     }
     val detailPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = theme.subtextColor
         textSize = heightPx * DETAIL_TEXT_HEIGHT_FRACTION
-        typeface = themedTypeface(context, theme, Typeface.NORMAL)
+        typeface = WidgetFont.typeface(context, Typeface.NORMAL)
         setShadowLayer(heightPx * 0.015f, 0f, heightPx * 0.006f, 0x66000000)
     }
 
@@ -237,7 +241,7 @@ internal fun renderWidgetSlide(
         val formPaint = TextPaint(detailPaint).apply {
             color = theme.textColor
             textSize = heightPx * 0.145f
-            typeface = themedTypeface(context, theme, Typeface.BOLD)
+            typeface = WidgetFont.typeface(context, Typeface.BOLD)
         }
         val label = "Thi: ${item.examForm.ifBlank { "Chưa rõ hình thức" }}"
         canvas.drawText(TextUtils.ellipsize(label, formPaint, titleMaxWidth,
@@ -414,18 +418,6 @@ private fun widgetThemeForKey(context: Context, key: String): WidgetTheme {
     "youtube" -> WidgetTheme(key, 0xFF181818.toInt(), 0xFF2B0E14.toInt(), 0xFFFFFFFF.toInt(), 0xFFFF8A9F.toInt())
     "steam" -> WidgetTheme(key, 0xFF171D25.toInt(), 0xFF1B3D55.toInt(), 0xFFD6E9F8.toInt(), 0xFF66C0F4.toInt())
     else -> WidgetTheme("classic", 0xFF173A8E.toInt(), 0xFF315AB5.toInt(), 0xFFFFFFFF.toInt(), 0xFFDDE8FF.toInt())
-    }
-}
-
-private fun themedTypeface(context: Context, theme: WidgetTheme, style: Int): Typeface {
-    if (theme.key != "minecraft") {
-        return Typeface.create(Typeface.DEFAULT, style)
-    }
-    return try {
-        val base = context.resources.getFont(R.font.minecraft_custom)
-        Typeface.create(base, style)
-    } catch (_: Exception) {
-        Typeface.create(Typeface.MONOSPACE, style)
     }
 }
 

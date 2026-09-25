@@ -10,6 +10,7 @@ internal class WidgetVisualPalette(
     private val end: Int,
     val primaryText: Int,
     val secondaryText: Int,
+    private val vibeKey: String = "classic",
 ) {
     private val lightText = luminance(primaryText) > 0.5
     private val dominant = mix(start, end, 0.28f)
@@ -23,9 +24,17 @@ internal class WidgetVisualPalette(
         val sample = mix(start, end, index / 4f)
         val hsv = FloatArray(3)
         Color.colorToHSV(sample, hsv)
-        if (hsv[1] < 0.12f) hsv[0] = anchorHue
-        hsv[0] = (hsv[0] + (index - 2) * 3f + 360f) % 360f
-        hsv[1] = (hsv[1] * 0.84f + 0.10f).coerceIn(0.25f, 0.76f)
+        val vibeHue = when (vibeKey) {
+            "minecraft", "ben10" -> 96f
+            "lol" -> 43f
+            "valorant", "youtube" -> 355f
+            "steam" -> 203f
+            "facebook" -> 214f
+            "tiktok" -> if (index % 2 == 0) 182f else 331f
+            else -> if (hsv[1] < 0.12f) anchorHue else hsv[0]
+        }
+        hsv[0] = (vibeHue + (index - 2) * 8f + 360f) % 360f
+        hsv[1] = (hsv[1] * 0.72f + 0.20f).coerceIn(0.29f, 0.76f)
         hsv[2] = if (lightText) hsv[2].coerceIn(0.56f, 0.89f)
             else hsv[2].coerceIn(0.32f, 0.72f)
         Color.HSVToColor(hsv)

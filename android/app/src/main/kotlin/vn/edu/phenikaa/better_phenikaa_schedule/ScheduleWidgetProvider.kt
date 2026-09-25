@@ -29,6 +29,8 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 class ScheduleWidgetProvider : HomeWidgetProvider() {
+    internal fun isBetterDefault(context: Context): Boolean = readThemeColors(context).key == "classic"
+
     internal fun restoreDisplay(context: Context, manager: AppWidgetManager, ids: IntArray) {
         val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
         val visible = context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
@@ -48,24 +50,26 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
 
     internal fun overviewTimeColor(context: Context, index: Int, active: Boolean): Int {
         val theme = readThemeColors(context)
+        if (theme.key == "classic") return theme.textColor
         return WidgetVisualPalette(theme.startColor, theme.endColor,
-            theme.textColor, theme.textColor).timeText(index, active)
+            theme.textColor, theme.textColor, theme.key).timeText(index, active)
     }
 
     internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int): Bitmap {
         val theme = readThemeColors(context)
         val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
-            theme.textColor, theme.textColor)
+            theme.textColor, theme.textColor, theme.key)
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (heightDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            val start = if (theme.key == "classic") theme.startColor else palette.backgroundStart
+            val end = if (theme.key == "classic") 0xFF992C71.toInt() else palette.backgroundEnd
             shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
-                intArrayOf(palette.backgroundStart,
-                    blend(palette.backgroundStart, palette.backgroundEnd, 0.48f),
-                    palette.backgroundEnd),
-                floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+                intArrayOf(start, blend(start, end, 0.48f), end),
+                floatArrayOf(0f, if (theme.key == "classic") 0.52f else 0.55f, 1f),
+                Shader.TileMode.CLAMP)
         }
         val canvas = Canvas(bitmap)
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
@@ -75,20 +79,33 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                     WidgetVisualPalette.withAlpha(theme.textColor, 0)),
                 null, Shader.TileMode.CLAMP)
         }
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), glow)
+        if (theme.key != "classic") {
+            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), glow)
+        }
         return bitmap
     }
 
     internal fun overviewCardBackground(context: Context, index: Int, active: Boolean): Bitmap {
         val theme = readThemeColors(context)
         val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
-            theme.textColor, theme.textColor)
+            theme.textColor, theme.textColor, theme.key)
         val density = context.resources.displayMetrics.density
         val width = (110 * density).roundToInt().coerceAtLeast(1)
         val height = (76 * density).roundToInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val radius = 12f * density
+        if (theme.key == "classic") {
+            val accent = intArrayOf(0xFF0874CA.toInt(), 0xFF334AA9.toInt(),
+                0xFF7644B3.toInt(), 0xFFAD478E.toInt(), 0xFFC24178.toInt())[index % 5]
+            val baseline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
+                    blend(accent, theme.startColor, 0.4f), accent, Shader.TileMode.CLAMP)
+            }
+            canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(),
+                radius, radius, baseline)
+            return bitmap
+        }
         val edge = (if (active) 3f else 2f) * density
         val bounds = RectF(edge, edge, width - edge, height - edge)
         val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.glow(index, active) }
@@ -125,10 +142,26 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val canvas = Canvas(bitmap)
         val theme = readThemeColors(context)
         val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
-            theme.textColor, theme.textColor)
+            theme.textColor, theme.textColor, theme.key)
         val y = height / 2f
         val left = 10f * density
         val right = width - left
+        if (theme.key == "classic") {
+            val track = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = theme.iconColor
+                alpha = 170
+                strokeWidth = 1.5f * density
+            }
+            canvas.drawLine(left, y, right, y, track)
+            val dots = intArrayOf(0xFF12CCFA.toInt(), 0xFF6578FF.toInt(),
+                0xFFC375E8.toInt(), 0xFFFA67BA.toInt(), 0xFFFF557C.toInt())
+            repeat(count.coerceAtMost(5)) { index ->
+                val x = left + (right - left) * (index + 0.5f) / slots.coerceAtLeast(1)
+                canvas.drawCircle(x, y, 5f * density,
+                    Paint(Paint.ANTI_ALIAS_FLAG).apply { color = dots[(startIndex + index) % 5] })
+            }
+            return bitmap
+        }
         val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(left, y, right, y,
                 palette.trackStart(), palette.trackEnd(), Shader.TileMode.CLAMP)
@@ -463,6 +496,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
             reveal.setViewVisibility(R.id.widget_list, if (hasItems) View.VISIBLE else View.GONE)
             reveal.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
+            reveal.setViewVisibility(R.id.widget_empty_background,
+                if (hasItems) View.GONE else View.VISIBLE)
             reveal.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
             manager.partiallyUpdateAppWidget(widgetId, reveal)
         }, 700L)
@@ -534,10 +569,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         }
 
         val theme = readThemeColors(context)
-        views.setImageViewBitmap(
-            R.id.widget_theme_background,
-            renderThemeBackground(context, renderWidthDp, renderHeightDp, theme),
-        )
+        val background = renderThemeBackground(context, renderWidthDp, renderHeightDp, theme)
+        views.setImageViewBitmap(R.id.widget_theme_background, background)
+        views.setImageViewBitmap(R.id.widget_empty_background, background)
         views.setInt(R.id.widget_calendar, "setColorFilter", theme.iconColor)
         val examMode = SmallWidgetMode.isExam(context, widgetId)
         views.setInt(R.id.widget_mode, "setColorFilter",
@@ -559,6 +593,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         views.setFloat(R.id.widget_root, "setAlpha", if (waitingForTheme) 0f else 1f)
         val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
         views.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
+        views.setViewVisibility(R.id.widget_empty_background,
+            if (hasItems) View.GONE else View.VISIBLE)
 
         if (showRefreshCover && hasItems && !waitingForTheme) {
             val cover = renderWidgetRefreshCover(
@@ -696,10 +732,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val heightDp = size.height.roundToInt().coerceAtLeast(1)
         val targetTheme = themeColorsForKey(context, targetThemeKey)
         val hiddenTarget = RemoteViews(context.packageName, R.layout.schedule_widget)
-        hiddenTarget.setImageViewBitmap(
-            R.id.widget_theme_background,
-            renderThemeBackground(context, widthDp, heightDp, targetTheme),
-        )
+        val targetBackground = renderThemeBackground(context, widthDp, heightDp, targetTheme)
+        hiddenTarget.setImageViewBitmap(R.id.widget_theme_background, targetBackground)
+        hiddenTarget.setImageViewBitmap(R.id.widget_empty_background, targetBackground)
         hiddenTarget.setInt(R.id.widget_calendar, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setInt(R.id.widget_mode, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setInt(R.id.widget_reload, "setColorFilter", targetTheme.iconColor)
@@ -709,6 +744,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
         hiddenTarget.setViewVisibility(R.id.widget_list, if (hasItems) View.VISIBLE else View.GONE)
         hiddenTarget.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
+        hiddenTarget.setViewVisibility(R.id.widget_empty_background,
+            if (hasItems) View.GONE else View.VISIBLE)
         manager.partiallyUpdateAppWidget(widgetId, hiddenTarget)
 
         state.edit().putString(transitionPhaseKey(widgetId), PHASE_WAITING_TARGET).apply()
@@ -843,11 +880,19 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         theme: ThemeColors,
     ): Bitmap {
         val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
-            theme.textColor, theme.textColor)
+            theme.textColor, theme.textColor, theme.key)
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (heightDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        if (theme.key == "classic") {
+            Canvas(bitmap).drawRect(0f, 0f, width.toFloat(), height.toFloat(),
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    shader = LinearGradient(0f, 0f, width.toFloat(), 0f,
+                        theme.startColor, theme.endColor, Shader.TileMode.CLAMP)
+                })
+            return bitmap
+        }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(
                 0f,
@@ -903,7 +948,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             (root.optJSONArray(if (examMode) "exams" else "classes")
                 ?: root.optJSONArray("records"))?.toString() ?: snapshot
         }.getOrDefault(snapshot)
-        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|${readThemeColors(context).key}|calendar-v3"
+        val fontKey = snapshotPreferences.getString(MainActivity.WIDGET_FONT_FAMILY_KEY, "").orEmpty()
+        val fontPath = snapshotPreferences.getString(MainActivity.WIDGET_FONT_PATH_KEY, "").orEmpty()
+        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|${readThemeColors(context).key}|${fontKey.hashCode()}:${fontPath.hashCode()}|calendar-v3"
     }
 
     private fun contentTokenKey(widgetId: Int): String = "content_token_$widgetId"

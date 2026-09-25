@@ -10,6 +10,24 @@ import java.io.File
 
 /** RemoteViews accepts parcelable character styles even though it cannot set a Typeface directly. */
 internal object WidgetFont {
+    fun typeface(context: Context, weight: Int = Typeface.NORMAL): Typeface {
+        val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val family = prefs.getString(MainActivity.WIDGET_FONT_FAMILY_KEY, "").orEmpty()
+        val path = prefs.getString(MainActivity.WIDGET_FONT_PATH_KEY, "").orEmpty()
+        val imported = File(path)
+        val importDir = File(context.filesDir, "theme_imports").canonicalFile
+        val base = runCatching {
+            when {
+                path.isNotBlank() && imported.canonicalFile.parentFile == importDir &&
+                    imported.isFile -> Typeface.createFromFile(imported)
+                family == "MinecraftCustom" -> context.resources.getFont(R.font.minecraft_custom)
+                family.isNotBlank() -> Typeface.create(family, Typeface.NORMAL)
+                else -> Typeface.DEFAULT
+            }
+        }.getOrDefault(Typeface.DEFAULT)
+        return Typeface.create(base, weight)
+    }
+
     fun text(context: Context, value: String): CharSequence {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val family = prefs.getString(MainActivity.WIDGET_FONT_FAMILY_KEY, "").orEmpty()
@@ -17,20 +35,7 @@ internal object WidgetFont {
         if (family.isBlank() && path.isBlank()) return value
         val style = when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.P -> {
-                val face = runCatching {
-                    val imported = File(path)
-                    val importDir = File(context.filesDir, "theme_imports").canonicalFile
-                    when {
-                        path.isNotBlank() && imported.canonicalFile.parentFile == importDir &&
-                            imported.isFile -> Typeface.createFromFile(imported)
-                        family == "MinecraftCustom" ->
-                            Typeface.createFromAsset(context.assets,
-                                "flutter_assets/assets/fonts/minecraft.ttf")
-                        family.isNotBlank() -> Typeface.create(family, Typeface.NORMAL)
-                        else -> null
-                    }
-                }.getOrNull() ?: return value
-                TypefaceSpan(face)
+                TypefaceSpan(typeface(context))
             }
             family == "serif" || family == "monospace" -> TypefaceSpan(family)
             else -> return value

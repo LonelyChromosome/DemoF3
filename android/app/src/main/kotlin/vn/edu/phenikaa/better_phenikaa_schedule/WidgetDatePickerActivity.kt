@@ -311,7 +311,7 @@ class WidgetDatePickerActivity : Activity() {
             .putBoolean(ScheduleWidgetProvider.resetChildKey(widgetId), true)
             .apply()
         refreshWidget(widgetId)
-        finish()
+        finishAndRemoveTask()
     }
 
     private fun refreshWidget(widgetId: Int) {

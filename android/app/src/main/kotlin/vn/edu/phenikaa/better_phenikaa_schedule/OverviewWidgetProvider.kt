@@ -170,6 +170,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             state.edit().putInt(pageKey(id), page).apply()
         }
         val (textColor, iconColor) = ScheduleWidgetProvider().overviewColors(context)
+        val betterDefault = ScheduleWidgetProvider().isBetterDefault(context)
         val views = RemoteViews(context.packageName, R.layout.overview_widget)
         val openApp = PendingIntent.getActivity(
             context, id, Intent(context, MainActivity::class.java).apply {
@@ -300,7 +301,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 card.setTextColor(R.id.overview_card_subject, textColor)
                 listOf(R.id.overview_card_date, R.id.overview_card_form,
                     R.id.overview_card_room).forEach {
-                    card.setTextColor(it, WidgetVisualPalette.withAlpha(textColor, 210))
+                    card.setTextColor(it, if (betterDefault)
+                        textColor else WidgetVisualPalette.withAlpha(textColor, 210))
                 }
                 row.addView(R.id.overview_row, card)
             }
