@@ -84,7 +84,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 val direction = intent.getIntExtra(EXTRA_DIRECTION, 0).coerceIn(-1, 1)
                 val items = WidgetSnapshotStore.readOverview(context, id, state.getBoolean(modeKey(id), false))
                 val options = AppWidgetManager.getInstance(context).getAppWidgetOptions(id)
-                val size = OverviewPager.pageSize(
+                val size = if (state.getBoolean(modeKey(id), false)) 2 else OverviewPager.pageSize(
                     options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320),
                     options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160),
                 )
@@ -131,8 +131,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val footerHeight = if (compact) 16 else if (panelHeight >= 140) 24 else 20
         val verticalPadding = if (compact) 4 else 10
         val cardHeight = panelHeight - verticalPadding - headerHeight - footerHeight - 5
-        val columns = OverviewPager.columns(width)
-        val size = OverviewPager.pageSize(width, height)
+        val columns = if (examMode) 2 else OverviewPager.columns(width)
+        val size = if (examMode) 2 else OverviewPager.pageSize(width, height)
         val page = WidgetRefreshDecision.overviewPage(
             state.getInt(pageKey(id), 0), items.size, size,
         )
@@ -238,6 +238,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                     TypedValue.COMPLEX_UNIT_SP, if (compact) 10f else 11f)
                 card.setTextViewTextSize(R.id.overview_card_room,
                     TypedValue.COMPLEX_UNIT_SP, if (compact) 9f else 10f)
+                card.setTextViewTextSize(R.id.overview_card_form,
+                    TypedValue.COMPLEX_UNIT_SP, if (compact) 9f else 10f)
                 val colorIndex = page * size + rowIndex * columns + columnIndex
                 card.setImageViewBitmap(R.id.overview_card_background,
                     ScheduleWidgetProvider().overviewCardBackground(context, colorIndex))
@@ -251,6 +253,11 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 card.setTextViewText(R.id.overview_card_subject,
                     WidgetFont.text(context,
                         OverviewPager.compactSubject(item.subject, (width - 24) / columns)))
+                val examForm = item.examForm.ifBlank { "Chưa rõ hình thức thi" }
+                card.setTextViewText(R.id.overview_card_form,
+                    WidgetFont.text(context, "Thi: $examForm"))
+                card.setViewVisibility(R.id.overview_card_form,
+                    if (examMode) View.VISIBLE else View.GONE)
                 card.setContentDescription(R.id.overview_card_root, item.subject)
                 card.setOnClickPendingIntent(R.id.overview_card_root, openApp)
                 // The header already shows the selected date, and exam cards have their own date.
@@ -258,7 +265,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 card.setTextViewText(R.id.overview_card_room,
                     WidgetFont.text(context, item.room.substringBefore(" • ")))
                 listOf(R.id.overview_card_date, R.id.overview_card_time,
-                    R.id.overview_card_subject, R.id.overview_card_room).forEach {
+                    R.id.overview_card_subject, R.id.overview_card_form,
+                    R.id.overview_card_room).forEach {
                     card.setTextColor(it, textColor)
                 }
                 row.addView(R.id.overview_row, card)
