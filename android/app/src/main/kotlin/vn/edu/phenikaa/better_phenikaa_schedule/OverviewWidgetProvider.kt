@@ -155,7 +155,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
         val height = manager.getAppWidgetOptions(id)
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
-        val panelHeight = OverviewPager.panelHeight(height)
+        // Use available 4x2 launcher height for typography without changing page capacity.
+        val panelHeight = height.coerceIn(104, 156)
         val compact = panelHeight < 120
         val headerHeight = if (compact) 32 else if (panelHeight >= 140) 42 else 36
         val footerHeight = if (compact) 16 else if (panelHeight >= 140) 24 else 20
@@ -173,6 +174,11 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val betterDefault = ScheduleWidgetProvider().isBetterDefault(context)
         val bitmapFont = WidgetFont.hasSelectedFont(context)
         val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        // Launchers may reapply RemoteViews to existing children; XML defaults are not a reset.
+        listOf(R.id.overview_header_font, R.id.overview_empty_font,
+            R.id.overview_status_font, R.id.overview_page_font).forEach {
+            views.setViewVisibility(it, View.GONE)
+        }
         val openApp = PendingIntent.getActivity(
             context, id, Intent(context, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -268,6 +274,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             val row = RemoteViews(context.packageName, R.layout.overview_widget_row)
             rowItems.forEachIndexed { columnIndex, item ->
                 val card = RemoteViews(context.packageName, R.layout.overview_widget_card)
+                card.setViewVisibility(R.id.overview_card_font, View.GONE)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                     card.setViewLayoutHeight(R.id.overview_card_root,
                         cardHeight.toFloat(), TypedValue.COMPLEX_UNIT_DIP)

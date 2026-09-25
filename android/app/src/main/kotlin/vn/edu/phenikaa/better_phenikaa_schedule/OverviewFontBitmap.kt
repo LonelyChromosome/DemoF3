@@ -4,10 +4,12 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.text.TextPaint
 import android.text.TextUtils
 import kotlin.math.roundToInt
+import kotlin.math.min
 
 /** Paint selected theme fonts locally: custom TypefaceSpan cannot cross every launcher RemoteViews boundary. */
 internal object OverviewFontBitmap {
@@ -22,6 +24,22 @@ internal object OverviewFontBitmap {
             typeface = WidgetFont.typeface(context, if (bold) Typeface.BOLD else Typeface.NORMAL)
             textSize = sp * context.resources.displayMetrics.scaledDensity
             this.color = color
+            val reference = TextPaint(this).apply {
+                typeface = Typeface.create(Typeface.DEFAULT,
+                    if (bold) Typeface.BOLD else Typeface.NORMAL)
+            }
+            val sample = "Ngày 25/09 · 13:00 TKWNC"
+            val selectedBounds = Rect()
+            val systemBounds = Rect()
+            getTextBounds(sample, 0, sample.length, selectedBounds)
+            reference.getTextBounds(sample, 0, sample.length, systemBounds)
+            val glyphRatio = systemBounds.height().toFloat() /
+                selectedBounds.height().coerceAtLeast(1)
+            val widthRatio = reference.measureText(sample) /
+                measureText(sample).coerceAtLeast(1f)
+            val metricRatio = (reference.fontMetrics.descent - reference.fontMetrics.ascent) /
+                (fontMetrics.descent - fontMetrics.ascent).coerceAtLeast(1f)
+            textSize *= min(glyphRatio, min(widthRatio, metricRatio)).coerceIn(0.45f, 1f)
         }
 
     private fun line(canvas: Canvas, value: String, x: Float, top: Float, maxWidth: Float,
@@ -33,12 +51,22 @@ internal object OverviewFontBitmap {
 
     private fun height(paint: TextPaint) = paint.fontMetrics.descent - paint.fontMetrics.ascent
 
+    private fun fitHeight(available: Float, vararg paints: TextPaint) {
+        val total = paints.sumOf { height(it).toDouble() }.toFloat()
+        if (total > available && total > 0f) {
+            val scale = (available / total).coerceAtMost(1f)
+            paints.forEach { it.textSize *= scale }
+        }
+    }
+
     fun header(context: Context, width: Int, headerHeight: Int, title: String, subtitle: String,
         color: Int, compact: Boolean): Bitmap {
         val result = bitmap(context, width, headerHeight)
         val canvas = Canvas(result)
         val titlePaint = paint(context, if (compact) 14f else 16f, color, true)
         val secondary = paint(context, if (compact) 10f else 11f, color)
+        fitHeight(result.height - 4f * context.resources.displayMetrics.density,
+            titlePaint, secondary)
         val total = height(titlePaint) + height(secondary)
         val top = (result.height - total) / 2f
         line(canvas, title, 0f, top, result.width.toFloat(), titlePaint)
@@ -61,9 +89,7 @@ internal object OverviewFontBitmap {
         val x = 8f * d
         val lines = listOfNotNull(if (date != null) date to datePaint else null,
             time to timePaint, subject to subjectPaint, room to roomPaint)
-        val naturalHeight = lines.sumOf { height(it.second).toDouble() }.toFloat()
-        val scale = ((result.height - 2f * d) / naturalHeight).coerceIn(0.78f, 1f)
-        if (scale < 1f) lines.forEach { it.second.textSize *= scale }
+        fitHeight(result.height - 4f * d, *lines.map { it.second }.toTypedArray())
         val total = lines.sumOf { height(it.second).toDouble() }.toFloat()
         var top = ((result.height - total) / 2f).coerceAtLeast(0f)
         lines.forEach { (value, p) ->
@@ -78,6 +104,7 @@ internal object OverviewFontBitmap {
         val result = bitmap(context, width, height)
         val canvas = Canvas(result)
         val p = paint(context, sp, color)
+        fitHeight(result.height - 4f * context.resources.displayMetrics.density, p)
         val clipped = TextUtils.ellipsize(value, p, result.width.toFloat(), TextUtils.TruncateAt.END)
         val x = (result.width - p.measureText(clipped.toString())) / 2f
         line(canvas, clipped.toString(), x, (result.height - height(p)) / 2f,
@@ -89,6 +116,7 @@ internal object OverviewFontBitmap {
         reservedEnd: Int = 0): Bitmap {
         val result = bitmap(context, width, footerHeight)
         val p = paint(context, 11f, color)
+        fitHeight(result.height - 2f * context.resources.displayMetrics.density, p)
         line(Canvas(result), value, 0f, (result.height - height(p)) / 2f,
             result.width - reservedEnd * context.resources.displayMetrics.density, p)
         return result
