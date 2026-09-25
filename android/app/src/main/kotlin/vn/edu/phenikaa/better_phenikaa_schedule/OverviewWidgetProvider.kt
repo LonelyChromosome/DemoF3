@@ -217,7 +217,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val width = manager.getAppWidgetOptions(id)
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
         val columns = OverviewPager.columns(width)
-        val distance = kotlin.math.abs(next - old) * (width - 44f) / columns
+        val distance = kotlin.math.abs(next - old) * (width - 24f) / columns
         windowFrame(context, manager, id, items, width, columns, old, next,
             .33f, .8f, offset * distance * .33f)
         handler.postDelayed({
@@ -256,13 +256,13 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val result = Bitmap.createBitmap(before.width, before.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
         val density = context.resources.displayMetrics.density
-        val span = before.width - 20f * density
+        val span = before.width.toFloat()
         val shift = (last - first) * span / columns
         val fraction = if (next > old) progress else 1f - progress
         canvas.drawBitmap(before, -shift * fraction, 0f, null)
         val incomingX = shift * (1f - fraction)
         canvas.save()
-        canvas.clipRect(incomingX + 10f * density +
+        canvas.clipRect(incomingX +
             (OverviewWindow.SLOTS - (last - first)) * span / columns, 0f,
             result.width.toFloat(), result.height.toFloat())
         canvas.drawBitmap(after, incomingX, 0f, null)
