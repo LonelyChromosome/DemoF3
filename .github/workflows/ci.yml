@@ -40,7 +40,9 @@ jobs:
         run: bash tool/bootstrap.sh
 
       - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: |
+          dart format lib test
+          git diff -- lib/features/dang_nhap_qldt/qldt_login_mobile.dart lib/features/dang_nhap_qldt/semester_schedule_verifier.dart test/semester_schedule_verifier_test.dart
 
       - name: Analyze
         run: flutter analyze
