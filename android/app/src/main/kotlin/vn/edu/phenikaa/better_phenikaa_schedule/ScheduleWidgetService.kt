@@ -186,12 +186,14 @@ internal fun renderWidgetSlide(
         color = theme.textColor
         textSize = heightPx * SUBJECT_TEXT_HEIGHT_FRACTION
         typeface = WidgetFont.typeface(context, Typeface.BOLD)
+        textSize *= WidgetFont.scaleLikeSystem(this, Typeface.BOLD)
         setShadowLayer(heightPx * 0.018f, 0f, heightPx * 0.008f, 0x66000000)
     }
     val detailPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = theme.subtextColor
         textSize = heightPx * DETAIL_TEXT_HEIGHT_FRACTION
         typeface = WidgetFont.typeface(context, Typeface.NORMAL)
+        textSize *= WidgetFont.scaleLikeSystem(this, Typeface.NORMAL)
         setShadowLayer(heightPx * 0.015f, 0f, heightPx * 0.006f, 0x66000000)
     }
 
@@ -222,6 +224,7 @@ internal fun renderWidgetSlide(
             color = theme.textColor
             textSize = heightPx * 0.145f
             typeface = WidgetFont.typeface(context, Typeface.BOLD)
+            textSize *= WidgetFont.scaleLikeSystem(this, Typeface.BOLD)
         }
         val label = "Thi: ${item.examForm.ifBlank { "Chưa rõ hình thức" }}"
         canvas.drawText(TextUtils.ellipsize(label, formPaint, titleMaxWidth,

@@ -4,12 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.Typeface
 import android.text.TextPaint
 import android.text.TextUtils
 import kotlin.math.roundToInt
-import kotlin.math.min
 
 /** Paint selected theme fonts locally: custom TypefaceSpan cannot cross every launcher RemoteViews boundary. */
 internal object OverviewFontBitmap {
@@ -24,22 +22,8 @@ internal object OverviewFontBitmap {
             typeface = WidgetFont.typeface(context, if (bold) Typeface.BOLD else Typeface.NORMAL)
             textSize = sp * context.resources.displayMetrics.scaledDensity
             this.color = color
-            val reference = TextPaint(this).apply {
-                typeface = Typeface.create(Typeface.DEFAULT,
-                    if (bold) Typeface.BOLD else Typeface.NORMAL)
-            }
-            val sample = "Ngày 25/09 · 13:00 TKWNC"
-            val selectedBounds = Rect()
-            val systemBounds = Rect()
-            getTextBounds(sample, 0, sample.length, selectedBounds)
-            reference.getTextBounds(sample, 0, sample.length, systemBounds)
-            val glyphRatio = systemBounds.height().toFloat() /
-                selectedBounds.height().coerceAtLeast(1)
-            val widthRatio = reference.measureText(sample) /
-                measureText(sample).coerceAtLeast(1f)
-            val metricRatio = (reference.fontMetrics.descent - reference.fontMetrics.ascent) /
-                (fontMetrics.descent - fontMetrics.ascent).coerceAtLeast(1f)
-            textSize *= min(glyphRatio, min(widthRatio, metricRatio)).coerceIn(0.45f, 1f)
+            textSize *= WidgetFont.scaleLikeSystem(this,
+                if (bold) Typeface.BOLD else Typeface.NORMAL)
         }
 
     private fun line(canvas: Canvas, value: String, x: Float, top: Float, maxWidth: Float,

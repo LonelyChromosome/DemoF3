@@ -170,15 +170,23 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         canvas.drawLine(left, y, right, y, line)
         repeat(count.coerceAtMost(5)) { index ->
             val x = left + (right - left) * (index + 0.5f) / slots.coerceAtLeast(1)
-            val accent = palette.accent(startIndex + index)
+            val accent = palette.timelineDot(startIndex + index,
+                WidgetVisualPalette.mix(palette.backgroundStart, palette.backgroundEnd,
+                    (index + 0.5f) / slots.coerceAtLeast(1)))
             if (index == 0) {
                 val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                    color = palette.glow(startIndex + index, true)
+                    color = WidgetVisualPalette.withAlpha(accent, 100)
                     style = Paint.Style.STROKE
-                    strokeWidth = 3.5f * density
+                    strokeWidth = 3.2f * density
                 }
                 canvas.drawCircle(x, y, 7f * density, ring)
             }
+            canvas.drawCircle(x, y, (if (index == 0) 6.4f else 5.4f) * density,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = WidgetVisualPalette.withAlpha(
+                        if (WidgetVisualPalette.contrast(0xFFFFFFFF.toInt(), accent) > 3.5)
+                            0xFFFFFFFF.toInt() else 0xFF000000.toInt(), 205)
+                })
             val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
             canvas.drawCircle(x, y, (if (index == 0) 5.5f else 4.5f) * density, dot)
         }
@@ -463,7 +471,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 .putString(contentTokenKey(widgetId), contentToken)
                 .putString(themeTokenKey(widgetId), themeKey)
                 .apply()
-            scheduleRefreshCoverHide(context, appWidgetManager, widgetId, contentToken)
+            if (renderStatePrefs.getString(transitionPhaseKey(widgetId), null) !=
+                PHASE_WAITING_TARGET) {
+                scheduleRefreshCoverHide(context, appWidgetManager, widgetId, contentToken)
+            }
             Handler(Looper.getMainLooper()).postDelayed({
                 applyPendingSelection(context, appWidgetManager, widgetId)
             }, 260L)
@@ -591,7 +602,13 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
         views.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
 
-        if (showRefreshCover && hasItems && !waitingForTheme) {
+        if (waitingForTheme && hasItems) {
+            renderWidgetRefreshCover(context, widgetId, renderWidthDp, renderHeightDp)?.let {
+                views.setImageViewBitmap(R.id.widget_refresh_cover, it)
+                views.setViewVisibility(R.id.widget_refresh_cover, View.VISIBLE)
+            }
+            views.setViewVisibility(R.id.widget_list, View.INVISIBLE)
+        } else if (showRefreshCover && hasItems) {
             val cover = renderWidgetRefreshCover(
                 context,
                 widgetId,
@@ -734,9 +751,16 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         hiddenTarget.setInt(R.id.widget_reload, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setTextColor(R.id.widget_empty, targetTheme.textColor)
         hiddenTarget.setFloat(R.id.widget_root, "setAlpha", 0f)
-        hiddenTarget.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
         val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
-        hiddenTarget.setViewVisibility(R.id.widget_list, if (hasItems) View.VISIBLE else View.GONE)
+        if (hasItems) {
+            renderWidgetRefreshCover(context, widgetId, widthDp, heightDp, targetThemeKey)?.let {
+                hiddenTarget.setImageViewBitmap(R.id.widget_refresh_cover, it)
+                hiddenTarget.setViewVisibility(R.id.widget_refresh_cover, View.VISIBLE)
+            }
+        } else {
+            hiddenTarget.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
+        }
+        hiddenTarget.setViewVisibility(R.id.widget_list, if (hasItems) View.INVISIBLE else View.GONE)
         hiddenTarget.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
         manager.partiallyUpdateAppWidget(widgetId, hiddenTarget)
 
@@ -801,6 +825,15 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 .remove(transitionTargetKey(widgetId))
                 .remove(transitionPhaseKey(widgetId))
                 .apply()
+            val manager = AppWidgetManager.getInstance(context)
+            manager.notifyAppWidgetViewDataChanged(widgetId, R.id.widget_list)
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (readThemeColors(context).key != targetThemeKey ||
+                    hasActiveThemeTransition(state, widgetId)) return@postDelayed
+                applyPendingSelection(context, manager, widgetId)
+                val token = state.getString(contentTokenKey(widgetId), null)
+                if (token != null) scheduleRefreshCoverHide(context, manager, widgetId, token)
+            }, 450L)
         }
     }
 

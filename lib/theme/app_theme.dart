@@ -702,6 +702,7 @@ class AppThemeController extends ChangeNotifier {
 
 ThemeData buildBetterTheme(AppThemePalette palette) {
   final brightness = palette.dark ? Brightness.dark : Brightness.light;
+  final fontScale = themeFontSizeFactor(palette.fontFamily);
   final base = ThemeData(
     useMaterial3: true,
     brightness: brightness,
@@ -722,8 +723,13 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
         ),
     textTheme: base.textTheme.apply(
       fontFamily: palette.fontFamily ?? 'Roboto',
+      fontSizeFactor: fontScale,
       bodyColor: palette.textPrimary,
       displayColor: palette.textPrimary,
+    ),
+    primaryTextTheme: base.primaryTextTheme.apply(
+      fontFamily: palette.fontFamily ?? 'Roboto',
+      fontSizeFactor: fontScale,
     ),
     iconTheme: IconThemeData(color: palette.textPrimary),
     cardTheme: CardThemeData(
@@ -745,6 +751,8 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
             : Colors.white,
         shape: shape,
         textStyle: TextStyle(
+          fontFamily: palette.fontFamily ?? 'Roboto',
+          fontSize: 14 * fontScale,
           fontWeight: FontWeight.w800,
           letterSpacing: themeLetterSpacing(palette),
         ),
@@ -755,6 +763,10 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
         foregroundColor: palette.primary,
         side: BorderSide(color: palette.border),
         shape: shape,
+        textStyle: TextStyle(
+          fontFamily: palette.fontFamily ?? 'Roboto',
+          fontSize: 14 * fontScale,
+        ),
       ),
     ),
     dividerColor: palette.border,
@@ -763,6 +775,33 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
       modalBackgroundColor: palette.surface,
     ),
   );
+}
+
+/// Match a selected font's actual glyph footprint to the system font at the
+/// same nominal size. Imported fonts can have very different advances/ascents.
+double themeFontSizeFactor(String? family) {
+  if (family == null || family.isEmpty || family == 'Roboto') return 1;
+  const sample = 'Ngày 25/09 • Lịch học';
+  Size measure(String font) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: sample,
+        style: TextStyle(fontFamily: font, fontSize: 20),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    return painter.size;
+  }
+
+  final standard = measure('Roboto');
+  final selected = measure(family);
+  if (selected.width <= 0 || selected.height <= 0) return 1;
+  final widthRatio = standard.width / selected.width;
+  final heightRatio = standard.height / selected.height;
+  return (widthRatio < heightRatio ? widthRatio : heightRatio)
+      .clamp(0.5, 1.1)
+      .toDouble();
 }
 
 OutlinedBorder themeButtonShape(AppThemePalette palette) {

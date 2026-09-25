@@ -524,7 +524,9 @@ class _SectionTitle extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 8),
     child: Text(
       text,
-      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w800,
+      ),
     ),
   );
 }
@@ -550,9 +552,11 @@ class _ThemePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fontScale = themeFontSizeFactor(fontFamily);
     final baseStyle = TextStyle(
       fontFamily: fontFamily,
       color: tokens.textPrimary,
+      fontSize: 14 * fontScale,
     );
     return Container(
       padding: const EdgeInsets.all(14),
@@ -569,7 +573,7 @@ class _ThemePreview extends StatelessWidget {
           Text(
             'Better Phenikaa App',
             style: baseStyle.copyWith(
-              fontSize: 18,
+              fontSize: 18 * fontScale,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -597,7 +601,7 @@ class _ThemePreview extends StatelessWidget {
                         'A6-205 • 09:30–12:10',
                         style: baseStyle.copyWith(
                           color: tokens.textSecondary,
-                          fontSize: 12,
+                          fontSize: 12 * fontScale,
                         ),
                       ),
                     ],
@@ -635,7 +639,7 @@ class _ThemePreview extends StatelessWidget {
                   'A5-301 • 13:00–15:40',
                   style: baseStyle.copyWith(
                     color: tokens.widgetSubtext,
-                    fontSize: 12,
+                    fontSize: 12 * fontScale,
                   ),
                 ),
               ],

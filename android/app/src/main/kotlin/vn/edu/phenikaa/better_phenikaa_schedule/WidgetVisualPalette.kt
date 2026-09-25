@@ -71,6 +71,21 @@ internal class WidgetVisualPalette(
     fun trackStart(): Int = withAlpha(mix(primaryText, accent(0), 0.35f), 125)
     fun trackEnd(): Int = withAlpha(mix(primaryText, accent(4), 0.35f), 125)
 
+    fun timelineDot(index: Int, background: Int): Int {
+        val hsv = FloatArray(3)
+        Color.colorToHSV(accent(index), hsv)
+        hsv[1] = (hsv[1] * 1.32f).coerceIn(0.66f, 0.94f)
+        hsv[2] = if (lightText) 0.98f else 0.53f
+        var dot = Color.HSVToColor(hsv)
+        repeat(8) {
+            if (contrast(dot, background) >= 3.5) return dot
+            hsv[2] = if (lightText) (hsv[2] + 0.025f).coerceAtMost(1f)
+                else (hsv[2] - 0.04f).coerceAtLeast(0.24f)
+            dot = Color.HSVToColor(hsv)
+        }
+        return dot
+    }
+
     private fun backgroundCorner(color: Int, vibrant: Boolean): Int {
         val hsv = FloatArray(3)
         Color.colorToHSV(color, hsv)
