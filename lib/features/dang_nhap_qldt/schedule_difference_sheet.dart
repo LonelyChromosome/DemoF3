@@ -3,7 +3,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_change
 import 'package:flutter/material.dart';
 
 class ScheduleDifferenceSheet extends StatelessWidget {
-  const ScheduleDifferenceSheet({super.key, required this.difference});
+  const ScheduleDifferenceSheet({required this.difference, super.key});
 
   final SemesterDifference? difference;
 

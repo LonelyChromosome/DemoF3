@@ -5,8 +5,8 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login.dart
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/schedule_difference_sheet.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_sync_message.dart';
 import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
@@ -117,11 +117,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     final unread =
         difference?.hasChanges == true &&
         prefs.getString(_seenDifferenceKey) != jsonEncode(difference!.toJson());
-    if (mounted)
+    if (mounted) {
       setState(() {
         _latestDifference = difference;
         _unreadDifference = unread;
       });
+    }
   }
 
   Future<void> _showDifferences() async {
@@ -319,6 +320,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           });
           if (difference != null) {
             await _refreshDifference();
+            if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
