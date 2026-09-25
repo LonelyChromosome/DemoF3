@@ -180,13 +180,14 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val error = status["lastError"] as? String
         val started = status["lastStartedAtMillis"] as? Long ?: 0L
         val succeeded = status["lastSuccessAtMillis"] as? Long ?: 0L
-        views.setTextViewText(R.id.overview_title, when {
+        views.setTextViewText(R.id.overview_title, WidgetFont.text(context, when {
             examMode -> "Lịch thi · Học kỳ hiện tại"
             else -> if (selected == today) "Hôm nay · $date" else "Ngày $date"
-        })
+        }))
         views.setTextViewText(R.id.overview_subtitle,
-            if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học")
-        views.setTextViewText(R.id.overview_status, when {
+            WidgetFont.text(context,
+                if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học"))
+        views.setTextViewText(R.id.overview_status, WidgetFont.text(context, when {
             !error.isNullOrEmpty() && started > succeeded -> error
             started > succeeded -> "Đang đồng bộ QLĐT..."
             examMode && items.isNotEmpty() -> {
@@ -205,7 +206,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             examMode -> "Chưa có ca thi sắp tới"
             selected == today -> "Lịch học hôm nay"
             else -> "Lịch học ngày $date"
-        })
+        }))
         views.setImageViewResource(R.id.overview_mode,
             if (examMode) R.drawable.ic_widget_back else R.drawable.ic_widget_bell)
         views.setContentDescription(R.id.overview_mode,
@@ -240,19 +241,22 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 val colorIndex = page * size + rowIndex * columns + columnIndex
                 card.setImageViewBitmap(R.id.overview_card_background,
                     ScheduleWidgetProvider().overviewCardBackground(context, colorIndex))
-                card.setTextViewText(R.id.overview_card_date,
+                card.setTextViewText(R.id.overview_card_date, WidgetFont.text(context,
                     if (examMode) "${item.dateKey.substring(8, 10)}/${item.dateKey.substring(5, 7)}"
-                    else "")
+                    else ""))
                 card.setViewVisibility(R.id.overview_card_date,
                     if (examMode) View.VISIBLE else View.GONE)
-                card.setTextViewText(R.id.overview_card_time, item.startAt.drop(11).take(5))
+                card.setTextViewText(R.id.overview_card_time,
+                    WidgetFont.text(context, item.startAt.drop(11).take(5)))
                 card.setTextViewText(R.id.overview_card_subject,
-                    OverviewPager.compactSubject(item.subject, (width - 24) / columns))
+                    WidgetFont.text(context,
+                        OverviewPager.compactSubject(item.subject, (width - 24) / columns)))
                 card.setContentDescription(R.id.overview_card_root, item.subject)
                 card.setOnClickPendingIntent(R.id.overview_card_root, openApp)
                 // The header already shows the selected date, and exam cards have their own date.
                 // Keeping only the room makes four fixed slots readable on a phone.
-                card.setTextViewText(R.id.overview_card_room, item.room.substringBefore(" • "))
+                card.setTextViewText(R.id.overview_card_room,
+                    WidgetFont.text(context, item.room.substringBefore(" • ")))
                 listOf(R.id.overview_card_date, R.id.overview_card_time,
                     R.id.overview_card_subject, R.id.overview_card_room).forEach {
                     card.setTextColor(it, textColor)
@@ -271,7 +275,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         }
         views.setViewVisibility(R.id.overview_empty, if (items.isEmpty()) View.VISIBLE else View.GONE)
         views.setTextViewText(R.id.overview_empty,
-            if (examMode) "Không có lịch thi" else "Không có lịch học")
+            WidgetFont.text(context,
+                if (examMode) "Không có lịch thi" else "Không có lịch học"))
         val lastPage = OverviewPager.lastPage(items.size, size)
         val showProgress = !examMode && lastPage == 0 && items.isNotEmpty() &&
             (error.isNullOrEmpty() || started <= succeeded)
@@ -289,7 +294,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             if (page == 0) View.INVISIBLE else View.VISIBLE)
         views.setViewVisibility(R.id.overview_next,
             if (page >= lastPage) View.INVISIBLE else View.VISIBLE)
-        views.setTextViewText(R.id.overview_page, "${page + 1}/${lastPage + 1}")
+        views.setTextViewText(R.id.overview_page,
+            WidgetFont.text(context, "${page + 1}/${lastPage + 1}"))
         views.setOnClickPendingIntent(R.id.overview_previous, action(context, id, ACTION_PAGE, -1))
         views.setOnClickPendingIntent(R.id.overview_next, action(context, id, ACTION_PAGE, 1))
         views.setOnClickPendingIntent(R.id.overview_mode, action(context, id, ACTION_MODE, 0))

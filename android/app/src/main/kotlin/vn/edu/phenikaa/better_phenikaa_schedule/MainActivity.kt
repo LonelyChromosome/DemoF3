@@ -52,12 +52,21 @@ class MainActivity : FlutterActivity() {
             val prefs = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
             val currentTheme = prefs.getString(THEME_KEY, "classic") ?: "classic"
             val currentToken = prefs.getString(THEME_TOKEN_KEY, currentTheme) ?: currentTheme
+            val fontChanged = prefs.getString(WIDGET_FONT_FAMILY_KEY, "") != request.fontFamily ||
+                prefs.getString(WIDGET_FONT_PATH_KEY, "") != request.fontPath
             val manager = AppWidgetManager.getInstance(this)
             val component = ComponentName(this, ScheduleWidgetProvider::class.java)
             val widgetIds = manager.getAppWidgetIds(component)
             val overviewIds = manager.getAppWidgetIds(
                 ComponentName(this, OverviewWidgetProvider::class.java),
             )
+
+            if (currentToken == request.token && fontChanged) {
+                commitWidgetTheme(prefs, request, refreshOverview = false)
+                WidgetRefreshCoordinator.refreshData(this)
+                result.success(widgetIds.size + overviewIds.size)
+                return@setMethodCallHandler
+            }
 
             if ((widgetIds.isNotEmpty() || overviewIds.isNotEmpty()) &&
                 currentToken != request.token) {
@@ -184,6 +193,8 @@ class MainActivity : FlutterActivity() {
             .putInt(CUSTOM_TEXT_KEY, request.textColor)
             .putInt(CUSTOM_SUBTEXT_KEY, request.subtextColor)
             .putInt(CUSTOM_ICON_KEY, request.iconColor)
+            .putString(WIDGET_FONT_FAMILY_KEY, request.fontFamily)
+            .putString(WIDGET_FONT_PATH_KEY, request.fontPath)
             .commit()
         if (refreshOverview) WidgetRefreshCoordinator.refreshOverview(this)
     }
@@ -213,7 +224,7 @@ class MainActivity : FlutterActivity() {
                         ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
                         WIDGET_VISIBLE_POSITION_PREFS,
                         "better_phenikaa_widget_render_state",
-                        OverviewWidgetProvider.STATE_PREFS,
+                        "better_phenikaa_overview_state",
                         "better_phenikaa_small_widget_mode",
                     ).forEach { name ->
                         getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
@@ -426,6 +437,8 @@ class MainActivity : FlutterActivity() {
         val textColor: Int,
         val subtextColor: Int,
         val iconColor: Int,
+        val fontFamily: String,
+        val fontPath: String,
     ) {
         companion object {
             fun from(arguments: Any?): WidgetThemeRequest {
@@ -436,12 +449,16 @@ class MainActivity : FlutterActivity() {
                 val text = (values["widgetText"] as? Number)?.toInt() ?: DEFAULT_TEXT
                 val subtext = (values["widgetSubtext"] as? Number)?.toInt() ?: DEFAULT_SUBTEXT
                 val icon = (values["widgetIcon"] as? Number)?.toInt() ?: text
+                val fontFamily = values["fontFamily"] as? String ?: ""
+                val fontPath = values["fontPath"] as? String ?: ""
                 val token = if (theme == "custom") {
-                    listOf(theme, start, end, text, subtext, icon).joinToString(":")
+                    listOf(theme, start, end, text, subtext, icon,
+                        fontFamily.hashCode(), fontPath.hashCode()).joinToString(":")
                 } else {
                     theme
                 }
-                return WidgetThemeRequest(theme, token, start, end, text, subtext, icon)
+                return WidgetThemeRequest(theme, token, start, end, text, subtext, icon,
+                    fontFamily, fontPath)
             }
         }
     }
@@ -459,6 +476,8 @@ class MainActivity : FlutterActivity() {
         internal const val CUSTOM_TEXT_KEY = "flutter.widgetCustomText"
         internal const val CUSTOM_SUBTEXT_KEY = "flutter.widgetCustomSubtext"
         internal const val CUSTOM_ICON_KEY = "flutter.widgetCustomIcon"
+        internal const val WIDGET_FONT_FAMILY_KEY = "flutter.widgetFontFamily"
+        internal const val WIDGET_FONT_PATH_KEY = "flutter.widgetFontPath"
         private const val HOME_SURFACE_SETTLE_MS = 360L
         private const val THEME_FREEZE_SETTLE_MS = 140L
         private const val FILE_PICK_REQUEST_CODE = 70_041

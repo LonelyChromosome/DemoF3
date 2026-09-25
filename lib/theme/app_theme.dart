@@ -487,12 +487,10 @@ class AppThemeController extends ChangeNotifier {
     }
     notifyListeners();
     final widgetTheme = prefs.getString(_widgetPreferenceKey);
-    if (widgetTheme != widgetKey) {
-      final nativeApplied = await _applyWidgetTheme(widgetKey, palette);
-      if (!nativeApplied) {
-        await prefs.setString(_widgetPreferenceKey, widgetKey);
-        await _syncWidgetTheme();
-      }
+    final nativeApplied = await _applyWidgetTheme(widgetKey, palette);
+    if (widgetTheme != widgetKey && !nativeApplied) {
+      await prefs.setString(_widgetPreferenceKey, widgetKey);
+      await _syncWidgetTheme();
     }
   }
 
@@ -664,6 +662,10 @@ class AppThemeController extends ChangeNotifier {
           'widgetText': target.widgetText.toARGB32(),
           'widgetSubtext': target.widgetSubtext.toARGB32(),
           'widgetIcon': target.widgetText.toARGB32(),
+          'fontFamily': target.fontFamily ?? '',
+          'fontPath': _theme == AppThemeId.custom
+              ? _activeCustomTheme?.font.path ?? ''
+              : '',
         },
       );
       return true;

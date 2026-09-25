@@ -538,6 +538,7 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
                 webView.removeAllViews()
                 webView.destroy()
             }
+            Unit
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             dispose()

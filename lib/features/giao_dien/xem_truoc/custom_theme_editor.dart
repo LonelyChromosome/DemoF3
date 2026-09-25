@@ -658,6 +658,53 @@ class _HsvColorPicker extends StatefulWidget {
 
 class _HsvColorPickerState extends State<_HsvColorPicker> {
   late HSVColor _color = HSVColor.fromColor(widget.initial);
+  final TextEditingController _hexController = TextEditingController();
+  String? _hexError;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateHexText();
+  }
+
+  @override
+  void dispose() {
+    _hexController.dispose();
+    super.dispose();
+  }
+
+  void _updateHexText() {
+    final digits = _color
+        .toColor()
+        .toARGB32()
+        .toRadixString(16)
+        .padLeft(8, '0');
+    final value = '#${digits.substring(2).toUpperCase()}';
+    _hexController.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+    _hexError = null;
+  }
+
+  void _setColor(HSVColor color) {
+    setState(() {
+      _color = color;
+      _updateHexText();
+    });
+  }
+
+  void _setHex(String value) {
+    final hex = value.trim().replaceFirst(RegExp(r'^#'), '');
+    if (!RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(hex)) {
+      setState(() => _hexError = 'Nhập 6 ký tự HEX, ví dụ #1747B5');
+      return;
+    }
+    setState(() {
+      _color = HSVColor.fromColor(Color(int.parse('FF$hex', radix: 16)));
+      _hexError = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -666,45 +713,60 @@ class _HsvColorPickerState extends State<_HsvColorPicker> {
       title: const Text('Chọn màu'),
       content: SizedBox(
         width: 300,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            SizedBox(
-              height: 180,
-              width: double.infinity,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final pickerSize = Size(constraints.maxWidth, 180);
-                  return GestureDetector(
-                    onPanDown: (details) =>
-                        _setFromOffset(details.localPosition, pickerSize),
-                    onPanUpdate: (details) =>
-                        _setFromOffset(details.localPosition, pickerSize),
-                    child: CustomPaint(
-                      painter: _SaturationValuePainter(hueColor),
-                      foregroundPainter: _SelectionPainter(
-                        _color.saturation,
-                        _color.value,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SizedBox(
+                height: 180,
+                width: double.infinity,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final pickerSize = Size(constraints.maxWidth, 180);
+                    return GestureDetector(
+                      onPanDown: (details) =>
+                          _setFromOffset(details.localPosition, pickerSize),
+                      onPanUpdate: (details) =>
+                          _setFromOffset(details.localPosition, pickerSize),
+                      child: CustomPaint(
+                        painter: _SaturationValuePainter(hueColor),
+                        foregroundPainter: _SelectionPainter(
+                          _color.saturation,
+                          _color.value,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-            Slider(
-              value: _color.hue,
-              max: 360,
-              onChanged: (value) =>
-                  setState(() => _color = _color.withHue(value)),
-            ),
-            Container(
-              height: 42,
-              decoration: BoxDecoration(
-                color: _color.toColor(),
-                borderRadius: BorderRadius.circular(10),
+              Slider(
+                value: _color.hue,
+                max: 360,
+                onChanged: (value) => _setColor(_color.withHue(value)),
               ),
-            ),
-          ],
+              Container(
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _color.toColor(),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _hexController,
+                maxLength: 7,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: 'Mã màu HEX',
+                  hintText: '#1747B5',
+                  errorText: _hexError,
+                  counterText: '',
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: _setHex,
+              ),
+            ],
+          ),
         ),
       ),
       actions: <Widget>[
@@ -713,7 +775,9 @@ class _HsvColorPickerState extends State<_HsvColorPicker> {
           child: const Text('Hủy'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, _color.toColor()),
+          onPressed: _hexError == null
+              ? () => Navigator.pop(context, _color.toColor())
+              : null,
           child: const Text('Chọn'),
         ),
       ],
@@ -721,11 +785,11 @@ class _HsvColorPickerState extends State<_HsvColorPicker> {
   }
 
   void _setFromOffset(Offset offset, Size size) {
-    setState(() {
-      _color = _color
+    _setColor(
+      _color
           .withSaturation((offset.dx / size.width).clamp(0.0, 1.0))
-          .withValue((1 - (offset.dy / size.height)).clamp(0.0, 1.0));
-    });
+          .withValue((1 - (offset.dy / size.height)).clamp(0.0, 1.0)),
+    );
   }
 }
 

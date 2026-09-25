@@ -46,16 +46,15 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
 
     internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int): Bitmap {
         val theme = readThemeColors(context)
-        if (theme.key != "classic") {
-            return renderThemeBackground(context, widthDp, heightDp, theme)
-        }
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (heightDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            val end = if (theme.key == "classic") 0xFF992C71.toInt() else theme.endColor
             shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
-                theme.startColor, 0xFF992C71.toInt(), Shader.TileMode.CLAMP)
+                intArrayOf(theme.startColor, blend(theme.startColor, end, 0.48f), end),
+                floatArrayOf(0f, 0.52f, 1f), Shader.TileMode.CLAMP)
         }
         Canvas(bitmap).drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
         return bitmap
@@ -73,12 +72,11 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             intArrayOf(0xFF0874CA.toInt(), 0xFF334AA9.toInt(), 0xFF7644B3.toInt(),
                 0xFFAD478E.toInt(), 0xFFC24178.toInt())[index % 5]
         } else {
-            val base = blend(theme.startColor, theme.endColor, (index % 5) / 4f)
-            readableCardColor(base, theme)
+            overviewAccent(theme, index)
         }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = LinearGradient(0f, 0f, width.toFloat(), height.toFloat(),
-                blend(accent, theme.startColor, if (theme.key == "classic") 0.4f else 0.18f),
+                blend(accent, theme.startColor, if (theme.key == "classic") 0.4f else 0.10f),
                 accent, Shader.TileMode.CLAMP)
         }
         val radius = 12f * density
@@ -109,8 +107,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 intArrayOf(0xFF12CCFA.toInt(), 0xFF6578FF.toInt(), 0xFFC375E8.toInt(),
                     0xFFFA67BA.toInt(), 0xFFFF557C.toInt())[index]
             } else {
-                val base = blend(theme.startColor, theme.endColor, index / 4f)
-                blend(base, theme.textColor, if (isLight(theme.textColor)) 0.45f else 0.25f)
+                overviewAccent(theme, index)
             }
             val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accent }
             canvas.drawCircle(x, y, 5f * density, dot)
@@ -130,6 +127,18 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
 
     private fun isLight(color: Int): Boolean =
         (Color.red(color) * 299 + Color.green(color) * 587 + Color.blue(color) * 114) >= 160_000
+
+    private fun overviewAccent(theme: ThemeColors, index: Int): Int {
+        val base = blend(theme.startColor, theme.endColor, 0.5f)
+        val hsv = FloatArray(3)
+        Color.colorToHSV(base, hsv)
+        val offsets = floatArrayOf(-28f, -13f, 0f, 15f, 30f)
+        hsv[0] = (hsv[0] + offsets[index % offsets.size] + 360f) % 360f
+        hsv[1] = (hsv[1] + 0.13f).coerceIn(0.26f, 0.88f)
+        hsv[2] = (hsv[2] + if (isLight(theme.textColor)) -0.02f else 0.07f)
+            .coerceIn(0.16f, 0.92f)
+        return readableCardColor(Color.HSVToColor(hsv), theme)
+    }
 
     private fun readableCardColor(base: Int, theme: ThemeColors): Int {
         var card = blend(base, theme.textColor,
@@ -679,7 +688,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
 
     private fun themeColorsForKey(context: Context, key: String): ThemeColors {
         if (key.startsWith("custom:")) {
-            val colors = key.split(':').drop(1).map(String::toIntOrNull)
+            val colors = key.split(':').drop(1).take(5).map(String::toIntOrNull)
             if (colors.size == 5 && colors.all { it != null }) {
                 return ThemeColors(
                     key,
