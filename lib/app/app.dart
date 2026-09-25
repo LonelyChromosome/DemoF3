@@ -1228,76 +1228,104 @@ class _TopTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
+    final headingStyle = TextStyle(
+      color: palette.textPrimary,
+      fontSize: 25,
+      fontWeight: FontWeight.w900,
+      letterSpacing: themeLetterSpacing(palette),
+    );
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: <Widget>[
-        Flexible(
-          child: Text(
-            themedHeading(title, palette),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: palette.textPrimary,
-              fontSize: 25,
-              fontWeight: FontWeight.w900,
-              letterSpacing: themeLetterSpacing(palette),
-            ),
-          ),
-        ),
-        if (badge != null) ...<Widget>[
-          const SizedBox(width: 9),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(
-              color: palette.cardAlt,
-              borderRadius: BorderRadius.circular(
-                palette.geometry == AppThemeGeometry.rounded ? 999 : 0,
+        Expanded(
+          child: Row(
+            children: <Widget>[
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    themedHeading(title, palette),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: headingStyle,
+                  ),
+                ),
               ),
-              border: Border.all(color: palette.border),
-            ),
-            child: Text(
-              badge!,
-              style: TextStyle(
-                color: palette.primary,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ],
-        const Spacer(),
-        if (onNotificationTap != null)
-          IconButton(
-            tooltip: 'Thông báo thay đổi lịch',
-            onPressed: onNotificationTap,
-            icon: Stack(
-              clipBehavior: Clip.none,
-              children: <Widget>[
-                Icon(Icons.notifications_none_rounded, color: palette.primary),
-                if (unreadDifference)
-                  const Positioned(
-                    right: 0,
-                    top: 0,
-                    child: CircleAvatar(
-                      radius: 4.5,
-                      backgroundColor: Color(0xFFE53945),
+              if (badge != null) ...<Widget>[
+                const SizedBox(width: 9),
+                Flexible(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: palette.cardAlt,
+                      borderRadius: BorderRadius.circular(
+                        palette.geometry == AppThemeGeometry.rounded ? 999 : 0,
+                      ),
+                      border: Border.all(color: palette.border),
+                    ),
+                    child: Text(
+                      badge!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.primary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
+                ),
               ],
-            ),
+            ],
           ),
-        if (onCalendarTap == null)
-          Icon(Icons.calendar_month_outlined, color: palette.primary)
-        else
-          IconButton.filledTonal(
-            tooltip: 'Chọn ngày',
-            onPressed: onCalendarTap,
-            style: IconButton.styleFrom(
-              foregroundColor: palette.primary,
-              backgroundColor: palette.cardAlt,
-              shape: themeButtonShape(palette),
-            ),
-            icon: const Icon(Icons.calendar_month_outlined),
-          ),
+        ),
+        const SizedBox(width: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (onNotificationTap != null)
+              IconButton(
+                tooltip: 'Thông báo thay đổi lịch',
+                onPressed: onNotificationTap,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                icon: Stack(
+                  clipBehavior: Clip.none,
+                  children: <Widget>[
+                    Icon(Icons.notifications_none_rounded, color: palette.primary),
+                    if (unreadDifference)
+                      const Positioned(
+                        right: 0,
+                        top: 0,
+                        child: CircleAvatar(
+                          radius: 4.5,
+                          backgroundColor: Color(0xFFE53945),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            if (onCalendarTap == null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Icon(Icons.calendar_month_outlined, color: palette.primary),
+              )
+            else
+              IconButton.filledTonal(
+                tooltip: 'Chọn ngày',
+                onPressed: onCalendarTap,
+                style: IconButton.styleFrom(
+                  foregroundColor: palette.primary,
+                  backgroundColor: palette.cardAlt,
+                  shape: themeButtonShape(palette),
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                icon: const Icon(Icons.calendar_month_outlined),
+              ),
+          ],
+        ),
       ],
     );
   }
