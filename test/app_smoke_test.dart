@@ -2,6 +2,7 @@ import 'package:better_phenikaa_schedule/app/app.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -50,6 +51,13 @@ void main() {
       expect(find.text('Theo tuần'), findsOneWidget);
       await tester.tap(find.text('Theo tuần'));
       await tester.pumpAndSettle();
+      // The seven-day list builds only visible days; Friday can start below
+      // the test viewport even though the record belongs to this week.
+      await tester.scrollUntilVisible(
+        find.text('Thiết kế web nâng cao'),
+        100,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Thiết kế web nâng cao'), findsOneWidget);
       await tester.tap(find.byTooltip('Tuần sau'));
       await tester.pumpAndSettle();
