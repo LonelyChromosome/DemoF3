@@ -1,0 +1,103 @@
+package vn.edu.phenikaa.better_phenikaa_schedule
+
+import android.graphics.Color
+import kotlin.math.pow
+import kotlin.math.roundToInt
+
+/** Colors used only by widget bitmaps; no widget state or interaction lives here. */
+internal class WidgetVisualPalette(
+    private val start: Int,
+    private val end: Int,
+    val primaryText: Int,
+    val secondaryText: Int,
+) {
+    private val lightText = luminance(primaryText) > 0.5
+    private val dominant = mix(start, end, 0.28f)
+    private val anchorHue = FloatArray(3).let { startHsv ->
+        val endHsv = FloatArray(3)
+        Color.colorToHSV(start, startHsv)
+        Color.colorToHSV(end, endHsv)
+        if (startHsv[1] >= endHsv[1]) startHsv[0] else endHsv[0]
+    }
+    private val accents = IntArray(5) { index ->
+        val sample = mix(start, end, index / 4f)
+        val hsv = FloatArray(3)
+        Color.colorToHSV(sample, hsv)
+        if (hsv[1] < 0.12f) hsv[0] = anchorHue
+        hsv[0] = (hsv[0] + (index - 2) * 3f + 360f) % 360f
+        hsv[1] = (hsv[1] * 0.84f + 0.10f).coerceIn(0.25f, 0.76f)
+        hsv[2] = if (lightText) hsv[2].coerceIn(0.56f, 0.89f)
+            else hsv[2].coerceIn(0.32f, 0.72f)
+        Color.HSVToColor(hsv)
+    }
+
+    val backgroundStart: Int = mix(dominant, if (lightText) Color.BLACK else Color.WHITE, 0.08f)
+    val backgroundEnd: Int = mix(end, if (lightText) Color.BLACK else Color.WHITE, 0.08f)
+    val surface: Int = mix(dominant, if (lightText) Color.BLACK else Color.WHITE,
+        if (lightText) 0.29f else 0.31f)
+
+    fun accent(index: Int): Int = accents[index.mod(accents.size)]
+
+    fun cardStart(index: Int, active: Boolean): Int = readable(
+        mix(surface, accent(index), if (active) 0.43f else 0.31f),
+    )
+
+    fun cardEnd(index: Int, active: Boolean): Int = readable(
+        mix(surface, accent(index), if (active) 0.26f else 0.17f),
+    )
+
+    fun cardBorder(index: Int, active: Boolean): Int = withAlpha(
+        mix(accent(index), primaryText, if (active) 0.46f else 0.26f),
+        if (active) 155 else 75,
+    )
+
+    fun glow(index: Int, active: Boolean): Int = withAlpha(accent(index),
+        if (active) 89 else 35)
+
+    fun timeText(index: Int, active: Boolean): Int {
+        val tint = mix(primaryText, accent(index), if (active) 0.22f else 0.12f)
+        return if (contrast(tint, cardStart(index, active)) >= 4.5) tint else primaryText
+    }
+
+    fun trackStart(): Int = withAlpha(mix(primaryText, accent(0), 0.35f), 125)
+    fun trackEnd(): Int = withAlpha(mix(primaryText, accent(4), 0.35f), 125)
+
+    private fun readable(color: Int): Int {
+        var result = color
+        val target = if (lightText) Color.BLACK else Color.WHITE
+        repeat(8) {
+            if (contrast(primaryText, result) >= 4.7) return result
+            result = mix(result, target, 0.16f)
+        }
+        return result
+    }
+
+    companion object {
+        fun withAlpha(color: Int, alpha: Int): Int =
+            Color.argb(alpha.coerceIn(0, 255), Color.red(color), Color.green(color), Color.blue(color))
+
+        fun mix(a: Int, b: Int, amount: Float): Int {
+            val t = amount.coerceIn(0f, 1f)
+            return Color.rgb(
+                (Color.red(a) * (1f - t) + Color.red(b) * t).roundToInt(),
+                (Color.green(a) * (1f - t) + Color.green(b) * t).roundToInt(),
+                (Color.blue(a) * (1f - t) + Color.blue(b) * t).roundToInt(),
+            )
+        }
+
+        fun contrast(a: Int, b: Int): Double {
+            val high = maxOf(luminance(a), luminance(b))
+            val low = minOf(luminance(a), luminance(b))
+            return (high + 0.05) / (low + 0.05)
+        }
+
+        private fun luminance(color: Int): Double {
+            fun channel(value: Int): Double {
+                val n = value / 255.0
+                return if (n <= 0.04045) n / 12.92 else ((n + 0.055) / 1.055).pow(2.4)
+            }
+            return channel(Color.red(color)) * 0.2126 +
+                channel(Color.green(color)) * 0.7152 + channel(Color.blue(color)) * 0.0722
+        }
+    }
+}
