@@ -48,12 +48,22 @@ final class SemesterScheduleVerifier {
       final subject = classes[normalizeSubjectName(row.subjectName)];
       if (subject == null) continue;
       final className = normalizeClassName(row.className);
-      if (className.isEmpty || !subject.containsKey(className)) {
-        throw FormatException(
-          'Không xác minh được lớp của lịch: ${row.subjectName}',
-        );
-      }
       if (row.isExam) {
+        // QLĐT sometimes puts the exam format (e.g. "Trắc nghiệm trên máy
+        // 30p") in TENLOPHOCPHAN instead of a registered class name.
+        // Only accept a recognizable format when the subject and semester
+        // have already been verified; a different class code is still wrong.
+        final examLabel = normalizeClassName(row.examForm);
+        final isExamFormat = className.isNotEmpty &&
+            (className == examLabel && examLabel.isNotEmpty ||
+                RegExp(r'trắc nghiệm|tự luận|vấn đáp|bài thi|thi |trên máy|thực hành|online',
+                        caseSensitive: false)
+                    .hasMatch(className));
+        if (!subject.containsKey(className) && !isExamFormat) {
+          throw FormatException(
+            'Không xác minh được lớp của lịch: ${row.subjectName}',
+          );
+        }
         final earliestStart = subject.values
             .map((section) => section.startsOn)
             .reduce((a, b) => a.isBefore(b) ? a : b);
@@ -65,13 +75,22 @@ final class SemesterScheduleVerifier {
         exams.add(row);
         continue;
       }
+      if (className.isEmpty || !subject.containsKey(className)) {
+        throw FormatException(
+          'Không xác minh được lớp của lịch: ${row.subjectName}',
+        );
+      }
       final section = subject[className]!;
       final date = DateTime(
         row.startAt.year,
         row.startAt.month,
         row.startAt.day,
       );
-      if (date.isBefore(section.startsOn) || date.isAfter(section.endsOn)) {
+      // TraCuu's class date range can lag the actual personal timetable by
+      // a week. Class identity remains exact; tolerate only a small boundary
+      // discrepancy, never a record from a distant term.
+      if (date.isBefore(section.startsOn.subtract(const Duration(days: 14))) ||
+          date.isAfter(section.endsOn.add(const Duration(days: 14)))) {
         throw FormatException(
           'Buổi học ngoài khoảng ngày lớp: ${row.subjectName}',
         );
