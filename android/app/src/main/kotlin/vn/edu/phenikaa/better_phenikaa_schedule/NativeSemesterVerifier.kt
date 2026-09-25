@@ -2,8 +2,10 @@ package vn.edu.phenikaa.better_phenikaa_schedule
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.text.SimpleDateFormat
 import java.text.Normalizer
 import java.util.Locale
+import java.util.TimeZone
 
 internal object NativeSemesterVerifier {
     data class SnapshotBundle(
@@ -87,13 +89,20 @@ internal object NativeSemesterVerifier {
             val subjectName = normalize(widgetSubjectName(row.getString("subjectName")))
             val subject = lookup[subjectName] ?: continue
             val className = normalize(widgetClassName(row.optString("className")))
-            val range = sections[subjectName]?.get(className)
-                ?: throw IllegalArgumentException("Không xác minh được lớp của lịch.")
-            val start = range.substringBefore('|')
-            val end = range.substringAfter('|')
+            val subjectSections = sections[subjectName].orEmpty()
+            val range = subjectSections[className]
             val date = row.getString("startAt").take(10)
             val exam = row.getBoolean("isExam")
-            require(if (exam) date >= start else date >= start && date <= end) {
+            val format = exam && className.isNotEmpty() && EXAM_FORMATS.any {
+                className.contains(normalize(it))
+            }
+            require(range != null || (exam && format && subjectSections.isNotEmpty())) {
+                "Không xác minh được lớp của lịch."
+            }
+            val start = if (exam) subjectSections.values.minOf { it.substringBefore('|') }
+                else range!!.substringBefore('|')
+            val end = range?.substringAfter('|') ?: start
+            require(if (exam) date >= start else withinClassWindow(date, start, end)) {
                 "Lịch nằm ngoài học kỳ đăng ký."
             }
             val copy = JSONObject(row.toString())
@@ -102,6 +111,8 @@ internal object NativeSemesterVerifier {
                 .put("id", "${subject.getString("subjectId")}|${copy.getString("id")}")
                 .put("subjectName", subject.getString("name"))
                 .put("room", row.getString("room"))
+                .put("examForm", if (exam && format) row.optString("className")
+                    else row.optString("examForm"))
                 .put("startAt", row.getString("startAt"))
                 .put("endAt", row.getString("endAt"))
             if (exam) widgetExams.put(widget) else widgetClasses.put(widget)
@@ -139,6 +150,23 @@ internal object NativeSemesterVerifier {
 
     private fun isIsoDate(value: String): Boolean =
         Regex("\\d{4}-\\d{2}-\\d{2}").matches(value)
+
+    private fun withinClassWindow(date: String, start: String, end: String): Boolean {
+        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply {
+            isLenient = false
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val day = parser.parse(date)?.time ?: return false
+        val first = parser.parse(start)?.time ?: return false
+        val last = parser.parse(end)?.time ?: return false
+        val tolerance = 14L * 24 * 60 * 60 * 1000
+        return day in (first - tolerance)..(last + tolerance)
+    }
+
+    private val EXAM_FORMATS = listOf(
+        "trắc nghiệm", "tự luận", "vấn đáp", "bài thi", "thi ",
+        "trên máy", "thực hành", "online",
+    )
 
     private fun base64Url(bytes: ByteArray): String {
         val alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
