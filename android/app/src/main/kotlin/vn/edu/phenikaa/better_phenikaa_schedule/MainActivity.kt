@@ -226,9 +226,11 @@ class MainActivity : FlutterActivity() {
                         "better_phenikaa_widget_render_state",
                         "better_phenikaa_overview_state",
                         "better_phenikaa_small_widget_mode",
+                        "better_phenikaa_daily_sync",
                     ).forEach { name ->
                         getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
                     }
+                    File(filesDir, "theme_imports").deleteRecursively()
                     WidgetRefreshCoordinator.refreshData(applicationContext)
                     result.success(null)
                 }

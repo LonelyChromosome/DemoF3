@@ -301,9 +301,11 @@ class _AppRootState extends State<_AppRoot> {
     await CurrentSemesterStore().clear();
     await SemesterDifferenceStore().clear();
     await WidgetPublisher.clear();
+    await prefs.clear();
     if (!kIsWeb) {
       await _widgetSessionChannel.invokeMethod<void>('clear');
     }
+    AppThemeController.instance.resetAfterLogout();
     if (mounted) {
       setState(() {
         _data = null;

@@ -425,6 +425,21 @@ class AppThemeController extends ChangeNotifier {
   CustomThemeDefinition? get activeCustomTheme => _activeCustomTheme;
   bool get isTransitioning => _transitionPalette != null;
 
+  void resetAfterLogout() {
+    _transitionTimer?.cancel();
+    _transitionTimer = null;
+    final pending = _transitionCompletion;
+    if (pending != null && !pending.isCompleted) pending.complete();
+    _transitionCompletion = null;
+    _transitionSerial++;
+    _transitionPalette = null;
+    _theme = AppThemeId.classic;
+    _activeCustomTheme = null;
+    _activeCustomFontFamily = null;
+    _customThemes = <CustomThemeDefinition>[];
+    notifyListeners();
+  }
+
   AppThemePalette _resolvedPalette(
     AppThemeId id,
     CustomThemeDefinition? custom,
