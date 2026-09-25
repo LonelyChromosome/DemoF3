@@ -1292,10 +1292,7 @@ class _TopTitle extends StatelessWidget {
                 tooltip: 'Thông báo thay đổi lịch',
                 onPressed: onNotificationTap,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 40,
-                  minHeight: 40,
-                ),
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                 icon: Stack(
                   clipBehavior: Clip.none,
                   children: <Widget>[
