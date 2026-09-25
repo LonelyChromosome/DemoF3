@@ -147,10 +147,12 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             theme.textColor, theme.textColor, theme.key)
         val y = height / 2f
         val slotsSafe = slots.coerceAtLeast(1)
-        // Keep the track centered under the card slots; arrows retain their own hitboxes.
+        // The 4dp end margin belongs to each card, not to the timeline track.
         val slotWidth = width.toFloat() / slotsSafe
-        val trackLeft = slotWidth * 0.5f
-        val trackRight = width - trackLeft
+        val cardMargin = 4f * density
+        val trackInset = 32f * density
+        val trackLeft = trackInset
+        val trackRight = width - trackInset
         if (theme.key == "classic") {
             val track = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = theme.iconColor
@@ -162,7 +164,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             val dots = intArrayOf(0xFF12CCFA.toInt(), 0xFF6578FF.toInt(),
                 0xFFC375E8.toInt(), 0xFFFA67BA.toInt(), 0xFFFF557C.toInt())
             if (drawDots) repeat(count.coerceAtMost(5)) { index ->
-                val x = trackLeft + (trackRight - trackLeft) * (index + 0.5f) / slotsSafe
+                val x = slotWidth * (index + 0.5f) - cardMargin / 2f
                 canvas.drawCircle(x, y, 5f * density,
                     Paint(Paint.ANTI_ALIAS_FLAG).apply { color = dots[(startIndex + index) % 5] })
             }
@@ -176,7 +178,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         if (drawTrack && trackRight > trackLeft)
             canvas.drawLine(trackLeft, y, trackRight, y, line)
         if (drawDots) repeat(count.coerceAtMost(5)) { index ->
-            val x = trackLeft + (trackRight - trackLeft) * (index + 0.5f) / slotsSafe
+            val x = slotWidth * (index + 0.5f) - cardMargin / 2f
             val accent = palette.timelineDot(startIndex + index,
                 WidgetVisualPalette.mix(palette.backgroundStart, palette.backgroundEnd,
                     (index + 0.5f) / slots.coerceAtLeast(1)))
