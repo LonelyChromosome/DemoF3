@@ -61,7 +61,7 @@ class _AppRoot extends StatefulWidget {
   State<_AppRoot> createState() => _AppRootState();
 }
 
-class _AppRootState extends State<_AppRoot> {
+class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   static const _storageKey = 'better_phenikaa_snapshot_v1';
   static const _routeKey = 'better_phenikaa_qldt_registration_route_v1';
   static const _widgetSessionChannel = MethodChannel(
@@ -76,10 +76,12 @@ class _AppRootState extends State<_AppRoot> {
   DateTime _selectedDate = DateTime.now();
   bool _showPastExams = false;
   String? _errorMessage;
+  String? _examNotice;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     AppThemeController.instance.addListener(_handleThemeChanged);
     unawaited(_restore());
   }
@@ -92,8 +94,24 @@ class _AppRootState extends State<_AppRoot> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     AppThemeController.instance.removeListener(_handleThemeChanged);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed || _data == null) return;
+    unawaited(_refreshExamNotice());
+  }
+
+  Future<void> _refreshExamNotice() async {
+    try {
+      final notice = await DailySync.examNotice();
+      if (mounted) setState(() => _examNotice = notice);
+    } on Object {
+      // The saved schedule remains usable if the notification channel is unavailable.
+    }
   }
 
   Future<void> _restore() async {
@@ -117,6 +135,7 @@ class _AppRootState extends State<_AppRoot> {
           }
         }
         await DailySync.disable();
+        _examNotice = await DailySync.examNotice();
       }
     } on Object catch (error) {
       _errorMessage = 'Không đọc được dữ liệu cục bộ: $error';
@@ -162,6 +181,7 @@ class _AppRootState extends State<_AppRoot> {
       await DailySync.disable();
       try {
         await DailySync.recordAppSyncSuccess();
+        _examNotice = await DailySync.examNotice();
       } on Object {
         // The successful semester snapshot is already stored.
       }
@@ -259,7 +279,9 @@ class _AppRootState extends State<_AppRoot> {
           });
           if (difference != null) {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(SemesterSyncMessage.from(difference))),
+              SnackBar(
+                content: Text(_examNotice ?? SemesterSyncMessage.from(difference)),
+              ),
             );
           }
           try {
@@ -312,6 +334,7 @@ class _AppRootState extends State<_AppRoot> {
         _panelOpen = false;
         _page = _AppPage.timetable;
         _errorMessage = null;
+        _examNotice = null;
       });
     }
   }
@@ -336,7 +359,17 @@ class _AppRootState extends State<_AppRoot> {
     setState(() {
       _page = page;
       _panelOpen = false;
+      if (page == _AppPage.exam) _examNotice = null;
     });
+    if (page == _AppPage.exam) unawaited(_acknowledgeExamNotice());
+  }
+
+  Future<void> _acknowledgeExamNotice() async {
+    try {
+      await DailySync.ackExamNotice();
+    } on Object {
+      // The exam page remains available if widget state cannot be refreshed.
+    }
   }
 
   @override
@@ -399,6 +432,7 @@ class _AppRootState extends State<_AppRoot> {
                               panelOpen: _panelOpen,
                               syncing: _syncing,
                               errorMessage: _errorMessage,
+                              examNotice: _examNotice,
                               onTogglePanel: () =>
                                   setState(() => _panelOpen = !_panelOpen),
                               onOpenPage: _openPage,
@@ -582,6 +616,7 @@ class _MainShell extends StatelessWidget {
     required this.panelOpen,
     required this.syncing,
     required this.errorMessage,
+    required this.examNotice,
     required this.onTogglePanel,
     required this.onOpenPage,
     required this.onSync,
@@ -598,6 +633,7 @@ class _MainShell extends StatelessWidget {
   final bool panelOpen;
   final bool syncing;
   final String? errorMessage;
+  final String? examNotice;
   final VoidCallback onTogglePanel;
   final ValueChanged<_AppPage> onOpenPage;
   final VoidCallback onSync;
@@ -631,11 +667,43 @@ class _MainShell extends StatelessWidget {
       child: Stack(
         children: <Widget>[
           Positioned.fill(child: child),
-          if (errorMessage != null)
+          if (examNotice != null && page != _AppPage.exam)
             Positioned(
               left: 16,
               right: 16,
               top: 14,
+              child: Material(
+                color: const Color(0xFF8E1835),
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  onTap: () => onOpenPage(_AppPage.exam),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      children: <Widget>[
+                        const Icon(
+                          Icons.notifications_active,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            examNotice!,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (errorMessage != null)
+            Positioned(
+              left: 16,
+              right: 16,
+              top: examNotice == null ? 14 : 90,
               child: _ErrorBanner(
                 message: errorMessage!,
                 onDismiss: onDismissError,
