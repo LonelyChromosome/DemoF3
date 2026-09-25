@@ -40,6 +40,7 @@ abstract final class WidgetPublisher {
                   'subjectName': item.subjectName,
                   'room': item.room,
                   'examForm': item.examForm,
+                  'className': item.className,
                   'startAt': item.startAt.toIso8601String(),
                   'endAt': item.endAt.toIso8601String(),
                 },
