@@ -516,11 +516,14 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         views.setTextViewText(R.id.widget_empty,
             if (examMode) "Không có lịch thi" else "Không có lịch học")
         views.setTextColor(R.id.widget_empty, theme.textColor)
-        views.setFloat(R.id.widget_root, "setAlpha", 1f)
+        val waitingForTheme = context.getSharedPreferences(
+            WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE,
+        ).getString(transitionPhaseKey(widgetId), null) == PHASE_WAITING_TARGET
+        views.setFloat(R.id.widget_root, "setAlpha", if (waitingForTheme) 0f else 1f)
         val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
         views.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
 
-        if (showRefreshCover && hasItems) {
+        if (showRefreshCover && hasItems && !waitingForTheme) {
             val cover = renderWidgetRefreshCover(
                 context,
                 widgetId,
@@ -546,7 +549,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
                 putExtra(EXTRA_RENDER_WIDTH_DP, renderWidthDp)
                 putExtra(EXTRA_RENDER_HEIGHT_DP, renderHeightDp)
-                data = Uri.parse("better-phenikaa://widget/$widgetId/$sizeToken/${if (examMode) "exam" else "study"}")
+                val themeToken = Uri.encode(theme.key)
+                data = Uri.parse("better-phenikaa://widget/$widgetId/$sizeToken/${if (examMode) "exam" else "study"}/$themeToken")
             }
             views.setRemoteAdapter(R.id.widget_list, serviceIntent)
 
@@ -670,12 +674,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         hiddenTarget.setViewVisibility(R.id.widget_empty, if (hasItems) View.GONE else View.VISIBLE)
         manager.partiallyUpdateAppWidget(widgetId, hiddenTarget)
 
-        state.edit()
-            .putString(themeTokenKey(widgetId), targetThemeKey)
-            .putString(transitionPhaseKey(widgetId), PHASE_WAITING_TARGET)
-            .apply()
-
-        manager.notifyAppWidgetViewDataChanged(widgetId, R.id.widget_list)
+        state.edit().putString(transitionPhaseKey(widgetId), PHASE_WAITING_TARGET).apply()
+        // Rebind the adapter for the new palette. The old adapter can retain
+        // cached cards in the previous theme after a data-only invalidation.
+        renderWidget(context, manager, widgetId)
 
         Handler(Looper.getMainLooper()).postDelayed({
             maybeStartFadeIn(context, widgetId, targetThemeKey)
@@ -854,7 +856,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             (root.optJSONArray(if (examMode) "exams" else "classes")
                 ?: root.optJSONArray("records"))?.toString() ?: snapshot
         }.getOrDefault(snapshot)
-        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|calendar-v3"
+        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|${readThemeColors(context).key}|calendar-v3"
     }
 
     private fun contentTokenKey(widgetId: Int): String = "content_token_$widgetId"
