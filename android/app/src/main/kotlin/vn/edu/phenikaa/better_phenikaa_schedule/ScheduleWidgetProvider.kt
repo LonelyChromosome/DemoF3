@@ -210,6 +210,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             val readyThemeKey = intent.getStringExtra(EXTRA_READY_THEME_KEY)
             if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID && readyThemeKey != null) {
                 maybeStartFadeIn(context, widgetId, readyThemeKey)
+                Handler(Looper.getMainLooper()).postDelayed({
+                    applyPendingSelection(context, AppWidgetManager.getInstance(context), widgetId)
+                }, 80L)
             }
             return
         }
@@ -248,6 +251,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             SmallWidgetMode.clear(context, widgetId)
             renderState.edit()
                 .remove(contentTokenKey(widgetId))
+                .remove(pendingSelectionKey(widgetId))
                 .remove(themeTokenKey(widgetId))
                 .remove(transitionFromKey(widgetId))
                 .remove(transitionTargetKey(widgetId))
@@ -325,7 +329,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         )
         val contentToken = collectionContentToken(context, widgetId, options)
         val previousToken = renderStatePrefs.getString(contentTokenKey(widgetId), null)
-        val orderChanged = previousToken != null && !previousToken.endsWith("|calendar-v2")
+        val orderChanged = previousToken != null && !previousToken.endsWith("|calendar-v3")
         if (orderChanged) {
             context.getSharedPreferences(WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE)
                 .edit().putBoolean(resetChildKey(widgetId), true).apply()
@@ -381,6 +385,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         }
 
         if (collectionChanged) {
+            renderStatePrefs.edit().putString(pendingSelectionKey(widgetId), contentToken).apply()
             appWidgetManager.updateAppWidget(widgetId, views)
             appWidgetManager.notifyAppWidgetViewDataChanged(widgetId, R.id.widget_list)
             renderStatePrefs.edit()
@@ -388,6 +393,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 .putString(themeTokenKey(widgetId), themeKey)
                 .apply()
             scheduleRefreshCoverHide(context, appWidgetManager, widgetId, contentToken)
+            Handler(Looper.getMainLooper()).postDelayed({
+                applyPendingSelection(context, appWidgetManager, widgetId)
+            }, 260L)
         } else if (themeChanged && !hasActiveThemeTransition(renderStatePrefs, widgetId)) {
             appWidgetManager.partiallyUpdateAppWidget(widgetId, views)
             appWidgetManager.notifyAppWidgetViewDataChanged(widgetId, R.id.widget_list)
@@ -407,6 +415,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         Handler(Looper.getMainLooper()).postDelayed({
             val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
             if (state.getString(contentTokenKey(widgetId), null) != contentToken) return@postDelayed
+            if (state.getString(pendingSelectionKey(widgetId), null) == contentToken) {
+                scheduleRefreshCoverHide(context, manager, widgetId, contentToken)
+                return@postDelayed
+            }
             val reveal = RemoteViews(context.packageName, R.layout.schedule_widget)
             val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
             reveal.setViewVisibility(R.id.widget_list, if (hasItems) View.VISIBLE else View.GONE)
@@ -414,6 +426,17 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             reveal.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
             manager.partiallyUpdateAppWidget(widgetId, reveal)
         }, 360L)
+    }
+
+    private fun applyPendingSelection(context: Context, manager: AppWidgetManager, widgetId: Int) {
+        val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
+        val pending = state.getString(pendingSelectionKey(widgetId), null) ?: return
+        if (pending != state.getString(contentTokenKey(widgetId), null)) return
+        val selected = WidgetSnapshotStore.read(context, widgetId).selectedIndex
+        val views = RemoteViews(context.packageName, R.layout.schedule_widget)
+        views.setDisplayedChild(R.id.widget_list, selected)
+        manager.partiallyUpdateAppWidget(widgetId, views)
+        state.edit().remove(pendingSelectionKey(widgetId)).apply()
     }
 
     private fun animateModeSlide(
@@ -825,10 +848,11 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             (root.optJSONArray(if (examMode) "exams" else "classes")
                 ?: root.optJSONArray("records"))?.toString() ?: snapshot
         }.getOrDefault(snapshot)
-        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|calendar-v2"
+        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|calendar-v3"
     }
 
     private fun contentTokenKey(widgetId: Int): String = "content_token_$widgetId"
+    private fun pendingSelectionKey(widgetId: Int): String = "pending_selection_$widgetId"
     private fun themeTokenKey(widgetId: Int): String = "theme_token_$widgetId"
 
     @Suppress("DEPRECATION")
