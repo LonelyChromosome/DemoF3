@@ -1256,7 +1256,10 @@ class _TopTitle extends StatelessWidget {
                 const SizedBox(width: 9),
                 Flexible(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: palette.cardAlt,
                       borderRadius: BorderRadius.circular(
@@ -1289,11 +1292,17 @@ class _TopTitle extends StatelessWidget {
                 tooltip: 'Thông báo thay đổi lịch',
                 onPressed: onNotificationTap,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                constraints: const BoxConstraints(
+                  minWidth: 40,
+                  minHeight: 40,
+                ),
                 icon: Stack(
                   clipBehavior: Clip.none,
                   children: <Widget>[
-                    Icon(Icons.notifications_none_rounded, color: palette.primary),
+                    Icon(
+                      Icons.notifications_none_rounded,
+                      color: palette.primary,
+                    ),
                     if (unreadDifference)
                       const Positioned(
                         right: 0,
@@ -1309,7 +1318,10 @@ class _TopTitle extends StatelessWidget {
             if (onCalendarTap == null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Icon(Icons.calendar_month_outlined, color: palette.primary),
+                child: Icon(
+                  Icons.calendar_month_outlined,
+                  color: palette.primary,
+                ),
               )
             else
               IconButton.filledTonal(
