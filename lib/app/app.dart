@@ -1289,7 +1289,9 @@ class _NotificationCenterScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
-    final hasStudy = difference?.study.hasChanges == true;
+    final hasStudy = difference?.study.hasChanges == true ||
+        difference?.addedSubjects.isNotEmpty == true ||
+        difference?.removedSubjects.isNotEmpty == true;
     final hasExam = difference?.exams.hasChanges == true;
     final hasAnyChange = difference?.hasChanges == true;
     return Padding(
@@ -1352,7 +1354,9 @@ class _NotificationCenterScreen extends StatelessWidget {
                       description: 'Có thay đổi lịch học',
                       count: difference!.study.added +
                           difference.study.removed +
-                          difference.study.modified,
+                          difference.study.modified +
+                          difference.addedSubjects.length +
+                          difference.removedSubjects.length,
                       palette: palette,
                     ),
                   if (hasStudy && hasExam) const SizedBox(height: 10),

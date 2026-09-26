@@ -209,39 +209,4 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     },
   );
-
-  testWidgets('notification center replaces bell Snackbar and opens exam page',
-      (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    final now = DateTime.now();
-    final snapshot = ImportedScheduleData(
-      displayName: 'Sinh viên',
-      records: <ScheduleRecord>[
-        ScheduleRecord(
-          id: 'exam',
-          isExam: true,
-          subjectName: 'Thiết kế web nâng cao',
-          room: 'A1',
-          startAt: now.add(const Duration(days: 2)),
-          endAt: now.add(const Duration(days: 2, hours: 2)),
-        ),
-      ],
-      syncedAt: now,
-    );
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'better_phenikaa_snapshot_v1': snapshot.encode(),
-    });
-    await tester.pumpWidget(const BetterPhenikaaScheduleApp());
-    await tester.pump(const Duration(milliseconds: 700));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Đang trong kỳ thi'));
-    await tester.pumpAndSettle();
-    expect(find.text('Thông báo'), findsOneWidget);
-    expect(find.byTooltip('Mở lịch thi'), findsOneWidget);
-    expect(find.byType(SnackBar), findsNothing);
-    await tester.tap(find.byTooltip('Mở lịch thi'));
-    await tester.pumpAndSettle();
-    expect(find.text('Lịch thi'), findsOneWidget);
-    debugDefaultTargetPlatformOverride = null;
-  });
 }

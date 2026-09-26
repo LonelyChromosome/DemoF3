@@ -14,7 +14,6 @@ enum AssistantPack {
 
 enum AssistantEvent {
   syncInitial,
-  notificationEmpty,
   syncStale,
   syncSuccessNoChange,
   studyChanged,
@@ -68,7 +67,6 @@ abstract final class AssistantText {
     // Packs without a localized entry use the normal wording.
     return switch (event) {
       AssistantEvent.syncInitial => 'Đã lưu dữ liệu học kỳ đầu tiên.',
-      AssistantEvent.notificationEmpty => 'Không có thông báo mới.',
       AssistantEvent.syncStale =>
         'Bạn nên đồng bộ lại để đảm bảo tính chính xác của dữ liệu.',
       AssistantEvent.syncSuccessNoChange =>
