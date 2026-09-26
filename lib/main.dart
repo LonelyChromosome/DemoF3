@@ -1,15 +1,11 @@
 import 'dart:async';
 
 import 'package:better_phenikaa_schedule/app/app.dart';
-import 'package:better_phenikaa_schedule/demo/demo_data_seed.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  if (const bool.fromEnvironment('BETTER_PHENIKAA_DEMO_DATA')) {
-    await DemoDataSeed.seedIfEmpty();
-  }
   runApp(const _LoginCreditOverlay(child: BetterPhenikaaScheduleApp()));
 }
 

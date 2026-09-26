@@ -23,10 +23,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  assets:
-    - assets/demo/current_semester.json
-    - assets/demo/schedule_difference.json
-
   fonts:
     - family: MinecraftCustom
       fonts:
