@@ -3,7 +3,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dar
 enum ExamCountdownBand { green, blue, orange, red }
 
 final class ExamCountdown {
-  const ExamCountdown({required this.label, required this.band});
+  const new({required this.label, required this.band});
 
   final String label;
   final ExamCountdownBand band;
