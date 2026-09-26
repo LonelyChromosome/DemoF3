@@ -9,6 +9,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.d
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_range.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/tracuu_api.dart';
+import 'package:better_phenikaa_schedule/features/tro_li/assistant_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -98,15 +99,22 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   int _webViewGeneration = 0;
   int _readinessAttempt = 0;
   String _status = 'Đăng nhập bằng tài khoản Microsoft của bạn.';
+  AssistantPack _assistantPack = AssistantPack.normal;
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadSavedCredentials());
+    unawaited(_loadAssistantPack());
     _showWebPage = !widget.cachedSession;
     if (widget.cachedSession) {
       _status = 'Đang kiểm tra phiên QLĐT và đồng bộ...';
     }
+  }
+
+  Future<void> _loadAssistantPack() async {
+    final pack = await AssistantSelection.load();
+    if (mounted) _assistantPack = pack;
   }
 
   @override
@@ -1204,7 +1212,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _pendingRegistrationRaw = null;
     setState(() {
       _syncing = false;
-      _status = status;
+      _status = code.endsWith('_TIMEOUT')
+          ? AssistantText.of(AssistantEvent.syncTimeout, _assistantPack)
+          : code == 'FAILED'
+          ? AssistantText.of(AssistantEvent.syncFailed, _assistantPack)
+          : status;
     });
   }
 

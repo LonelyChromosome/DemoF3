@@ -82,7 +82,10 @@ void main() {
       expect(find.byKey(dot), findsOneWidget);
       await tester.tap(find.byTooltip('Đang trong kỳ thi'));
       await tester.pumpAndSettle();
-      expect(find.text('Bạn đang trong kỳ thi.'), findsOneWidget);
+      expect(
+        find.text('Bạn đang trong kỳ thi. Nhớ kiểm tra lịch thi nhé.'),
+        findsOneWidget,
+      );
       expect(find.byTooltip('Mở lịch thi'), findsOneWidget);
       expect(find.byType(SnackBar), findsNothing);
       expect(find.byType(FloatingActionButton), findsNothing);
@@ -217,7 +220,10 @@ void main() {
       await selection;
       await tester.tap(find.byTooltip('Đang trong kỳ thi'));
       await tester.pump(const Duration(milliseconds: 700));
-      expect(find.text('Bạn đang trong kỳ thi.'), findsOneWidget);
+      expect(
+        find.text('Bạn đang trong kỳ thi. Nhớ kiểm tra lịch thi nhé.'),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
       debugDefaultTargetPlatformOverride = null;
     });

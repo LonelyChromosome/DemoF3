@@ -1,12 +1,15 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'assistant_catalog.dart';
+
 enum AssistantPack {
   normal('Bình thường'),
   serious('Nghiêm túc'),
   playful('Nhí nhảnh'),
   affectionate('Tình cảm'),
   flirtatious('Lẳng lơ'),
-  academic('Học thuật');
+  academic('Học thuật'),
+  blunt('Mỏ hỗn');
 
   new(this.label);
   final String label;
@@ -25,6 +28,13 @@ enum AssistantEvent {
   examTomorrow,
   examPeriodActive,
   examCountdownMultiple,
+  widgetSyncChanged,
+  widgetSyncUnchanged,
+  differenceUnread,
+  examEmpty,
+  studyTodayEmpty,
+  syncFailed,
+  syncTimeout,
 }
 
 /// One pack governs all in-app messages and Android notifications.
@@ -55,11 +65,18 @@ abstract final class AssistantText {
         AssistantEvent.syncSuccessNoChange ||
         AssistantEvent.studyChanged ||
         AssistantEvent.examChanged ||
-        AssistantEvent.studyAndExamChanged => 'Đồng bộ QLĐT',
+        AssistantEvent.studyAndExamChanged ||
+        AssistantEvent.widgetSyncChanged ||
+        AssistantEvent.widgetSyncUnchanged ||
+        AssistantEvent.syncFailed ||
+        AssistantEvent.syncTimeout => 'Đồng bộ QLĐT',
         AssistantEvent.examInDays ||
         AssistantEvent.examTomorrow ||
         AssistantEvent.examCountdownMultiple ||
-        AssistantEvent.examPeriodActive => 'Lịch thi',
+        AssistantEvent.examPeriodActive ||
+        AssistantEvent.examEmpty => 'Lịch thi',
+        AssistantEvent.differenceUnread => 'Thông báo',
+        AssistantEvent.studyTodayEmpty => 'Lịch học',
       };
 
   static String of(
@@ -67,32 +84,54 @@ abstract final class AssistantText {
     AssistantPack pack, {
     int days = 0,
     int examCount = 1,
+    bool inWidget = false,
+    Map<String, Map<int, String>>? templates,
   }) {
-    // Packs without a localized entry use the normal wording.
-    return switch (event) {
-      AssistantEvent.syncInitial => 'Đã lưu dữ liệu học kỳ đầu tiên.',
-      AssistantEvent.notificationEmpty => 'Không có thông báo mới.',
-      AssistantEvent.syncStale =>
-        'Bạn nên đồng bộ lại để đảm bảo tính chính xác của dữ liệu.',
-      AssistantEvent.syncSuccessNoChange =>
-        'Đồng bộ thành công. Lịch không đổi.',
-      AssistantEvent.studyChanged =>
-        'Lịch học đã thay đổi. Chạm chuông để xem chi tiết.',
-      AssistantEvent.examChanged =>
-        'Lịch thi đã thay đổi. Chạm chuông để xem chi tiết.',
-      AssistantEvent.studyAndExamChanged =>
-        'Lịch học và lịch thi đã thay đổi. Chạm chuông để xem chi tiết.',
-      AssistantEvent.examInDays when examCount > 1 =>
-        '$days ngày nữa bạn có $examCount môn thi.',
-      AssistantEvent.examInDays => '$days ngày nữa bạn có một môn thi.',
-      AssistantEvent.examTomorrow when examCount > 1 =>
-        'Ngày mai bạn có $examCount môn thi.',
-      AssistantEvent.examTomorrow => 'Ngày mai bạn có một môn thi.',
-      AssistantEvent.examPeriodActive => 'Bạn đang trong kỳ thi.',
-      AssistantEvent.notificationEmptyDescription =>
-        'Các thông báo mới sẽ xuất hiện ở đây.',
-      AssistantEvent.examCountdownMultiple =>
-        'Bạn có $examCount môn thi sắp tới.',
+    final useCase = switch (event) {
+      AssistantEvent.syncStale => 1,
+      AssistantEvent.syncSuccessNoChange => 2,
+      AssistantEvent.studyChanged => 3,
+      AssistantEvent.examChanged => 4,
+      AssistantEvent.studyAndExamChanged => 5,
+      AssistantEvent.examInDays when examCount > 1 => 11,
+      AssistantEvent.examInDays when days == 7 => 6,
+      AssistantEvent.examInDays when days == 3 => 7,
+      AssistantEvent.examInDays => 9,
+      AssistantEvent.examTomorrow when examCount > 1 => 11,
+      AssistantEvent.examTomorrow => 8,
+      AssistantEvent.examPeriodActive => 10,
+      AssistantEvent.examCountdownMultiple => 11,
+      AssistantEvent.widgetSyncChanged => 12,
+      AssistantEvent.widgetSyncUnchanged => 13,
+      AssistantEvent.differenceUnread => 14,
+      AssistantEvent.examEmpty => 15,
+      AssistantEvent.studyTodayEmpty => 16,
+      AssistantEvent.syncFailed => 17,
+      AssistantEvent.syncTimeout => 18,
+      AssistantEvent.syncInitial ||
+      AssistantEvent.notificationEmpty ||
+      AssistantEvent.notificationEmptyDescription => null,
     };
+    if (useCase == null) {
+      return switch (event) {
+        AssistantEvent.syncInitial => 'Đã lưu dữ liệu học kỳ đầu tiên.',
+        AssistantEvent.notificationEmpty => 'Không có thông báo mới.',
+        _ => 'Các thông báo mới sẽ xuất hiện ở đây.',
+      };
+    }
+    final catalog = templates ?? assistantCatalog;
+    final template =
+        catalog[pack.name]?[useCase] ??
+        catalog[AssistantPack.normal.name]![useCase]!;
+    final resolved = switch (useCase) {
+      9 => template.replaceFirst('X', '$days'),
+      11 => template
+          .replaceFirst('X', '$days')
+          .replaceFirst('N', '$examCount'),
+      _ => template,
+    };
+    return inWidget && pack == AssistantPack.flirtatious
+        ? resolved.replaceAll('❤️', '<3')
+        : resolved;
   }
 }

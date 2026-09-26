@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_mobile.dart'
     as mobile;
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
+import 'package:better_phenikaa_schedule/features/tro_li/assistant_text.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -114,7 +115,12 @@ void main() {
         () => Future<void>.delayed(const Duration(seconds: 48)),
       );
       await tester.pump();
-      expect(find.textContaining('schedule không phản hồi'), findsOneWidget);
+      expect(
+        find.text(
+          AssistantText.of(AssistantEvent.syncTimeout, AssistantPack.normal),
+        ),
+        findsOneWidget,
+      );
       expect(find.byType(CircularProgressIndicator), findsNothing);
       expect(find.text('Thử đồng bộ lại'), findsOneWidget);
       expect(result, isNull);

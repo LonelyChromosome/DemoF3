@@ -604,9 +604,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           }
         }
       }
-    } on Object catch (error) {
+    } on Object {
       if (mounted) {
-        setState(() => _errorMessage = 'Đồng bộ thất bại: $error');
+        setState(
+          () => _errorMessage = AssistantText.of(
+            AssistantEvent.syncFailed,
+            _assistantPack,
+          ),
+        );
       }
     } finally {
       if (mounted) {
@@ -1058,6 +1063,7 @@ class _MainShell extends StatelessWidget {
     final child = switch (page) {
       _AppPage.timetable => _TimetableScreen(
         data: data,
+        assistantPack: assistantPack,
         selectedDate: selectedDate,
         onDateChanged: onDateChanged,
         unreadDifference: unreadDifference,
@@ -1066,6 +1072,7 @@ class _MainShell extends StatelessWidget {
       ),
       _AppPage.exam => _ExamScreen(
         data: data,
+        assistantPack: assistantPack,
         showPast: showPastExams,
         onTabChanged: onExamTabChanged,
         unreadDifference: unreadDifference,
@@ -1207,6 +1214,7 @@ class _MainShell extends StatelessWidget {
 class _TimetableScreen extends StatefulWidget {
   const new({
     required this.data,
+    required this.assistantPack,
     required this.selectedDate,
     required this.onDateChanged,
     required this.unreadDifference,
@@ -1215,6 +1223,7 @@ class _TimetableScreen extends StatefulWidget {
   });
 
   final ImportedScheduleData data;
+  final AssistantPack assistantPack;
   final DateTime selectedDate;
   final ValueChanged<DateTime> onDateChanged;
   final bool unreadDifference;
@@ -1397,10 +1406,19 @@ class _TimetableScreenState extends State<_TimetableScreen>
                       '${widget.selectedDate.year}-${widget.selectedDate.month}-${widget.selectedDate.day}',
                     ),
                     child: items.isEmpty
-                        ? const _EmptyState(
+                        ? _EmptyState(
                             icon: Icons.event_available_outlined,
-                            title: 'Không có lịch học',
-                            message: 'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
+                            title: _sameDay(
+                              widget.selectedDate,
+                              DateTime.now(),
+                            )
+                                ? AssistantText.of(
+                                    AssistantEvent.studyTodayEmpty,
+                                    widget.assistantPack,
+                                  )
+                                : 'Không có lịch học',
+                            message:
+                                'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
                           )
                         : ListView.separated(
                             padding: const EdgeInsets.only(bottom: 82),
@@ -1426,6 +1444,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
 class _ExamScreen extends StatelessWidget {
   const new({
     required this.data,
+    required this.assistantPack,
     required this.showPast,
     required this.onTabChanged,
     required this.unreadDifference,
@@ -1434,6 +1453,7 @@ class _ExamScreen extends StatelessWidget {
   });
 
   final ImportedScheduleData data;
+  final AssistantPack assistantPack;
   final bool showPast;
   final ValueChanged<bool> onTabChanged;
   final bool unreadDifference;
@@ -1472,7 +1492,10 @@ class _ExamScreen extends StatelessWidget {
                     icon: Icons.assignment_turned_in_outlined,
                     title: showPast
                         ? 'Chưa có kỳ thi đã qua'
-                        : 'Chưa có lịch thi sắp tới',
+                        : AssistantText.of(
+                            AssistantEvent.examEmpty,
+                            assistantPack,
+                          ),
                     message: 'Dữ liệu sẽ được cập nhật sau lần đồng bộ QLĐT tiếp theo.',
                   )
                 : ListView.separated(
@@ -1573,7 +1596,10 @@ class _NotificationCenterScreen extends StatelessWidget {
                     _NotificationChangeCard(
                       icon: Icons.event_available_rounded,
                       title: 'Thay đổi môn học',
-                      description: 'Có thay đổi lịch học',
+                      description: AssistantText.of(
+                        AssistantEvent.studyChanged,
+                        assistantPack,
+                      ),
                       count:
                           (currentDifference?.study.added ?? 0) +
                           (currentDifference?.study.removed ?? 0) +
@@ -1587,7 +1613,10 @@ class _NotificationCenterScreen extends StatelessWidget {
                     _NotificationChangeCard(
                       icon: Icons.assignment_rounded,
                       title: 'Thay đổi lịch thi',
-                      description: 'Có thay đổi lịch thi',
+                      description: AssistantText.of(
+                        AssistantEvent.examChanged,
+                        assistantPack,
+                      ),
                       count:
                           (currentDifference?.exams.added ?? 0) +
                           (currentDifference?.exams.removed ?? 0) +
@@ -1856,6 +1885,14 @@ class _AccountScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   const AppThemeSettingButton(),
                   const SizedBox(height: 12),
+                  Text(
+                    'Assistant Pack',
+                    style: TextStyle(
+                      color: palette.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   PopupMenuButton<AssistantPack>(
                     tooltip: 'Chọn Trợ lí',
                     onSelected: onAssistantPackChanged,
@@ -1863,9 +1900,17 @@ class _AccountScreen extends StatelessWidget {
                         .map(
                           (pack) => PopupMenuItem(
                             value: pack,
-                            child: Text(
-                              pack.label,
-                              overflow: TextOverflow.ellipsis,
+                            child: Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: Text(
+                                    pack.label,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (pack == assistantPack)
+                                  Icon(Icons.check, color: palette.primary),
+                              ],
                             ),
                           ),
                         )

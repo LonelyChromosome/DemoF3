@@ -581,7 +581,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         populateCards(context, views, items, start, columns, width, cardHeight,
             compact, examMode, textColor, betterDefault, bitmapFont, openApp)
         views.setViewVisibility(R.id.overview_empty, if (items.isEmpty()) View.VISIBLE else View.GONE)
-        val emptyLabel = if (examMode) "Không có lịch thi" else "Không có lịch học"
+        val emptyLabel = if (examMode) AssistantText.of(AssistantEvent.exam_empty,
+            AssistantText.selected(context), inWidget = true) else "Không có lịch học"
         views.setTextViewText(R.id.overview_empty, WidgetFont.text(context, emptyLabel))
         if (bitmapFont && items.isEmpty()) {
             views.setImageViewBitmap(R.id.overview_empty_font,

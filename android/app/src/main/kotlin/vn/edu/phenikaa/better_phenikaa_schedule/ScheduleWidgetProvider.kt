@@ -603,7 +603,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         views.setContentDescription(R.id.widget_mode,
             if (examMode) "Về lịch học" else "Xem lịch thi")
         views.setTextViewText(R.id.widget_empty,
-            if (examMode) "Không có lịch thi" else "Không có lịch học")
+            if (examMode) AssistantText.of(AssistantEvent.exam_empty,
+                AssistantText.selected(context), inWidget = true)
+            else "Không có lịch học")
         views.setTextColor(R.id.widget_empty, theme.textColor)
         val waitingForTheme = context.getSharedPreferences(
             WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE,
