@@ -54,7 +54,10 @@ object DailySyncScheduler {
         preferences(context).getBoolean(ENABLED_KEY, false)
 
     fun recordStarted(context: Context, startedAtMillis: Long) {
-        preferences(context).edit().putLong(LAST_STARTED_KEY, startedAtMillis).apply()
+        preferences(context).edit()
+            .putLong(LAST_STARTED_KEY, startedAtMillis)
+            .remove(LAST_ERROR_KEY)
+            .apply()
     }
 
     fun recordSuccess(context: Context, completedAtMillis: Long) {
@@ -62,6 +65,7 @@ object DailySyncScheduler {
             .putLong(LAST_SUCCESS_KEY, completedAtMillis)
             .remove(LAST_ERROR_KEY)
             .apply()
+        SyncStaleReminderScheduler.onSuccess(context)
     }
 
     fun recordFailure(context: Context, message: String) {

@@ -38,4 +38,36 @@ abstract final class DailySync {
       debugPrint('Unable to refresh today on the widget: $error');
     }
   }
+
+  static Future<void> syncReminders() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('syncReminders');
+  }
+
+  static Future<void> recordAppSyncSuccess() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('recordAppSyncSuccess');
+  }
+
+  static Future<DateTime?> lastSuccessfulSync() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
+    final status = await _channel.invokeMapMethod<String, dynamic>('status');
+    final millis = status?['lastSuccessAtMillis'] as int? ?? 0;
+    return millis > 0 ? DateTime.fromMillisecondsSinceEpoch(millis) : null;
+  }
+
+  static Future<String?> examNotice() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
+    return await _channel.invokeMethod<String>('examNotice');
+  }
+
+  static Future<void> ackExamNotice() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('ackExamNotice');
+  }
+
+  static Future<void> clearReminders() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    await _channel.invokeMethod<void>('clearReminders');
+  }
 }

@@ -425,6 +425,21 @@ class AppThemeController extends ChangeNotifier {
   CustomThemeDefinition? get activeCustomTheme => _activeCustomTheme;
   bool get isTransitioning => _transitionPalette != null;
 
+  void resetAfterLogout() {
+    _transitionTimer?.cancel();
+    _transitionTimer = null;
+    final pending = _transitionCompletion;
+    if (pending != null && !pending.isCompleted) pending.complete();
+    _transitionCompletion = null;
+    _transitionSerial++;
+    _transitionPalette = null;
+    _theme = AppThemeId.classic;
+    _activeCustomTheme = null;
+    _activeCustomFontFamily = null;
+    _customThemes = <CustomThemeDefinition>[];
+    notifyListeners();
+  }
+
   AppThemePalette _resolvedPalette(
     AppThemeId id,
     CustomThemeDefinition? custom,
@@ -487,12 +502,10 @@ class AppThemeController extends ChangeNotifier {
     }
     notifyListeners();
     final widgetTheme = prefs.getString(_widgetPreferenceKey);
-    if (widgetTheme != widgetKey) {
-      final nativeApplied = await _applyWidgetTheme(widgetKey, palette);
-      if (!nativeApplied) {
-        await prefs.setString(_widgetPreferenceKey, widgetKey);
-        await _syncWidgetTheme();
-      }
+    final nativeApplied = await _applyWidgetTheme(widgetKey, palette);
+    if (widgetTheme != widgetKey && !nativeApplied) {
+      await prefs.setString(_widgetPreferenceKey, widgetKey);
+      await _syncWidgetTheme();
     }
   }
 
@@ -664,6 +677,10 @@ class AppThemeController extends ChangeNotifier {
           'widgetText': target.widgetText.toARGB32(),
           'widgetSubtext': target.widgetSubtext.toARGB32(),
           'widgetIcon': target.widgetText.toARGB32(),
+          'fontFamily': target.fontFamily ?? '',
+          'fontPath': _theme == AppThemeId.custom
+              ? _activeCustomTheme?.font.path ?? ''
+              : '',
         },
       );
       return true;
@@ -678,13 +695,15 @@ class AppThemeController extends ChangeNotifier {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     await HomeWidget.updateWidget(
       name: 'ScheduleWidgetProvider',
-      androidName: 'ScheduleWidgetProvider',
+      qualifiedAndroidName:
+          'vn.edu.phenikaa.better_phenikaa_schedule.ScheduleWidgetProvider',
     );
   }
 }
 
 ThemeData buildBetterTheme(AppThemePalette palette) {
   final brightness = palette.dark ? Brightness.dark : Brightness.light;
+  final fontScale = themeFontSizeFactor(palette.fontFamily);
   final base = ThemeData(
     useMaterial3: true,
     brightness: brightness,
@@ -705,8 +724,13 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
         ),
     textTheme: base.textTheme.apply(
       fontFamily: palette.fontFamily ?? 'Roboto',
+      fontSizeFactor: fontScale,
       bodyColor: palette.textPrimary,
       displayColor: palette.textPrimary,
+    ),
+    primaryTextTheme: base.primaryTextTheme.apply(
+      fontFamily: palette.fontFamily ?? 'Roboto',
+      fontSizeFactor: fontScale,
     ),
     iconTheme: IconThemeData(color: palette.textPrimary),
     cardTheme: CardThemeData(
@@ -728,6 +752,8 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
             : Colors.white,
         shape: shape,
         textStyle: TextStyle(
+          fontFamily: palette.fontFamily ?? 'Roboto',
+          fontSize: 14 * fontScale,
           fontWeight: FontWeight.w800,
           letterSpacing: themeLetterSpacing(palette),
         ),
@@ -738,6 +764,10 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
         foregroundColor: palette.primary,
         side: BorderSide(color: palette.border),
         shape: shape,
+        textStyle: TextStyle(
+          fontFamily: palette.fontFamily ?? 'Roboto',
+          fontSize: 14 * fontScale,
+        ),
       ),
     ),
     dividerColor: palette.border,
@@ -746,6 +776,31 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
       modalBackgroundColor: palette.surface,
     ),
   );
+}
+
+/// Match a selected font's actual glyph footprint to the system font at the
+/// same nominal size. Imported fonts can have very different advances/ascents.
+double themeFontSizeFactor(String? family) {
+  if (family == null || family.isEmpty || family == 'Roboto') return 1;
+  const sample = 'Ngày 25/09 • Lịch học';
+  Size measure(String font) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: sample,
+        style: TextStyle(fontFamily: font, fontSize: 20),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    return painter.size;
+  }
+
+  final standard = measure('Roboto');
+  final selected = measure(family);
+  if (selected.width <= 0 || selected.height <= 0) return 1;
+  final widthRatio = standard.width / selected.width;
+  final heightRatio = standard.height / selected.height;
+  return (widthRatio < heightRatio ? widthRatio : heightRatio).clamp(0.5, 1.1);
 }
 
 OutlinedBorder themeButtonShape(AppThemePalette palette) {

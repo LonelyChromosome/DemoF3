@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "DemoF3 TraCuu Inspector",
+  "version": "1.0.0",
+  "description": "Capture decoded TraCuu calls locally without authentication data.",
+  "permissions": ["scripting", "activeTab"],
+  "host_permissions": ["https://qldtbeta.phenikaa-uni.edu.vn/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://qldtbeta.phenikaa-uni.edu.vn/*"],
+      "js": ["capture.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": true
+    }
+  ],
+  "action": {
+    "default_title": "DemoF3 TraCuu Inspector",
+    "default_popup": "popup.html"
+  }
+}

@@ -2,6 +2,30 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dar
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('retains distinct component classes at the same time and room', () {
+    Map<String, Object> item(String section) => <String, Object>{
+      'PHANLOAI': 'LICHHOC',
+      'TENHOCPHAN': 'Thiết kế web nâng cao',
+      'TENLOPHOCPHAN': section,
+      'NGAYHOC': '23/09/2026',
+      'GIOBATDAU': 7,
+      'PHUTBATDAU': 0,
+      'GIOKETTHUC': 9,
+      'PHUTKETTHUC': 0,
+      'PHONGHOC_TEN': 'A1',
+    };
+    final data = const QldtParser().parseApiResponse(
+      <String, dynamic>{
+        'Success': true,
+        'Data': <dynamic>[item('WEB-LT'), item('WEB-TH')],
+      },
+      displayName: 'Sinh viên',
+      strict: true,
+    );
+    expect(data.records, hasLength(2));
+    expect(data.records.map((row) => row.id).toSet(), hasLength(2));
+  });
+
   const parser = QldtParser();
 
   test('extracts the display name from the QLĐT account element', () {

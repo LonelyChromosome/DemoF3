@@ -5,12 +5,42 @@ import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 /** One native reader for the normalized, app-local widget contract. */
 internal object WidgetSnapshotStore {
+    fun readOverview(context: Context, widgetId: Int, examMode: Boolean): List<WidgetClass> {
+        val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
+        val normalized = preferences.getString(WIDGET_SNAPSHOT_KEY, null)
+        val legacy = preferences.getString(APP_SNAPSHOT_KEY, null)
+        val raw = normalized ?: legacy ?: return emptyList()
+        return runCatching {
+            val today = SimpleDateFormat(DATE_PATTERN, Locale.US).format(Date())
+            val date = selectedDate(context, widgetId, today)
+            val records = JSONObject(raw).optJSONArray(
+                if (normalized != null) {
+                    if (examMode) "exams" else "classes"
+                } else "records"
+            ) ?: JSONArray()
+            (0 until records.length()).mapNotNull { index ->
+                val record = records.optJSONObject(index) ?: return@mapNotNull null
+                if (normalized == null && record.optBoolean("isExam", false) != examMode) {
+                    return@mapNotNull null
+                }
+                parseClass(record, examMode)
+            }.filter { item ->
+                if (examMode) item.dateKey >= today else item.dateKey == date
+            }.sortedWith(compareBy(WidgetClass::startAt, WidgetClass::id))
+        }.getOrElse { emptyList() }
+    }
+
     fun read(context: Context, widgetId: Int): WidgetCollection {
+        if (SmallWidgetMode.isExam(context, widgetId)) {
+            val exams = readOverview(context, widgetId, true)
+            return WidgetCollection(exams, 0)
+        }
         val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
         val normalized = preferences.getString(WIDGET_SNAPSHOT_KEY, null)
         val legacy = preferences.getString(APP_SNAPSHOT_KEY, null)
@@ -35,24 +65,25 @@ internal object WidgetSnapshotStore {
                 parseClass(record)?.let(items::add)
             }
 
-            if (items.none { it.dateKey == selectedDate }) {
-                items.add(emptyDay(selectedDate, today))
+            val days = WidgetTimeline.withCalendarDays(items, selectedDate) { date ->
+                emptyDay(date, today)
             }
-            WidgetTimeline.arrange(items, selectedDate, today, now)
+            WidgetTimeline.arrange(
+                days, selectedDate, today, now,
+            )
         }.getOrElse { WidgetCollection.empty() }
     }
 
     private fun selectedDate(context: Context, widgetId: Int, today: String): String {
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return today
-        return context.getSharedPreferences(
+        val chosen = context.getSharedPreferences(
             ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
             Context.MODE_PRIVATE,
         ).getString(ScheduleWidgetProvider.selectedDateKey(widgetId), null)
-            ?.takeIf(::isIsoDate)
-            ?: today
+        return WidgetRefreshDecision.selectedDate(chosen, today)
     }
 
-    private fun parseClass(record: JSONObject): WidgetClass? {
+    private fun parseClass(record: JSONObject, examMode: Boolean = false): WidgetClass? {
         val startAt = record.optString("startAt")
         val endAt = record.optString("endAt")
         if (startAt.length < 16 || endAt.length < 16) return null
@@ -71,6 +102,11 @@ internal object WidgetSnapshotStore {
             startAt = startAt,
             endAt = endAt,
             dateKey = dateKey,
+            examForm = record.optString("className").takeIf { label ->
+                examMode && listOf("thi", "trắc nghiệm", "tự luận", "vấn đáp", "thực hành", "online", "trên máy")
+                    .any { label.contains(it, ignoreCase = true) }
+            } ?: record.optString("examForm"),
+            isExam = examMode || record.optBoolean("isExam", false),
         )
     }
 
@@ -104,6 +140,9 @@ internal object WidgetSnapshotStore {
 
 /** Chronological, non-looping timeline shared with native regression tests. */
 internal object WidgetTimeline {
+    fun fromDate(items: List<WidgetClass>, selectedDate: String): List<WidgetClass> =
+        items.filter { it.dateKey >= selectedDate }
+
     fun arrange(
         sourceItems: List<WidgetClass>,
         selectedDate: String,
@@ -120,6 +159,37 @@ internal object WidgetTimeline {
             indexes.firstOrNull() ?: 0
         }
         return WidgetCollection(items, selectedIndex)
+    }
+
+    fun withCalendarDays(
+        items: List<WidgetClass>, selectedDate: String,
+        emptyDay: (String) -> WidgetClass,
+    ): List<WidgetClass> {
+        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { isLenient = false }
+        val chosen = parser.parse(selectedDate) ?: return items
+        val start = Calendar.getInstance().apply {
+            time = chosen
+            add(Calendar.DAY_OF_MONTH, -1)
+        }
+        val end = Calendar.getInstance().apply {
+            time = chosen
+            add(Calendar.DAY_OF_MONTH, 1)
+        }
+        items.forEach { item ->
+            val date = parser.parse(item.dateKey) ?: return@forEach
+            if (date.before(start.time)) start.time = date
+            if (date.after(end.time)) end.time = date
+        }
+        val byDay = items.groupBy(WidgetClass::dateKey)
+        val result = ArrayList<WidgetClass>()
+        val cursor = start.clone() as Calendar
+        repeat(370) {
+            if (cursor.after(end)) return result
+            val day = parser.format(cursor.time)
+            result.addAll(byDay[day].orEmpty().ifEmpty { listOf(emptyDay(day)) })
+            cursor.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        return result
     }
 }
 
@@ -140,6 +210,8 @@ internal data class WidgetClass(
     val startAt: String,
     val endAt: String,
     val dateKey: String,
+    val examForm: String = "",
+    val isExam: Boolean = false,
 ) {
     val stableId: Long
         get() = id.hashCode().toLong()

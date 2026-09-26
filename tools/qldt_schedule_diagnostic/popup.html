@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QLĐT Schedule Diagnostic</title>
+  <style>
+    body { font: 14px system-ui, sans-serif; width: 340px; margin: 16px; color: #182845; }
+    h1 { font-size: 17px; margin: 0 0 10px; }
+    p { line-height: 1.45; }
+    button { padding: 10px 12px; border: 0; border-radius: 8px; background: #1747b5; color: white; cursor: pointer; width: 100%; }
+    button:disabled { opacity: .55; cursor: default; }
+    #status { white-space: pre-wrap; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <h1>Kiểm tra API lịch QLĐT</h1>
+  <p>Đăng nhập QLĐT trên tab Chrome này, tải lại trang, rồi bấm nút. Phép thử chỉ đọc lịch và đợi tối đa 25 giây.</p>
+  <button id="probe">Kiểm tra và tải chẩn đoán</button>
+  <p><button id="probeShort">Đo tốc độ lấy 7 ngày đầu</button></p>
+  <p id="status" role="status"></p>
+  <script src="popup.js"></script>
+</body>
+</html>

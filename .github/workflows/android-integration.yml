@@ -1,0 +1,73 @@
+name: Android integration
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: bash tool/bootstrap.sh
+      - name: Enable KVM for emulator
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; fi
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: |
+            set -e
+            adb shell wm size 720x1280
+            flutter test integration_test/app_flow_test.dart
+            flutter test integration_test/qldt_login_flow_test.dart
+            adb shell wm size 1080x1920
+            flutter test integration_test/app_flow_test.dart
+            flutter test integration_test/qldt_login_flow_test.dart
+
+  apk:
+    needs: emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: bash tool/bootstrap.sh
+      - run: flutter test
+      - run: node --test tool/tracuu_probe_test.cjs
+      - run: node --test tool/tracuu_api_flow_test.cjs
+      - run: cd android && ./gradlew :app:testDebugUnitTest
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: big-update-tested-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14

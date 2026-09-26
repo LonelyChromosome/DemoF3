@@ -7,6 +7,7 @@ plugins {
 dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
 }
 
 android {
@@ -22,6 +23,7 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "vn.edu.phenikaa.better_phenikaa_schedule"
+        manifestPlaceholders["appLabel"] = "Better Phenikaa App"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

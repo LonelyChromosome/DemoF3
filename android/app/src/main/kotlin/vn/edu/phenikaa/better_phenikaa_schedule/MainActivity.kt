@@ -1,18 +1,21 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 import android.app.Activity
+import android.Manifest
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import androidx.work.WorkManager
 import java.io.DataInputStream
 import java.io.File
 import java.io.FileInputStream
@@ -22,6 +25,19 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 8421 &&
+            grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            ExamChangeNotifier.publishPending(applicationContext)
+            val semester = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+                .getString("flutter.better_phenikaa_current_semester_v1", null)
+            semester?.let { runCatching { ExamReminderScheduler.reconcile(applicationContext, it) } }
+        }
+    }
+
     private val widgetHandler = Handler(Looper.getMainLooper())
     private val fileExecutor: ExecutorService = Executors.newSingleThreadExecutor()
     private var pendingWidgetFromToken: String? = null
@@ -32,8 +48,34 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        ExamChangeNotifier.recoverExisting(applicationContext)
+        SyncStaleReminderScheduler.reconcile(applicationContext)
         configureDailySyncChannel(flutterEngine)
+        configureQldtCredentialChannel(flutterEngine)
+        configureWidgetSessionChannel(flutterEngine)
         configureLocalFileChannel(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            WIDGET_PIN_CHANNEL).setMethodCallHandler { call, result ->
+            if (call.method != "requestPin") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val provider = when (call.arguments as? String) {
+                "small" -> ScheduleWidgetProvider::class.java
+                "overview" -> OverviewWidgetProvider::class.java
+                else -> {
+                    result.error("invalid_widget", "Không rõ loại widget.", null)
+                    return@setMethodCallHandler
+                }
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                result.success(false)
+                return@setMethodCallHandler
+            }
+            val manager = AppWidgetManager.getInstance(this)
+            result.success(manager.isRequestPinAppWidgetSupported &&
+                manager.requestPinAppWidget(ComponentName(this, provider), null, null))
+        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             WIDGET_THEME_CHANNEL,
@@ -47,20 +89,34 @@ class MainActivity : FlutterActivity() {
             val prefs = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
             val currentTheme = prefs.getString(THEME_KEY, "classic") ?: "classic"
             val currentToken = prefs.getString(THEME_TOKEN_KEY, currentTheme) ?: currentTheme
+            val fontChanged = prefs.getString(WIDGET_FONT_FAMILY_KEY, "") != request.fontFamily ||
+                prefs.getString(WIDGET_FONT_PATH_KEY, "") != request.fontPath
             val manager = AppWidgetManager.getInstance(this)
             val component = ComponentName(this, ScheduleWidgetProvider::class.java)
             val widgetIds = manager.getAppWidgetIds(component)
+            val overviewIds = manager.getAppWidgetIds(
+                ComponentName(this, OverviewWidgetProvider::class.java),
+            )
 
-            if (widgetIds.isNotEmpty() && currentToken != request.token) {
+            if (currentToken == request.token && fontChanged) {
+                commitWidgetTheme(prefs, request, refreshOverview = false)
+                WidgetRefreshCoordinator.refreshData(this)
+                result.success(widgetIds.size + overviewIds.size)
+                return@setMethodCallHandler
+            }
+
+            if ((widgetIds.isNotEmpty() || overviewIds.isNotEmpty()) &&
+                currentToken != request.token) {
                 // The target palette is committed only between fade-out and
                 // collection refresh, keeping the old widget frame intact.
                 pendingWidgetFromToken = currentToken
                 pendingWidgetRequest = request
                 pendingWidgetApply?.let(widgetHandler::removeCallbacks)
-            } else if (widgetIds.isEmpty() || currentToken != request.token) {
+            } else if ((widgetIds.isEmpty() && overviewIds.isEmpty()) ||
+                currentToken != request.token) {
                 commitWidgetTheme(prefs, request)
             }
-            result.success(widgetIds.size)
+            result.success(widgetIds.size + overviewIds.size)
         }
     }
 
@@ -123,19 +179,25 @@ class MainActivity : FlutterActivity() {
             val manager = AppWidgetManager.getInstance(this)
             val component = ComponentName(this, ScheduleWidgetProvider::class.java)
             val widgetIds = manager.getAppWidgetIds(component)
+            val overviewIds = manager.getAppWidgetIds(
+                ComponentName(this, OverviewWidgetProvider::class.java),
+            )
 
-            if (widgetIds.isEmpty()) {
+            if (widgetIds.isEmpty() && overviewIds.isEmpty()) {
                 commitWidgetTheme(prefs, request)
                 clearPendingWidgetTheme(fromToken, request.token)
                 return@Runnable
             }
 
             val provider = ScheduleWidgetProvider()
+            val overview = OverviewWidgetProvider()
             provider.stageThemeTransition(this, manager, widgetIds, fromToken, request.token)
+            overview.stageThemeTransition(this, manager, overviewIds)
             widgetHandler.postDelayed({
-                commitWidgetTheme(prefs, request)
+                commitWidgetTheme(prefs, request, refreshOverview = false)
                 provider.stageThemeTransition(this, manager, widgetIds, fromToken, request.token)
                 provider.refreshHiddenCollection(this, manager, widgetIds, fromToken, request.token)
+                overview.animateThemeTransition(this, manager, overviewIds)
                 clearPendingWidgetTheme(fromToken, request.token)
             }, THEME_FREEZE_SETTLE_MS)
         }
@@ -158,6 +220,7 @@ class MainActivity : FlutterActivity() {
     private fun commitWidgetTheme(
         prefs: android.content.SharedPreferences,
         request: WidgetThemeRequest,
+        refreshOverview: Boolean = true,
     ) {
         prefs.edit()
             .putString(THEME_KEY, request.theme)
@@ -167,7 +230,51 @@ class MainActivity : FlutterActivity() {
             .putInt(CUSTOM_TEXT_KEY, request.textColor)
             .putInt(CUSTOM_SUBTEXT_KEY, request.subtextColor)
             .putInt(CUSTOM_ICON_KEY, request.iconColor)
+            .putString(WIDGET_FONT_FAMILY_KEY, request.fontFamily)
+            .putString(WIDGET_FONT_PATH_KEY, request.fontPath)
             .commit()
+        if (refreshOverview) WidgetRefreshCoordinator.refreshOverview(this)
+    }
+
+    private fun configureWidgetSessionChannel(flutterEngine: FlutterEngine) {
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "better_phenikaa/widget_session",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "invalidate" -> {
+                    WidgetSyncIndicator.clear(applicationContext)
+                    WorkManager.getInstance(applicationContext)
+                        .cancelUniqueWork(WidgetManualSync.WORK_NAME)
+                    result.success(null)
+                }
+                "clear" -> {
+                    val prefs = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+                    prefs.edit()
+                        .remove("flutter.better_phenikaa_snapshot_v1")
+                        .remove("flutter.better_phenikaa_widget_snapshot_v1")
+                        .remove("flutter.better_phenikaa_current_semester_v1")
+                        .remove("flutter.better_phenikaa_semester_difference_v1")
+                        .remove("flutter.better_phenikaa_qldt_registration_route_v1")
+                        .commit()
+                    listOf(
+                        ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
+                        WIDGET_VISIBLE_POSITION_PREFS,
+                        "better_phenikaa_widget_render_state",
+                        "better_phenikaa_overview_state",
+                        "better_phenikaa_small_widget_mode",
+                        "better_phenikaa_daily_sync",
+                    ).forEach { name ->
+                        getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
+                    }
+                    File(filesDir, "theme_imports").deleteRecursively()
+                    ExamChangeNotifier.clear(applicationContext)
+                    WidgetRefreshCoordinator.refreshData(applicationContext)
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     private fun configureDailySyncChannel(flutterEngine: FlutterEngine) {
@@ -186,9 +293,78 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
                 "status" -> result.success(DailySyncScheduler.status(applicationContext))
+                "recordAppSyncSuccess" -> {
+                    DailySyncScheduler.recordSuccess(applicationContext, System.currentTimeMillis())
+                    val prefs = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+                    val semester = prefs.getString("flutter.better_phenikaa_current_semester_v1", null)
+                    val difference = prefs.getString("flutter.better_phenikaa_semester_difference_v1", null)
+                    if (semester != null && difference != null) {
+                        runCatching { ExamChangeNotifier.record(
+                            applicationContext, semester, difference, notifySystem = false) }
+                    }
+                    WidgetRefreshCoordinator.refreshOverview(applicationContext)
+                    result.success(null)
+                }
+                "examNotice" -> result.success(ExamChangeNotifier.pending(applicationContext))
+                "ackExamNotice" -> {
+                    ExamChangeNotifier.acknowledge(applicationContext)
+                    result.success(null)
+                }
+                "syncReminders" -> {
+                    val semester = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+                        .getString("flutter.better_phenikaa_current_semester_v1", null)
+                    if (semester == null) {
+                        result.error("missing_semester", "Chưa có dữ liệu học kỳ.", null)
+                    } else {
+                        runCatching { ExamReminderScheduler.reconcile(applicationContext, semester) }
+                            .onSuccess {
+                                if (Build.VERSION.SDK_INT >= 33 &&
+                                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                                    android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 8421)
+                                }
+                                result.success(null)
+                            }
+                            .onFailure { result.error("reminder_failed", it.message, null) }
+                    }
+                }
+                "clearReminders" -> {
+                    ExamReminderScheduler.clear(applicationContext)
+                    SyncStaleReminderScheduler.clear(applicationContext)
+                    ExamChangeNotifier.clear(applicationContext)
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun configureQldtCredentialChannel(flutterEngine: FlutterEngine) {
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, QLDT_CREDENTIAL_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "save" -> {
+                            val username = call.argument<String>("username").orEmpty()
+                            val password = call.argument<String>("password").orEmpty()
+                            result.success(QldtCredentialVault.save(this, username, password))
+                        }
+                        "read" -> {
+                            val credentials = QldtCredentialVault.read(this)
+                            result.success(credentials?.let {
+                                mapOf("username" to it.username, "password" to it.password)
+                            })
+                        }
+                        "clear" -> {
+                            QldtCredentialVault.clear(this)
+                            result.success(null)
+                        }
+                        else -> result.notImplemented()
+                    }
+                } catch (_: Exception) {
+                    result.error("qldt_credentials", "Không thể dùng thông tin đăng nhập đã lưu.", null)
+                }
+            }
     }
 
     private fun configureLocalFileChannel(flutterEngine: FlutterEngine) {
@@ -315,6 +491,8 @@ class MainActivity : FlutterActivity() {
         val textColor: Int,
         val subtextColor: Int,
         val iconColor: Int,
+        val fontFamily: String,
+        val fontPath: String,
     ) {
         companion object {
             fun from(arguments: Any?): WidgetThemeRequest {
@@ -325,19 +503,25 @@ class MainActivity : FlutterActivity() {
                 val text = (values["widgetText"] as? Number)?.toInt() ?: DEFAULT_TEXT
                 val subtext = (values["widgetSubtext"] as? Number)?.toInt() ?: DEFAULT_SUBTEXT
                 val icon = (values["widgetIcon"] as? Number)?.toInt() ?: text
+                val fontFamily = values["fontFamily"] as? String ?: ""
+                val fontPath = values["fontPath"] as? String ?: ""
                 val token = if (theme == "custom") {
-                    listOf(theme, start, end, text, subtext, icon).joinToString(":")
+                    listOf(theme, start, end, text, subtext, icon,
+                        fontFamily.hashCode(), fontPath.hashCode()).joinToString(":")
                 } else {
                     theme
                 }
-                return WidgetThemeRequest(theme, token, start, end, text, subtext, icon)
+                return WidgetThemeRequest(theme, token, start, end, text, subtext, icon,
+                    fontFamily, fontPath)
             }
         }
     }
 
     companion object {
         private const val DAILY_SYNC_CHANNEL = "better_phenikaa/daily_sync"
+        private const val QLDT_CREDENTIAL_CHANNEL = "better_phenikaa/qldt_credentials"
         private const val WIDGET_THEME_CHANNEL = "better_phenikaa/widget_theme"
+        private const val WIDGET_PIN_CHANNEL = "better_phenikaa/widget_pin"
         private const val LOCAL_FILE_CHANNEL = "better_phenikaa/local_files"
         private const val FLUTTER_PREFS = "FlutterSharedPreferences"
         private const val THEME_KEY = "flutter.appTheme"
@@ -347,6 +531,8 @@ class MainActivity : FlutterActivity() {
         internal const val CUSTOM_TEXT_KEY = "flutter.widgetCustomText"
         internal const val CUSTOM_SUBTEXT_KEY = "flutter.widgetCustomSubtext"
         internal const val CUSTOM_ICON_KEY = "flutter.widgetCustomIcon"
+        internal const val WIDGET_FONT_FAMILY_KEY = "flutter.widgetFontFamily"
+        internal const val WIDGET_FONT_PATH_KEY = "flutter.widgetFontPath"
         private const val HOME_SURFACE_SETTLE_MS = 360L
         private const val THEME_FREEZE_SETTLE_MS = 140L
         private const val FILE_PICK_REQUEST_CODE = 70_041

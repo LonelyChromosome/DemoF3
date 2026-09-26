@@ -48,8 +48,24 @@ jobs:
       - name: Test
         run: flutter test --coverage
 
+      - name: TraCuu browser-flow simulation
+        run: node --test tool/tracuu_probe_test.cjs
+
+      - name: TraCuu verified API simulation
+        run: node --test tool/tracuu_api_flow_test.cjs
+
+      - name: TraCuu inspector redaction
+        run: node --test tools/tracuu_inspector/capture_test.cjs
+
       - name: Native Android tests
         run: cd android && ./gradlew :app:testDebugUnitTest
 
-      - name: Build debug APK
-        run: flutter build apk --debug
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DemoF3-big-update-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14

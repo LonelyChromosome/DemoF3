@@ -1,7 +1,11 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -14,6 +18,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.app.NotificationCompat
+import androidx.work.ForegroundInfo
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import org.json.JSONArray
@@ -33,110 +39,264 @@ class QldtDailySyncWorker(
 ) : Worker(appContext, workerParameters) {
     @Volatile
     private var activeSync: HeadlessQldtSync? = null
+    private val syncToken: Long get() = inputData.getLong("sync_token", 0L)
 
     override fun doWork(): Result {
-        if (!DailySyncScheduler.isEnabled(applicationContext)) {
+        if (!inputData.getBoolean("manual", false)) {
             return Result.success()
         }
 
+        if (!WidgetSyncIndicator.isCurrent(applicationContext, syncToken)) return Result.success()
         DailySyncScheduler.recordStarted(applicationContext, System.currentTimeMillis())
+        var syncSucceeded = false
+        var syncError = "SYNC_UNKNOWN: QLĐT chưa trả kết quả."
+        var reminderSemester: String? = null
         try {
+            // Keep the user-initiated widget sync alive when the app goes to the background.
+            // Wait until WorkManager has promoted it before starting the hidden WebView.
+            setForegroundAsync(syncForegroundInfo()).get()
+            if (isStopped) return Result.success()
             val preferences = applicationContext.getSharedPreferences(
                 FLUTTER_PREFERENCES,
                 Context.MODE_PRIVATE,
             )
             val previousSnapshot = preferences.getString(APP_SNAPSHOT_KEY, null)
             if (previousSnapshot.isNullOrBlank()) {
-                DailySyncScheduler.disable(applicationContext)
+                syncError = "SYNC_NO_SNAPSHOT: Hãy đồng bộ lần đầu trong ứng dụng."
                 return Result.success()
             }
 
-            val synchronizer = HeadlessQldtSync(applicationContext)
+            val cachedRoute = preferences.getString(REGISTRATION_ROUTE_KEY, null)
+            val synchronizer = HeadlessQldtSync(applicationContext, cachedRoute)
             activeSync = synchronizer
             val syncResult = try {
                 synchronizer.run()
             } finally {
                 activeSync = null
             }
-            if (isStopped || !DailySyncScheduler.isEnabled(applicationContext)) {
+            if (isStopped || !WidgetSyncIndicator.isCurrent(applicationContext, syncToken)) {
+                syncError = "SYNC_STOPPED: Tác vụ đồng bộ đã dừng."
                 return Result.success()
             }
 
             when (syncResult) {
                 is HeadlessQldtSync.Result.Success -> {
-                    val bundle = QldtSnapshotEncoder.encode(
+                    val bundle = NativeSemesterVerifier.verify(
                         syncResult.envelope,
+                        syncResult.registration,
                         previousSnapshot,
                     )
+                    val difference = NativeSemesterDifference.compare(
+                        preferences.getString(CURRENT_SEMESTER_KEY, null),
+                        bundle.semester,
+                    )
+                    val startText = registeredStart(syncResult.registration)
+                    val oldSemester = preferences.getString(CURRENT_SEMESTER_KEY, null)
+                    val oldStart = preferences.getString(CURRENT_START_KEY, null)
+                    val archive = if (oldSemester != null && oldStart != null &&
+                        JSONObject(oldSemester).optString("semesterId") !=
+                        JSONObject(bundle.semester).optString("semesterId") &&
+                        isTermActive(oldStart)) {
+                        JSONObject().put("startedAt", oldStart)
+                            .put("semester", JSONObject(oldSemester)).toString()
+                    } else preferences.getString(PREVIOUS_SEMESTER_KEY, null)?.takeIf {
+                        runCatching {
+                            val previous = JSONObject(it)
+                            isTermActive(previous.getString("startedAt")) &&
+                                previous.getJSONObject("semester").optString("semesterId") !=
+                                JSONObject(bundle.semester).optString("semesterId")
+                        }.getOrDefault(false)
+                    }
+                    val (appSnapshot, widgetSnapshot) = mergeArchivedSchedules(bundle, archive)
+                    if (!WidgetSyncIndicator.isCurrent(applicationContext, syncToken))
+                        return Result.success()
                     val saved = preferences.edit()
-                        .putString(APP_SNAPSHOT_KEY, bundle.appSnapshot)
-                        .putString(WIDGET_SNAPSHOT_KEY, bundle.widgetSnapshot)
+                        .putString(APP_SNAPSHOT_KEY, appSnapshot)
+                        .putString(WIDGET_SNAPSHOT_KEY, widgetSnapshot)
+                        .putString(CURRENT_SEMESTER_KEY, bundle.semester)
+                        .putString(CURRENT_START_KEY, startText)
+                        .putString(DIFFERENCE_KEY, difference)
+                        .apply {
+                            if (archive == null) remove(PREVIOUS_SEMESTER_KEY)
+                            else putString(PREVIOUS_SEMESTER_KEY, archive)
+                            val route = JSONObject(syncResult.registration).optJSONObject("route")
+                            if (route != null) putString(REGISTRATION_ROUTE_KEY, route.toString())
+                        }
                         .commit()
                     if (!saved) {
-                        DailySyncScheduler.recordFailure(
-                            applicationContext,
-                            "Không thể ghi dữ liệu đồng bộ vào bộ nhớ cục bộ.",
-                        )
+                        syncError = "SYNC_SAVE: Không thể lưu dữ liệu đồng bộ."
                         return Result.success()
                     }
-                    WidgetRefreshCoordinator.refreshToday(applicationContext)
-                    DailySyncScheduler.recordSuccess(
-                        applicationContext,
-                        System.currentTimeMillis(),
-                    )
+                    runCatching { ExamChangeNotifier.record(
+                        applicationContext, bundle.semester, difference, notifySystem = true) }
+                    WidgetRefreshCoordinator.refreshData(applicationContext)
+                    syncSucceeded = true
+                    reminderSemester = bundle.semester
                 }
                 is HeadlessQldtSync.Result.Failure -> {
-                    DailySyncScheduler.recordFailure(
-                        applicationContext,
-                        syncResult.message,
-                    )
+                    syncError = syncResult.message
                 }
             }
+        } catch (error: IllegalArgumentException) {
+            syncError = "VERIFY: " + error.message.orEmpty().take(150)
         } catch (error: Exception) {
-            DailySyncScheduler.recordFailure(
-                applicationContext,
-                "Dữ liệu QLĐT không hợp lệ: ${error.message.orEmpty()}",
-            )
+            syncError = "SYNC_EXCEPTION: " + error.javaClass.simpleName.take(48)
         } finally {
-            if (DailySyncScheduler.isEnabled(applicationContext)) {
-                runCatching {
-                    DailySyncScheduler.scheduleAfterRun(applicationContext)
-                }.onFailure { error ->
-                    DailySyncScheduler.recordFailure(
-                        applicationContext,
-                        "Không thể đặt lịch đồng bộ tiếp theo: ${error.message.orEmpty()}",
-                    )
+            if (WidgetSyncIndicator.finish(applicationContext, syncToken, syncSucceeded)) {
+                if (syncSucceeded) {
+                    DailySyncScheduler.recordSuccess(applicationContext, System.currentTimeMillis())
+                } else {
+                    DailySyncScheduler.recordFailure(applicationContext, syncError)
                 }
+                WidgetRefreshCoordinator.refreshOverview(applicationContext)
             }
+        }
+        reminderSemester?.let { semester ->
+            runCatching { ExamReminderScheduler.reconcile(applicationContext, semester) }
         }
         return Result.success()
     }
 
     override fun onStopped() {
         activeSync?.cancel()
+        if (WidgetSyncIndicator.finish(applicationContext, syncToken, false)) {
+            DailySyncScheduler.recordFailure(applicationContext,
+                "SYNC_STOPPED: Android đã dừng tác vụ. Hãy thử lại.")
+            WidgetRefreshCoordinator.refreshOverview(applicationContext)
+        }
         super.onStopped()
+    }
+
+    private fun syncForegroundInfo(): ForegroundInfo {
+        val manager = applicationContext.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager?.createNotificationChannel(NotificationChannel(
+                SYNC_CHANNEL, "Đồng bộ widget", NotificationManager.IMPORTANCE_LOW,
+            ))
+        }
+        val launch = applicationContext.packageManager
+            .getLaunchIntentForPackage(applicationContext.packageName)
+        val openApp = launch?.let {
+            PendingIntent.getActivity(applicationContext, SYNC_NOTIFICATION_ID, it,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        }
+        val notification = NotificationCompat.Builder(applicationContext, SYNC_CHANNEL)
+            .setSmallIcon(R.drawable.ic_widget_reload)
+            .setContentTitle("Đang đồng bộ QLĐT")
+            .setContentText("Có thể tiếp tục dùng ứng dụng khác trong lúc đồng bộ.")
+            .setContentIntent(openApp)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build()
+        return ForegroundInfo(SYNC_NOTIFICATION_ID, notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+    }
+
+    private fun registeredStart(raw: String): String {
+        val subjects = JSONObject(raw).getJSONArray("subjects")
+        val dates = mutableListOf<String>()
+        for (index in 0 until subjects.length()) {
+            val classes = subjects.getJSONObject(index).getJSONArray("classes")
+            for (classIndex in 0 until classes.length()) {
+                dates.add(classes.getJSONObject(classIndex).getString("startsOn"))
+            }
+        }
+        val first = dates.minOrNull() ?: throw IllegalArgumentException("Học kỳ chưa có môn.")
+        return "${first}T00:00:00.000"
+    }
+
+    private fun isTermActive(startText: String): Boolean = runCatching {
+        val start = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }
+            .parse(startText.take(10)) ?: return@runCatching false
+        val expiry = Calendar.getInstance().apply {
+            time = start
+            add(Calendar.MONTH, 4)
+            add(Calendar.DAY_OF_MONTH, 8)
+        }
+        Date().before(expiry.time)
+    }.getOrDefault(false)
+
+    private fun mergeArchivedSchedules(
+        current: NativeSemesterVerifier.SnapshotBundle,
+        archive: String?,
+    ): Pair<String, String> {
+        if (archive == null) return current.appSnapshot to current.widgetSnapshot
+        val app = JSONObject(current.appSnapshot)
+        val widget = JSONObject(current.widgetSnapshot)
+        val oldSubjects = JSONObject(archive).getJSONObject("semester").getJSONArray("subjects")
+        for (index in 0 until oldSubjects.length()) {
+            val subject = oldSubjects.getJSONObject(index)
+            for ((key, widgetKey) in listOf(
+                "studySchedules" to "classes", "examSchedules" to "exams",
+            )) {
+                val rows = subject.getJSONArray(key)
+                for (rowIndex in 0 until rows.length()) {
+                    val row = rows.getJSONObject(rowIndex)
+                    val id = subject.getString("subjectId") + "|" + row.getString("id")
+                    val record = JSONObject(row.toString())
+                        .put("id", id)
+                        .put("subjectName", subject.getString("name"))
+                    app.getJSONArray("records").put(record)
+                    widget.getJSONArray(widgetKey).put(
+                        JSONObject().put("id", id)
+                            .put("subjectName", subject.getString("name"))
+                            .put("room", row.getString("room"))
+                            .put("startAt", row.getString("startAt"))
+                            .put("endAt", row.getString("endAt"))
+                            .apply {
+                                if (widgetKey == "exams") {
+                                    put("examForm", row.optString("examForm"))
+                                    put("className", row.optString("className"))
+                                }
+                            },
+                    )
+                }
+            }
+        }
+        return app.toString() to widget.toString()
     }
 
     private companion object {
         const val FLUTTER_PREFERENCES = "FlutterSharedPreferences"
         const val APP_SNAPSHOT_KEY = "flutter.better_phenikaa_snapshot_v1"
         const val WIDGET_SNAPSHOT_KEY = "flutter.better_phenikaa_widget_snapshot_v1"
+        const val CURRENT_SEMESTER_KEY = "flutter.better_phenikaa_current_semester_v1"
+        const val CURRENT_START_KEY = "flutter.better_phenikaa_current_term_start_v1"
+        const val PREVIOUS_SEMESTER_KEY = "flutter.better_phenikaa_previous_semester_v1"
+        const val DIFFERENCE_KEY = "flutter.better_phenikaa_semester_difference_v1"
+        const val REGISTRATION_ROUTE_KEY = "flutter.better_phenikaa_qldt_registration_route_v1"
+        const val SYNC_CHANNEL = "widget_sync_progress"
+        const val SYNC_NOTIFICATION_ID = 2819
     }
 }
 
-private class HeadlessQldtSync(private val context: Context) {
+private class HeadlessQldtSync(private val context: Context, cachedRoute: String?) {
+    private val routeLiteral: String = runCatching {
+        val route = JSONObject(cachedRoute ?: "")
+        if (listOf("userId", "semesterId", "semesterName", "planId")
+                .any { route.optString(it).isBlank() }) "null" else route.toString()
+    }.getOrDefault("null")
     sealed interface Result {
-        data class Success(val envelope: String) : Result
+        data class Success(val envelope: String, val registration: String) : Result
         data class Failure(val message: String) : Result
     }
 
     private val completed = AtomicBoolean(false)
     private val syncRequested = AtomicBoolean(false)
+    private val sessionProbeStarted = AtomicBoolean(false)
+    private val stage = AtomicReference("PAGE_LOAD")
+    private val pendingEnvelope = AtomicReference<String>()
+    private val pendingRegistration = AtomicReference<String>()
+    private val registrationRequested = AtomicBoolean(false)
     private val result = AtomicReference<Result>()
     private val latch = CountDownLatch(1)
     private val mainHandler = Handler(Looper.getMainLooper())
     private val webViewReference = AtomicReference<WebView>()
     private var readinessAttempt = 0
+    private var pageLoadRetries = 0
+    private var pageRetryPending = false
+    private var authEmailSubmitted = false
+    private var authPasswordSubmitted = false
 
     fun run(): Result {
         mainHandler.post(::createAndLoadWebView)
@@ -147,15 +307,16 @@ private class HeadlessQldtSync(private val context: Context) {
             false
         }
         if (!finished) {
-            complete(Result.Failure("Tác vụ QLĐT hết thời gian chờ."))
+            complete(Result.Failure(
+                "QLDT_TIMEOUT_${stage.get()}: QLĐT không phản hồi trong 50 giây."))
         }
-        disposeWebViewAndWait()
+        disposeWebViewAsync()
         return result.get() ?: Result.Failure("QLĐT không trả kết quả đồng bộ.")
     }
 
     fun cancel() {
         complete(Result.Failure("Tác vụ đồng bộ đã dừng."))
-        disposeWebViewAndWait()
+        disposeWebViewAsync()
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -177,16 +338,68 @@ private class HeadlessQldtSync(private val context: Context) {
             }
 
             webView.addJavascriptInterface(
-                JavascriptResultBridge(::complete),
+                JavascriptResultBridge(
+                    onSchedule = { envelope ->
+                        mainHandler.post {
+                            pendingEnvelope.set(envelope)
+                            completeWhenBothReady()
+                        }
+                    },
+                    onRegistration = { registration ->
+                        mainHandler.post {
+                            pendingRegistration.set(registration)
+                            val range = runCatching { registrationRange(registration) }
+                                .getOrElse {
+                                    complete(Result.Failure(
+                                        "INVALID_REGISTRATION: TraCuu trả ngày lớp không hợp lệ.",
+                                    ))
+                                    return@post
+                                }
+                            if (range == null) {
+                                complete(Result.Failure(
+                                    "NO_SUBJECTS: Học kỳ mới chưa có môn đăng ký. Dữ liệu cũ được giữ nguyên.",
+                                ))
+                            } else {
+                                stage.set("SCHEDULE")
+                                requestSchedule(webView, range)
+                            }
+                        }
+                    },
+                    onError = { code ->
+                        val message = when (code) {
+                            "SESSION_EXPIRED" -> "SESSION_EXPIRED: Hãy đăng nhập lại QLĐT trong app."
+                            "NETWORK_ERROR", "REQUEST_ERROR" -> "$code: Yêu cầu QLĐT thất bại."
+                            "NO_SEMESTER" -> "TraCuu không trả học kỳ hợp lệ."
+                            "PLAN_AMBIGUOUS" -> "PLAN_AMBIGUOUS: Không xác định được kế hoạch."
+                            "INVALID_REGISTRATION" -> "INVALID_REGISTRATION: Kết quả đăng ký sai kế hoạch hoặc học kỳ."
+                            "INVALID_DATE" -> "INVALID_DATE: Ngày lớp đăng ký không hợp lệ."
+                            "INVALID_SUBJECT" -> "INVALID_SUBJECT: Thông tin môn đăng ký không nhất quán."
+                            "INVALID_RESPONSE" -> "INVALID_RESPONSE: QLĐT không trả danh sách hợp lệ."
+                            else -> "REQUEST: QLĐT trả dữ liệu thiếu hoặc không hợp lệ."
+                        }
+                        complete(Result.Failure(message))
+                    },
+                    onAuthStep = { step ->
+                        if (step == "email") authEmailSubmitted = true
+                        if (step == "password") authPasswordSubmitted = true
+                    },
+                ),
                 JAVASCRIPT_BRIDGE,
             )
             webView.webViewClient = object : WebViewClient() {
+                override fun onPageCommitVisible(view: WebView, url: String?) {
+                    super.onPageCommitVisible(view, url)
+                    if (isMicrosoftLogin(url)) {
+                        sessionProbeStarted.set(false)
+                        stage.set("AUTH")
+                    }
+                    beginReadinessProbe(view, url)
+                }
+
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
-                    if (url != null && Uri.parse(url).host == QLDT_HOST) {
-                        readinessAttempt = 0
-                        checkSessionReady(view)
-                    }
+                    if (isMicrosoftLogin(url)) attemptAutoLogin(view)
+                    beginReadinessProbe(view, url)
                 }
 
                 override fun onReceivedError(
@@ -196,11 +409,30 @@ private class HeadlessQldtSync(private val context: Context) {
                 ) {
                     super.onReceivedError(view, request, error)
                     if (request.isForMainFrame) {
-                        complete(
-                            Result.Failure(
-                                "Không tải được QLĐT: " + error.description,
-                            ),
+                        if (pageRetryPending) return
+                        val code = error.errorCode
+                        val retryDelay = QldtPageRetry.delayMillis(
+                            code, pageLoadRetries,
+                            Uri.parse(request.url.toString()).host == QLDT_HOST,
                         )
+                        if (retryDelay != null) {
+                            pageLoadRetries++
+                            pageRetryPending = true
+                            sessionProbeStarted.set(false)
+                            stage.set("PAGE_RETRY_$code")
+                            mainHandler.postDelayed({
+                                if (!completed.get()) {
+                                    readinessAttempt = 0
+                                    pageRetryPending = false
+                                    stage.set("PAGE_LOAD")
+                                    view.loadUrl(request.url.toString())
+                                }
+                            }, retryDelay)
+                        } else {
+                            complete(Result.Failure(
+                                "QLDT_PAGE_$code: Không tải được QLĐT. Kiểm tra mạng rồi thử lại.",
+                            ))
+                        }
                     }
                 }
 
@@ -236,18 +468,90 @@ private class HeadlessQldtSync(private val context: Context) {
                     return true
                 }
             }
-            webView.loadUrl(QLDT_URL)
-        } catch (error: Exception) {
+            val sessionPrefs = context.getSharedPreferences(
+                "FlutterSharedPreferences", Context.MODE_PRIVATE,
+            )
+            val portalPath = sessionPrefs.getString("flutter.qldt_verified_portal_path", null)
+            val portalUrl = if (portalPath != null && portalPath.startsWith("/") &&
+                !portalPath.startsWith("//")) {
+                Uri.parse(QLDT_URL).buildUpon().path(portalPath).build().toString()
+            } else {
+                QLDT_URL
+            }
+            webView.loadUrl(portalUrl)
+        } catch (_: Exception) {
             complete(
                 Result.Failure(
-                    "Không thể khởi tạo phiên QLĐT: " + error.message.orEmpty(),
+                    "WEBVIEW_INIT: Không thể khởi tạo phiên QLĐT.",
                 ),
             )
         }
     }
 
+    private fun beginReadinessProbe(webView: WebView, url: String?) {
+        if (completed.get() || pageRetryPending || url == null ||
+            Uri.parse(url).host != QLDT_HOST || pendingEnvelope.get() != null ||
+            !sessionProbeStarted.compareAndSet(false, true)) return
+        stage.set("SESSION_READY")
+        readinessAttempt = 0
+        checkSessionReady(webView)
+    }
+
+    private fun isMicrosoftLogin(url: String?): Boolean {
+        val host = url?.let { Uri.parse(it).host?.lowercase(Locale.ROOT) } ?: return false
+        return host == "login.microsoftonline.com" || host == "login.live.com" ||
+            host.endsWith(".microsoftonline.com")
+    }
+
+    private fun attemptAutoLogin(webView: WebView) {
+        if (completed.get()) return
+        val credentials = QldtCredentialVault.read(context)
+        if (credentials == null) {
+            complete(Result.Failure("AUTO_LOGIN_MISSING: Mở app và đăng nhập QLĐT một lần."))
+            return
+        }
+        val username = JSONObject.quote(credentials.username)
+        val password = JSONObject.quote(credentials.password)
+        val emailDone = authEmailSubmitted
+        val passwordDone = authPasswordSubmitted
+        webView.evaluateJavascript("""
+            (function () {
+              if (!['login.microsoftonline.com', 'login.live.com'].includes(location.hostname) &&
+                  !location.hostname.endsWith('.microsoftonline.com')) return;
+              if (window.__betterPhenikaaAutoLogin) return;
+              window.__betterPhenikaaAutoLogin = true;
+              var attempts = 0, emailDone = $emailDone, passwordDone = $passwordDone;
+              var timer = setInterval(function () {
+                if (++attempts > 80 || (emailDone && passwordDone)) { clearInterval(timer); return; }
+                var field = document.querySelector('input[type="password"]');
+                if (field && !passwordDone) {
+                  passwordDone = true;
+                  var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                  setter.call(field, $password);
+                  field.dispatchEvent(new Event('input', { bubbles: true }));
+                  field.dispatchEvent(new Event('change', { bubbles: true }));
+                  BetterPhenikaaNative.onAuthStep('password');
+                  setTimeout(function () { document.querySelector('#idSIButton9, button[type="submit"], input[type="submit"]')?.click(); }, 100);
+                  clearInterval(timer);
+                } else if (!emailDone) {
+                  field = document.querySelector('input[type="email"], input[name="loginfmt"], #i0116');
+                  if (!field) return;
+                  emailDone = true;
+                  var setter2 = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                  setter2.call(field, $username);
+                  field.dispatchEvent(new Event('input', { bubbles: true }));
+                  field.dispatchEvent(new Event('change', { bubbles: true }));
+                  BetterPhenikaaNative.onAuthStep('email');
+                  setTimeout(function () { document.querySelector('#idSIButton9, button[type="submit"], input[type="submit"]')?.click(); }, 100);
+                  clearInterval(timer);
+                }
+              }, 250);
+            })();
+        """.trimIndent(), null)
+    }
+
     private fun checkSessionReady(webView: WebView) {
-        if (completed.get()) {
+        if (completed.get() || pageRetryPending || !sessionProbeStarted.get()) {
             return
         }
         webView.evaluateJavascript(SESSION_READY_SCRIPT) { rawResult ->
@@ -256,7 +560,7 @@ private class HeadlessQldtSync(private val context: Context) {
             }
             if (rawResult == "true") {
                 if (syncRequested.compareAndSet(false, true)) {
-                    requestSchedule(webView)
+                    requestRegistration(webView)
                 }
                 return@evaluateJavascript
             }
@@ -276,8 +580,8 @@ private class HeadlessQldtSync(private val context: Context) {
         }
     }
 
-    private fun requestSchedule(webView: WebView) {
-        val (startDate, endDate) = currentAcademicYearRange()
+    private fun requestSchedule(webView: WebView, range: Pair<String, String>) {
+        val (startDate, endDate) = range
         val startJson = JSONObject.quote(startDate)
         val endJson = JSONObject.quote(endDate)
         val script = """
@@ -285,7 +589,7 @@ private class HeadlessQldtSync(private val context: Context) {
               try {
                 if (!(window.edu && edu.system && edu.system.userId &&
                       edu.system.iM != null && typeof edu.system.makeRequest === 'function')) {
-                  window.$JAVASCRIPT_BRIDGE.onError('Phiên QLĐT chưa sẵn sàng.');
+                  window.$JAVASCRIPT_BRIDGE.onError('SESSION_EXPIRED');
                   return;
                 }
                 var requestData = {
@@ -310,13 +614,13 @@ private class HeadlessQldtSync(private val context: Context) {
                         }
                       }
                     }
-                    window.$JAVASCRIPT_BRIDGE.onResult(
+                    window.$JAVASCRIPT_BRIDGE.onSchedule(
                       JSON.stringify({name: name, response: response})
                     );
                   },
                   error: function () {
                     window.$JAVASCRIPT_BRIDGE.onError(
-                      'QLĐT báo lỗi khi tải lịch cá nhân.'
+                      'NETWORK_ERROR'
                     );
                   },
                   type: 'POST',
@@ -326,21 +630,53 @@ private class HeadlessQldtSync(private val context: Context) {
                   fakedb: []
                 }, false, false, false, null);
               } catch (error) {
-                window.$JAVASCRIPT_BRIDGE.onError('Lỗi QLĐT: ' + error);
+                window.$JAVASCRIPT_BRIDGE.onError('REQUEST_ERROR');
               }
             })();
         """.trimIndent()
         webView.evaluateJavascript(script, null)
     }
 
-    private fun currentAcademicYearRange(): Pair<String, String> {
-        val now = Calendar.getInstance()
-        val startYear = if (now.get(Calendar.MONTH) >= Calendar.AUGUST) {
-            now.get(Calendar.YEAR)
-        } else {
-            now.get(Calendar.YEAR) - 1
+    private fun requestRegistration(webView: WebView) {
+        if (completed.get() || !registrationRequested.compareAndSet(false, true)) return
+        stage.set("REGISTRATION")
+        webView.evaluateJavascript(REGISTRATION_SCRIPT.replace("__ROUTE__", routeLiteral), null)
+    }
+
+    private fun completeWhenBothReady() {
+        val envelope = pendingEnvelope.get() ?: return
+        val registration = pendingRegistration.get() ?: return
+        complete(Result.Success(envelope, registration))
+    }
+
+    private fun registrationRange(raw: String): Pair<String, String>? {
+        val subjects = JSONObject(raw).getJSONArray("subjects")
+        val dates = mutableListOf<String>()
+        for (index in 0 until subjects.length()) {
+            val classes = subjects.getJSONObject(index).getJSONArray("classes")
+            for (classIndex in 0 until classes.length()) {
+                val value = classes.getJSONObject(classIndex).getString("startsOn")
+                require(Regex("\\d{4}-\\d{2}-\\d{2}").matches(value))
+                dates.add(value)
+            }
         }
-        return "01/08/$startYear" to "31/07/" + (startYear + 1)
+        val first = dates.minOrNull() ?: return null
+        val input = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }
+        val output = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+        val start = input.parse(first) ?: return null
+        val expiry = Calendar.getInstance().apply {
+            time = start
+            add(Calendar.MONTH, 4)
+            add(Calendar.DAY_OF_MONTH, 7)
+        }
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (today.after(expiry)) return null
+        return output.format(start) to output.format(expiry.time)
     }
 
     private fun complete(value: Result) {
@@ -350,7 +686,7 @@ private class HeadlessQldtSync(private val context: Context) {
         }
     }
 
-    private fun disposeWebViewAndWait() {
+    private fun disposeWebViewAsync() {
         val dispose = {
             webViewReference.getAndSet(null)?.let { webView ->
                 webView.stopLoading()
@@ -360,37 +696,39 @@ private class HeadlessQldtSync(private val context: Context) {
                 webView.removeAllViews()
                 webView.destroy()
             }
+            Unit
         }
         if (Looper.myLooper() == Looper.getMainLooper()) {
             dispose()
             return
         }
-        val cleanupLatch = CountDownLatch(1)
-        mainHandler.post {
-            try {
-                dispose()
-            } finally {
-                cleanupLatch.countDown()
-            }
-        }
-        try {
-            cleanupLatch.await(CLEANUP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
+        mainHandler.post(dispose)
     }
 
     private class JavascriptResultBridge(
-        private val complete: (Result) -> Unit,
+        private val onSchedule: (String) -> Unit,
+        private val onRegistration: (String) -> Unit,
+        private val onError: (String) -> Unit,
+        private val onAuthStep: (String) -> Unit,
     ) {
         @JavascriptInterface
-        fun onResult(envelope: String) {
-            complete(Result.Success(envelope))
+        fun onSchedule(envelope: String) {
+            onSchedule.invoke(envelope)
+        }
+
+        @JavascriptInterface
+        fun onRegistration(registration: String) {
+            onRegistration.invoke(registration)
         }
 
         @JavascriptInterface
         fun onError(message: String) {
-            complete(Result.Failure(message))
+            onError(message)
+        }
+
+        @JavascriptInterface
+        fun onAuthStep(step: String) {
+            onAuthStep(step)
         }
     }
 
@@ -398,8 +736,7 @@ private class HeadlessQldtSync(private val context: Context) {
         const val QLDT_URL = "https://qldtbeta.phenikaa-uni.edu.vn/"
         const val QLDT_HOST = "qldtbeta.phenikaa-uni.edu.vn"
         const val JAVASCRIPT_BRIDGE = "BetterPhenikaaNative"
-        const val SYNC_TIMEOUT_SECONDS = 90L
-        const val CLEANUP_TIMEOUT_SECONDS = 5L
+        const val SYNC_TIMEOUT_SECONDS = 50L
         const val MAX_READINESS_ATTEMPTS = 35
         const val READINESS_RETRY_MILLIS = 1_000L
         const val SESSION_READY_SCRIPT = """
@@ -408,10 +745,145 @@ private class HeadlessQldtSync(private val context: Context) {
               edu.system.iM != null && typeof edu.system.makeRequest === 'function'
             );
         """
+        const val REGISTRATION_SCRIPT = """
+            (function () {
+              const bridge = window.BetterPhenikaaNative;
+              const system = window.edu && edu.system;
+              const storedRoute = __ROUTE__;
+              let finished = false;
+              const fail = code => {
+                if (finished) return;
+                finished = true;
+                bridge.onError(code);
+              };
+              if (!system || !system.userId || system.iM == null ||
+                  typeof system.makeRequest !== 'function') {
+                fail('SESSION_EXPIRED'); return;
+              }
+              const call = (action, func, fields, next, onFailure = fail) => {
+                const payload = Object.assign({action, func, iM: system.iM,
+                  strQLSV_NguoiHoc_Id: system.userId}, fields);
+                try {
+                  system.makeRequest({
+                    success: response => {
+                      if (finished) return;
+                      if (!response || response.Success !== true || !Array.isArray(response.Data)) {
+                        onFailure('INVALID_RESPONSE'); return;
+                      }
+                      try { next(response.Data); } catch (_) { onFailure('INVALID_RESPONSE'); }
+                    },
+                    error: () => onFailure('NETWORK_ERROR'),
+                    type: 'POST', action, contentType: true, data: payload, fakedb: []
+                  }, false, false, false, null);
+                } catch (_) { onFailure('REQUEST_ERROR'); }
+              };
+              const requestRows = (semesterId, planId, next, onFailure = fail) =>
+                call('DKH_Chung_MH/DSA4CiQ1EDQgBSAvJgo4DS4xCS4iESkgLwPP',
+                  'pkg_dangkyhoc_chung.LayKetQuaDangKyLopHocPhan',
+                  {strDaoTao_ChuongTrinh_Id: '',
+                    strDangKy_KeHoachDangKy_Id: planId,
+                    strNguoiThucHien_Id: system.userId,
+                    strDaoTao_ThoiGianDaoTao_Id: semesterId}, next, onFailure);
+              const cached = storedRoute && storedRoute.userId === String(system.userId)
+                ? storedRoute : null;
+              let cachedReady = false, cachedRows = null, cachedError = false;
+              let validated = null;
+              const finishRows = (latest, planId, planSemesterId, rows) => {
+                const subjects = new Map();
+                for (const row of rows) {
+                  if (row.DANGKY_KEHOACHDANGKY_ID !== planId ||
+                      (row.DAOTAO_THOIGIANDAOTAO_ID !== latest.id &&
+                        row.DAOTAO_THOIGIANDAOTAO_ID !== planSemesterId) ||
+                      !row.DAOTAO_HOCPHAN_ID || !row.DAOTAO_HOCPHAN_TEN ||
+                      !row.DANGKY_LOPHOCPHAN_ID || !row.DANGKY_LOPHOCPHAN_TEN) {
+                    fail('INVALID_REGISTRATION'); return;
+                  }
+                  const key = row.DAOTAO_HOCPHAN_ID;
+                  const start = date(row.NGAYBATDAU);
+                  const end = date(row.NGAYKETTHUC);
+                  if (end < start) { fail('INVALID_DATE'); return; }
+                  if (!subjects.has(key)) subjects.set(key, {
+                    name: row.DAOTAO_HOCPHAN_TEN, classes: []
+                  });
+                  const subject = subjects.get(key);
+                  if (subject.name !== row.DAOTAO_HOCPHAN_TEN) {
+                    fail('INVALID_SUBJECT'); return;
+                  }
+                  if (!subject.classes.some(item => item.id === row.DANGKY_LOPHOCPHAN_ID)) {
+                    subject.classes.push({id: row.DANGKY_LOPHOCPHAN_ID,
+                      name: row.DANGKY_LOPHOCPHAN_TEN, startsOn: start, endsOn: end});
+                  }
+                }
+                finished = true;
+                bridge.onRegistration(JSON.stringify({id: latest.name,
+                  name: latest.name, confirmedEmpty: rows.length === 0,
+                  route: {userId: String(system.userId), semesterId: String(latest.id),
+                    semesterName: latest.name, planId: String(planId)},
+                  subjects: [...subjects.values()].map(subject => ({
+                    name: subject.name,
+                    classes: subject.classes.map(({name, startsOn, endsOn}) =>
+                      ({name, startsOn, endsOn}))
+                  }))}));
+              };
+              const resolveRows = () => {
+                if (!validated || finished) return;
+                const {latest, planId, planSemesterId} = validated;
+                if (cached && cached.semesterId === String(latest.id) &&
+                    cached.semesterName === latest.name && cached.planId === planId) {
+                  if (!cachedReady) return;
+                  if (!cachedError) { finishRows(latest, planId, planSemesterId, cachedRows); return; }
+                }
+                requestRows(latest.id, planId, rows =>
+                  finishRows(latest, planId, planSemesterId, rows));
+              };
+              const date = value => {
+                const match = /^(\d{2})\/(\d{2})\/(\d{4})${'$'}/.exec(value);
+                if (!match) throw Error('DATE_INVALID');
+                const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+                if (parsed.getFullYear() !== Number(match[3]) ||
+                    parsed.getMonth() + 1 !== Number(match[2]) ||
+                    parsed.getDate() !== Number(match[1])) throw Error('DATE_INVALID');
+                return match[3] + '-' + match[2] + '-' + match[1];
+              };
+              if (cached) requestRows(cached.semesterId, cached.planId, rows => {
+                cachedRows = rows; cachedReady = true; resolveRows();
+              }, () => { cachedError = true; cachedReady = true; resolveRows(); });
+              call('DKH_ThongTin_MH/DSA4FSkuKAYoIC8FIC8mCjgCIA8pIC8P',
+                'pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan',
+                {strDaoTao_ThoiGianDaoTao_Id: null}, semesters => {
+                  const choices = semesters.map(row => {
+                    const match = /^(\d{4})_(\d{4})_(\d+)${'$'}/.exec(row.THOIGIAN);
+                    return match && Number(match[2]) === Number(match[1]) + 1 && row.ID
+                      ? {id: row.ID, name: row.THOIGIAN, year: Number(match[1]), term: Number(match[3])}
+                      : null;
+                  }).filter(Boolean).sort((a, b) => b.year - a.year || b.term - a.term);
+                  if (!choices.length) { fail('NO_SEMESTER'); return; }
+                  const latest = choices[0];
+                  call('DKH_ThongTin_MH/DSA4BRIKJAkuICIpBSAvJgo4AiAPKSAv',
+                    'pkg_dangkyhoc_thongtin.LayDSKeHoachDangKyCaNhan',
+                    {strDaoTao_ThoiGianDaoTao_Id: latest.id}, plans => {
+                      const matchingPlans = plans.filter(row => row && row.ID &&
+                        (String(row.MAKEHOACH || '').trim() === latest.name ||
+                          String(row.MAKEHOACH || '').trim().startsWith(latest.name + ',')));
+                      const planIds = [...new Set(matchingPlans
+                        .map(row => String(row.ID || '').trim())
+                        .filter(Boolean))];
+                      const planSemesterIds = [...new Set(matchingPlans
+                        .map(row => String(row.DAOTAO_THOIGIANDAOTAO_ID || '').trim())
+                        .filter(Boolean))];
+                      if (planIds.length !== 1 || planSemesterIds.length !== 1) {
+                        fail('PLAN_AMBIGUOUS'); return;
+                      }
+                      validated = {latest, planId: planIds[0], planSemesterId: planSemesterIds[0]};
+                      resolveRows();
+                    });
+                });
+            })();
+        """
     }
 }
 
-private object QldtSnapshotEncoder {
+internal object QldtSnapshotEncoder {
     data class SnapshotBundle(
         val appSnapshot: String,
         val widgetSnapshot: String,
@@ -474,7 +946,7 @@ private object QldtSnapshotEncoder {
     }
 
     private fun parseRecord(item: JSONObject): JSONObject? {
-        val subjectName = jsonString(item, "TENHOCPHAN")
+        val subjectName = widgetSubjectName(jsonString(item, "TENHOCPHAN"))
         val dateText = jsonString(item, "NGAYHOC")
         val date = parseVietnameseDate(dateText)
         if (subjectName.isEmpty() || date == null) {
@@ -505,6 +977,7 @@ private object QldtSnapshotEncoder {
         if (endAt <= startAt) {
             return null
         }
+        val className = widgetClassName(jsonString(item, "TENLOPHOCPHAN"))
         val idPrefix = if (isExam) "exam" else "class"
         val id = listOf(
             idPrefix,
@@ -512,6 +985,7 @@ private object QldtSnapshotEncoder {
             subjectName,
             "$startHour:$startMinute",
             room,
+            className,
         ).joinToString("|")
 
         return JSONObject()
@@ -521,7 +995,7 @@ private object QldtSnapshotEncoder {
             .put("room", room)
             .put("startAt", startAt)
             .put("endAt", endAt)
-            .put("className", jsonString(item, "TENLOPHOCPHAN"))
+            .put("className", className)
             .put("examForm", jsonString(item, "DANGKY_LOPHOCPHAN_TEN"))
             .put("periodStart", jsonInt(item, "TIETBATDAU") ?: JSONObject.NULL)
             .put("periodEnd", jsonInt(item, "TIETKETTHUC") ?: JSONObject.NULL)
