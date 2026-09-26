@@ -124,7 +124,7 @@ void main() {
     await tester.tap(find.text('Chi tiết'));
     await tester.pumpAndSettle();
     expect(find.text('Thay đổi lịch gần nhất'), findsOneWidget);
-    await tester.pageBack();
+    await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Quay lại'));
     await tester.pumpAndSettle();
@@ -211,9 +211,11 @@ void main() {
         exam(start, start.add(const Duration(hours: 2))),
       ], unreadDifference: true);
       await AppThemeController.instance.select(theme);
-      await tester.pumpAndSettle();
+      // Minecraft and Valorant keep animated backgrounds alive, so settling
+      // every frame would wait forever even after the theme has applied.
+      await tester.pump(const Duration(milliseconds: 700));
       await tester.tap(find.byTooltip('Đang trong kỳ thi'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 700));
       expect(find.text('Bạn đang trong kỳ thi.'), findsOneWidget);
       expect(tester.takeException(), isNull);
       debugDefaultTargetPlatformOverride = null;
