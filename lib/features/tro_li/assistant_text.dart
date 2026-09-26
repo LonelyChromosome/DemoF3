@@ -15,6 +15,7 @@ enum AssistantPack {
 enum AssistantEvent {
   syncInitial,
   notificationEmpty,
+  notificationEmptyDescription,
   syncStale,
   syncSuccessNoChange,
   studyChanged,
@@ -48,6 +49,7 @@ abstract final class AssistantText {
   static String titleOf(AssistantEvent event, AssistantPack pack) =>
       switch (event) {
         AssistantEvent.notificationEmpty => 'Thông báo',
+        AssistantEvent.notificationEmptyDescription => 'Thông báo',
         AssistantEvent.syncStale => 'Nhắc đồng bộ',
         AssistantEvent.syncInitial ||
         AssistantEvent.syncSuccessNoChange ||
@@ -86,8 +88,9 @@ abstract final class AssistantText {
       AssistantEvent.examTomorrow when examCount > 1 =>
         'Ngày mai bạn có $examCount môn thi.',
       AssistantEvent.examTomorrow => 'Ngày mai bạn có một môn thi.',
-      AssistantEvent.examPeriodActive =>
-        'Bạn đang trong kỳ thi. Hãy vào Lịch thi để kiểm tra.',
+      AssistantEvent.examPeriodActive => 'Bạn đang trong kỳ thi.',
+      AssistantEvent.notificationEmptyDescription =>
+        'Các thông báo mới sẽ xuất hiện ở đây.',
       AssistantEvent.examCountdownMultiple =>
         'Bạn có $examCount môn thi sắp tới.',
     };

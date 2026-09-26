@@ -29,6 +29,7 @@ void main() {
     WidgetTester tester,
     List<ScheduleRecord> records, {
     bool unreadDifference = false,
+    SemesterDifference? difference,
   }) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     final snapshot = ImportedScheduleData(
@@ -38,7 +39,9 @@ void main() {
     );
     SharedPreferences.setMockInitialValues(<String, Object>{
       'better_phenikaa_snapshot_v1': snapshot.encode(),
-      if (unreadDifference)
+      if (difference != null)
+        SemesterDifferenceStore.storageKey: jsonEncode(difference.toJson()),
+      if (unreadDifference && difference == null)
         SemesterDifferenceStore.storageKey: jsonEncode(
           const SemesterDifference(
             initial: false,
@@ -68,7 +71,7 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('period badge survives bell, exam page and app restore', (
+  testWidgets('period status survives notification center and exam navigation', (
     tester,
   ) async {
     final start = DateTime.now().add(const Duration(days: 2));
@@ -77,17 +80,13 @@ void main() {
     ]);
     const dot = ValueKey<String>('exam-period-dot');
     expect(find.byKey(dot), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.notifications_none_rounded));
-    await tester.pump();
-    expect(
-      find.text('Bạn đang trong kỳ thi. Hãy vào Lịch thi để kiểm tra.'),
-      findsOneWidget,
-    );
-    expect(find.byKey(dot), findsOneWidget);
-    await tester.tap(find.byType(FloatingActionButton));
+    await tester.tap(find.byTooltip('Đang trong kỳ thi'));
     await tester.pumpAndSettle();
-    expect(find.byKey(dot), findsNWidgets(2));
-    await tester.tap(find.text('Lịch thi').last);
+    expect(find.text('Bạn đang trong kỳ thi.'), findsOneWidget);
+    expect(find.byTooltip('Mở lịch thi'), findsOneWidget);
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.byType(FloatingActionButton), findsNothing);
+    await tester.tap(find.byTooltip('Mở lịch thi'));
     await tester.pumpAndSettle();
     expect(find.byKey(dot), findsOneWidget);
     expect(find.text('Còn 2 ngày'), findsOneWidget);
@@ -99,7 +98,7 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('reading a schedule change does not clear the exam period', (
+  testWidgets('opening center preserves unread until details are opened', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1080, 1920);
@@ -108,20 +107,137 @@ void main() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
     });
+    await showApp(tester, <ScheduleRecord>[], unreadDifference: true);
+    await tester.tap(find.byIcon(Icons.notifications_none_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Thay đổi môn học'), findsOneWidget);
+    expect(find.text('Chi tiết'), findsOneWidget);
+    await tester.tap(find.byTooltip('Quay lại'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('exam-period-dot')), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.notifications_none_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chi tiết'));
+    await tester.pumpAndSettle();
+    expect(find.text('Thay đổi lịch gần nhất'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Quay lại'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('exam-period-dot')), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  SemesterDifference changed({int study = 0, int exams = 0}) =>
+      SemesterDifference(
+        initial: false,
+        addedSubjects: const <String>[],
+        removedSubjects: const <String>[],
+        study: ScheduleDifference(
+          added: study,
+          removed: 0,
+          modified: 0,
+        ),
+        exams: ScheduleDifference(
+          added: exams,
+          removed: 0,
+          modified: 0,
+        ),
+      );
+
+  testWidgets('notification groups show only the changed schedule types', (
+    tester,
+  ) async {
+    for (final item in <({int study, int exams, List<String> expected, List<String> absent})>[
+      (study: 1, exams: 0, expected: <String>['Thay đổi môn học'], absent: <String>['Thay đổi lịch thi']),
+      (study: 0, exams: 1, expected: <String>['Thay đổi lịch thi'], absent: <String>['Thay đổi môn học']),
+      (study: 1, exams: 1, expected: <String>['Thay đổi môn học', 'Thay đổi lịch thi'], absent: const <String>[]),
+    ]) {
+      await showApp(
+        tester,
+        <ScheduleRecord>[],
+        difference: changed(study: item.study, exams: item.exams),
+      );
+      await tester.tap(find.byIcon(Icons.notifications_none_rounded));
+      await tester.pumpAndSettle();
+      for (final title in item.expected) {
+        expect(find.text(title), findsOneWidget);
+      }
+      for (final title in item.absent) {
+        expect(find.text(title), findsNothing);
+      }
+      await tester.pumpWidget(const SizedBox());
+    }
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('notification center has a nonblank empty state', (tester) async {
+    await showApp(tester, <ScheduleRecord>[]);
+    await tester.tap(find.byIcon(Icons.notifications_none_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Không có thông báo mới.'), findsOneWidget);
+    expect(find.text('Các thông báo mới sẽ xuất hiện ở đây.'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  for (final theme in <AppThemeId>[
+    AppThemeId.classic,
+    AppThemeId.minecraft,
+    AppThemeId.valorant,
+  ]) {
+    testWidgets('notification center fits $theme', (tester) async {
+      tester.view.physicalSize = const Size(720, 1280);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      final start = DateTime.now().add(const Duration(days: 2));
+      await showApp(tester, <ScheduleRecord>[
+        exam(start, start.add(const Duration(hours: 2))),
+      ], unreadDifference: true);
+      await AppThemeController.instance.select(theme);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Đang trong kỳ thi'));
+      await tester.pumpAndSettle();
+      expect(find.text('Bạn đang trong kỳ thi.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      debugDefaultTargetPlatformOverride = null;
+    });
+  }
+
+  testWidgets('custom notification theme and font keep arrow card within screen', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(720, 1280);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    final custom = CustomThemeDefinition(
+      id: 'notification-test',
+      name: 'Notification',
+      source: const ThemeSourceData.colorMix(
+        colors: <Color>[Color(0xFF7755AA), Color(0xFF334477)],
+        weights: <double>[60, 40],
+      ),
+      tokens: appThemePalettes[AppThemeId.valorant]!.toTokens(),
+      font: AppFontChoice.builtIns[1],
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    await AppThemeController.instance.applyCustomTheme(custom);
     final start = DateTime.now().add(const Duration(days: 2));
     await showApp(tester, <ScheduleRecord>[
       exam(start, start.add(const Duration(hours: 2))),
-    ], unreadDifference: true);
-    await tester.tap(find.byIcon(Icons.notifications_none_rounded));
-    await tester.pump();
-    expect(find.text('Xem thay đổi'), findsOneWidget);
-    await tester.tap(find.text('Xem thay đổi'));
+    ]);
+    await tester.tap(find.byTooltip('Đang trong kỳ thi'));
     await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey<String>('exam-period-dot')),
-      findsOneWidget,
-    );
+    expect(tester.getRect(find.byTooltip('Mở lịch thi')).width, greaterThanOrEqualTo(44));
+    expect(tester.takeException(), isNull);
     debugDefaultTargetPlatformOverride = null;
+    await tester.pumpWidget(const SizedBox());
   });
 
   for (final theme in <AppThemeId>[

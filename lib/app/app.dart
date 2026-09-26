@@ -915,14 +915,14 @@ class _MainShell extends StatelessWidget {
                 color: palette.primary,
               ),
             ),
-          if (panelOpen)
+          if (page != _AppPage.notifications && panelOpen)
             Positioned.fill(
               child: GestureDetector(
                 onTap: onTogglePanel,
                 child: Container(color: Colors.black.withValues(alpha: .48)),
               ),
             ),
-          if (panelOpen)
+          if (page != _AppPage.notifications && panelOpen)
             Positioned(
               right: 10,
               bottom: 78,
@@ -933,7 +933,8 @@ class _MainShell extends StatelessWidget {
                 onSync: onSync,
               ),
             ),
-          Positioned(
+          if (page != _AppPage.notifications)
+            Positioned(
             right: 22,
             bottom: 28,
             child: FloatingActionButton(
@@ -959,7 +960,7 @@ class _MainShell extends StatelessWidget {
               ),
             ),
           ),
-          if (syncStale)
+          if (page != _AppPage.notifications && syncStale)
             Positioned(
               left: 22,
               bottom: 28,
@@ -1328,7 +1329,7 @@ class _NotificationCenterScreen extends StatelessWidget {
           const SizedBox(height: 18),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.only(bottom: 82),
+              padding: const EdgeInsets.only(bottom: 20),
               children: <Widget>[
                 if (hasActiveExamPeriod)
                   _NotificationExamCard(
@@ -1397,7 +1398,10 @@ class _NotificationCenterScreen extends StatelessWidget {
                         AssistantEvent.notificationEmpty,
                         assistantPack,
                       ),
-                      message: 'Các thông báo mới sẽ xuất hiện ở đây.',
+                      message: AssistantText.of(
+                        AssistantEvent.notificationEmptyDescription,
+                        assistantPack,
+                      ),
                     ),
                   ),
               ],
@@ -1417,7 +1421,7 @@ class _NotificationExamCard extends StatelessWidget {
   });
 
   final String text;
-  final dynamic palette;
+  final AppThemePalette palette;
   final VoidCallback onOpenExam;
 
   @override
@@ -1451,9 +1455,7 @@ class _NotificationExamCard extends StatelessWidget {
               padding: EdgeInsets.zero,
               style: IconButton.styleFrom(
                 backgroundColor: palette.primary,
-                foregroundColor: palette.id == AppThemeId.lol
-                    ? const Color(0xFF06171D)
-                    : Colors.white,
+                foregroundColor: _contrastForeground(palette.primary),
               ),
               icon: const Icon(Icons.arrow_forward_rounded),
             ),
@@ -1475,7 +1477,7 @@ class _NotificationChangeCard extends StatelessWidget {
   final String title;
   final String description;
   final int count;
-  final dynamic palette;
+  final AppThemePalette palette;
 
   @override
   Widget build(BuildContext context) => Container(
