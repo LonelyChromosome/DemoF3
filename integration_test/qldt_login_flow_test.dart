@@ -68,13 +68,12 @@ void main() {
           '''
       <!doctype html><html><body>
       <script>
-        let missedSchedule = false;
         window.edu = {system: {userId: 'fixture', iM: 1,
           makeRequest: function (options) {
             if (options.data.func ===
                 'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan' &&
-                !missedSchedule) {
-              missedSchedule = true;
+                window.name !== 'better-phenikaa-missed-schedule') {
+              window.name = 'better-phenikaa-missed-schedule';
               return;
             }
             switch (options.data.func) {
