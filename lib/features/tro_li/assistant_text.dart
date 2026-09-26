@@ -47,6 +47,7 @@ abstract final class AssistantSelection {
 abstract final class AssistantText {
   static String titleOf(AssistantEvent event, AssistantPack pack) =>
       switch (event) {
+        AssistantEvent.notificationEmpty => 'Thông báo',
         AssistantEvent.syncStale => 'Nhắc đồng bộ',
         AssistantEvent.syncInitial ||
         AssistantEvent.syncSuccessNoChange ||
