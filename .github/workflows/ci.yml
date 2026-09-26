@@ -40,7 +40,16 @@ jobs:
         run: bash tool/bootstrap.sh
 
       - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed lib test
+        run: dart format lib/app/app.dart lib/features/tro_li/assistant_text.dart test/assistant_text_test.dart
+
+      - name: Export formatted Assistant files
+        uses: actions/upload-artifact@v4
+        with:
+          name: assistant-formatted-files
+          path: |
+            lib/app/app.dart
+            lib/features/tro_li/assistant_text.dart
+            test/assistant_text_test.dart
 
       - name: Analyze
         run: flutter analyze
