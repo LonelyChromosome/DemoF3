@@ -6,6 +6,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dar
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_range.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/tracuu_api.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/verification_diagnostics.dart';
 import 'package:flutter/material.dart';
@@ -620,11 +621,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             _showWebPage = false;
             _status = 'Đang lấy học kỳ và môn đăng ký từ QLĐT...';
           });
-          _startPhase(
-            QldtSyncPhase.semesterPlan,
-            const Duration(seconds: 20),
-            epoch,
-          );
           if (registrationRaw != null) {
             unawaited(_completeRegistration(epoch, registrationRaw));
           }
@@ -680,12 +676,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             const Duration(seconds: 20),
             _syncEpoch,
           );
-        } else if (stage == 'verification') {
-          _startPhase(
-            QldtSyncPhase.verification,
-            const Duration(seconds: 10),
-            _syncEpoch,
-          );
         }
         return null;
       },
@@ -703,6 +693,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         final raw = arguments[1]?.toString() ?? '';
         if (_pendingSchedule == null) {
           _pendingRegistrationRaw = raw;
+          unawaited(_requestScheduleForRegistration(epoch, raw));
           return null;
         }
         await _completeRegistration(epoch, raw);
@@ -759,6 +750,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     RegisteredSemester? registration;
     var verificationStage = 'registration_parse';
     try {
+      _startPhase(
+        QldtSyncPhase.verification,
+        const Duration(seconds: 10),
+        epoch,
+      );
       registration = const TracuuApi().parse(raw);
       final schedule = _pendingSchedule!;
       verificationStage = 'schedule_verify';
@@ -811,6 +807,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           schedule: semester.toImportedScheduleData(),
           semester: semester,
           registrationRoute: const TracuuApi().routeForVerifiedResult(raw),
+          termStartedAt: SemesterScheduleRange.fromRegistration(
+            registration,
+          )?.start,
         ),
       );
     } on Object catch (error) {
@@ -984,26 +983,80 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         code: 'TOTAL_TIMEOUT',
       );
     });
-    _startPhase(QldtSyncPhase.schedule, const Duration(seconds: 45), epoch);
+    _startPhase(QldtSyncPhase.semesterPlan, const Duration(seconds: 20), epoch);
     setState(() {
       _syncing = true;
       _showWebPage = false;
-      _status = 'Đang lấy lịch cá nhân từ QLĐT...';
+      _status = 'Đang xác định học kỳ và môn đăng ký từ QLĐT...';
     });
     _pendingSchedule = null;
     _pendingRegistrationRaw = null;
     _failureDiagnosticsJson = null;
     _scheduleStages.clear();
-    _scheduleStages.add('dispatch');
+    try {
+      final dispatch = await controller.evaluateJavascript(
+        source: const TracuuApi().scriptForAttempt(epoch),
+      );
+      if (!mounted || !_syncing || epoch != _syncEpoch) return;
+      if (dispatch == 'BRIDGE_MISSING') {
+        _syncWatchdog?.cancel();
+        _phaseTimer?.cancel();
+        setState(() {
+          _syncing = false;
+          _autoSyncStarted = false;
+          _pageReady = false;
+          _status = 'Đang đợi trang QLĐT sẵn sàng để đồng bộ...';
+        });
+        _beginReadinessChecks();
+      }
+    } on Object {
+      _stopSync(epoch, 'Không thể yêu cầu môn đăng ký từ QLĐT. Hãy thử lại.');
+    }
+  }
 
-    final now = DateTime.now();
-    final academicStartYear = now.month >= 8 ? now.year : now.year - 1;
-    final start = DateTime(academicStartYear, 8);
-    final end = DateTime(academicStartYear + 1, 7, 31);
-    final startText = _formatDate(start);
-    final endText = _formatDate(end);
+  Future<void> _requestScheduleForRegistration(int epoch, String raw) async {
+    final controller = _controller;
+    if (controller == null || !mounted || !_syncing || epoch != _syncEpoch) {
+      return;
+    }
+    try {
+      final registration = const TracuuApi().parse(raw);
+      final range = SemesterScheduleRange.fromRegistration(registration);
+      if (range == null) {
+        _stopSync(
+          epoch,
+          'Học kỳ mới chưa có môn đăng ký. Dữ liệu cũ được giữ nguyên.',
+          code: 'NO_SUBJECTS',
+        );
+        return;
+      }
+      if (DateTime.now().isAfter(range.end.add(const Duration(days: 1)))) {
+        _stopSync(
+          epoch,
+          'Học kỳ mới nhất đã hết thời gian lưu trữ.',
+          code: 'SEMESTER_EXPIRED',
+        );
+        return;
+      }
+      await _requestSchedule(controller, epoch, range);
+    } on Object {
+      _stopSync(epoch, 'Không xác định được khoảng học kỳ từ TraCuu.');
+    }
+  }
 
-    final registrationScript = const TracuuApi().scriptForAttempt(epoch);
+  Future<void> _requestSchedule(
+    InAppWebViewController controller,
+    int epoch,
+    SemesterScheduleRange range,
+  ) async {
+    if (!mounted || !_syncing || epoch != _syncEpoch) return;
+    _startPhase(QldtSyncPhase.schedule, const Duration(seconds: 45), epoch);
+    setState(() => _status = 'Đang lấy lịch cá nhân trong học kỳ...');
+    _scheduleStages
+      ..clear()
+      ..add('dispatch');
+    final startText = _formatDate(range.start);
+    final endText = _formatDate(range.end);
     final script =
         '''
       (function () {
@@ -1054,13 +1107,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                 $epoch,
                 JSON.stringify({name: name, response: response})
               );
-              try {
-                $registrationScript
-              } catch (_) {
-                window.flutter_inappwebview.callHandler(
-                  'betterPhenikaaRegistrationError', $epoch, 'REQUEST_ERROR'
-                );
-              }
             },
             error: function () {
               scheduleStage('error');

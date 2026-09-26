@@ -68,11 +68,15 @@ void main() {
           '''
       <!doctype html><html><body>
       <script>
-        let calls = 0;
+        let missedSchedule = false;
         window.edu = {system: {userId: 'fixture', iM: 1,
           makeRequest: function (options) {
-            calls++;
-            if (calls === 1) return;
+            if (options.data.func ===
+                'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan' &&
+                !missedSchedule) {
+              missedSchedule = true;
+              return;
+            }
             switch (options.data.func) {
               case 'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan':
                 options.success($response); break;

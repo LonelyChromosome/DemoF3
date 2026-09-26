@@ -4,10 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum QldtSyncPhase {
   session,
-  schedule,
   navigation,
   semesterPlan,
   subjects,
+  schedule,
   verification,
   sessionCache,
   save,

@@ -80,14 +80,27 @@ class QldtDailySyncWorker(
                         preferences.getString(CURRENT_SEMESTER_KEY, null),
                         bundle.semester,
                     )
+                    val startText = registeredStart(syncResult.registration)
+                    val oldSemester = preferences.getString(CURRENT_SEMESTER_KEY, null)
+                    val oldStart = preferences.getString(CURRENT_START_KEY, null)
+                    val archive = if (oldSemester != null && oldStart != null &&
+                        JSONObject(oldSemester).optString("semesterId") !=
+                        JSONObject(bundle.semester).optString("semesterId") &&
+                        isTermActive(oldStart)) {
+                        JSONObject().put("startedAt", oldStart)
+                            .put("semester", JSONObject(oldSemester)).toString()
+                    } else preferences.getString(PREVIOUS_SEMESTER_KEY, null)
                     if (!WidgetSyncIndicator.isCurrent(applicationContext, syncToken))
                         return Result.success()
                     val saved = preferences.edit()
                         .putString(APP_SNAPSHOT_KEY, bundle.appSnapshot)
                         .putString(WIDGET_SNAPSHOT_KEY, bundle.widgetSnapshot)
                         .putString(CURRENT_SEMESTER_KEY, bundle.semester)
+                        .putString(CURRENT_START_KEY, startText)
                         .putString(DIFFERENCE_KEY, difference)
                         .apply {
+                            if (archive == null) remove(PREVIOUS_SEMESTER_KEY)
+                            else putString(PREVIOUS_SEMESTER_KEY, archive)
                             val route = JSONObject(syncResult.registration).optJSONObject("route")
                             if (route != null) putString(REGISTRATION_ROUTE_KEY, route.toString())
                         }
@@ -136,11 +149,37 @@ class QldtDailySyncWorker(
         super.onStopped()
     }
 
+    private fun registeredStart(raw: String): String {
+        val subjects = JSONObject(raw).getJSONArray("subjects")
+        val dates = mutableListOf<String>()
+        for (index in 0 until subjects.length()) {
+            val classes = subjects.getJSONObject(index).getJSONArray("classes")
+            for (classIndex in 0 until classes.length()) {
+                dates.add(classes.getJSONObject(classIndex).getString("startsOn"))
+            }
+        }
+        val first = dates.minOrNull() ?: throw IllegalArgumentException("Học kỳ chưa có môn.")
+        return "${first}T00:00:00.000"
+    }
+
+    private fun isTermActive(startText: String): Boolean = runCatching {
+        val start = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }
+            .parse(startText.take(10)) ?: return@runCatching false
+        val expiry = Calendar.getInstance().apply {
+            time = start
+            add(Calendar.MONTH, 4)
+            add(Calendar.DAY_OF_MONTH, 8)
+        }
+        Date().before(expiry.time)
+    }.getOrDefault(false)
+
     private companion object {
         const val FLUTTER_PREFERENCES = "FlutterSharedPreferences"
         const val APP_SNAPSHOT_KEY = "flutter.better_phenikaa_snapshot_v1"
         const val WIDGET_SNAPSHOT_KEY = "flutter.better_phenikaa_widget_snapshot_v1"
         const val CURRENT_SEMESTER_KEY = "flutter.better_phenikaa_current_semester_v1"
+        const val CURRENT_START_KEY = "flutter.better_phenikaa_current_term_start_v1"
+        const val PREVIOUS_SEMESTER_KEY = "flutter.better_phenikaa_previous_semester_v1"
         const val DIFFERENCE_KEY = "flutter.better_phenikaa_semester_difference_v1"
         const val REGISTRATION_ROUTE_KEY = "flutter.better_phenikaa_qldt_registration_route_v1"
     }
@@ -224,7 +263,21 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
                     onRegistration = { registration ->
                         mainHandler.post {
                             pendingRegistration.set(registration)
-                            completeWhenBothReady()
+                            val range = runCatching { registrationRange(registration) }
+                                .getOrElse {
+                                    complete(Result.Failure(
+                                        "INVALID_REGISTRATION: TraCuu trả ngày lớp không hợp lệ.",
+                                    ))
+                                    return@post
+                                }
+                            if (range == null) {
+                                complete(Result.Failure(
+                                    "NO_SUBJECTS: Học kỳ mới chưa có môn đăng ký. Dữ liệu cũ được giữ nguyên.",
+                                ))
+                            } else {
+                                stage.set("SCHEDULE")
+                                requestSchedule(webView, range)
+                            }
                         }
                     },
                     onError = { code ->
@@ -422,8 +475,6 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
             }
             if (rawResult == "true") {
                 if (syncRequested.compareAndSet(false, true)) {
-                    stage.set("SCHEDULE")
-                    requestSchedule(webView)
                     requestRegistration(webView)
                 }
                 return@evaluateJavascript
@@ -444,8 +495,8 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
         }
     }
 
-    private fun requestSchedule(webView: WebView) {
-        val (startDate, endDate) = currentAcademicYearRange()
+    private fun requestSchedule(webView: WebView, range: Pair<String, String>) {
+        val (startDate, endDate) = range
         val startJson = JSONObject.quote(startDate)
         val endJson = JSONObject.quote(endDate)
         val script = """
@@ -513,14 +564,34 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
         complete(Result.Success(envelope, registration))
     }
 
-    private fun currentAcademicYearRange(): Pair<String, String> {
-        val now = Calendar.getInstance()
-        val startYear = if (now.get(Calendar.MONTH) >= Calendar.AUGUST) {
-            now.get(Calendar.YEAR)
-        } else {
-            now.get(Calendar.YEAR) - 1
+    private fun registrationRange(raw: String): Pair<String, String>? {
+        val subjects = JSONObject(raw).getJSONArray("subjects")
+        val dates = mutableListOf<String>()
+        for (index in 0 until subjects.length()) {
+            val classes = subjects.getJSONObject(index).getJSONArray("classes")
+            for (classIndex in 0 until classes.length()) {
+                val value = classes.getJSONObject(classIndex).getString("startsOn")
+                require(Regex("\\d{4}-\\d{2}-\\d{2}").matches(value))
+                dates.add(value)
+            }
         }
-        return "01/08/$startYear" to "31/07/" + (startYear + 1)
+        val first = dates.minOrNull() ?: return null
+        val input = SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).apply { isLenient = false }
+        val output = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+        val start = input.parse(first) ?: return null
+        val expiry = Calendar.getInstance().apply {
+            time = start
+            add(Calendar.MONTH, 4)
+            add(Calendar.DAY_OF_MONTH, 7)
+        }
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (today.after(expiry)) return null
+        return output.format(start) to output.format(expiry.time)
     }
 
     private fun complete(value: Result) {

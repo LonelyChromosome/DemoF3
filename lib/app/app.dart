@@ -9,6 +9,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagn
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/schedule_difference_sheet.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_retention.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/sync_reminder_policy.dart';
 import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
@@ -86,6 +87,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   _AppPage _notificationReturnPage = _AppPage.timetable;
   Timer? _examClockTimer;
   Timer? _syncStaleTimer;
+  Timer? _semesterExpiryTimer;
   Timer? _exitGestureTimer;
   bool _exitGestureArmed = false;
   DateTime? _lastSuccessfulSync;
@@ -110,6 +112,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void dispose() {
     _examClockTimer?.cancel();
     _syncStaleTimer?.cancel();
+    _semesterExpiryTimer?.cancel();
     _exitGestureTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     AppThemeController.instance.removeListener(_handleThemeChanged);
@@ -119,6 +122,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed || _data == null) return;
+    unawaited(_expireStoredSemesters());
     setState(() {});
     _scheduleExamClock();
     unawaited(_refreshExamNotice());
@@ -189,6 +193,56 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     });
   }
 
+  void _scheduleSemesterExpiry(
+    RetainedSemester current,
+    RetainedSemester? previous,
+  ) {
+    _semesterExpiryTimer?.cancel();
+    final now = DateTime.now();
+    final boundaries = <DateTime>[
+      current.expiresOn.add(const Duration(days: 1)),
+      if (previous != null) previous.expiresOn.add(const Duration(days: 1)),
+    ]..sort();
+    final next = boundaries.where((date) => date.isAfter(now)).firstOrNull;
+    if (next != null) {
+      _semesterExpiryTimer = Timer(next.difference(now), () {
+        unawaited(_expireStoredSemesters());
+      });
+    }
+  }
+
+  Future<void> _expireStoredSemesters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final current = await CurrentSemesterStore().read();
+    if (current == null) return;
+    final start = SemesterRetention.startOf(
+      current,
+      prefs.getString(SemesterRetention.currentStartKey),
+    );
+    if (start == null) return;
+    final retained = RetainedSemester(current, start);
+    final now = DateTime.now();
+    if (!retained.activeAt(now)) {
+      await CurrentSemesterStore().clear();
+      await prefs.remove(_storageKey);
+      await prefs.remove(SemesterRetention.currentStartKey);
+      await prefs.remove(SemesterRetention.previousKey);
+      await WidgetPublisher.clear();
+      _semesterExpiryTimer?.cancel();
+      if (mounted) setState(() => _data = null);
+      return;
+    }
+    final previous = SemesterRetention.readPrevious(prefs, now);
+    if (previous == null) await prefs.remove(SemesterRetention.previousKey);
+    final data = SemesterRetention.combine(current, previous);
+    if (prefs.getString(_storageKey) != data.encode()) {
+      await prefs.setString(_storageKey, data.encode());
+      await WidgetPublisher.publish(data, resetToToday: false);
+    }
+    _scheduleSemesterExpiry(retained, previous);
+    if (mounted) setState(() => _data = data);
+  }
+
   void _onNotificationTap() {
     _notificationReturnPage = _page == _AppPage.notifications
         ? _AppPage.timetable
@@ -243,15 +297,46 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     try {
       final prefs = await SharedPreferences.getInstance();
       _assistantPack = await AssistantSelection.load();
-      final raw = prefs.getString(_storageKey);
-      final semester = await CurrentSemesterStore().read();
+      var raw = prefs.getString(_storageKey);
+      var semester = await CurrentSemesterStore().read();
+      final startedAt = semester == null
+          ? null
+          : SemesterRetention.startOf(
+              semester,
+              prefs.getString(SemesterRetention.currentStartKey),
+            );
+      if (semester != null &&
+          startedAt != null &&
+          !RetainedSemester(semester, startedAt).activeAt(DateTime.now())) {
+        await CurrentSemesterStore().clear();
+        await prefs.remove(_storageKey);
+        await prefs.remove(SemesterRetention.currentStartKey);
+        await prefs.remove(SemesterRetention.previousKey);
+        await WidgetPublisher.clear();
+        semester = null;
+        raw = null;
+      }
       if (semester != null || (raw != null && raw.isNotEmpty)) {
+        final previous = semester == null
+            ? null
+            : SemesterRetention.readPrevious(prefs, DateTime.now());
+        if (semester != null && previous == null) {
+          await prefs.remove(SemesterRetention.previousKey);
+        }
         final data =
-            semester?.toImportedScheduleData() ??
+            (semester == null
+                ? null
+                : SemesterRetention.combine(semester, previous)) ??
             ImportedScheduleData.decode(raw!);
         _data = data;
         _selectedDate = _initialDateFor(data);
         _scheduleExamClock();
+        if (semester != null && startedAt != null) {
+          _scheduleSemesterExpiry(
+            RetainedSemester(semester, startedAt),
+            previous,
+          );
+        }
         await WidgetPublisher.publish(data, resetToToday: false);
         if (semester != null) {
           try {
@@ -282,6 +367,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     final previousSemester = await store.read();
     final previousDifference = await differenceStore.read();
     final previousSnapshot = prefs.getString(_storageKey);
+    final previousStart = prefs.getString(SemesterRetention.currentStartKey);
+    final previousArchive = prefs.getString(SemesterRetention.previousKey);
     final previousRoute = prefs.getString(_routeKey);
     final previousWidgetSnapshot = prefs.getString(
       'better_phenikaa_widget_snapshot_v1',
@@ -291,22 +378,59 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
     try {
       SemesterDifference? difference;
+      var publishedData = result.schedule;
       if (result.semester != null) {
+        final now = DateTime.now();
+        final startedAt =
+            result.termStartedAt ??
+            SemesterRetention.startOf(result.semester!, null);
+        if (startedAt == null) {
+          throw const FormatException('Không xác định được môn đầu học kỳ.');
+        }
+        var retained = SemesterRetention.readPrevious(prefs, now);
+        if (previousSemester != null &&
+            previousSemester.semesterId != result.semester!.semesterId) {
+          final oldStart = SemesterRetention.startOf(
+            previousSemester,
+            previousStart,
+          );
+          if (oldStart != null) {
+            final old = RetainedSemester(previousSemester, oldStart);
+            if (old.activeAt(now)) retained = old;
+          }
+        }
+        if (retained != null) {
+          await prefs.setString(
+            SemesterRetention.previousKey,
+            retained.encode(),
+          );
+        } else {
+          await prefs.remove(SemesterRetention.previousKey);
+        }
+        await prefs.setString(
+          SemesterRetention.currentStartKey,
+          startedAt.toIso8601String(),
+        );
         difference = const SemesterChangeDetector().compare(
           previousSemester,
           result.semester!,
         );
         await store.save(result.semester!);
         await differenceStore.save(difference);
+        publishedData = SemesterRetention.combine(result.semester!, retained);
+        _scheduleSemesterExpiry(
+          RetainedSemester(result.semester!, startedAt),
+          retained,
+        );
       }
-      if (!await prefs.setString(_storageKey, result.schedule.encode())) {
+      if (!await prefs.setString(_storageKey, publishedData.encode())) {
         throw StateError('Không thể lưu dữ liệu lịch trên thiết bị.');
       }
       if (result.registrationRoute != null &&
           !await prefs.setString(_routeKey, result.registrationRoute!)) {
         throw StateError('Không thể lưu đường dẫn đăng ký trên thiết bị.');
       }
-      await WidgetPublisher.publish(result.schedule, resetToToday: true);
+      await WidgetPublisher.publish(publishedData, resetToToday: true);
       await DailySync.disable();
       try {
         await DailySync.recordAppSyncSuccess();
@@ -327,6 +451,16 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       } else {
         await prefs.setString(_storageKey, previousSnapshot);
       }
+      if (previousStart == null) {
+        await prefs.remove(SemesterRetention.currentStartKey);
+      } else {
+        await prefs.setString(SemesterRetention.currentStartKey, previousStart);
+      }
+      if (previousArchive == null) {
+        await prefs.remove(SemesterRetention.previousKey);
+      } else {
+        await prefs.setString(SemesterRetention.previousKey, previousArchive);
+      }
       if (previousRoute == null) {
         await prefs.remove(_routeKey);
       } else {
@@ -346,16 +480,28 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         );
       }
       try {
-        final oldData =
-            previousSemester?.toImportedScheduleData() ??
-            (previousSnapshot == null
-                ? null
-                : ImportedScheduleData.decode(previousSnapshot));
+        final oldData = previousSnapshot == null
+            ? previousSemester?.toImportedScheduleData()
+            : ImportedScheduleData.decode(previousSnapshot);
         if (oldData != null) {
           await WidgetPublisher.publish(oldData, resetToToday: false);
         }
       } on Object {
         // The saved snapshot remains available for the next widget refresh.
+      }
+      if (previousSemester != null) {
+        final restoredStart = SemesterRetention.startOf(
+          previousSemester,
+          previousStart,
+        );
+        if (restoredStart != null) {
+          _scheduleSemesterExpiry(
+            RetainedSemester(previousSemester, restoredStart),
+            SemesterRetention.readPrevious(prefs, DateTime.now()),
+          );
+        }
+      } else {
+        _semesterExpiryTimer?.cancel();
       }
       rethrow;
     }
@@ -402,10 +548,16 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           rethrow;
         }
         if (mounted) {
+          final prefs = await SharedPreferences.getInstance();
+          final saved = prefs.getString(_storageKey);
+          final displayed = saved == null
+              ? imported.schedule
+              : ImportedScheduleData.decode(saved);
+          if (!mounted) return;
           setState(() {
-            _data = imported.schedule;
-            _lastSuccessfulSync = imported.schedule.syncedAt;
-            _selectedDate = _initialDateFor(imported.schedule);
+            _data = displayed;
+            _lastSuccessfulSync = displayed.syncedAt;
+            _selectedDate = _initialDateFor(displayed);
             _page = _AppPage.timetable;
           });
           _syncStaleTimer?.cancel();
