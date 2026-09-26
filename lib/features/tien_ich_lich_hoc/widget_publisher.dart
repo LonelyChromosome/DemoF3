@@ -63,11 +63,10 @@ abstract final class WidgetPublisher {
     await _refresh();
   }
 
-  static Future<void> _refresh() =>
-      HomeWidget.updateWidget(
-        name: _provider,
-        qualifiedAndroidName: _qualifiedProvider,
-      );
+  static Future<void> _refresh() => HomeWidget.updateWidget(
+    name: _provider,
+    qualifiedAndroidName: _qualifiedProvider,
+  );
 
   static bool get _isSupported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
