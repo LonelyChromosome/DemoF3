@@ -59,7 +59,14 @@ class WeekTimetable extends StatelessWidget {
           ],
         ),
         Expanded(
-          child: ListView.separated(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeInOut,
+            switchOutCurve: Curves.easeInOut,
+            transitionBuilder: (child, animation) =>
+                FadeTransition(opacity: animation, child: child),
+            child: ListView.separated(
+            key: ValueKey<DateTime>(monday),
             padding: const EdgeInsets.only(bottom: 86),
             itemCount: 7,
             separatorBuilder: (_, _) => const SizedBox(height: 6),
@@ -199,6 +206,7 @@ class WeekTimetable extends StatelessWidget {
                 ),
               );
             },
+            ),
           ),
         ),
       ],

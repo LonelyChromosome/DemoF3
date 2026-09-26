@@ -1,6 +1,7 @@
 import 'package:better_phenikaa_schedule/app/app.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -60,6 +61,25 @@ void main() {
       );
       expect(find.text('Thiết kế web nâng cao'), findsOneWidget);
       await tester.tap(find.byTooltip('Tuần sau'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      final fades = tester.widgetList<FadeTransition>(
+        find.descendant(
+          of: find.byType(WeekTimetable),
+          matching: find.byType(FadeTransition),
+        ),
+      );
+      expect(
+        fades.any((fade) => fade.opacity.value > 0 && fade.opacity.value < 1),
+        isTrue,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(WeekTimetable),
+          matching: find.byType(SlideTransition),
+        ),
+        findsNothing,
+      );
       await tester.pumpAndSettle();
       expect(find.text('Thiết kế web nâng cao'), findsNothing);
       await tester.tap(find.text('Theo ngày'));

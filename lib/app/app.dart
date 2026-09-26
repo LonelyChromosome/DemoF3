@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/exam_period.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/schedule_difference_sheet.dart';
@@ -81,6 +82,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   String? _examNotice;
   SemesterDifference? _latestDifference;
   bool _unreadDifference = false;
+  Timer? _examClockTimer;
   static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
 
   @override
@@ -99,6 +101,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _examClockTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     AppThemeController.instance.removeListener(_handleThemeChanged);
     super.dispose();
@@ -107,8 +110,52 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed || _data == null) return;
+    setState(() {});
+    _scheduleExamClock();
     unawaited(_refreshExamNotice());
     unawaited(_refreshDifference());
+  }
+
+  void _scheduleExamClock() {
+    _examClockTimer?.cancel();
+    final data = _data;
+    if (data == null) return;
+    final now = DateTime.now();
+    final midnight = DateTime(now.year, now.month, now.day + 1);
+    final nextEnd = data.exams
+        .map((exam) => exam.endAt)
+        .where((end) => !end.isBefore(now))
+        .fold<DateTime?>(null, (next, end) =>
+            next == null || end.isBefore(next) ? end : next);
+    final boundary = nextEnd == null || !nextEnd.isBefore(midnight)
+        ? midnight
+        : nextEnd.add(const Duration(milliseconds: 1));
+    _examClockTimer = Timer(boundary.difference(now), () {
+      if (!mounted) return;
+      setState(() {});
+      _scheduleExamClock();
+    });
+  }
+
+  void _onNotificationTap() {
+    final active = _data != null &&
+        ExamPeriod.hasActiveExamPeriod(_data!.exams, DateTime.now());
+    if (!active) {
+      unawaited(_showDifferences());
+      return;
+    }
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: const Text(
+        'Bạn đang trong kỳ thi. Hãy vào Lịch thi để kiểm tra.',
+      ),
+      action: SnackBarAction(
+        label: _unreadDifference ? 'Xem thay đổi' : 'Lịch thi',
+        onPressed: _unreadDifference
+            ? () => unawaited(_showDifferences())
+            : () => _openPage(_AppPage.exam),
+      ),
+    ));
   }
 
   Future<void> _refreshDifference() async {
@@ -165,6 +212,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
             ImportedScheduleData.decode(raw!);
         _data = data;
         _selectedDate = _initialDateFor(data);
+        _scheduleExamClock();
         await WidgetPublisher.publish(data, resetToToday: false);
         if (semester != null) {
           try {
@@ -318,6 +366,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
             _selectedDate = _initialDateFor(imported.schedule);
             _page = _AppPage.timetable;
           });
+          _scheduleExamClock();
           if (difference != null) {
             await _refreshDifference();
             if (!mounted) return;
@@ -356,6 +405,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   Future<void> _logout() async {
+    _examClockTimer?.cancel();
     if (!kIsWeb) {
       await _widgetSessionChannel.invokeMethod<void>('invalidate');
     }
@@ -481,7 +531,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                               errorMessage: _errorMessage,
                               examNotice: _examNotice,
                               unreadDifference: _unreadDifference,
-                              onOpenDifferences: _showDifferences,
+                              hasActiveExamPeriod: ExamPeriod.hasActiveExamPeriod(
+                                _data!.exams,
+                                DateTime.now(),
+                              ),
+                              onOpenDifferences: _onNotificationTap,
                               onTogglePanel: () =>
                                   setState(() => _panelOpen = !_panelOpen),
                               onOpenPage: _openPage,
@@ -674,6 +728,7 @@ class _MainShell extends StatelessWidget {
     required this.errorMessage,
     required this.examNotice,
     required this.unreadDifference,
+    required this.hasActiveExamPeriod,
     required this.onOpenDifferences,
     required this.onTogglePanel,
     required this.onOpenPage,
@@ -693,6 +748,7 @@ class _MainShell extends StatelessWidget {
   final String? errorMessage;
   final String? examNotice;
   final bool unreadDifference;
+  final bool hasActiveExamPeriod;
   final VoidCallback onOpenDifferences;
   final VoidCallback onTogglePanel;
   final ValueChanged<_AppPage> onOpenPage;
@@ -711,6 +767,7 @@ class _MainShell extends StatelessWidget {
         selectedDate: selectedDate,
         onDateChanged: onDateChanged,
         unreadDifference: unreadDifference,
+        hasActiveExamPeriod: hasActiveExamPeriod,
         onOpenDifferences: onOpenDifferences,
       ),
       _AppPage.exam => _ExamScreen(
@@ -718,6 +775,7 @@ class _MainShell extends StatelessWidget {
         showPast: showPastExams,
         onTabChanged: onExamTabChanged,
         unreadDifference: unreadDifference,
+        hasActiveExamPeriod: hasActiveExamPeriod,
         onOpenDifferences: onOpenDifferences,
       ),
       _AppPage.account => _AccountScreen(
@@ -796,6 +854,7 @@ class _MainShell extends StatelessWidget {
               bottom: 78,
               child: _ControlPanel(
                 page: page,
+                hasActiveExamPeriod: hasActiveExamPeriod,
                 onOpenPage: onOpenPage,
                 onSync: onSync,
               ),
@@ -838,6 +897,7 @@ class _TimetableScreen extends StatefulWidget {
     required this.selectedDate,
     required this.onDateChanged,
     required this.unreadDifference,
+    required this.hasActiveExamPeriod,
     required this.onOpenDifferences,
   });
 
@@ -845,6 +905,7 @@ class _TimetableScreen extends StatefulWidget {
   final DateTime selectedDate;
   final ValueChanged<DateTime> onDateChanged;
   final bool unreadDifference;
+  final bool hasActiveExamPeriod;
   final VoidCallback onOpenDifferences;
 
   @override
@@ -936,6 +997,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
               title: 'Lịch học',
               badge: null,
               unreadDifference: widget.unreadDifference,
+              hasActiveExamPeriod: widget.hasActiveExamPeriod,
               onNotificationTap: widget.onOpenDifferences,
               onCalendarTap: () => _weekly
                   ? _pickWeek()
@@ -1054,6 +1116,7 @@ class _ExamScreen extends StatelessWidget {
     required this.showPast,
     required this.onTabChanged,
     required this.unreadDifference,
+    required this.hasActiveExamPeriod,
     required this.onOpenDifferences,
   });
 
@@ -1061,6 +1124,7 @@ class _ExamScreen extends StatelessWidget {
   final bool showPast;
   final ValueChanged<bool> onTabChanged;
   final bool unreadDifference;
+  final bool hasActiveExamPeriod;
   final VoidCallback onOpenDifferences;
 
   @override
@@ -1083,6 +1147,7 @@ class _ExamScreen extends StatelessWidget {
             title: 'Lịch thi',
             badge: null,
             unreadDifference: unreadDifference,
+            hasActiveExamPeriod: hasActiveExamPeriod,
             onNotificationTap: onOpenDifferences,
           ),
           const SizedBox(height: 20),
@@ -1217,6 +1282,7 @@ class _TopTitle extends StatelessWidget {
     this.onCalendarTap,
     this.onNotificationTap,
     this.unreadDifference = false,
+    this.hasActiveExamPeriod = false,
   });
 
   final String title;
@@ -1224,6 +1290,7 @@ class _TopTitle extends StatelessWidget {
   final VoidCallback? onCalendarTap;
   final VoidCallback? onNotificationTap;
   final bool unreadDifference;
+  final bool hasActiveExamPeriod;
 
   @override
   Widget build(BuildContext context) {
@@ -1289,7 +1356,9 @@ class _TopTitle extends StatelessWidget {
           children: <Widget>[
             if (onNotificationTap != null)
               IconButton(
-                tooltip: 'Thông báo thay đổi lịch',
+                tooltip: hasActiveExamPeriod
+                    ? 'Đang trong kỳ thi'
+                    : 'Thông báo thay đổi lịch',
                 onPressed: onNotificationTap,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
@@ -1300,13 +1369,12 @@ class _TopTitle extends StatelessWidget {
                       Icons.notifications_none_rounded,
                       color: palette.primary,
                     ),
-                    if (unreadDifference)
-                      const Positioned(
-                        right: 0,
-                        top: 0,
-                        child: CircleAvatar(
-                          radius: 4.5,
-                          backgroundColor: Color(0xFFE53945),
+                    if (unreadDifference || hasActiveExamPeriod)
+                      Positioned(
+                        right: -2,
+                        bottom: -2,
+                        child: _ExamAlertDot(
+                          background: palette.surface,
                         ),
                       ),
                   ],
@@ -1598,6 +1666,7 @@ class _ExamCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
+    final countdown = ExamPeriod.countdown(item, DateTime.now());
     return AppThemePanel(
       padding: const EdgeInsets.all(12),
       child: Row(
@@ -1648,6 +1717,13 @@ class _ExamCard extends StatelessWidget {
                     style: TextStyle(color: palette.accent, fontSize: 11),
                   ),
                 ],
+                if (countdown != null) ...<Widget>[
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: _ExamCountdownTag(countdown: countdown),
+                  ),
+                ],
                 const SizedBox(height: 7),
                 _MetaLine(
                   icon: Icons.access_time_rounded,
@@ -1661,6 +1737,101 @@ class _ExamCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ExamCountdownTag extends StatelessWidget {
+  const new({required this.countdown});
+
+  final ExamCountdown countdown;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = appThemePalette;
+    final (dark, light) = switch (countdown.band) {
+      ExamCountdownBand.green => (
+          const Color(0xFF155724),
+          const Color(0xFF9CE5A8),
+        ),
+      ExamCountdownBand.blue => (
+          const Color(0xFF0B4A91),
+          const Color(0xFF9AD1FF),
+        ),
+      ExamCountdownBand.orange => (
+          const Color(0xFF8D4100),
+          const Color(0xFFFFC078),
+        ),
+      ExamCountdownBand.red => (
+          const Color(0xFFAA1730),
+          const Color(0xFFFFA3A9),
+        ),
+    };
+    final background = Color.alphaBlend(
+      (palette.card.computeLuminance() > .4 ? dark : light)
+          .withValues(alpha: .13),
+      palette.card,
+    );
+    final foreground = _contrastRatio(dark, background) >=
+            _contrastRatio(light, background)
+        ? dark
+        : light;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        border: Border.all(color: foreground.withValues(alpha: .65)),
+        borderRadius: BorderRadius.circular(
+          palette.geometry == AppThemeGeometry.rounded ? 999 : 0,
+        ),
+      ),
+      child: Text(
+        countdown.label,
+        maxLines: 1,
+        softWrap: false,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: foreground,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+double _contrastRatio(Color a, Color b) {
+  final light = a.computeLuminance() > b.computeLuminance()
+      ? a.computeLuminance()
+      : b.computeLuminance();
+  final dark = a.computeLuminance() < b.computeLuminance()
+      ? a.computeLuminance()
+      : b.computeLuminance();
+  return (light + .05) / (dark + .05);
+}
+
+class _ExamAlertDot extends StatelessWidget {
+  const new({required this.background});
+
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = background.computeLuminance() > .4
+        ? const Color(0xFFB51C41)
+        : const Color(0xFFFF7490);
+    return Semantics(
+      label: 'Đang trong kỳ thi',
+      child: Container(
+        key: const ValueKey<String>('exam-period-dot'),
+        width: 12,
+        height: 12,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(color: background, width: 2),
+        ),
       ),
     );
   }
@@ -1942,11 +2113,13 @@ class _WidgetLolClipper extends CustomClipper<Path> {
 class _ControlPanel extends StatelessWidget {
   const new({
     required this.page,
+    required this.hasActiveExamPeriod,
     required this.onOpenPage,
     required this.onSync,
   });
 
   final _AppPage page;
+  final bool hasActiveExamPeriod;
   final ValueChanged<_AppPage> onOpenPage;
   final VoidCallback onSync;
 
@@ -1989,6 +2162,7 @@ class _ControlPanel extends StatelessWidget {
                   icon: Icons.assignment_rounded,
                   color: _panelSecondaryColor(palette),
                   selected: page == _AppPage.exam,
+                  showAlertDot: hasActiveExamPeriod,
                   onTap: () => onOpenPage(_AppPage.exam),
                 ),
               ),
@@ -2090,6 +2264,7 @@ class _PanelAction extends StatelessWidget {
     required this.icon,
     required this.color,
     required this.selected,
+    this.showAlertDot = false,
     required this.onTap,
   });
 
@@ -2097,6 +2272,7 @@ class _PanelAction extends StatelessWidget {
   final IconData icon;
   final Color color;
   final bool selected;
+  final bool showAlertDot;
   final VoidCallback onTap;
 
   @override
@@ -2123,13 +2299,28 @@ class _PanelAction extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: color,
-                  child: Icon(
-                    icon,
-                    color: _contrastForeground(color),
-                    size: 20,
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: <Widget>[
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: color,
+                        child: Icon(
+                          icon,
+                          color: _contrastForeground(color),
+                          size: 20,
+                        ),
+                      ),
+                      if (showAlertDot)
+                        Positioned(
+                          right: -3,
+                          bottom: -3,
+                          child: _ExamAlertDot(background: palette.surface),
+                        ),
+                    ],
                   ),
                 ),
               ],
