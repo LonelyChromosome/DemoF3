@@ -145,7 +145,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-        title: Text(AssistantText.titleOf(AssistantEvent.syncStale, _assistantPack)),
+          title: Text(
+            AssistantText.titleOf(AssistantEvent.syncStale, _assistantPack),
+          ),
           content: Text(
             AssistantText.of(AssistantEvent.syncStale, _assistantPack),
           ),
@@ -415,9 +417,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         if (mounted) {
           setState(() {
             _data = imported.schedule;
+            _lastSuccessfulSync = imported.schedule.syncedAt;
             _selectedDate = _initialDateFor(imported.schedule);
             _page = _AppPage.timetable;
           });
+          _syncStaleTimer?.cancel();
           _scheduleExamClock();
           if (difference != null) {
             await _refreshDifference();
@@ -1314,80 +1318,89 @@ class _AccountScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-          const _TopTitle(title: 'Tài khoản', badge: null),
-          const SizedBox(height: 26),
-          Row(
-            children: <Widget>[
-              CircleAvatar(
-                radius: 38,
-                backgroundColor: palette.primary,
-                child: Icon(
-                  Icons.person_rounded,
-                  color: palette.id == AppThemeId.lol
-                      ? const Color(0xFF06171D)
-                      : Colors.white,
-                  size: 48,
-                ),
-              ),
-              const SizedBox(width: 18),
-              Expanded(
-                child: Text(
-                  data.displayName.isEmpty
-                      ? 'Người dùng QLĐT'
-                      : data.displayName,
-                  style: TextStyle(
-                    color: palette.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: themeLetterSpacing(palette),
+                  const _TopTitle(title: 'Tài khoản', badge: null),
+                  const SizedBox(height: 26),
+                  Row(
+                    children: <Widget>[
+                      CircleAvatar(
+                        radius: 38,
+                        backgroundColor: palette.primary,
+                        child: Icon(
+                          Icons.person_rounded,
+                          color: palette.id == AppThemeId.lol
+                              ? const Color(0xFF06171D)
+                              : Colors.white,
+                          size: 48,
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      Expanded(
+                        child: Text(
+                          data.displayName.isEmpty
+                              ? 'Người dùng QLĐT'
+                              : data.displayName,
+                          style: TextStyle(
+                            color: palette.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: themeLetterSpacing(palette),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _InfoPanel(data: data),
-          const SizedBox(height: 12),
-          const AppThemeSettingButton(),
-          const SizedBox(height: 12),
-          PopupMenuButton<AssistantPack>(
-            tooltip: 'Chọn Trợ lí',
-            onSelected: onAssistantPackChanged,
-            itemBuilder: (context) => AssistantPack.values
-                .map(
-                  (pack) => PopupMenuItem(
-                    value: pack,
-                    child: Text(pack.label, overflow: TextOverflow.ellipsis),
-                  ),
-                )
-                .toList(),
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 44),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                border: Border.all(color: palette.primary),
-                borderRadius: BorderRadius.circular(
-                  palette.geometry == AppThemeGeometry.rounded ? 12 : 0,
-                ),
-              ),
-              child: Row(
-                children: <Widget>[
-                  Icon(Icons.assistant_outlined, color: palette.primary),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Trợ lí: ${assistantPack.label}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 24),
+                  _InfoPanel(data: data),
+                  const SizedBox(height: 12),
+                  const AppThemeSettingButton(),
+                  const SizedBox(height: 12),
+                  PopupMenuButton<AssistantPack>(
+                    tooltip: 'Chọn Trợ lí',
+                    onSelected: onAssistantPackChanged,
+                    itemBuilder: (context) => AssistantPack.values
+                        .map(
+                          (pack) => PopupMenuItem(
+                            value: pack,
+                            child: Text(
+                              pack.label,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 44),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: palette.primary),
+                        borderRadius: BorderRadius.circular(
+                          palette.geometry == AppThemeGeometry.rounded ? 12 : 0,
+                        ),
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            Icons.assistant_outlined,
+                            color: palette.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Trợ lí: ${assistantPack.label}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.arrow_drop_down),
+                        ],
+                      ),
                     ),
                   ),
-                  const Icon(Icons.arrow_drop_down),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (next != null) _WidgetPreview(item: next),
+                  const SizedBox(height: 12),
+                  if (next != null) _WidgetPreview(item: next),
                 ],
               ),
             ),

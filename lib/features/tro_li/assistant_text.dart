@@ -1,14 +1,14 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum AssistantPack {
-  normal._('Bình thường'),
-  serious._('Nghiêm túc'),
-  playful._('Nhí nhảnh'),
-  affectionate._('Tình cảm'),
-  flirtatious._('Lẳng lơ'),
-  academic._('Học thuật');
+  normal('Bình thường'),
+  serious('Nghiêm túc'),
+  playful('Nhí nhảnh'),
+  affectionate('Tình cảm'),
+  flirtatious('Lẳng lơ'),
+  academic('Học thuật');
 
-  AssistantPack._(this.label);
+  new(this.label);
   final String label;
 }
 

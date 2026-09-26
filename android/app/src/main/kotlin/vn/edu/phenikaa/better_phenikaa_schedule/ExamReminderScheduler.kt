@@ -37,7 +37,8 @@ internal object ExamReminderScheduler {
             // not touch DELIVERED, so the 3-day and tomorrow milestones still fire.
             val due = plan.due
             if (due.isNotEmpty()) {
-                notify(context, due.flatMap { it.subjects }, due.minOf { it.daysBefore })
+                notify(context, due.flatMap { it.subjects }.distinct(),
+                    due.map { it.daysBefore }.toSet())
                 delivered = delivered + due.flatMap { it.milestoneKeys }
                 prefs.edit().putStringSet(DELIVERED, delivered).commit()
                 plan = ExamReminderPlanner.plan(
@@ -78,7 +79,7 @@ internal object ExamReminderScheduler {
         Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
             context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
-    private fun notify(context: Context, subjects: List<String>, days: Int) {
+    private fun notify(context: Context, subjects: List<String>, days: Set<Int>) {
         val notifications = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notifications.createNotificationChannel(NotificationChannel(
@@ -89,12 +90,16 @@ internal object ExamReminderScheduler {
             PendingIntent.getActivity(context, 2819, it,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
-        val event = if (days == 1) AssistantEvent.exam_tomorrow else AssistantEvent.exam_in_days
+        val event = when {
+            days.size > 1 -> AssistantEvent.exam_countdown_multiple
+            days.single() == 1 -> AssistantEvent.exam_tomorrow
+            else -> AssistantEvent.exam_in_days
+        }
         val notification = NotificationCompat.Builder(context, "exam_reminders")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(AssistantText.titleOf(event, AssistantText.selected(context)))
             .setContentText(AssistantText.of(event, AssistantText.selected(context),
-                days = days, examCount = subjects.size))
+                days = days.minOrNull() ?: 0, examCount = subjects.size))
             .setAutoCancel(true)
             .setContentIntent(pending)
             .build()

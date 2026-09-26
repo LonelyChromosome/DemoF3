@@ -8,7 +8,7 @@ internal enum class AssistantPack {
 
 internal enum class AssistantEvent {
     sync_stale, study_changed, exam_changed, study_and_exam_changed,
-    exam_in_days, exam_tomorrow, exam_period_active,
+    exam_in_days, exam_tomorrow, exam_countdown_multiple, exam_period_active,
     exam_notice,
 }
 
@@ -34,6 +34,7 @@ internal object AssistantText {
             AssistantEvent.exam_tomorrow ->
                 if (examCount > 1) "Ngày mai bạn có $examCount môn thi."
                 else "Ngày mai bạn có một môn thi."
+            AssistantEvent.exam_countdown_multiple -> "Bạn có $examCount môn thi sắp tới."
             AssistantEvent.exam_period_active ->
                 "Bạn đang trong kỳ thi. Hãy vào Lịch thi để kiểm tra."
             AssistantEvent.exam_notice ->
@@ -46,7 +47,8 @@ internal object AssistantText {
         AssistantEvent.study_changed, AssistantEvent.exam_changed,
         AssistantEvent.study_and_exam_changed, AssistantEvent.exam_notice ->
             "Lịch học kỳ thay đổi"
-        AssistantEvent.exam_in_days, AssistantEvent.exam_tomorrow -> "Nhắc lịch thi"
+        AssistantEvent.exam_in_days, AssistantEvent.exam_tomorrow,
+        AssistantEvent.exam_countdown_multiple -> "Nhắc lịch thi"
         AssistantEvent.exam_period_active -> "Lịch thi"
     }
 }

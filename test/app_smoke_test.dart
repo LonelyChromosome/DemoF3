@@ -188,10 +188,10 @@ void main() {
       expect(find.byTooltip('Đã lâu chưa đồng bộ'), findsNothing);
       await tester.tap(find.byIcon(Icons.grid_view_rounded));
       await tester.pumpAndSettle();
-    await tester.tap(find.text('Tài khoản').first);
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byTooltip('Chọn Trợ lí'));
-    await tester.tap(find.byTooltip('Chọn Trợ lí'));
+      await tester.tap(find.text('Tài khoản').first);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byTooltip('Chọn Trợ lí'));
+      await tester.tap(find.byTooltip('Chọn Trợ lí'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Học thuật').last);
       await tester.pumpAndSettle();
