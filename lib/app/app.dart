@@ -281,7 +281,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     } on Object catch (error) {
       _errorMessage = 'Không đọc được dữ liệu cục bộ: $error';
     }
-    await _refreshSyncStatus();
+    if (_data != null) await _refreshSyncStatus();
     await Future<void>.delayed(const Duration(milliseconds: 650));
     if (mounted) {
       setState(() => _booting = false);

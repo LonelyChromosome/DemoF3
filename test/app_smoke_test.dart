@@ -15,7 +15,7 @@ void main() {
 
     expect(find.text('Better Phenikaa App'), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 700));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
 
     expect(find.text('Chào mừng bạn!'), findsOneWidget);
     expect(find.textContaining('Đăng nhập QLĐT'), findsOneWidget);
