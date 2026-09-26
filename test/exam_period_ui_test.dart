@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:better_phenikaa_schedule/app/app.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_source.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_choice.dart';
@@ -31,6 +34,7 @@ void main() {
   Future<void> showApp(
     WidgetTester tester,
     List<ScheduleRecord> records,
+    {bool unreadDifference = false}
   ) async {
     final snapshot = ImportedScheduleData(
       displayName: 'Sinh viên',
@@ -39,6 +43,16 @@ void main() {
     );
     SharedPreferences.setMockInitialValues(<String, Object>{
       'better_phenikaa_snapshot_v1': snapshot.encode(),
+      if (unreadDifference)
+        SemesterDifferenceStore.storageKey: jsonEncode(
+          const SemesterDifference(
+            initial: false,
+            addedSubjects: <String>['Môn thi'],
+            removedSubjects: <String>[],
+            study: ScheduleDifference(added: 0, removed: 0, modified: 0),
+            exams: ScheduleDifference(added: 1, removed: 0, modified: 0),
+          ).toJson(),
+        ),
     });
     await tester.pumpWidget(const BetterPhenikaaScheduleApp());
     await tester.pump(const Duration(milliseconds: 700));
@@ -91,6 +105,23 @@ void main() {
       <ScheduleRecord>[exam(start, start.add(const Duration(hours: 2)))],
     );
     expect(find.byKey(dot), findsOneWidget);
+  });
+
+  testWidgets('reading a schedule change does not clear the exam period', (
+    tester,
+  ) async {
+    final start = DateTime.now().add(const Duration(days: 2));
+    await showApp(
+      tester,
+      <ScheduleRecord>[exam(start, start.add(const Duration(hours: 2)))],
+      unreadDifference: true,
+    );
+    await tester.tap(find.byIcon(Icons.notifications_none_rounded));
+    await tester.pump();
+    expect(find.text('Xem thay đổi'), findsOneWidget);
+    await tester.tap(find.text('Xem thay đổi'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('exam-period-dot')), findsOneWidget);
   });
 
   for (final theme in <AppThemeId>[
