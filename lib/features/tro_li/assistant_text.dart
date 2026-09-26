@@ -8,7 +8,7 @@ enum AssistantPack {
   flirtatious('Lẳng lơ'),
   academic('Học thuật');
 
-  AssistantPack(this.label);
+  (this.label);
   final String label;
 }
 

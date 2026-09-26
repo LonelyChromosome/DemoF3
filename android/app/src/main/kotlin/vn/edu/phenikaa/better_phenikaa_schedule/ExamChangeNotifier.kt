@@ -33,33 +33,35 @@ internal object ExamChangeNotifier {
             AssistantEvent.exam_notice, pack, examCount = count) else null
     }
 
-    fun record(context: Context, semesterJson: String, differenceJson: String,
-               notifySystem: Boolean = false) {
+    fun eventFor(differenceJson: String): AssistantEvent? {
         val difference = JSONObject(differenceJson)
-        if (difference.optBoolean("initial")) {
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-                .remove(SYSTEM_MESSAGE).remove(NOTIFIED).apply()
-            return
-        }
+        if (difference.optBoolean("initial")) return null
         fun changed(key: String): Boolean {
             val rows = difference.getJSONObject(key)
             return rows.optInt("added") + rows.optInt("removed") + rows.optInt("modified") > 0
         }
         val study = changed("study")
         val exam = changed("exams")
-        if (!study && !exam) {
+        return when {
+            study && exam -> AssistantEvent.study_and_exam_changed
+            study -> AssistantEvent.study_changed
+            exam -> AssistantEvent.exam_changed
+            else -> null
+        }
+    }
+
+    fun record(context: Context, semesterJson: String, differenceJson: String,
+               notifySystem: Boolean = false) {
+        val event = eventFor(differenceJson)
+        if (event == null) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
                 .remove(SYSTEM_MESSAGE).remove(NOTIFIED).apply()
             return
         }
-        val event = when {
-            study && exam -> AssistantEvent.study_and_exam_changed
-            study -> AssistantEvent.study_changed
-            else -> AssistantEvent.exam_changed
-        }
         val summary = AssistantText.of(event, AssistantText.selected(context))
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val edit = prefs.edit().putBoolean(INITIALIZED, true)
+        val exam = event != AssistantEvent.study_changed
         if (exam) edit.putString(MESSAGE,
             messageFor(semesterJson, differenceJson, AssistantText.selected(context)))
         if (notifySystem) edit.putString(SYSTEM_MESSAGE, summary).putBoolean(NOTIFIED, false)

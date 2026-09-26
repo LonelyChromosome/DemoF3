@@ -21,4 +21,15 @@ class ExamChangeNotifierTest {
             ExamChangeNotifier.messageFor(semester,
                 """{"initial":false,"exams":{"added":0,"modified":0,"removed":1}}"""))
     }
+
+    @Test fun sourceChangesClassifyStudyExamBothOrNone() {
+        fun diff(study: Int, exam: Int) =
+            """{"initial":false,"study":{"added":$study},"exams":{"removed":$exam}}"""
+        assertEquals(AssistantEvent.study_changed, ExamChangeNotifier.eventFor(diff(1, 0)))
+        assertEquals(AssistantEvent.exam_changed, ExamChangeNotifier.eventFor(diff(0, 1)))
+        assertEquals(AssistantEvent.study_and_exam_changed,
+            ExamChangeNotifier.eventFor(diff(1, 1)))
+        assertNull(ExamChangeNotifier.eventFor(diff(0, 0)))
+        assertNull(ExamChangeNotifier.eventFor("""{"initial":true}"""))
+    }
 }
