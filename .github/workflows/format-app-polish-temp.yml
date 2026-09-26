@@ -1,0 +1,34 @@
+name: Format app polish (temporary)
+
+on:
+  push:
+    branches:
+      - feature/big-update
+    paths:
+      - '.github/workflows/format-app-polish-temp.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: dart format lib/app/app.dart lib/features/lich_hoc/week_timetable.dart lib/features/dang_nhap_qldt/exam_period.dart test/app_smoke_test.dart test/exam_period_test.dart test/exam_period_ui_test.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatted-app-polish
+          path: |
+            lib/app/app.dart
+            lib/features/lich_hoc/week_timetable.dart
+            lib/features/dang_nhap_qldt/exam_period.dart
+            test/app_smoke_test.dart
+            test/exam_period_test.dart
+            test/exam_period_ui_test.dart
+          retention-days: 1
