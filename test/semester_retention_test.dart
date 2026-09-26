@@ -15,7 +15,9 @@ void main() {
     expect(retained.expiresOn, DateTime(2026, 12, 24));
     expect(retained.activeAt(DateTime(2026, 12, 24, 23, 59)), isTrue);
     expect(retained.activeAt(DateTime(2026, 12, 25)), isFalse);
-    expect(RetainedSemester.decode(retained.encode()).semester.semesterId,
-        '2026_2027_1');
+    expect(
+      RetainedSemester.decode(retained.encode()).semester.semesterId,
+      '2026_2027_1',
+    );
   });
 }

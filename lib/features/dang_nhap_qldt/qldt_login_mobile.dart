@@ -5,8 +5,8 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_resu
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_range.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/tracuu_api.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/verification_diagnostics.dart';
 import 'package:flutter/material.dart';
@@ -807,9 +807,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           schedule: semester.toImportedScheduleData(),
           semester: semester,
           registrationRoute: const TracuuApi().routeForVerifiedResult(raw),
-          termStartedAt: SemesterScheduleRange.fromRegistration(
-            registration,
-          )?.start,
+          termStartedAt: SemesterScheduleRange.fromRegistration(registration)
+              ?.start,
         ),
       );
     } on Object catch (error) {

@@ -8,20 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 final class RetainedSemester {
   const new(this.semester, this.startedAt);
 
-  final CurrentSemester semester;
-  final DateTime startedAt;
-
-  DateTime get expiresOn => semesterExpiry(startedAt);
-
-  bool activeAt(DateTime now) =>
-      now.isBefore(DateTime(expiresOn.year, expiresOn.month, expiresOn.day + 1));
-
-  String encode() => jsonEncode(<String, Object?>{
-    'startedAt': startedAt.toIso8601String(),
-    'semester': semester.toJson(),
-  });
-
-  static RetainedSemester decode(String raw) {
+  factory RetainedSemester.decode(String raw) {
     final json = jsonDecode(raw) as Map<String, dynamic>;
     return RetainedSemester(
       CurrentSemester.fromJson(
@@ -30,6 +17,20 @@ final class RetainedSemester {
       DateTime.parse(json['startedAt'] as String),
     );
   }
+
+  final CurrentSemester semester;
+  final DateTime startedAt;
+
+  DateTime get expiresOn => semesterExpiry(startedAt);
+
+  bool activeAt(DateTime now) => now.isBefore(
+    DateTime(expiresOn.year, expiresOn.month, expiresOn.day + 1),
+  );
+
+  String encode() => jsonEncode(<String, Object?>{
+    'startedAt': startedAt.toIso8601String(),
+    'semester': semester.toJson(),
+  });
 }
 
 abstract final class SemesterRetention {
@@ -63,16 +64,15 @@ abstract final class SemesterRetention {
     final records = <ScheduleRecord>[...old.records, ...data.records]
       ..sort((a, b) => a.startAt.compareTo(b.startAt));
     return ImportedScheduleData(
-      displayName: data.displayName.isEmpty ? old.displayName : data.displayName,
+      displayName: data.displayName.isEmpty
+          ? old.displayName
+          : data.displayName,
       records: records,
       syncedAt: data.syncedAt,
     );
   }
 
-  static RetainedSemester? readPrevious(
-    SharedPreferences prefs,
-    DateTime now,
-  ) {
+  static RetainedSemester? readPrevious(SharedPreferences prefs, DateTime now) {
     final raw = prefs.getString(previousKey);
     if (raw == null) return null;
     try {
