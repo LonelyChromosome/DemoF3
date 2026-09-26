@@ -1898,6 +1898,19 @@ class _AccountScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final report = await QldtSyncDiagnostics.exportReport();
+                      await Clipboard.setData(ClipboardData(text: report));
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Đã sao chép bản đo QLĐT.')),
+                      );
+                    },
+                    icon: const Icon(Icons.timer_outlined),
+                    label: const Text('Sao chép bản đo QLĐT'),
+                  ),
+                  const SizedBox(height: 12),
                   if (next != null)
                     GestureDetector(
                       onTap: () =>

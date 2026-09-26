@@ -49,9 +49,20 @@ final class TracuuApi {
       const call = (action, func, data, next) => {
         const payload = Object.assign({action, func, iM: system.iM,
           strQLSV_NguoiHoc_Id: system.userId}, data);
+        const request = func === 'pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan'
+          ? 'semesters' : func === 'pkg_dangkyhoc_thongtin.LayDSKeHoachDangKyCaNhan'
+          ? 'plans' : 'subjects';
+        const now = () => typeof performance !== 'undefined' && performance.now
+          ? performance.now() : Date.now();
+        const started = now();
+        const metric = outcome => {
+          try { bridge.callHandler('betterPhenikaaRequestMetric', attempt,
+            request, Math.round(now() - started), outcome); } catch (_) {}
+        };
         try {
           system.makeRequest({
             success: response => {
+              metric(response && response.Success === true ? 'success' : 'error');
               if (done) return;
               if (func === 'pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan') {
                 stage('semesterResponse');
@@ -62,10 +73,10 @@ final class TracuuApi {
               }
               try { next(response); } catch (_) { fail('INVALID_RESPONSE'); }
             },
-            error: () => fail('NETWORK_ERROR'),
+            error: () => { metric('error'); fail('NETWORK_ERROR'); },
             type: 'POST', action, contentType: true, data: payload, fakedb: []
           }, false, false, false, null);
-        } catch (_) { fail('REQUEST_ERROR'); }
+        } catch (_) { metric('exception'); fail('REQUEST_ERROR'); }
       };
       stage('semesterRequest');
       call('DKH_ThongTin_MH/DSA4FSkuKAYoIC8FIC8mCjgCIA8pIC8P',

@@ -18,6 +18,50 @@ final class QldtSyncDiagnostics {
 
   static const storageKey = 'qldt_sync_diagnostics';
 
+  /// A timing-only report. Never exports WebView responses, URLs or credentials.
+  static Future<String> exportReport() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(storageKey);
+    final decoded = raw == null ? null : jsonDecode(raw);
+    final records = decoded is List ? decoded : const <dynamic>[];
+    final safe = records.take(200).whereType<Map>().map((record) {
+      final phase = record['phase']?.toString() ?? '';
+      final code = record['code']?.toString() ?? '';
+      final request = record['request']?.toString() ?? '';
+      final outcome = record['outcome']?.toString() ?? '';
+      final start = DateTime.tryParse(record['startedAt']?.toString() ?? '');
+      final end = DateTime.tryParse(record['endedAt']?.toString() ?? '');
+      return <String, Object?>{
+        'phase': QldtSyncPhase.values.any((value) => value.name == phase)
+            ? phase
+            : 'unknown',
+        if (RegExp(r'^[A-Z_0-9]{1,60}$').hasMatch(code)) 'code': code,
+        if (start != null) 'startedAt': start.toUtc().toIso8601String(),
+        if (start != null && end != null)
+          'durationMs': end.difference(start).inMilliseconds.clamp(0, 300000),
+        if (const <String>{
+          'semesters',
+          'plans',
+          'subjects',
+          'schedule',
+        }.contains(request))
+          'request': request,
+        if (const <String>{'success', 'error', 'exception'}.contains(outcome))
+          'outcome': outcome,
+        if (int.tryParse(record['elapsedMs']?.toString() ?? '') != null)
+          'elapsedMs': int.parse(record['elapsedMs'].toString()).clamp(
+            0,
+            300000,
+          ),
+      };
+    }).toList();
+    return jsonEncode(<String, Object?>{
+      'version': 1,
+      'kind': 'qldt_timing',
+      'events': safe,
+    });
+  }
+
   static String sanitizePlanSnapshot(String raw) {
     final source = jsonDecode(raw);
     if (source is! Map ||
@@ -160,6 +204,29 @@ final class QldtSyncDiagnostics {
       'startedAt': now,
       'endedAt': now,
       'code': code,
+    });
+    _persist();
+  }
+
+  void markRequest(String request, int elapsedMs, String outcome) {
+    if (!const <String>{
+          'semesters',
+          'plans',
+          'subjects',
+          'schedule',
+        }.contains(request) ||
+        !const <String>{'success', 'error', 'exception'}.contains(outcome)) {
+      return;
+    }
+    final now = _clock().toUtc().toIso8601String();
+    _events.add(<String, String>{
+      'phase': _active?['phase'] ?? QldtSyncPhase.schedule.name,
+      'startedAt': now,
+      'endedAt': now,
+      'code': 'REQUEST',
+      'request': request,
+      'outcome': outcome,
+      'elapsedMs': elapsedMs.clamp(0, 300000).toString(),
     });
     _persist();
   }

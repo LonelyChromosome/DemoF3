@@ -78,6 +78,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   String? _pendingRegistrationRaw;
   String? _failureDiagnosticsJson;
   final List<String> _scheduleStages = <String>[];
+  Stopwatch? _scheduleRequestWatch;
   int _syncEpoch = 0;
   bool _pageReady = false;
   bool _syncing = false;
@@ -206,6 +207,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                               ),
                               onWebViewCreated: _onWebViewCreated,
                               onLoadStart: (_, _) {
+                                _diagnostics.mark('PAGE_LOAD_START');
                                 _readinessTimer?.cancel();
                                 if (mounted) {
                                   setState(() {
@@ -221,6 +223,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                                 }
                               },
                               onLoadStop: (controller, url) {
+                                _diagnostics.mark('PAGE_LOAD_STOP');
                                 unawaited(
                                   _handleLoginPage(controller, url?.toString()),
                                 );
@@ -336,8 +339,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () async {
+                        final timing = await QldtSyncDiagnostics.exportReport();
                         await Clipboard.setData(
-                          ClipboardData(text: _failureDiagnosticsJson!),
+                          ClipboardData(text: jsonEncode(<String, Object?>{
+                            'timing': jsonDecode(timing),
+                            'failure': jsonDecode(_failureDiagnosticsJson!),
+                          })),
                         );
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -579,6 +586,23 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       });
     }
     controller.addJavaScriptHandler(
+      handlerName: 'betterPhenikaaRequestMetric',
+      callback: (arguments) {
+        if (!mounted ||
+            !_syncing ||
+            arguments.length < 4 ||
+            arguments.first?.toString() != '$_syncEpoch') {
+          return null;
+        }
+        _diagnostics.markRequest(
+          arguments[1]?.toString() ?? '',
+          (arguments[2] as num?)?.toInt() ?? 0,
+          arguments[3]?.toString() ?? '',
+        );
+        return null;
+      },
+    );
+    controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaScheduleStage',
       callback: (arguments) {
         if (mounted &&
@@ -593,6 +617,21 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             'exception',
           }.contains(stage)) {
             _scheduleStages.add(stage!);
+            if (stage == 'request') {
+              _scheduleRequestWatch = Stopwatch()..start();
+            } else if (_scheduleRequestWatch != null) {
+              _scheduleRequestWatch!.stop();
+              _diagnostics.markRequest(
+                'schedule',
+                _scheduleRequestWatch!.elapsedMilliseconds,
+                switch (stage) {
+                  'success' => 'success',
+                  'error' => 'error',
+                  _ => 'exception',
+                },
+              );
+              _scheduleRequestWatch = null;
+            }
           }
         }
         return null;
@@ -992,6 +1031,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _pendingRegistrationRaw = null;
     _failureDiagnosticsJson = null;
     _scheduleStages.clear();
+    _scheduleRequestWatch = null;
     try {
       final dispatch = await controller.evaluateJavascript(
         source: const TracuuApi().scriptForAttempt(epoch),

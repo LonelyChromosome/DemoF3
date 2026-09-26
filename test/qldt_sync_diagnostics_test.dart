@@ -35,6 +35,24 @@ void main() {
     );
   });
 
+  test('exports per-request timings without response data', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    var now = DateTime.utc(2026, 9, 26, 1);
+    final trail = QldtSyncDiagnostics(clock: () => now);
+    trail.start(QldtSyncPhase.semesterPlan);
+    trail.markRequest('semesters', 823, 'success');
+    trail.markRequest('password=secret', 9, 'error');
+    now = now.add(const Duration(seconds: 2));
+    trail.finish('OK');
+    await trail.flushed;
+
+    final report = await QldtSyncDiagnostics.exportReport();
+    expect(report, contains('"request":"semesters"'));
+    expect(report, contains('"elapsedMs":823'));
+    expect(report, contains('"durationMs":2000'));
+    expect(report, isNot(contains('password=secret')));
+  });
+
   test(
     'plan export keeps scoped fields and drops personal response values',
     () {
