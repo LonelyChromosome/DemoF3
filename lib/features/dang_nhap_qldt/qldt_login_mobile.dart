@@ -911,7 +911,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         source: '''
           Boolean(
             window.edu && edu.system && edu.system.userId &&
-            edu.system.iM != null && typeof edu.system.makeRequest === 'function'
+            edu.system.iM != null && typeof edu.system.makeRequest === 'function' &&
+            window.flutter_inappwebview &&
+            typeof window.flutter_inappwebview.callHandler === 'function'
           );
         ''',
       );
@@ -975,14 +977,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     final epoch = ++_syncEpoch;
     _currentPhase = null;
     _syncWatchdog?.cancel();
-    _syncWatchdog = Timer(const Duration(seconds: 70), () {
+    _syncWatchdog = Timer(const Duration(seconds: 100), () {
       _stopSync(
         epoch,
-        'Đồng bộ quá 70 giây. Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
+        'Đồng bộ quá 100 giây. Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
         code: 'TOTAL_TIMEOUT',
       );
     });
-    _startPhase(QldtSyncPhase.schedule, const Duration(seconds: 20), epoch);
+    _startPhase(QldtSyncPhase.schedule, const Duration(seconds: 45), epoch);
     setState(() {
       _syncing = true;
       _showWebPage = false;
@@ -1013,14 +1015,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           } catch (_) {}
         }
         try {
+          if (!(window.flutter_inappwebview &&
+                typeof window.flutter_inappwebview.callHandler === 'function')) {
+            return 'bridge_unavailable';
+          }
           if (!(window.edu && edu.system && edu.system.userId &&
                 edu.system.iM != null && typeof edu.system.makeRequest === 'function')) {
-            window.flutter_inappwebview.callHandler(
-              'betterPhenikaaSyncError',
-              $epoch,
-              'Phiên QLĐT chưa sẵn sàng.'
-            );
-            return;
+            return 'portal_unavailable';
           }
 
           var requestData = {
@@ -1075,6 +1076,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             data: requestData,
             fakedb: []
           }, false, false, false, null);
+          return 'request_dispatched';
         } catch (error) {
           scheduleStage('exception');
           window.flutter_inappwebview.callHandler(
@@ -1082,12 +1084,29 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             $epoch,
             'Không thực hiện được yêu cầu lịch QLĐT.'
           );
+          return 'request_exception';
         }
       })();
     ''';
 
     try {
-      await controller.evaluateJavascript(source: script);
+      final dispatch = await controller.evaluateJavascript(source: script);
+      if (!mounted || !_syncing || epoch != _syncEpoch) return;
+      if (dispatch == 'bridge_unavailable' ||
+          dispatch == 'portal_unavailable') {
+        _syncWatchdog?.cancel();
+        _phaseTimer?.cancel();
+        setState(() {
+          _syncing = false;
+          _autoSyncStarted = false;
+          _pageReady = false;
+          _status = 'Đang đợi trang QLĐT sẵn sàng để đồng bộ...';
+        });
+        _beginReadinessChecks();
+      } else if (dispatch == 'request_dispatched' &&
+          !_scheduleStages.contains('request')) {
+        _scheduleStages.add('request');
+      }
     } on Object {
       _stopSync(epoch, 'Không thể yêu cầu lịch QLĐT. Hãy thử lại.');
     }

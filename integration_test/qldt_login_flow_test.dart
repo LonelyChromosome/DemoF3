@@ -107,7 +107,7 @@ void main() {
       await tester.tap(find.text('Mở QLĐT giả lập'));
       await tester.pump();
       await tester.runAsync(
-        () => Future<void>.delayed(const Duration(seconds: 23)),
+        () => Future<void>.delayed(const Duration(seconds: 48)),
       );
       await tester.pump();
       expect(find.textContaining('schedule không phản hồi'), findsOneWidget);
