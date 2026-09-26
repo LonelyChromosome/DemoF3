@@ -14,11 +14,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   setUp(() {
-    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     AppThemeController.instance.resetAfterLogout();
   });
   tearDown(() {
-    debugDefaultTargetPlatformOverride = null;
     AppThemeController.instance.resetAfterLogout();
   });
 
@@ -36,6 +34,7 @@ void main() {
     List<ScheduleRecord> records, {
     bool unreadDifference = false,
   }) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     final snapshot = ImportedScheduleData(
       displayName: 'Sinh viên',
       records: records,
@@ -70,6 +69,7 @@ void main() {
       exam(yesterday.subtract(const Duration(hours: 2)), yesterday),
     ]);
     expect(find.byKey(const ValueKey<String>('exam-period-dot')), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('period badge survives bell, exam page and app restore', (
@@ -100,11 +100,18 @@ void main() {
       exam(start, start.add(const Duration(hours: 2))),
     ]);
     expect(find.byKey(dot), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('reading a schedule change does not clear the exam period', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
     final start = DateTime.now().add(const Duration(days: 2));
     await showApp(tester, <ScheduleRecord>[
       exam(start, start.add(const Duration(hours: 2))),
@@ -118,6 +125,7 @@ void main() {
       find.byKey(const ValueKey<String>('exam-period-dot')),
       findsOneWidget,
     );
+    debugDefaultTargetPlatformOverride = null;
   });
 
   for (final theme in <AppThemeId>[
@@ -148,6 +156,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Còn 10 ngày'), findsOneWidget);
       expect(tester.takeException(), isNull);
+      debugDefaultTargetPlatformOverride = null;
     });
   }
 
@@ -186,5 +195,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Còn 5 ngày'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    debugDefaultTargetPlatformOverride = null;
   });
 }
