@@ -1,0 +1,105 @@
+{
+  "initial": false,
+  "addedSubjects": [],
+  "removedSubjects": [],
+  "study": {
+    "added": 1,
+    "removed": 0,
+    "modified": 1,
+    "details": [
+      {
+        "kind": "modified",
+        "before": {
+          "id": "study-2026-09-28-0730-SMTE6MjAyNl8yMDI3XzFsYcyjzIJwIHRyacyAbmggd2ViIG5hzIJuZyBjYW8",
+          "isExam": false,
+          "subjectName": "Lập trình Web nâng cao",
+          "room": "A099",
+          "startAt": "2026-09-28T07:30:00+07:00",
+          "endAt": "2026-09-28T09:30:00+07:00",
+          "className": "WEB-01",
+          "examForm": "",
+          "periodStart": 1,
+          "periodEnd": 3
+        },
+        "after": {
+          "id": "study-2026-09-28-0730-SMTE6MjAyNl8yMDI3XzFsYcyjzIJwIHRyacyAbmggd2ViIG5hzIJuZyBjYW8",
+          "isExam": false,
+          "subjectName": "Lập trình Web nâng cao",
+          "room": "A101",
+          "startAt": "2026-09-28T07:30:00+07:00",
+          "endAt": "2026-09-28T09:30:00+07:00",
+          "className": "WEB-01",
+          "examForm": "",
+          "periodStart": 1,
+          "periodEnd": 3
+        }
+      },
+      {
+        "kind": "added",
+        "before": null,
+        "after": {
+          "id": "study-2026-09-28-0945-SMTE6MjAyNl8yMDI3XzFjYcyCzIF1IHRydcyBYyBkdcybzIMgbGllzKPMgnUgdmHMgCBnaWHMiWkgdGh1YcyjzIJ0",
+          "isExam": false,
+          "subjectName": "Cấu trúc dữ liệu và giải thuật",
+          "room": "B201",
+          "startAt": "2026-09-28T09:45:00+07:00",
+          "endAt": "2026-09-28T11:45:00+07:00",
+          "className": "CTDL-01",
+          "examForm": "",
+          "periodStart": 4,
+          "periodEnd": 6
+        }
+      }
+    ]
+  },
+  "exams": {
+    "added": 1,
+    "removed": 0,
+    "modified": 1,
+    "details": [
+      {
+        "kind": "modified",
+        "before": {
+          "id": "exam-web-20261002",
+          "isExam": true,
+          "subjectName": "Lập trình Web nâng cao",
+          "room": "P101",
+          "startAt": "2026-10-02T08:00:00+07:00",
+          "endAt": "2026-10-02T10:00:00+07:00",
+          "className": "WEB-01",
+          "examForm": "Tự luận",
+          "periodStart": null,
+          "periodEnd": null
+        },
+        "after": {
+          "id": "exam-web-20261002",
+          "isExam": true,
+          "subjectName": "Lập trình Web nâng cao",
+          "room": "P201",
+          "startAt": "2026-10-02T08:00:00+07:00",
+          "endAt": "2026-10-02T10:00:00+07:00",
+          "className": "WEB-01",
+          "examForm": "Tự luận",
+          "periodStart": null,
+          "periodEnd": null
+        }
+      },
+      {
+        "kind": "added",
+        "before": null,
+        "after": {
+          "id": "exam-ai-20261005",
+          "isExam": true,
+          "subjectName": "Trí tuệ nhân tạo",
+          "room": "P305",
+          "startAt": "2026-10-05T13:00:00+07:00",
+          "endAt": "2026-10-05T15:00:00+07:00",
+          "className": "AI-01",
+          "examForm": "Trắc nghiệm",
+          "periodStart": null,
+          "periodEnd": null
+        }
+      }
+    ]
+  }
+}

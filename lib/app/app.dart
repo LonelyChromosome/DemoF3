@@ -954,7 +954,10 @@ class _MainShell extends StatelessWidget {
                   child: child,
                 );
               },
-              child: KeyedSubtree(key: ValueKey<_AppPage>(page), child: child),
+              child: KeyedSubtree(
+                key: ValueKey<_AppPage>(page),
+                child: ColoredBox(color: palette.surface, child: child),
+              ),
             ),
           ),
           if (errorMessage != null)
@@ -1598,6 +1601,54 @@ class _AccountScreen extends StatelessWidget {
   final VoidCallback onSync;
   final AssistantPack assistantPack;
   final ValueChanged<AssistantPack> onAssistantPackChanged;
+  static const _widgetPinChannel = MethodChannel('better_phenikaa/widget_pin');
+
+  Future<void> _showWidgetOptions(BuildContext context, String type) async {
+    final name = type == 'overview' ? 'Widget 4×2' : 'Widget 1×4';
+    final shouldPin = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(name),
+        content: const Text('Đưa widget này ra màn hình chính?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Đóng'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Đưa ra màn hình'),
+          ),
+        ],
+      ),
+    );
+    if (shouldPin != true || !context.mounted) return;
+    await _requestWidgetPin(context, type);
+  }
+
+  Future<void> _requestWidgetPin(BuildContext context, String type) async {
+    try {
+      final requested = await _widgetPinChannel.invokeMethod<bool>(
+        'requestPin',
+        type,
+      );
+      if (!context.mounted) return;
+      if (requested != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Màn hình chính không hỗ trợ thêm trực tiếp. Hãy nhấn giữ màn hình chính và chọn Widget.',
+            ),
+          ),
+        );
+      }
+    } on PlatformException {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không mở được trình thêm widget.')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1695,7 +1746,20 @@ class _AccountScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  if (next != null) _WidgetPreview(item: next),
+                  if (next != null)
+                    GestureDetector(
+                      onTap: () => unawaited(_showWidgetOptions(context, 'small')),
+                      onLongPress: () =>
+                          unawaited(_requestWidgetPin(context, 'small')),
+                      child: _WidgetPreview(item: next),
+                    ),
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: () => unawaited(_showWidgetOptions(context, 'overview')),
+                    onLongPress: () =>
+                        unawaited(_requestWidgetPin(context, 'overview')),
+                    child: _OverviewWidgetPreview(data: data, date: next?.startAt),
+                  ),
                 ],
               ),
             ),
@@ -2536,6 +2600,189 @@ class _WidgetPreview extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _OverviewWidgetPreview extends StatelessWidget {
+  const new({required this.data, this.date});
+
+  final ImportedScheduleData data;
+  final DateTime? date;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = appThemePalette;
+    final selected = date ?? DateTime.now();
+    final subjects = data.classes
+        .where(
+          (item) => item.startAt.year == selected.year &&
+              item.startAt.month == selected.month &&
+              item.startAt.day == selected.day,
+        )
+        .toList()
+      ..sort((a, b) => a.startAt.compareTo(b.startAt));
+    final visible = subjects.take(4).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'Widget 4×2',
+          style: TextStyle(
+            color: palette.textPrimary,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ClipPath(
+          clipper: palette.geometry == AppThemeGeometry.valorant
+              ? const _WidgetValorantClipper()
+              : palette.geometry == AppThemeGeometry.lol
+              ? const _WidgetLolClipper()
+              : null,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: <Color>[palette.widgetStart, palette.widgetEnd],
+              ),
+              borderRadius: BorderRadius.circular(
+                palette.geometry == AppThemeGeometry.rounded ? 18 : 0,
+              ),
+              border: Border.all(color: palette.border.withValues(alpha: .8)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Icon(Icons.school_outlined, size: 18, color: palette.widgetText),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'Ngày ${selected.day}/${selected.month} · ${subjects.length} môn học',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: palette.widgetText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    for (final icon in <IconData>[
+                      Icons.calendar_month_outlined,
+                      Icons.sync_rounded,
+                      Icons.notifications_none_rounded,
+                    ]) ...<Widget>[
+                      const SizedBox(width: 5),
+                      Icon(icon, size: 15, color: palette.widgetText),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 66,
+                  child: visible.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Không có lịch học',
+                            style: TextStyle(color: palette.widgetText),
+                          ),
+                        )
+                      : Row(
+                          children: <Widget>[
+                            for (var index = 0; index < 4; index++) ...<Widget>[
+                              if (index > 0) const SizedBox(width: 4),
+                              Expanded(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: palette.card.withValues(alpha: .22),
+                                    border: Border.all(
+                                      color: palette.widgetText.withValues(alpha: .3),
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      palette.geometry == AppThemeGeometry.rounded ? 8 : 0,
+                                    ),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(4),
+                                    child: index >= visible.length
+                                        ? const SizedBox.expand()
+                                        : Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Text(
+                                                _time(visible[index].startAt),
+                                                maxLines: 1,
+                                                style: TextStyle(
+                                                  color: palette.widgetText,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Expanded(
+                                                child: Text(
+                                                  visible[index].subjectName,
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: palette.widgetText,
+                                                    fontSize: 9,
+                                                    height: 1.1,
+                                                  ),
+                                                ),
+                                              ),
+                                              Text(
+                                                visible[index].room,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color: palette.widgetSubtext,
+                                                  fontSize: 9,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: <Widget>[
+                    Icon(Icons.chevron_left, size: 15, color: palette.widgetText),
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: <Widget>[
+                          for (var index = 0; index < visible.length; index++)
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: index == 0
+                                    ? palette.primary
+                                    : palette.widgetSubtext,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, size: 15, color: palette.widgetText),
                   ],
                 ),
               ],

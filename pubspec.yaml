@@ -25,6 +25,7 @@ flutter:
 
   assets:
     - assets/demo/current_semester.json
+    - assets/demo/schedule_difference.json
 
   fonts:
     - family: MinecraftCustom

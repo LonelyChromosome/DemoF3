@@ -54,6 +54,28 @@ class MainActivity : FlutterActivity() {
         configureQldtCredentialChannel(flutterEngine)
         configureWidgetSessionChannel(flutterEngine)
         configureLocalFileChannel(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+            WIDGET_PIN_CHANNEL).setMethodCallHandler { call, result ->
+            if (call.method != "requestPin") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val provider = when (call.arguments as? String) {
+                "small" -> ScheduleWidgetProvider::class.java
+                "overview" -> OverviewWidgetProvider::class.java
+                else -> {
+                    result.error("invalid_widget", "Không rõ loại widget.", null)
+                    return@setMethodCallHandler
+                }
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                result.success(false)
+                return@setMethodCallHandler
+            }
+            val manager = AppWidgetManager.getInstance(this)
+            result.success(manager.isRequestPinAppWidgetSupported &&
+                manager.requestPinAppWidget(ComponentName(this, provider), null, null))
+        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             WIDGET_THEME_CHANNEL,
@@ -499,6 +521,7 @@ class MainActivity : FlutterActivity() {
         private const val DAILY_SYNC_CHANNEL = "better_phenikaa/daily_sync"
         private const val QLDT_CREDENTIAL_CHANNEL = "better_phenikaa/qldt_credentials"
         private const val WIDGET_THEME_CHANNEL = "better_phenikaa/widget_theme"
+        private const val WIDGET_PIN_CHANNEL = "better_phenikaa/widget_pin"
         private const val LOCAL_FILE_CHANNEL = "better_phenikaa/local_files"
         private const val FLUTTER_PREFS = "FlutterSharedPreferences"
         private const val THEME_KEY = "flutter.appTheme"

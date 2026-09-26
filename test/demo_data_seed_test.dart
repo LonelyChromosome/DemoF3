@@ -1,5 +1,6 @@
 import 'package:better_phenikaa_schedule/demo/demo_data_seed.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,5 +28,20 @@ void main() {
     final original = preferences.getString(CurrentSemesterStore.storageKey);
     await DemoDataSeed.seedIfEmpty();
     expect(preferences.getString(CurrentSemesterStore.storageKey), original);
+    final difference = await SemesterDifferenceStore().read();
+    expect(difference?.study.hasChanges, isTrue);
+    expect(difference?.exams.hasChanges, isTrue);
+    expect(difference!.study.details, isNotEmpty);
+    expect(difference.exams.details, isNotEmpty);
+  });
+
+  test('existing demo schedule receives missing example difference', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      CurrentSemesterStore.storageKey: 'existing schedule',
+    });
+    await DemoDataSeed.seedIfEmpty();
+    final preferences = await SharedPreferences.getInstance();
+    expect(preferences.getString(CurrentSemesterStore.storageKey), 'existing schedule');
+    expect((await SemesterDifferenceStore().read())?.hasChanges, isTrue);
   });
 }
