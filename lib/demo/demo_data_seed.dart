@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
