@@ -6,7 +6,7 @@ enum AssistantPack {
   serious('Nghiêm túc'),
   playful('Nhí nhảnh'),
   affectionate('Tình cảm'),
-  flirtatious('Lẳng lơ'),
+  flirtatious('Mập mờ'),
   academic('Học thuật'),
   blunt('Mỏ hỗn');
 
