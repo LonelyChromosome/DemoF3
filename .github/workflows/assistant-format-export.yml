@@ -1,0 +1,23 @@
+name: Temporary Assistant formatter export
+on:
+  push:
+    branches: [feature/big-update]
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+      - run: dart format lib/app/app.dart lib/features/tro_li/assistant_text.dart test/assistant_text_test.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assistant-formatted-files
+          path: |
+            lib/app/app.dart
+            lib/features/tro_li/assistant_text.dart
+            test/assistant_text_test.dart
