@@ -24,9 +24,13 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
     private fun hostSize(context: Context, manager: AppWidgetManager, id: Int) =
         WidgetHostSizeResolver.currentSize(context, manager.getAppWidgetOptions(id), 320, 150)
 
+    private fun hostViews(context: Context, manager: AppWidgetManager, id: Int) =
+        RemoteViews(context.packageName,
+            WidgetHostSizeResolver.overviewLayout(context, manager.getAppWidgetOptions(id)))
+
     internal fun stageThemeTransition(context: Context, manager: AppWidgetManager, ids: IntArray) {
         ids.forEach { id ->
-            val frame = RemoteViews(context.packageName, R.layout.overview_widget)
+            val frame = hostViews(context, manager, id)
             frame.setFloat(R.id.overview_root, "setAlpha", 1f)
             manager.partiallyUpdateAppWidget(id, frame)
         }
@@ -55,7 +59,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
         if (state.getInt(transitionKey(id), 0) != generation) return
         val progress = frame.toFloat() / (THEME_FRAME_COUNT - 1)
-        val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        val views = hostViews(context, manager, id)
         views.setFloat(R.id.overview_root, "setAlpha", if (fadeIn) progress else 1f - progress)
         manager.partiallyUpdateAppWidget(id, views)
         if (frame + 1 < THEME_FRAME_COUNT) {
@@ -77,7 +81,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
         if (state.getInt(transitionKey(id), 0) != generation) return
         val progress = frame.toFloat() / (THEME_FRAME_COUNT - 1)
-        val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        val views = hostViews(context, manager, id)
         views.setFloat(R.id.overview_root, "setAlpha", if (fadeIn) progress else 1f - progress)
         manager.partiallyUpdateAppWidget(id, views)
         if (frame + 1 < THEME_FRAME_COUNT) {
@@ -205,7 +209,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
 
     private fun contentFrame(context: Context, manager: AppWidgetManager, id: Int,
                              alpha: Float, offsetDp: Float = 0f, date: Boolean = false) {
-        val frame = RemoteViews(context.packageName, R.layout.overview_widget)
+        val frame = hostViews(context, manager, id)
         if (date) {
             frame.setFloat(R.id.overview_content, "setAlpha", alpha)
         } else {
@@ -285,7 +289,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             result.width.toFloat(), result.height.toFloat())
         canvas.drawBitmap(after, incomingX, 0f, null)
         canvas.restore()
-        val frame = RemoteViews(context.packageName, R.layout.overview_widget)
+        val frame = hostViews(context, manager, id)
         frame.setImageViewBitmap(R.id.overview_dots, result)
         frame.setFloat(R.id.overview_cards, "setAlpha", cardAlpha)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -431,7 +435,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val columns = OverviewPager.columns(width)
         val start = OverviewWindow.clamp(state.getInt(windowKey(id), 0), items.size)
         val (textColor, _) = ScheduleWidgetProvider().overviewColors(context)
-        val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        val views = hostViews(context, manager, id)
         val openApp = PendingIntent.getActivity(context, id,
             Intent(context, MainActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -483,7 +487,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val (textColor, iconColor) = ScheduleWidgetProvider().overviewColors(context)
         val betterDefault = ScheduleWidgetProvider().isBetterDefault(context)
         val bitmapFont = WidgetFont.hasSelectedFont(context)
-        val views = RemoteViews(context.packageName, R.layout.overview_widget)
+        val views = hostViews(context, manager, id)
         // Launchers may reapply RemoteViews to existing children; XML defaults are not a reset.
         listOf(R.id.overview_header_font, R.id.overview_empty_font,
             R.id.overview_status_font, R.id.overview_page_font).forEach {
@@ -514,6 +518,12 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 TypedValue.COMPLEX_UNIT_DIP)
             views.setViewLayoutHeight(R.id.overview_footer, footerHeight.toFloat(),
                 TypedValue.COMPLEX_UNIT_DIP)
+        } else if (panelHeight > 156) {
+            // The separate tall XML fills older hosts; the reference XML stays intact.
+            val density = context.resources.displayMetrics.density
+            views.setViewPadding(R.id.overview_content, (12 * density).toInt(),
+                (geometry.topPadding * density).toInt(), (12 * density).toInt(),
+                (geometry.bottomPadding * density).toInt())
         }
         views.setTextViewTextSize(R.id.overview_title, TypedValue.COMPLEX_UNIT_SP,
             if (compact) 14f else 16f)

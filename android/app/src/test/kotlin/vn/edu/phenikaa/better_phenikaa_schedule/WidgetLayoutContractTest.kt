@@ -56,4 +56,13 @@ class WidgetLayoutContractTest {
         assertTrue(element("overview_navigation", root)
             .getAttributeNS(androidNamespace, "layout_height").isNotEmpty())
     }
+
+    @Test fun tallHostLayoutFillsOnlyItsSeparatePanel() {
+        val reference = layout("overview_widget").documentElement
+        val tall = layout("overview_widget_tall").documentElement
+        assertEquals("104dp", element("overview_panel", reference)
+            .getAttributeNS(androidNamespace, "layout_height"))
+        assertEquals("match_parent", element("overview_panel", tall)
+            .getAttributeNS(androidNamespace, "layout_height"))
+    }
 }

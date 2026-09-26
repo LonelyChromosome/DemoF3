@@ -24,5 +24,7 @@ launcher observations and tests. Geometry passing does not establish that
 those compatibility cases pass.
 
 Android 11 and older cannot set the 4×2 panel height through the Android 12
-`RemoteViews` size API. A taller 4×2 widget on those versions is not yet
-verified to fill the host and must be marked **CHƯA ĐẠT** until tested/fixed.
+`RemoteViews` size API. Only taller hosts use the separate
+`overview_widget_tall.xml` layout; the reference XML remains untouched.
+Its output still needs a launcher screenshot and interaction check before it
+can be marked as passing visual parity.

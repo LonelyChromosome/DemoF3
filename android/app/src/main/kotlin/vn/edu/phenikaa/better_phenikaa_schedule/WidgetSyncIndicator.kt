@@ -148,15 +148,21 @@ internal object WidgetSyncIndicator {
 
     private fun updateIcons(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
-        for ((provider, layout, icon) in listOf(
-            Triple(ScheduleWidgetProvider::class.java, R.layout.schedule_widget, R.id.widget_reload),
-            Triple(OverviewWidgetProvider::class.java, R.layout.overview_widget, R.id.overview_reload),
-        )) {
-            val ids = manager.getAppWidgetIds(ComponentName(context, provider))
-            if (ids.isEmpty()) continue
+        val smallIds = manager.getAppWidgetIds(ComponentName(context,
+            ScheduleWidgetProvider::class.java))
+        if (smallIds.isNotEmpty()) {
+            val views = RemoteViews(context.packageName, R.layout.schedule_widget)
+            apply(context, views, R.id.widget_reload)
+            manager.partiallyUpdateAppWidget(smallIds, views)
+        }
+        val overviewIds = manager.getAppWidgetIds(ComponentName(context,
+            OverviewWidgetProvider::class.java))
+        overviewIds.forEach { id ->
+            val layout = WidgetHostSizeResolver.overviewLayout(context,
+                manager.getAppWidgetOptions(id))
             val views = RemoteViews(context.packageName, layout)
-            apply(context, views, icon)
-            manager.partiallyUpdateAppWidget(ids, views)
+            apply(context, views, R.id.overview_reload)
+            manager.partiallyUpdateAppWidget(id, views)
         }
     }
 

@@ -38,4 +38,9 @@ internal object WidgetHostSizeResolver {
         }
         return nearest ?: SizeF(legacy.width.toFloat(), legacy.height.toFloat())
     }
+
+    fun overviewLayout(context: Context, options: Bundle): Int =
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S &&
+            currentSize(context, options, 320, 150).height > 156f)
+            R.layout.overview_widget_tall else R.layout.overview_widget
 }
