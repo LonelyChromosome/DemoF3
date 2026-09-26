@@ -125,8 +125,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     final nextEnd = data.exams
         .map((exam) => exam.endAt)
         .where((end) => !end.isBefore(now))
-        .fold<DateTime?>(null, (next, end) =>
-            next == null || end.isBefore(next) ? end : next);
+        .fold<DateTime?>(
+          null,
+          (next, end) => next == null || end.isBefore(next) ? end : next,
+        );
     final boundary = nextEnd == null || !nextEnd.isBefore(midnight)
         ? midnight
         : nextEnd.add(const Duration(milliseconds: 1));
@@ -138,24 +140,27 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _onNotificationTap() {
-    final active = _data != null &&
+    final active =
+        _data != null &&
         ExamPeriod.hasActiveExamPeriod(_data!.exams, DateTime.now());
     if (!active) {
       unawaited(_showDifferences());
       return;
     }
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: const Text(
-        'Bạn đang trong kỳ thi. Hãy vào Lịch thi để kiểm tra.',
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Bạn đang trong kỳ thi. Hãy vào Lịch thi để kiểm tra.',
+        ),
+        action: SnackBarAction(
+          label: _unreadDifference ? 'Xem thay đổi' : 'Lịch thi',
+          onPressed: _unreadDifference
+              ? () => unawaited(_showDifferences())
+              : () => _openPage(_AppPage.exam),
+        ),
       ),
-      action: SnackBarAction(
-        label: _unreadDifference ? 'Xem thay đổi' : 'Lịch thi',
-        onPressed: _unreadDifference
-            ? () => unawaited(_showDifferences())
-            : () => _openPage(_AppPage.exam),
-      ),
-    ));
+    );
   }
 
   Future<void> _refreshDifference() async {
@@ -531,10 +536,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                               errorMessage: _errorMessage,
                               examNotice: _examNotice,
                               unreadDifference: _unreadDifference,
-                              hasActiveExamPeriod: ExamPeriod.hasActiveExamPeriod(
-                                _data!.exams,
-                                DateTime.now(),
-                              ),
+                              hasActiveExamPeriod:
+                                  ExamPeriod.hasActiveExamPeriod(
+                                    _data!.exams,
+                                    DateTime.now(),
+                                  ),
                               onOpenDifferences: _onNotificationTap,
                               onTogglePanel: () =>
                                   setState(() => _panelOpen = !_panelOpen),
@@ -1373,9 +1379,7 @@ class _TopTitle extends StatelessWidget {
                       Positioned(
                         right: -2,
                         bottom: -2,
-                        child: _ExamAlertDot(
-                          background: palette.surface,
-                        ),
+                        child: _ExamAlertDot(background: palette.surface),
                       ),
                   ],
                 ),
@@ -1752,29 +1756,30 @@ class _ExamCountdownTag extends StatelessWidget {
     final palette = appThemePalette;
     final (dark, light) = switch (countdown.band) {
       ExamCountdownBand.green => (
-          const Color(0xFF155724),
-          const Color(0xFF9CE5A8),
-        ),
+        const Color(0xFF155724),
+        const Color(0xFF9CE5A8),
+      ),
       ExamCountdownBand.blue => (
-          const Color(0xFF0B4A91),
-          const Color(0xFF9AD1FF),
-        ),
+        const Color(0xFF0B4A91),
+        const Color(0xFF9AD1FF),
+      ),
       ExamCountdownBand.orange => (
-          const Color(0xFF8D4100),
-          const Color(0xFFFFC078),
-        ),
+        const Color(0xFF8D4100),
+        const Color(0xFFFFC078),
+      ),
       ExamCountdownBand.red => (
-          const Color(0xFFAA1730),
-          const Color(0xFFFFA3A9),
-        ),
+        const Color(0xFFAA1730),
+        const Color(0xFFFFA3A9),
+      ),
     };
     final background = Color.alphaBlend(
-      (palette.card.computeLuminance() > .4 ? dark : light)
-          .withValues(alpha: .13),
+      (palette.card.computeLuminance() > .4 ? dark : light).withValues(
+        alpha: .13,
+      ),
       palette.card,
     );
-    final foreground = _contrastRatio(dark, background) >=
-            _contrastRatio(light, background)
+    final foreground =
+        _contrastRatio(dark, background) >= _contrastRatio(light, background)
         ? dark
         : light;
     return Container(

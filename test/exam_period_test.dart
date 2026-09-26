@@ -15,33 +15,29 @@ void main() {
 
   test('period follows the final endAt and an empty list is inactive', () {
     expect(ExamPeriod.hasActiveExamPeriod(<ScheduleRecord>[], now), isFalse);
-    final finished = exam(
-      DateTime(2026, 9, 25, 8),
-      DateTime(2026, 9, 25, 10),
+    final finished = exam(DateTime(2026, 9, 25, 8), DateTime(2026, 9, 25, 10));
+    final future = exam(DateTime(2026, 9, 27, 8), DateTime(2026, 9, 27, 10));
+    expect(
+      ExamPeriod.hasActiveExamPeriod(<ScheduleRecord>[finished], now),
+      isFalse,
     );
-    final future = exam(
-      DateTime(2026, 9, 27, 8),
-      DateTime(2026, 9, 27, 10),
-    );
-    expect(ExamPeriod.hasActiveExamPeriod(<ScheduleRecord>[finished], now), isFalse);
     expect(
       ExamPeriod.hasActiveExamPeriod(<ScheduleRecord>[finished, future], now),
       isTrue,
     );
-    final today = exam(
-      DateTime(2026, 9, 26, 8),
-      DateTime(2026, 9, 26, 11),
+    final today = exam(DateTime(2026, 9, 26, 8), DateTime(2026, 9, 26, 11));
+    expect(
+      ExamPeriod.hasActiveExamPeriod(<ScheduleRecord>[today], now),
+      isTrue,
     );
-    expect(ExamPeriod.hasActiveExamPeriod(<ScheduleRecord>[today], now), isTrue);
     expect(
       ExamPeriod.hasActiveExamPeriod(<ScheduleRecord>[today], today.endAt),
       isTrue,
     );
     expect(
-      ExamPeriod.hasActiveExamPeriod(
-        <ScheduleRecord>[today],
-        today.endAt.add(const Duration(milliseconds: 1)),
-      ),
+      ExamPeriod.hasActiveExamPeriod(<ScheduleRecord>[
+        today,
+      ], today.endAt.add(const Duration(milliseconds: 1))),
       isFalse,
     );
   });
@@ -66,10 +62,7 @@ void main() {
   }
 
   test('no countdown after endAt even when exam date is today', () {
-    final ended = exam(
-      DateTime(2026, 9, 26, 7),
-      DateTime(2026, 9, 26, 9),
-    );
+    final ended = exam(DateTime(2026, 9, 26, 7), DateTime(2026, 9, 26, 9));
     expect(ExamPeriod.countdown(ended, now), isNull);
   });
 }

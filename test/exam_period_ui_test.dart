@@ -33,9 +33,9 @@ void main() {
 
   Future<void> showApp(
     WidgetTester tester,
-    List<ScheduleRecord> records,
-    {bool unreadDifference = false}
-  ) async {
+    List<ScheduleRecord> records, {
+    bool unreadDifference = false,
+  }) async {
     final snapshot = ImportedScheduleData(
       displayName: 'Sinh viên',
       records: records,
@@ -66,12 +66,9 @@ void main() {
     expect(find.byKey(const ValueKey<String>('exam-period-dot')), findsNothing);
     await tester.pumpWidget(const SizedBox());
     final yesterday = DateTime.now().subtract(const Duration(days: 1));
-    await showApp(
-      tester,
-      <ScheduleRecord>[
-        exam(yesterday.subtract(const Duration(hours: 2)), yesterday),
-      ],
-    );
+    await showApp(tester, <ScheduleRecord>[
+      exam(yesterday.subtract(const Duration(hours: 2)), yesterday),
+    ]);
     expect(find.byKey(const ValueKey<String>('exam-period-dot')), findsNothing);
   });
 
@@ -79,10 +76,9 @@ void main() {
     tester,
   ) async {
     final start = DateTime.now().add(const Duration(days: 2));
-    await showApp(
-      tester,
-      <ScheduleRecord>[exam(start, start.add(const Duration(hours: 2)))],
-    );
+    await showApp(tester, <ScheduleRecord>[
+      exam(start, start.add(const Duration(hours: 2))),
+    ]);
     const dot = ValueKey<String>('exam-period-dot');
     expect(find.byKey(dot), findsOneWidget);
     await tester.tap(find.byIcon(Icons.notifications_none_rounded));
@@ -100,10 +96,9 @@ void main() {
     expect(find.byKey(dot), findsOneWidget);
     expect(find.text('Còn 2 ngày'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
-    await showApp(
-      tester,
-      <ScheduleRecord>[exam(start, start.add(const Duration(hours: 2)))],
-    );
+    await showApp(tester, <ScheduleRecord>[
+      exam(start, start.add(const Duration(hours: 2))),
+    ]);
     expect(find.byKey(dot), findsOneWidget);
   });
 
@@ -111,17 +106,18 @@ void main() {
     tester,
   ) async {
     final start = DateTime.now().add(const Duration(days: 2));
-    await showApp(
-      tester,
-      <ScheduleRecord>[exam(start, start.add(const Duration(hours: 2)))],
-      unreadDifference: true,
-    );
+    await showApp(tester, <ScheduleRecord>[
+      exam(start, start.add(const Duration(hours: 2))),
+    ], unreadDifference: true);
     await tester.tap(find.byIcon(Icons.notifications_none_rounded));
     await tester.pump();
     expect(find.text('Xem thay đổi'), findsOneWidget);
     await tester.tap(find.text('Xem thay đổi'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey<String>('exam-period-dot')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('exam-period-dot')),
+      findsOneWidget,
+    );
   });
 
   for (final theme in <AppThemeId>[
@@ -139,10 +135,9 @@ void main() {
         tester.view.resetDevicePixelRatio();
       });
       final start = DateTime.now().add(const Duration(days: 10));
-      await showApp(
-        tester,
-        <ScheduleRecord>[exam(start, start.add(const Duration(hours: 2)))],
-      );
+      await showApp(tester, <ScheduleRecord>[
+        exam(start, start.add(const Duration(hours: 2))),
+      ]);
       final selection = AppThemeController.instance.select(theme);
       await tester.pump(const Duration(milliseconds: 650));
       await selection;
@@ -166,10 +161,9 @@ void main() {
       tester.view.resetDevicePixelRatio();
     });
     final start = DateTime.now().add(const Duration(days: 5));
-    await showApp(
-      tester,
-      <ScheduleRecord>[exam(start, start.add(const Duration(hours: 2)))],
-    );
+    await showApp(tester, <ScheduleRecord>[
+      exam(start, start.add(const Duration(hours: 2))),
+    ]);
     final custom = CustomThemeDefinition(
       id: 'exam-test',
       name: 'Custom',
