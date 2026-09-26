@@ -20,8 +20,9 @@ void main() {
   });
 
   test('all 126 approved lines are copied verbatim into the catalog', () {
-    final source = jsonDecode(File('tool/assistant_pack_texts.json').readAsStringSync())
-        as Map<String, dynamic>;
+    final source = jsonDecode(
+      File('tool/assistant_pack_texts.json').readAsStringSync(),
+    ) as Map<String, dynamic>;
     for (final pack in AssistantPack.values) {
       final lines = source[pack.name] as Map<String, dynamic>;
       expect(assistantCatalog[pack.name], hasLength(18));

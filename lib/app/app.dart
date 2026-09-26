@@ -1408,17 +1408,13 @@ class _TimetableScreenState extends State<_TimetableScreen>
                     child: items.isEmpty
                         ? _EmptyState(
                             icon: Icons.event_available_outlined,
-                            title: _sameDay(
-                              widget.selectedDate,
-                              DateTime.now(),
-                            )
+                            title: _sameDay(widget.selectedDate, DateTime.now())
                                 ? AssistantText.of(
                                     AssistantEvent.studyTodayEmpty,
                                     widget.assistantPack,
                                   )
                                 : 'Không có lịch học',
-                            message:
-                                'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
+                            message: 'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
                           )
                         : ListView.separated(
                             padding: const EdgeInsets.only(bottom: 82),

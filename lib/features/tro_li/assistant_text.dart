@@ -1,6 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'assistant_catalog.dart';
+import 'package:better_phenikaa_schedule/features/tro_li/assistant_catalog.dart';
 
 enum AssistantPack {
   normal('Bình thường'),
