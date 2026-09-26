@@ -9,6 +9,8 @@ on:
       - 'assets/demo/**'
       - 'lib/demo/**'
       - 'lib/main.dart'
+      - 'lib/features/tien_ich_lich_hoc/widget_publisher.dart'
+      - 'lib/theme/app_theme.dart'
       - 'pubspec.yaml'
       - 'android/app/build.gradle.kts'
   workflow_dispatch:

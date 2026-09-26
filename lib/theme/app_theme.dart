@@ -695,7 +695,8 @@ class AppThemeController extends ChangeNotifier {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     await HomeWidget.updateWidget(
       name: 'ScheduleWidgetProvider',
-      androidName: 'ScheduleWidgetProvider',
+      qualifiedAndroidName:
+          'vn.edu.phenikaa.better_phenikaa_schedule.ScheduleWidgetProvider',
     );
   }
 }

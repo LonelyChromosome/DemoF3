@@ -9,6 +9,8 @@ import 'package:home_widget/home_widget.dart';
 abstract final class WidgetPublisher {
   static const _storageKey = 'better_phenikaa_widget_snapshot_v1';
   static const _provider = 'ScheduleWidgetProvider';
+  static const _qualifiedProvider =
+      'vn.edu.phenikaa.better_phenikaa_schedule.ScheduleWidgetProvider';
 
   static Future<void> publish(
     ImportedScheduleData data, {
@@ -62,7 +64,10 @@ abstract final class WidgetPublisher {
   }
 
   static Future<void> _refresh() =>
-      HomeWidget.updateWidget(name: _provider, androidName: _provider);
+      HomeWidget.updateWidget(
+        name: _provider,
+        qualifiedAndroidName: _qualifiedProvider,
+      );
 
   static bool get _isSupported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
