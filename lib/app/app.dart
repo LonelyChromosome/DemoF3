@@ -1269,7 +1269,7 @@ class _ExamScreen extends StatelessWidget {
 }
 
 class _NotificationCenterScreen extends StatelessWidget {
-  const _NotificationCenterScreen({
+  const new({
     required this.data,
     required this.unreadDifference,
     required this.hasActiveExamPeriod,
@@ -1414,7 +1414,7 @@ class _NotificationCenterScreen extends StatelessWidget {
 }
 
 class _NotificationExamCard extends StatelessWidget {
-  const _NotificationExamCard({
+  const new({
     required this.text,
     required this.palette,
     required this.onOpenExam,
@@ -1456,6 +1456,7 @@ class _NotificationExamCard extends StatelessWidget {
               style: IconButton.styleFrom(
                 backgroundColor: palette.primary,
                 foregroundColor: _contrastForeground(palette.primary),
+                shape: const CircleBorder(),
               ),
               icon: const Icon(Icons.arrow_forward_rounded),
             ),
@@ -1465,7 +1466,7 @@ class _NotificationExamCard extends StatelessWidget {
 }
 
 class _NotificationChangeCard extends StatelessWidget {
-  const _NotificationChangeCard({
+  const new({
     required this.icon,
     required this.title,
     required this.description,
