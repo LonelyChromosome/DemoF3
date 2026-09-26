@@ -1,0 +1,24 @@
+name: Temporary Dart formatter output
+on:
+  push:
+    branches: [feature/big-update]
+    paths: [.github/workflows/format-repair.yml]
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+      - run: dart format lib/features/dang_nhap_qldt/qldt_login_mobile.dart lib/features/dang_nhap_qldt/semester_retention.dart test/semester_retention_test.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatted-dart-files
+          path: |
+            lib/features/dang_nhap_qldt/qldt_login_mobile.dart
+            lib/features/dang_nhap_qldt/semester_retention.dart
+            test/semester_retention_test.dart
