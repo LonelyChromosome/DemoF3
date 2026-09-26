@@ -5,9 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Loads the bundled timetable only for the separately built demo APK.
-final class DemoDataSeed {
-  const DemoDataSeed._();
-
+abstract final class DemoDataSeed {
   static const _legacySnapshotKey = 'better_phenikaa_snapshot_v1';
   static const _assetPath = 'assets/demo/current_semester.json';
 
