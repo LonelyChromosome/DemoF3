@@ -159,7 +159,10 @@ void main() {
       expect(left.left + right.right, closeTo(width, 1));
       await tester.tap(warning);
       await tester.pumpAndSettle();
-      expect(find.textContaining('Bạn đã lâu chưa đồng bộ dữ liệu rồi.'), findsOneWidget);
+      expect(
+        find.textContaining('Bạn đã lâu chưa đồng bộ dữ liệu rồi.'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Đóng'));
       await tester.pumpAndSettle();
       expect(find.byType(AlertDialog), findsNothing);
