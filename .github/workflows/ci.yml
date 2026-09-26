@@ -39,6 +39,17 @@ jobs:
       - name: Bootstrap project
         run: bash tool/bootstrap.sh
 
+      - name: Capture formatter output
+        run: dart format lib/features/dang_nhap_qldt/qldt_login_mobile.dart lib/features/dang_nhap_qldt/semester_retention.dart test/semester_retention_test.dart
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatted-dart-files
+          path: |
+            lib/features/dang_nhap_qldt/qldt_login_mobile.dart
+            lib/features/dang_nhap_qldt/semester_retention.dart
+            test/semester_retention_test.dart
+
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib test
 
