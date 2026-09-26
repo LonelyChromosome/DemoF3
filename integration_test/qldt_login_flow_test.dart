@@ -64,6 +64,9 @@ void main() {
           },
         ],
       });
+      final retryAfterMillis = DateTime.now()
+          .add(const Duration(seconds: 46))
+          .millisecondsSinceEpoch;
       final html =
           '''
       <!doctype html><html><body>
@@ -72,8 +75,7 @@ void main() {
           makeRequest: function (options) {
             if (options.data.func ===
                 'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan' &&
-                window.name !== 'better-phenikaa-missed-schedule') {
-              window.name = 'better-phenikaa-missed-schedule';
+                Date.now() < $retryAfterMillis) {
               return;
             }
             switch (options.data.func) {
