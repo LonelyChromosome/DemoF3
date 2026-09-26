@@ -79,7 +79,7 @@
     system.makeRequest = wrapped;
   }
 
-  async function probe() {
+  async function probe(range = 'academic_year') {
     install();
     const system = window.edu?.system;
     if (!system?.userId || system.iM == null || typeof system.makeRequest !== 'function') {
@@ -89,6 +89,8 @@
     const startYear = date.getMonth() >= 7 ? date.getFullYear() : date.getFullYear() - 1;
     const format = (day, month, year) =>
       `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+    const shortEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 6);
+    const shortRange = range === 'seven_days';
     const started = now();
     let completed = false;
     return new Promise(resolve => {
@@ -96,7 +98,8 @@
         if (completed) return;
         completed = true;
         clearTimeout(timer);
-        resolve({ phase, elapsedMs: now() - started, ...extra });
+        resolve({ phase, range: shortRange ? 'seven_days' : 'academic_year',
+          elapsedMs: now() - started, ...extra });
       };
       const timer = setTimeout(() => finish('timeout'), 25000);
       const data = {
@@ -104,8 +107,12 @@
         func: targetFunc,
         iM: system.iM,
         strQLSV_NguoiHoc_Id: system.userId,
-        strNgayBatDau: format(1, 8, startYear),
-        strNgayKetThuc: format(31, 7, startYear + 1),
+        strNgayBatDau: shortRange
+          ? format(date.getDate(), date.getMonth() + 1, date.getFullYear())
+          : format(1, 8, startYear),
+        strNgayKetThuc: shortRange
+          ? format(shortEnd.getDate(), shortEnd.getMonth() + 1, shortEnd.getFullYear())
+          : format(31, 7, startYear + 1),
       };
       try {
         system.makeRequest({

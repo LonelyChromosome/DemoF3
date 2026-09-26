@@ -1,8 +1,10 @@
 const button = document.getElementById('probe');
+const shortButton = document.getElementById('probeShort');
 const status = document.getElementById('status');
 
-button.addEventListener('click', async () => {
+async function run(range) {
   button.disabled = true;
+  shortButton.disabled = true;
   status.textContent = 'Đang chờ phản hồi lịch QLĐT (tối đa 25 giây)...';
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -22,7 +24,8 @@ button.addEventListener('click', async () => {
       const [probe] = await chrome.scripting.executeScript({
         target: { tabId: tab.id, frameIds: [readyFrame.frameId] },
         world: 'MAIN',
-        func: () => window.__demoF3ScheduleDiagnostic.probe(),
+        func: (selectedRange) => window.__demoF3ScheduleDiagnostic.probe(selectedRange),
+        args: [range],
       });
       result = probe.result;
     }
@@ -52,5 +55,9 @@ button.addEventListener('click', async () => {
     status.textContent = error.message || 'Không kiểm tra được QLĐT.';
   } finally {
     button.disabled = false;
+    shortButton.disabled = false;
   }
-});
+}
+
+button.addEventListener('click', () => run('academic_year'));
+shortButton.addEventListener('click', () => run('seven_days'));

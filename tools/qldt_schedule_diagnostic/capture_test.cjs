@@ -58,3 +58,21 @@ test('a request without callback remains pending until the probe timeout', async
   timeout();
   assert.equal((await pending).phase, 'timeout');
 });
+
+test('short probe requests seven calendar days instead of the academic year', async () => {
+  let request;
+  const { diagnostic } = createContext(options => {
+    request = options.data;
+    options.success({ Success: true, Data: [] });
+  });
+  const result = await diagnostic.probe('seven_days');
+  const parse = text => {
+    const [day, month, year] = text.split('/').map(Number);
+    return new Date(year, month - 1, day);
+  };
+  assert.equal(result.range, 'seven_days');
+  assert.equal(
+    (parse(request.strNgayKetThuc) - parse(request.strNgayBatDau)) / 86400000,
+    6,
+  );
+});
