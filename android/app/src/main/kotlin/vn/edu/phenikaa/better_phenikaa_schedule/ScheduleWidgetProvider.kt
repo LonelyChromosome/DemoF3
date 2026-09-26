@@ -433,7 +433,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val showRefreshCover = collectionChanged || themeChanged
 
         val views = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val exactSizes = exactWidgetSizes(options)
+            val exactSizes = WidgetHostSizeResolver.exactSizes(options)
             if (exactSizes.isNotEmpty()) {
                 val sizedViews = LinkedHashMap<SizeF, RemoteViews>()
                 exactSizes.take(MAX_EXACT_LAYOUTS).forEach { size ->
@@ -449,7 +449,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 }
                 RemoteViews(sizedViews)
             } else {
-                val fallback = legacyWidgetSize(options)
+                val fallback = WidgetHostSizeResolver.currentSize(context, options,
+                    DEFAULT_WIDGET_WIDTH_DP, DEFAULT_WIDGET_HEIGHT_DP)
                 buildWidgetViews(
                     context = context,
                     widgetId = widgetId,
@@ -461,7 +462,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 )
             }
         } else {
-            val fallback = legacyWidgetSize(options)
+            val fallback = WidgetHostSizeResolver.currentSize(context, options,
+                DEFAULT_WIDGET_WIDTH_DP, DEFAULT_WIDGET_HEIGHT_DP)
             buildWidgetViews(
                 context = context,
                 widgetId = widgetId,
@@ -540,7 +542,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
         val generation = state.getInt("mode_generation_$id", 0) + 1
         state.edit().putInt("mode_generation_$id", generation).apply()
-        val size = legacyWidgetSize(manager.getAppWidgetOptions(id))
+        val size = WidgetHostSizeResolver.currentSize(context, manager.getAppWidgetOptions(id),
+            DEFAULT_WIDGET_WIDTH_DP, DEFAULT_WIDGET_HEIGHT_DP)
         val width = size.width.roundToInt().coerceAtLeast(1)
         val height = size.height.roundToInt().coerceAtLeast(1)
         val oldFrame = renderWidgetStackCover(context, before, width, height)
@@ -751,7 +754,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
 
         val manager = AppWidgetManager.getInstance(context)
         val options = manager.getAppWidgetOptions(widgetId)
-        val size = legacyWidgetSize(options)
+        val size = WidgetHostSizeResolver.currentSize(context, options,
+            DEFAULT_WIDGET_WIDTH_DP, DEFAULT_WIDGET_HEIGHT_DP)
         val widthDp = size.width.roundToInt().coerceAtLeast(1)
         val heightDp = size.height.roundToInt().coerceAtLeast(1)
         val targetTheme = themeColorsForKey(context, targetThemeKey)
@@ -946,11 +950,12 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             .getString(selectedDateKey(widgetId), "")
             .orEmpty()
         val sizeSignature = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            exactWidgetSizes(options).joinToString(";") { size ->
+            WidgetHostSizeResolver.exactSizes(options).joinToString(";") { size ->
                 String.format(Locale.US, "%.1fx%.1f", size.width, size.height)
             }
         } else {
-            val size = legacyWidgetSize(options)
+            val size = WidgetHostSizeResolver.currentSize(context, options,
+                DEFAULT_WIDGET_WIDTH_DP, DEFAULT_WIDGET_HEIGHT_DP)
             String.format(Locale.US, "%.1fx%.1f", size.width, size.height)
         }
         val examMode = SmallWidgetMode.isExam(context, widgetId)
@@ -967,42 +972,6 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
     private fun contentTokenKey(widgetId: Int): String = "content_token_$widgetId"
     private fun pendingSelectionKey(widgetId: Int): String = "pending_selection_$widgetId"
     private fun themeTokenKey(widgetId: Int): String = "theme_token_$widgetId"
-
-    @Suppress("DEPRECATION")
-    private fun exactWidgetSizes(options: Bundle): List<SizeF> {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return emptyList()
-        return options
-            .getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES)
-            .orEmpty()
-            .filter { it.width > 0f && it.height > 0f }
-            .distinctBy { size ->
-                "${(size.width * 10f).roundToInt()}x${(size.height * 10f).roundToInt()}"
-            }
-    }
-
-    private fun legacyWidgetSize(options: Bundle): SizeF {
-        val minWidth = options
-            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, DEFAULT_WIDGET_WIDTH_DP)
-            .takeIf { it > 0 }
-            ?: DEFAULT_WIDGET_WIDTH_DP
-        val maxWidth = options
-            .getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidth)
-            .takeIf { it > 0 }
-            ?: minWidth
-        val minHeight = options
-            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, DEFAULT_WIDGET_HEIGHT_DP)
-            .takeIf { it > 0 }
-            ?: DEFAULT_WIDGET_HEIGHT_DP
-        val maxHeight = options
-            .getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeight)
-            .takeIf { it > 0 }
-            ?: minHeight
-
-        return SizeF(
-            maxOf(minWidth, maxWidth).toFloat(),
-            minOf(minHeight, maxHeight).toFloat(),
-        )
-    }
 
     companion object {
         private const val ACTION_SMALL_MODE = "vn.edu.phenikaa.better_phenikaa_schedule.SMALL_MODE"

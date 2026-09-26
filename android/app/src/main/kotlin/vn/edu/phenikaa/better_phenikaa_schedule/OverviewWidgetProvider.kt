@@ -21,6 +21,9 @@ import java.util.Date
 import java.util.Locale
 
 class OverviewWidgetProvider : HomeWidgetProvider() {
+    private fun hostSize(context: Context, manager: AppWidgetManager, id: Int) =
+        WidgetHostSizeResolver.currentSize(context, manager.getAppWidgetOptions(id), 320, 150)
+
     internal fun stageThemeTransition(context: Context, manager: AppWidgetManager, ids: IntArray) {
         ids.forEach { id ->
             val frame = RemoteViews(context.packageName, R.layout.overview_widget)
@@ -166,6 +169,16 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         }
     }
 
+    override fun onAppWidgetOptionsChanged(
+        context: Context, appWidgetManager: AppWidgetManager,
+        appWidgetId: Int, newOptions: android.os.Bundle,
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+        cancelNavigation(state, appWidgetId)
+        render(context, appWidgetManager, appWidgetId)
+    }
+
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
         super.onDeleted(context, appWidgetIds)
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE).edit()
@@ -214,8 +227,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val items = WidgetSnapshotStore.readOverview(context, id,
             state.getBoolean(modeKey(id), false))
         val old = OverviewWindow.clamp(state.getInt(windowKey(id), 0), items.size)
-        val width = manager.getAppWidgetOptions(id)
-            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
+        val width = hostSize(context, manager, id).width.toInt()
         val columns = OverviewPager.columns(width)
         val distance = kotlin.math.abs(next - old) * (width - 24f) / columns
         val provider = ScheduleWidgetProvider()
@@ -411,16 +423,11 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
         val examMode = state.getBoolean(modeKey(id), false)
         val items = WidgetSnapshotStore.readOverview(context, id, examMode)
-        val width = manager.getAppWidgetOptions(id)
-            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
-        val height = manager.getAppWidgetOptions(id)
-            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
-        val panelHeight = height.coerceIn(104, 156)
-        val compact = panelHeight < 120
-        val headerHeight = if (compact) 32 else if (panelHeight >= 140) 42 else 36
-        val footerHeight = if (compact) 16 else if (panelHeight >= 140) 24 else 20
-        val verticalPadding = if (compact) 4 else 10
-        val cardHeight = panelHeight - verticalPadding - headerHeight - footerHeight - 5
+        val size = hostSize(context, manager, id)
+        val width = size.width.toInt()
+        val geometry = WidgetGeometry.overview(size.height.toInt())
+        val cardHeight = geometry.cardHeight
+        val compact = geometry.compact
         val columns = OverviewPager.columns(width)
         val start = OverviewWindow.clamp(state.getInt(windowKey(id), 0), items.size)
         val (textColor, _) = ScheduleWidgetProvider().overviewColors(context)
@@ -460,17 +467,14 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
         val examMode = state.getBoolean(modeKey(id), false)
         val items = WidgetSnapshotStore.readOverview(context, id, examMode)
-        val width = manager.getAppWidgetOptions(id)
-            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
-        val height = manager.getAppWidgetOptions(id)
-            .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 150)
-        // Use available 4x2 launcher height for typography without changing page capacity.
-        val panelHeight = height.coerceIn(104, 156)
-        val compact = panelHeight < 120
-        val headerHeight = if (compact) 32 else if (panelHeight >= 140) 42 else 36
-        val footerHeight = if (compact) 16 else if (panelHeight >= 140) 24 else 20
-        val verticalPadding = if (compact) 4 else 10
-        val cardHeight = panelHeight - verticalPadding - headerHeight - footerHeight - 5
+        val size = hostSize(context, manager, id)
+        val width = size.width.toInt()
+        val geometry = WidgetGeometry.overview(size.height.toInt())
+        val panelHeight = geometry.panelHeight
+        val compact = geometry.compact
+        val headerHeight = geometry.headerHeight
+        val footerHeight = geometry.footerHeight
+        val cardHeight = geometry.cardHeight
         val columns = OverviewPager.columns(width)
         val start = OverviewWindow.clamp(state.getInt(windowKey(id), 0), items.size)
         if (start != state.getInt(windowKey(id), 0)) {
@@ -504,8 +508,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 TypedValue.COMPLEX_UNIT_DIP)
             val density = context.resources.displayMetrics.density
             views.setViewPadding(R.id.overview_content, (12 * density).toInt(),
-                ((if (compact) 2 else 6) * density).toInt(), (12 * density).toInt(),
-                ((if (compact) 2 else 4) * density).toInt())
+                (geometry.topPadding * density).toInt(), (12 * density).toInt(),
+                (geometry.bottomPadding * density).toInt())
             views.setViewLayoutHeight(R.id.overview_header, headerHeight.toFloat(),
                 TypedValue.COMPLEX_UNIT_DIP)
             views.setViewLayoutHeight(R.id.overview_footer, footerHeight.toFloat(),
@@ -587,7 +591,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         if (bitmapFont && items.isEmpty()) {
             views.setImageViewBitmap(R.id.overview_empty_font,
                 OverviewFontBitmap.centered(context, width - 24,
-                    (panelHeight - verticalPadding - headerHeight - footerHeight).coerceAtLeast(1),
+                    (cardHeight + 5).coerceAtLeast(1),
                     emptyLabel, 14f, textColor))
             views.setViewVisibility(R.id.overview_empty_font, View.VISIBLE)
             views.setTextColor(R.id.overview_empty, android.graphics.Color.TRANSPARENT)
