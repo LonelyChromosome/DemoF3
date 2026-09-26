@@ -32,6 +32,9 @@ class MainActivity : FlutterActivity() {
         if (requestCode == 8421 &&
             grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             ExamChangeNotifier.publishPending(applicationContext)
+            val semester = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+                .getString("flutter.better_phenikaa_current_semester_v1", null)
+            semester?.let { runCatching { ExamReminderScheduler.reconcile(applicationContext, it) } }
         }
     }
 
@@ -46,6 +49,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         ExamChangeNotifier.recoverExisting(applicationContext)
+        SyncStaleReminderScheduler.reconcile(applicationContext)
         configureDailySyncChannel(flutterEngine)
         configureQldtCredentialChannel(flutterEngine)
         configureWidgetSessionChannel(flutterEngine)
@@ -273,7 +277,8 @@ class MainActivity : FlutterActivity() {
                     val semester = prefs.getString("flutter.better_phenikaa_current_semester_v1", null)
                     val difference = prefs.getString("flutter.better_phenikaa_semester_difference_v1", null)
                     if (semester != null && difference != null) {
-                        runCatching { ExamChangeNotifier.record(applicationContext, semester, difference) }
+                        runCatching { ExamChangeNotifier.record(
+                            applicationContext, semester, difference, notifySystem = false) }
                     }
                     WidgetRefreshCoordinator.refreshOverview(applicationContext)
                     result.success(null)
@@ -303,6 +308,7 @@ class MainActivity : FlutterActivity() {
                 }
                 "clearReminders" -> {
                     ExamReminderScheduler.clear(applicationContext)
+                    SyncStaleReminderScheduler.clear(applicationContext)
                     ExamChangeNotifier.clear(applicationContext)
                     result.success(null)
                 }

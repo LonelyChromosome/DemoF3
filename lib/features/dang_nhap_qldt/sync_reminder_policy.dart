@@ -7,10 +7,11 @@ final class SyncReminderPolicy {
     required DateTime? lastReminder,
   }) {
     if (lastSuccessfulSync == null) return false;
-    final dueAt = lastSuccessfulSync.add(const Duration(days: 3));
-    if (now.isBefore(dueAt)) return false;
+    final dueAt = lastSuccessfulSync.add(const Duration(days: 2));
+    if (!now.isAfter(dueAt)) return false;
     return lastReminder == null ||
         lastReminder.isBefore(lastSuccessfulSync) ||
-        now.difference(lastReminder) >= const Duration(days: 3);
+        DateTime(now.year, now.month, now.day)
+            .isAfter(DateTime(lastReminder.year, lastReminder.month, lastReminder.day));
   }
 }

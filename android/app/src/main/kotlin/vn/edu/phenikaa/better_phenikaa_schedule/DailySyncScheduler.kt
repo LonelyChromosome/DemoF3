@@ -65,6 +65,7 @@ object DailySyncScheduler {
             .putLong(LAST_SUCCESS_KEY, completedAtMillis)
             .remove(LAST_ERROR_KEY)
             .apply()
+        SyncStaleReminderScheduler.onSuccess(context)
     }
 
     fun recordFailure(context: Context, message: String) {

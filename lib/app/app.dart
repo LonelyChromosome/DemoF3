@@ -9,11 +9,12 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagn
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/schedule_difference_sheet.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_sync_message.dart';
 import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
 import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
+import 'package:better_phenikaa_schedule/features/tro_li/assistant_text.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/sync_reminder_policy.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -83,6 +84,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   SemesterDifference? _latestDifference;
   bool _unreadDifference = false;
   Timer? _examClockTimer;
+  Timer? _syncStaleTimer;
+  DateTime? _lastSuccessfulSync;
+  AssistantPack _assistantPack = AssistantPack.normal;
   static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
 
   @override
@@ -102,6 +106,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   @override
   void dispose() {
     _examClockTimer?.cancel();
+    _syncStaleTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     AppThemeController.instance.removeListener(_handleThemeChanged);
     super.dispose();
@@ -114,6 +119,41 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     _scheduleExamClock();
     unawaited(_refreshExamNotice());
     unawaited(_refreshDifference());
+    unawaited(_refreshSyncStatus());
+  }
+
+  Future<void> _refreshSyncStatus() async {
+    try {
+      final last = await DailySync.lastSuccessfulSync();
+      if (!mounted) return;
+      setState(() => _lastSuccessfulSync = last);
+      _syncStaleTimer?.cancel();
+      if (last == null) return;
+      final due = last.add(const Duration(days: 2, milliseconds: 1));
+      if (due.isAfter(DateTime.now())) {
+        _syncStaleTimer = Timer(due.difference(DateTime.now()), () {
+          if (mounted) setState(() {});
+        });
+      }
+    } on Object {
+      // Local schedule and sync remain usable if the status channel is absent.
+    }
+  }
+
+  void _showSyncWarning() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nhắc đồng bộ'),
+        content: Text(AssistantText.of(AssistantEvent.syncStale, _assistantPack)),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _scheduleExamClock() {
@@ -150,9 +190,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text(
-          'Bạn đang trong kỳ thi. Hãy vào Lịch thi để kiểm tra.',
-        ),
+        content: Text(AssistantText.of(AssistantEvent.examPeriodActive, _assistantPack)),
         action: SnackBarAction(
           label: _unreadDifference ? 'Xem thay đổi' : 'Lịch thi',
           onPressed: _unreadDifference
@@ -209,6 +247,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   Future<void> _restore() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      _assistantPack = await AssistantSelection.load();
       final raw = prefs.getString(_storageKey);
       final semester = await CurrentSemesterStore().read();
       if (semester != null || (raw != null && raw.isNotEmpty)) {
@@ -234,6 +273,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     } on Object catch (error) {
       _errorMessage = 'Không đọc được dữ liệu cục bộ: $error';
     }
+    await _refreshSyncStatus();
     await Future<void>.delayed(const Duration(milliseconds: 650));
     if (mounted) {
       setState(() => _booting = false);
@@ -275,6 +315,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       await DailySync.disable();
       try {
         await DailySync.recordAppSyncSuccess();
+        await _refreshSyncStatus();
         _examNotice = await DailySync.examNotice();
       } on Object {
         // The successful semester snapshot is already stored.
@@ -378,7 +419,18 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                  _examNotice ?? SemesterSyncMessage.from(difference),
+                  AssistantText.of(
+                    difference.initial
+                        ? AssistantEvent.syncInitial
+                        : difference.study.hasChanges && difference.exams.hasChanges
+                        ? AssistantEvent.studyAndExamChanged
+                        : difference.study.hasChanges
+                        ? AssistantEvent.studyChanged
+                        : difference.exams.hasChanges
+                        ? AssistantEvent.examChanged
+                        : AssistantEvent.syncSuccessNoChange,
+                    _assistantPack,
+                  ),
                 ),
               ),
             );
@@ -411,6 +463,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   Future<void> _logout() async {
     _examClockTimer?.cancel();
+    _syncStaleTimer?.cancel();
     if (!kIsWeb) {
       await _widgetSessionChannel.invokeMethod<void>('invalidate');
     }
@@ -437,6 +490,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         _examNotice = null;
         _latestDifference = null;
         _unreadDifference = false;
+        _lastSuccessfulSync = null;
+        _assistantPack = AssistantPack.normal;
       });
     }
   }
@@ -536,11 +591,22 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                               errorMessage: _errorMessage,
                               examNotice: _examNotice,
                               unreadDifference: _unreadDifference,
-                              hasActiveExamPeriod:
-                                  ExamPeriod.hasActiveExamPeriod(
-                                    _data!.exams,
-                                    DateTime.now(),
-                                  ),
+                               hasActiveExamPeriod:
+                                   ExamPeriod.hasActiveExamPeriod(
+                                     _data!.exams,
+                                     DateTime.now(),
+                                   ),
+                               syncStale: const SyncReminderPolicy().shouldRemind(
+                                 now: DateTime.now(),
+                                 lastSuccessfulSync: _lastSuccessfulSync,
+                                 lastReminder: null,
+                               ),
+                               onSyncWarning: _showSyncWarning,
+                               assistantPack: _assistantPack,
+                               onAssistantPackChanged: (pack) async {
+                                 await AssistantSelection.save(pack);
+                                 if (mounted) setState(() => _assistantPack = pack);
+                               },
                               onOpenDifferences: _onNotificationTap,
                               onTogglePanel: () =>
                                   setState(() => _panelOpen = !_panelOpen),
@@ -735,6 +801,10 @@ class _MainShell extends StatelessWidget {
     required this.examNotice,
     required this.unreadDifference,
     required this.hasActiveExamPeriod,
+    required this.syncStale,
+    required this.onSyncWarning,
+    required this.assistantPack,
+    required this.onAssistantPackChanged,
     required this.onOpenDifferences,
     required this.onTogglePanel,
     required this.onOpenPage,
@@ -755,6 +825,10 @@ class _MainShell extends StatelessWidget {
   final String? examNotice;
   final bool unreadDifference;
   final bool hasActiveExamPeriod;
+  final bool syncStale;
+  final VoidCallback onSyncWarning;
+  final AssistantPack assistantPack;
+  final ValueChanged<AssistantPack> onAssistantPackChanged;
   final VoidCallback onOpenDifferences;
   final VoidCallback onTogglePanel;
   final ValueChanged<_AppPage> onOpenPage;
@@ -788,6 +862,8 @@ class _MainShell extends StatelessWidget {
         data: data,
         onLogout: onLogout,
         onSync: onSync,
+        assistantPack: assistantPack,
+        onAssistantPackChanged: onAssistantPackChanged,
       ),
     };
 
@@ -891,6 +967,23 @@ class _MainShell extends StatelessWidget {
               ),
             ),
           ),
+          if (syncStale)
+            Positioned(
+              left: 22,
+              bottom: 28,
+              child: FloatingActionButton(
+                heroTag: 'sync-stale-warning',
+                onPressed: onSyncWarning,
+                tooltip: 'Đã lâu chưa đồng bộ',
+                backgroundColor: palette.primary,
+                foregroundColor: palette.id == AppThemeId.lol
+                    ? const Color(0xFF06171D)
+                    : Colors.white,
+                elevation: palette.geometry == AppThemeGeometry.pixel ? 0 : 8,
+                shape: themeButtonShape(palette),
+                child: const Icon(Icons.warning_amber_rounded),
+              ),
+            ),
         ],
       ),
     );
@@ -1183,11 +1276,19 @@ class _ExamScreen extends StatelessWidget {
 }
 
 class _AccountScreen extends StatelessWidget {
-  const new({required this.data, required this.onLogout, required this.onSync});
+  const new({
+    required this.data,
+    required this.onLogout,
+    required this.onSync,
+    required this.assistantPack,
+    required this.onAssistantPackChanged,
+  });
 
   final ImportedScheduleData data;
   final VoidCallback onLogout;
   final VoidCallback onSync;
+  final AssistantPack assistantPack;
+  final ValueChanged<AssistantPack> onAssistantPackChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1233,6 +1334,36 @@ class _AccountScreen extends StatelessWidget {
           _InfoPanel(data: data),
           const SizedBox(height: 12),
           const AppThemeSettingButton(),
+          const SizedBox(height: 12),
+          PopupMenuButton<AssistantPack>(
+            tooltip: 'Chọn Trợ lí',
+            onSelected: onAssistantPackChanged,
+            itemBuilder: (context) => AssistantPack.values
+                .map((pack) => PopupMenuItem(
+                      value: pack,
+                      child: Text(pack.label, overflow: TextOverflow.ellipsis),
+                    ))
+                .toList(),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                border: Border.all(color: palette.primary),
+                borderRadius: BorderRadius.circular(
+                  palette.geometry == AppThemeGeometry.rounded ? 12 : 0,
+                ),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Icon(Icons.assistant_outlined, color: palette.primary),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text('Trợ lí: ${assistantPack.label}',
+                    maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  const Icon(Icons.arrow_drop_down),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 12),
           if (next != null) _WidgetPreview(item: next),
           const Spacer(),

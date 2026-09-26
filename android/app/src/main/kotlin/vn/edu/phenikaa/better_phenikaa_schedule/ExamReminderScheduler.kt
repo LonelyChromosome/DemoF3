@@ -5,7 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -22,31 +21,39 @@ internal object ExamReminderScheduler {
     private const val PREFS = "better_phenikaa_exam_reminders"
     private const val ACTIVE = "scheduled"
     private const val DELIVERED = "delivered"
+    private const val SEMESTER = "flutter.better_phenikaa_current_semester_v1"
 
+    @Synchronized
     fun reconcile(context: Context, semesterJson: String) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val scheduled = prefs.getStringSet(ACTIVE, emptySet()).orEmpty().toSet()
-        val delivered = prefs.getStringSet(DELIVERED, emptySet()).orEmpty().toSet()
-        val plan = ExamReminderPlanner.plan(
-            semesterJson, System.currentTimeMillis(), scheduled, delivered,
-        )
+        var delivered = prefs.getStringSet(DELIVERED, emptySet()).orEmpty().toSet()
+        var plan = ExamReminderPlanner.plan(
+            semesterJson, System.currentTimeMillis(), scheduled, delivered)
+        val manager = WorkManager.getInstance(context)
+        plan.cancel.forEach { manager.cancelUniqueWork(it) }
+        if (canNotify(context)) {
+            // One notification for all exams becoming due in this pass. Reading the page does
+            // not touch DELIVERED, so the 3-day and tomorrow milestones still fire.
+            val due = plan.due
+            if (due.isNotEmpty()) {
+                notify(context, due.flatMap { it.subjects }, due.minOf { it.daysBefore })
+                delivered = delivered + due.flatMap { it.milestoneKeys }
+                prefs.edit().putStringSet(DELIVERED, delivered).commit()
+                plan = ExamReminderPlanner.plan(
+                    semesterJson, System.currentTimeMillis(), scheduled, delivered)
+            }
+        }
         val next = (scheduled - plan.cancel) + plan.schedule.map { it.key }
         require(prefs.edit().putStringSet(ACTIVE, next).commit()) {
             "Không lưu được kế hoạch nhắc lịch thi."
         }
-        val manager = WorkManager.getInstance(context)
-        plan.cancel.forEach { manager.cancelUniqueWork(it) }
         plan.schedule.forEach { reminder ->
             val request = OneTimeWorkRequestBuilder<ExamReminderWorker>()
                 .setInitialDelay(
                     (reminder.atMillis - System.currentTimeMillis()).coerceAtLeast(0L),
-                    TimeUnit.MILLISECONDS,
-                )
-                .setInputData(workDataOf(
-                    "key" to reminder.key,
-                    "subject" to reminder.subject,
-                    "days" to reminder.daysBefore,
-                ))
+                    TimeUnit.MILLISECONDS)
+                .setInputData(workDataOf("key" to reminder.key))
                 .build()
             manager.enqueueUniqueWork(reminder.key, ExistingWorkPolicy.KEEP, request)
         }
@@ -59,48 +66,49 @@ internal object ExamReminderScheduler {
         keys.forEach { WorkManager.getInstance(context).cancelUniqueWork(it) }
     }
 
-    fun deliver(context: Context, key: String, subject: String, days: Int) {
+    fun deliver(context: Context, key: String) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val active = prefs.getStringSet(ACTIVE, emptySet()).orEmpty().toSet()
-        val delivered = prefs.getStringSet(DELIVERED, emptySet()).orEmpty().toSet()
-        if (key !in active || key in delivered) return
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
-            PackageManager.PERMISSION_GRANTED) return
-        if (!prefs.edit().putStringSet(DELIVERED, delivered + key)
-                .putStringSet(ACTIVE, active - key).commit()) return
+        if (key !in prefs.getStringSet(ACTIVE, emptySet()).orEmpty()) return
+        val semester = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            .getString(SEMESTER, null) ?: return
+        reconcile(context, semester)
+    }
+
+    private fun canNotify(context: Context): Boolean =
+        Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
+            context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    private fun notify(context: Context, subjects: List<String>, days: Int) {
         val notifications = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             notifications.createNotificationChannel(NotificationChannel(
-                "exam_reminders", "Nhắc lịch thi", NotificationManager.IMPORTANCE_DEFAULT,
-            ))
+                "exam_reminders", "Nhắc lịch thi", NotificationManager.IMPORTANCE_DEFAULT))
         }
         val openApp = context.packageManager.getLaunchIntentForPackage(context.packageName)
         val pending = openApp?.let {
-            PendingIntent.getActivity(context, key.hashCode(), it,
+            PendingIntent.getActivity(context, 2819, it,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
+        val event = if (days == 1) AssistantEvent.exam_tomorrow else AssistantEvent.exam_in_days
         val notification = NotificationCompat.Builder(context, "exam_reminders")
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Lịch thi sau $days ngày")
-            .setContentText(subject)
+            .setContentTitle("Nhắc lịch thi")
+            .setContentText(AssistantText.of(event, AssistantText.selected(context),
+                days = days, examCount = subjects.size))
             .setAutoCancel(true)
             .setContentIntent(pending)
             .build()
-        notifications.notify(key.hashCode(), notification)
+        notifications.notify(2819, notification)
     }
 }
 
 class ExamReminderWorker(context: Context, parameters: WorkerParameters) : Worker(context, parameters) {
     override fun doWork(): Result {
         val key = inputData.getString("key") ?: return Result.success()
-        val subject = inputData.getString("subject") ?: return Result.success()
-        val days = inputData.getInt("days", 0)
-        if (days !in listOf(7, 3, 1)) return Result.success()
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) !=
             PackageManager.PERMISSION_GRANTED) return Result.retry()
-        ExamReminderScheduler.deliver(applicationContext, key, subject, days)
+        ExamReminderScheduler.deliver(applicationContext, key)
         return Result.success()
     }
 }

@@ -36,8 +36,34 @@ class ExamReminderPlannerTest {
 
     @Test fun deliveredMilestoneIsNeverScheduledAgain() {
         val first = ExamReminderPlanner.plan(semester(), now, emptySet(), emptySet())
-        val delivered = setOf(first.schedule.first().key)
+        val delivered = first.schedule.first().milestoneKeys
         val repeated = ExamReminderPlanner.plan(semester(), now, emptySet(), delivered)
         assertEquals(2, repeated.schedule.size)
+    }
+
+    @Test fun missedSevenDayMilestoneCatchesUpAtFiveThenThreeThenTomorrow() {
+        val five = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2026-12-05")!!.time
+        val first = ExamReminderPlanner.plan(semester(), five, emptySet(), emptySet())
+        assertEquals(listOf(5), first.due.map { it.daysBefore })
+        val delivered = first.due.single().milestoneKeys
+        val three = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2026-12-07")!!.time
+        val second = ExamReminderPlanner.plan(semester(), three, emptySet(), delivered)
+        assertEquals(listOf(3), second.due.map { it.daysBefore })
+        val tomorrow = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2026-12-09")!!.time
+        val third = ExamReminderPlanner.plan(semester(), tomorrow, emptySet(),
+            delivered + second.due.single().milestoneKeys)
+        assertEquals(listOf(1), third.due.map { it.daysBefore })
+    }
+
+    @Test fun twoExamsOnSameDayMakeOneReminder() {
+        val both = semester().replace(
+            "{\"subjects\":[", "{\"subjects\":[")
+            .replace("}]}]}", "},{\"id\":\"second\",\"startAt\":\"2026-12-10T09:00:00.000\"," +
+                "\"endAt\":\"2026-12-10T11:00:00.000\",\"room\":\"C4\"," +
+                "\"className\":\"WEB-2026-LT\",\"examForm\":\"\"}]}]}")
+        val seven = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2026-12-03")!!.time
+        val plan = ExamReminderPlanner.plan(both, seven, emptySet(), emptySet())
+        assertEquals(1, plan.due.size)
+        assertEquals(2, plan.due.single().subjects.size)
     }
 }
