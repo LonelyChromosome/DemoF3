@@ -596,7 +596,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                           alpha: desktop ? .98 : .94,
                         ),
                         borderRadius: BorderRadius.circular(
-                          desktop && palette.geometry == AppThemeGeometry.rounded
+                          desktop &&
+                                  palette.geometry == AppThemeGeometry.rounded
                               ? 28
                               : 0,
                         ),
@@ -941,7 +942,8 @@ class _MainShell extends StatelessWidget {
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
               transitionBuilder: (child, animation) {
-                if (child.key != const ValueKey<_AppPage>(_AppPage.notifications)) {
+                if (child.key !=
+                    const ValueKey<_AppPage>(_AppPage.notifications)) {
                   return child;
                 }
                 return SlideTransition(
