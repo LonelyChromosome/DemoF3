@@ -56,7 +56,7 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
   }
 }
 
-enum _AppPage { timetable, exam, account }
+enum _AppPage { timetable, exam, account, notifications }
 
 class _AppRoot extends StatefulWidget {
   const new();
@@ -83,6 +83,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   String? _examNotice;
   SemesterDifference? _latestDifference;
   bool _unreadDifference = false;
+  _AppPage _notificationReturnPage = _AppPage.timetable;
   Timer? _examClockTimer;
   Timer? _syncStaleTimer;
   DateTime? _lastSuccessfulSync;
@@ -186,27 +187,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _onNotificationTap() {
-    final active =
-        _data != null &&
-        ExamPeriod.hasActiveExamPeriod(_data!.exams, DateTime.now());
-    if (!active) {
-      unawaited(_showDifferences());
-      return;
-    }
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          AssistantText.of(AssistantEvent.examPeriodActive, _assistantPack),
-        ),
-        action: SnackBarAction(
-          label: _unreadDifference ? 'Xem thay đổi' : 'Lịch thi',
-          onPressed: _unreadDifference
-              ? () => unawaited(_showDifferences())
-              : () => _openPage(_AppPage.exam),
-        ),
-      ),
-    );
+    _notificationReturnPage = _page == _AppPage.notifications
+        ? _AppPage.timetable
+        : _page;
+    _openPage(_AppPage.notifications);
   }
 
   Future<void> _refreshDifference() async {
@@ -532,6 +516,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     if (page == _AppPage.exam) unawaited(_acknowledgeExamNotice());
   }
 
+  void _closeNotificationCenter() => _openPage(_notificationReturnPage);
+
   Future<void> _acknowledgeExamNotice() async {
     try {
       await DailySync.ackExamNotice();
@@ -621,7 +607,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                   setState(() => _assistantPack = pack);
                                 }
                               },
-                              onOpenDifferences: _onNotificationTap,
+                               onOpenDifferences: _onNotificationTap,
+                               onCloseNotificationCenter: _closeNotificationCenter,
+                               onOpenExamFromNotification: () => _openPage(_AppPage.exam),
+                               onShowDifferences: _showDifferences,
+                               latestDifference: _latestDifference,
                               onTogglePanel: () =>
                                   setState(() => _panelOpen = !_panelOpen),
                               onOpenPage: _openPage,
@@ -820,6 +810,10 @@ class _MainShell extends StatelessWidget {
     required this.assistantPack,
     required this.onAssistantPackChanged,
     required this.onOpenDifferences,
+    required this.onCloseNotificationCenter,
+    required this.onOpenExamFromNotification,
+    required this.onShowDifferences,
+    required this.latestDifference,
     required this.onTogglePanel,
     required this.onOpenPage,
     required this.onSync,
@@ -844,6 +838,10 @@ class _MainShell extends StatelessWidget {
   final AssistantPack assistantPack;
   final ValueChanged<AssistantPack> onAssistantPackChanged;
   final VoidCallback onOpenDifferences;
+  final VoidCallback onCloseNotificationCenter;
+  final VoidCallback onOpenExamFromNotification;
+  final Future<void> Function() onShowDifferences;
+  final SemesterDifference? latestDifference;
   final VoidCallback onTogglePanel;
   final ValueChanged<_AppPage> onOpenPage;
   final VoidCallback onSync;
@@ -879,49 +877,27 @@ class _MainShell extends StatelessWidget {
         assistantPack: assistantPack,
         onAssistantPackChanged: onAssistantPackChanged,
       ),
+      _AppPage.notifications => _NotificationCenterScreen(
+        data: data,
+        unreadDifference: unreadDifference,
+        hasActiveExamPeriod: hasActiveExamPeriod,
+        onBack: onCloseNotificationCenter,
+        onOpenExam: onOpenExamFromNotification,
+        onDetails: onShowDifferences,
+        assistantPack: assistantPack,
+        difference: latestDifference,
+      ),
     };
 
     return _PhoneSurface(
       child: Stack(
         children: <Widget>[
           Positioned.fill(child: child),
-          if (examNotice != null && page != _AppPage.exam)
-            Positioned(
-              left: 16,
-              right: 16,
-              top: 14,
-              child: Material(
-                color: const Color(0xFF8E1835),
-                borderRadius: BorderRadius.circular(14),
-                child: InkWell(
-                  onTap: () => onOpenPage(_AppPage.exam),
-                  borderRadius: BorderRadius.circular(14),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Row(
-                      children: <Widget>[
-                        const Icon(
-                          Icons.notifications_active,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            examNotice!,
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
           if (errorMessage != null)
             Positioned(
               left: 16,
               right: 16,
-              top: examNotice == null ? 14 : 90,
+              top: 14,
               child: _ErrorBanner(
                 message: errorMessage!,
                 onDismiss: onDismissError,
@@ -1287,6 +1263,258 @@ class _ExamScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _NotificationCenterScreen extends StatelessWidget {
+  const _NotificationCenterScreen({
+    required this.data,
+    required this.unreadDifference,
+    required this.hasActiveExamPeriod,
+    required this.onBack,
+    required this.onOpenExam,
+    required this.onDetails,
+    required this.assistantPack,
+    required this.difference,
+  });
+
+  final ImportedScheduleData data;
+  final bool unreadDifference;
+  final bool hasActiveExamPeriod;
+  final VoidCallback onBack;
+  final VoidCallback onOpenExam;
+  final Future<void> Function() onDetails;
+  final AssistantPack assistantPack;
+  final SemesterDifference? difference;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = appThemePalette;
+    final hasStudy = difference?.study.hasChanges == true;
+    final hasExam = difference?.exams.hasChanges == true;
+    final hasAnyChange = difference?.hasChanges == true;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              IconButton(
+                tooltip: 'Quay lại',
+                onPressed: onBack,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                icon: Icon(Icons.arrow_back_rounded, color: palette.primary),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  themedHeading('Thông báo', palette),
+                  style: TextStyle(
+                    color: palette.textPrimary,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: themeLetterSpacing(palette),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 82),
+              children: <Widget>[
+                if (hasActiveExamPeriod)
+                  _NotificationExamCard(
+                    text: AssistantText.of(
+                      AssistantEvent.examPeriodActive,
+                      assistantPack,
+                    ),
+                    palette: palette,
+                    onOpenExam: onOpenExam,
+                  ),
+                if (hasAnyChange) ...<Widget>[
+                  if (hasActiveExamPeriod) const SizedBox(height: 18),
+                  Text(
+                    'Thay đổi lịch',
+                    style: TextStyle(
+                      color: palette.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (hasStudy)
+                    _NotificationChangeCard(
+                      icon: Icons.event_available_rounded,
+                      title: 'Thay đổi môn học',
+                      description: 'Có thay đổi lịch học',
+                      count: difference!.study.added +
+                          difference.study.removed +
+                          difference.study.modified,
+                      palette: palette,
+                    ),
+                  if (hasStudy && hasExam) const SizedBox(height: 10),
+                  if (hasExam)
+                    _NotificationChangeCard(
+                      icon: Icons.assignment_rounded,
+                      title: 'Thay đổi lịch thi',
+                      description: 'Có thay đổi lịch thi',
+                      count: difference!.exams.added +
+                          difference.exams.removed +
+                          difference.exams.modified,
+                      palette: palette,
+                    ),
+                  const SizedBox(height: 14),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton.icon(
+                      onPressed: () => unawaited(onDetails()),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      label: const Text('Chi tiết'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: palette.primary,
+                        side: BorderSide(color: palette.primary),
+                        shape: themeButtonShape(palette),
+                      ),
+                    ),
+                  ),
+                ],
+                if (!hasActiveExamPeriod && !hasAnyChange)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 90),
+                    child: _EmptyState(
+                      icon: Icons.notifications_none_rounded,
+                      title: AssistantText.of(
+                        AssistantEvent.notificationEmpty,
+                        assistantPack,
+                      ),
+                      message: 'Các thông báo mới sẽ xuất hiện ở đây.',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+}
+
+class _NotificationExamCard extends StatelessWidget {
+  const _NotificationExamCard({
+    required this.text,
+    required this.palette,
+    required this.onOpenExam,
+  });
+
+  final String text;
+  final dynamic palette;
+  final VoidCallback onOpenExam;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: palette.cardAlt,
+          borderRadius: BorderRadius.circular(
+            palette.geometry == AppThemeGeometry.rounded ? 16 : 0,
+          ),
+          border: Border.all(color: palette.primary, width: 1.4),
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(Icons.school_rounded, color: palette.primary, size: 26),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: palette.textPrimary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Mở lịch thi',
+              onPressed: onOpenExam,
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              padding: EdgeInsets.zero,
+              style: IconButton.styleFrom(
+                backgroundColor: palette.primary,
+                foregroundColor: palette.id == AppThemeId.lol
+                    ? const Color(0xFF06171D)
+                    : Colors.white,
+              ),
+              icon: const Icon(Icons.arrow_forward_rounded),
+            ),
+          ],
+        ),
+      );
+}
+
+class _NotificationChangeCard extends StatelessWidget {
+  const _NotificationChangeCard({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.count,
+    required this.palette,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final int count;
+  final dynamic palette;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: palette.surface,
+          borderRadius: BorderRadius.circular(
+            palette.geometry == AppThemeGeometry.rounded ? 16 : 0,
+          ),
+          border: Border.all(color: palette.border),
+        ),
+        child: Row(
+          children: <Widget>[
+            Icon(icon, color: palette.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: palette.textPrimary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    description,
+                    style: TextStyle(color: palette.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            if (count > 0)
+              Text(
+                '$count',
+                style: TextStyle(
+                  color: palette.primary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+          ],
+        ),
+      );
 }
 
 class _AccountScreen extends StatelessWidget {
