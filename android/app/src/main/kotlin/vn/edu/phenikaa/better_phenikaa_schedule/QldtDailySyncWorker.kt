@@ -1,7 +1,11 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -14,6 +18,8 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.app.NotificationCompat
+import androidx.work.ForegroundInfo
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import org.json.JSONArray
@@ -46,6 +52,10 @@ class QldtDailySyncWorker(
         var syncError = "SYNC_UNKNOWN: QLĐT chưa trả kết quả."
         var reminderSemester: String? = null
         try {
+            // Keep the user-initiated widget sync alive when the app goes to the background.
+            // Wait until WorkManager has promoted it before starting the hidden WebView.
+            setForegroundAsync(syncForegroundInfo()).get()
+            if (isStopped) return Result.success()
             val preferences = applicationContext.getSharedPreferences(
                 FLUTTER_PREFERENCES,
                 Context.MODE_PRIVATE,
@@ -157,6 +167,31 @@ class QldtDailySyncWorker(
         super.onStopped()
     }
 
+    private fun syncForegroundInfo(): ForegroundInfo {
+        val manager = applicationContext.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager?.createNotificationChannel(NotificationChannel(
+                SYNC_CHANNEL, "Đồng bộ widget", NotificationManager.IMPORTANCE_LOW,
+            ))
+        }
+        val launch = applicationContext.packageManager
+            .getLaunchIntentForPackage(applicationContext.packageName)
+        val openApp = launch?.let {
+            PendingIntent.getActivity(applicationContext, SYNC_NOTIFICATION_ID, it,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        }
+        val notification = NotificationCompat.Builder(applicationContext, SYNC_CHANNEL)
+            .setSmallIcon(R.drawable.ic_widget_reload)
+            .setContentTitle("Đang đồng bộ QLĐT")
+            .setContentText("Có thể tiếp tục dùng ứng dụng khác trong lúc đồng bộ.")
+            .setContentIntent(openApp)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build()
+        return ForegroundInfo(SYNC_NOTIFICATION_ID, notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+    }
+
     private fun registeredStart(raw: String): String {
         val subjects = JSONObject(raw).getJSONArray("subjects")
         val dates = mutableListOf<String>()
@@ -230,6 +265,8 @@ class QldtDailySyncWorker(
         const val PREVIOUS_SEMESTER_KEY = "flutter.better_phenikaa_previous_semester_v1"
         const val DIFFERENCE_KEY = "flutter.better_phenikaa_semester_difference_v1"
         const val REGISTRATION_ROUTE_KEY = "flutter.better_phenikaa_qldt_registration_route_v1"
+        const val SYNC_CHANNEL = "widget_sync_progress"
+        const val SYNC_NOTIFICATION_ID = 2819
     }
 }
 

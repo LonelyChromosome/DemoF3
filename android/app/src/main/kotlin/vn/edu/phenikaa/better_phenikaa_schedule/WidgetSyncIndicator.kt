@@ -67,6 +67,10 @@ internal object WidgetSyncIndicator {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getLong(STARTED_AT, 0L) == token
 
+    fun currentToken(context: Context): Long =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getLong(STARTED_AT, 0L)
+
     fun clear(context: Context) {
         synchronized(this) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().commit()
