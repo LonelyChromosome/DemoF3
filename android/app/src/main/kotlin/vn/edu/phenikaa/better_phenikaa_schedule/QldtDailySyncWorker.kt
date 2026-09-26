@@ -89,12 +89,20 @@ class QldtDailySyncWorker(
                         isTermActive(oldStart)) {
                         JSONObject().put("startedAt", oldStart)
                             .put("semester", JSONObject(oldSemester)).toString()
-                    } else preferences.getString(PREVIOUS_SEMESTER_KEY, null)
+                    } else preferences.getString(PREVIOUS_SEMESTER_KEY, null)?.takeIf {
+                        runCatching {
+                            val previous = JSONObject(it)
+                            isTermActive(previous.getString("startedAt")) &&
+                                previous.getJSONObject("semester").optString("semesterId") !=
+                                JSONObject(bundle.semester).optString("semesterId")
+                        }.getOrDefault(false)
+                    }
+                    val (appSnapshot, widgetSnapshot) = mergeArchivedSchedules(bundle, archive)
                     if (!WidgetSyncIndicator.isCurrent(applicationContext, syncToken))
                         return Result.success()
                     val saved = preferences.edit()
-                        .putString(APP_SNAPSHOT_KEY, bundle.appSnapshot)
-                        .putString(WIDGET_SNAPSHOT_KEY, bundle.widgetSnapshot)
+                        .putString(APP_SNAPSHOT_KEY, appSnapshot)
+                        .putString(WIDGET_SNAPSHOT_KEY, widgetSnapshot)
                         .putString(CURRENT_SEMESTER_KEY, bundle.semester)
                         .putString(CURRENT_START_KEY, startText)
                         .putString(DIFFERENCE_KEY, difference)
@@ -172,6 +180,46 @@ class QldtDailySyncWorker(
         }
         Date().before(expiry.time)
     }.getOrDefault(false)
+
+    private fun mergeArchivedSchedules(
+        current: NativeSemesterVerifier.SnapshotBundle,
+        archive: String?,
+    ): Pair<String, String> {
+        if (archive == null) return current.appSnapshot to current.widgetSnapshot
+        val app = JSONObject(current.appSnapshot)
+        val widget = JSONObject(current.widgetSnapshot)
+        val oldSubjects = JSONObject(archive).getJSONObject("semester").getJSONArray("subjects")
+        for (index in 0 until oldSubjects.length()) {
+            val subject = oldSubjects.getJSONObject(index)
+            for ((key, widgetKey) in listOf(
+                "studySchedules" to "classes", "examSchedules" to "exams",
+            )) {
+                val rows = subject.getJSONArray(key)
+                for (rowIndex in 0 until rows.length()) {
+                    val row = rows.getJSONObject(rowIndex)
+                    val id = subject.getString("subjectId") + "|" + row.getString("id")
+                    val record = JSONObject(row.toString())
+                        .put("id", id)
+                        .put("subjectName", subject.getString("name"))
+                    app.getJSONArray("records").put(record)
+                    widget.getJSONArray(widgetKey).put(
+                        JSONObject().put("id", id)
+                            .put("subjectName", subject.getString("name"))
+                            .put("room", row.getString("room"))
+                            .put("startAt", row.getString("startAt"))
+                            .put("endAt", row.getString("endAt"))
+                            .apply {
+                                if (widgetKey == "exams") {
+                                    put("examForm", row.optString("examForm"))
+                                    put("className", row.optString("className"))
+                                }
+                            },
+                    )
+                }
+            }
+        }
+        return app.toString() to widget.toString()
+    }
 
     private companion object {
         const val FLUTTER_PREFERENCES = "FlutterSharedPreferences"
