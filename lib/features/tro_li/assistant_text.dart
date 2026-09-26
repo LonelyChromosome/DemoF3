@@ -124,9 +124,7 @@ abstract final class AssistantText {
         catalog[AssistantPack.normal.name]![useCase]!;
     final resolved = switch (useCase) {
       9 => template.replaceFirst('X', '$days'),
-      11 => template
-          .replaceFirst('X', '$days')
-          .replaceFirst('N', '$examCount'),
+      11 => template.replaceFirst('X', '$days').replaceFirst('N', '$examCount'),
       _ => template,
     };
     return inWidget && pack == AssistantPack.flirtatious
