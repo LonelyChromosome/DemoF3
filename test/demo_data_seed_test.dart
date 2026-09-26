@@ -41,7 +41,10 @@ void main() {
     });
     await DemoDataSeed.seedIfEmpty();
     final preferences = await SharedPreferences.getInstance();
-    expect(preferences.getString(CurrentSemesterStore.storageKey), 'existing schedule');
+    expect(
+      preferences.getString(CurrentSemesterStore.storageKey),
+      'existing schedule',
+    );
     expect((await SemesterDifferenceStore().read())?.hasChanges, isTrue);
   });
 }

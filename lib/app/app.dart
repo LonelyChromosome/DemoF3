@@ -1748,17 +1748,22 @@ class _AccountScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   if (next != null)
                     GestureDetector(
-                      onTap: () => unawaited(_showWidgetOptions(context, 'small')),
+                      onTap: () =>
+                          unawaited(_showWidgetOptions(context, 'small')),
                       onLongPress: () =>
                           unawaited(_requestWidgetPin(context, 'small')),
                       child: _WidgetPreview(item: next),
                     ),
                   const SizedBox(height: 16),
                   GestureDetector(
-                    onTap: () => unawaited(_showWidgetOptions(context, 'overview')),
+                    onTap: () =>
+                        unawaited(_showWidgetOptions(context, 'overview')),
                     onLongPress: () =>
                         unawaited(_requestWidgetPin(context, 'overview')),
-                    child: _OverviewWidgetPreview(data: data, date: next?.startAt),
+                    child: _OverviewWidgetPreview(
+                      data: data,
+                      date: next?.startAt,
+                    ),
                   ),
                 ],
               ),
@@ -2621,14 +2626,16 @@ class _OverviewWidgetPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = appThemePalette;
     final selected = date ?? DateTime.now();
-    final subjects = data.classes
-        .where(
-          (item) => item.startAt.year == selected.year &&
-              item.startAt.month == selected.month &&
-              item.startAt.day == selected.day,
-        )
-        .toList()
-      ..sort((a, b) => a.startAt.compareTo(b.startAt));
+    final subjects =
+        data.classes
+            .where(
+              (item) =>
+                  item.startAt.year == selected.year &&
+                  item.startAt.month == selected.month &&
+                  item.startAt.day == selected.day,
+            )
+            .toList()
+          ..sort((a, b) => a.startAt.compareTo(b.startAt));
     final visible = subjects.take(4).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2664,7 +2671,11 @@ class _OverviewWidgetPreview extends StatelessWidget {
               children: <Widget>[
                 Row(
                   children: <Widget>[
-                    Icon(Icons.school_outlined, size: 18, color: palette.widgetText),
+                    Icon(
+                      Icons.school_outlined,
+                      size: 18,
+                      color: palette.widgetText,
+                    ),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -2707,10 +2718,15 @@ class _OverviewWidgetPreview extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: palette.card.withValues(alpha: .22),
                                     border: Border.all(
-                                      color: palette.widgetText.withValues(alpha: .3),
+                                      color: palette.widgetText.withValues(
+                                        alpha: .3,
+                                      ),
                                     ),
                                     borderRadius: BorderRadius.circular(
-                                      palette.geometry == AppThemeGeometry.rounded ? 8 : 0,
+                                      palette.geometry ==
+                                              AppThemeGeometry.rounded
+                                          ? 8
+                                          : 0,
                                     ),
                                   ),
                                   child: Padding(
@@ -2718,7 +2734,8 @@ class _OverviewWidgetPreview extends StatelessWidget {
                                     child: index >= visible.length
                                         ? const SizedBox.expand()
                                         : Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: <Widget>[
                                               Text(
                                                 _time(visible[index].startAt),
@@ -2734,7 +2751,8 @@ class _OverviewWidgetPreview extends StatelessWidget {
                                                 child: Text(
                                                   visible[index].subjectName,
                                                   maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                   style: TextStyle(
                                                     color: palette.widgetText,
                                                     fontSize: 9,
@@ -2763,7 +2781,11 @@ class _OverviewWidgetPreview extends StatelessWidget {
                 const SizedBox(height: 6),
                 Row(
                   children: <Widget>[
-                    Icon(Icons.chevron_left, size: 15, color: palette.widgetText),
+                    Icon(
+                      Icons.chevron_left,
+                      size: 15,
+                      color: palette.widgetText,
+                    ),
                     Expanded(
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -2782,7 +2804,11 @@ class _OverviewWidgetPreview extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Icon(Icons.chevron_right, size: 15, color: palette.widgetText),
+                    Icon(
+                      Icons.chevron_right,
+                      size: 15,
+                      color: palette.widgetText,
+                    ),
                   ],
                 ),
               ],
