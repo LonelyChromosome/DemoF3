@@ -36,6 +36,14 @@ jobs:
           channel: stable
           cache: true
       - run: bash tool/bootstrap.sh
+      - run: dart format lib/app/app.dart lib/demo/demo_data_seed.dart test/demo_data_seed_test.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatted-widget-preview-sources
+          path: |
+            lib/app/app.dart
+            lib/demo/demo_data_seed.dart
+            test/demo_data_seed_test.dart
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed lib/demo lib/main.dart test/demo_data_seed_test.dart
       - name: Test bundled data
