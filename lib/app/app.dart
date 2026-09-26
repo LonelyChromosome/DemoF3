@@ -608,10 +608,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 }
                               },
                                onOpenDifferences: _onNotificationTap,
-                               onCloseNotificationCenter: _closeNotificationCenter,
-                               onOpenExamFromNotification: () => _openPage(_AppPage.exam),
-                               onShowDifferences: _showDifferences,
-                               latestDifference: _latestDifference,
+                              onCloseNotificationCenter:
+                                  _closeNotificationCenter,
+                              onOpenExamFromNotification: () =>
+                                  _openPage(_AppPage.exam),
+                              onShowDifferences: _showDifferences,
+                              latestDifference: _latestDifference,
                               onTogglePanel: () =>
                                   setState(() => _panelOpen = !_panelOpen),
                               onOpenPage: _openPage,
@@ -1289,11 +1291,12 @@ class _NotificationCenterScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
-    final hasStudy = difference?.study.hasChanges == true ||
-        difference?.addedSubjects.isNotEmpty == true ||
-        difference?.removedSubjects.isNotEmpty == true;
-    final hasExam = difference?.exams.hasChanges == true;
-    final hasAnyChange = difference?.hasChanges == true;
+    final currentDifference = difference;
+    final hasStudy = currentDifference?.study.hasChanges == true ||
+        currentDifference?.addedSubjects.isNotEmpty == true ||
+        currentDifference?.removedSubjects.isNotEmpty == true;
+    final hasExam = currentDifference?.exams.hasChanges == true;
+    final hasAnyChange = currentDifference?.hasChanges == true;
     return Padding(
       padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
       child: Column(
@@ -1352,11 +1355,11 @@ class _NotificationCenterScreen extends StatelessWidget {
                       icon: Icons.event_available_rounded,
                       title: 'Thay đổi môn học',
                       description: 'Có thay đổi lịch học',
-                      count: difference!.study.added +
-                          difference.study.removed +
-                          difference.study.modified +
-                          difference.addedSubjects.length +
-                          difference.removedSubjects.length,
+                      count: (currentDifference?.study.added ?? 0) +
+                          (currentDifference?.study.removed ?? 0) +
+                          (currentDifference?.study.modified ?? 0) +
+                          (currentDifference?.addedSubjects.length ?? 0) +
+                          (currentDifference?.removedSubjects.length ?? 0),
                       palette: palette,
                     ),
                   if (hasStudy && hasExam) const SizedBox(height: 10),
@@ -1365,9 +1368,9 @@ class _NotificationCenterScreen extends StatelessWidget {
                       icon: Icons.assignment_rounded,
                       title: 'Thay đổi lịch thi',
                       description: 'Có thay đổi lịch thi',
-                      count: difference!.exams.added +
-                          difference.exams.removed +
-                          difference.exams.modified,
+                      count: (currentDifference?.exams.added ?? 0) +
+                          (currentDifference?.exams.removed ?? 0) +
+                          (currentDifference?.exams.modified ?? 0),
                       palette: palette,
                     ),
                   const SizedBox(height: 14),
@@ -1404,7 +1407,6 @@ class _NotificationCenterScreen extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _NotificationExamCard extends StatelessWidget {
