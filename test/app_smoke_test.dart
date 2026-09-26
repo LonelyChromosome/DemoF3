@@ -210,8 +210,9 @@ void main() {
     },
   );
 
-  testWidgets('notification center replaces bell Snackbar and opens exam page',
-      (tester) async {
+  testWidgets(
+    'notification center replaces bell Snackbar and opens exam page',
+    (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
     final now = DateTime.now();
     final snapshot = ImportedScheduleData(
@@ -243,5 +244,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Lịch thi'), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
-  });
+    },
+  );
 }
