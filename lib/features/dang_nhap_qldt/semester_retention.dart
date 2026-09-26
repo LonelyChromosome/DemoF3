@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 final class RetainedSemester {
   const new(this.semester, this.startedAt);
 
-  factory RetainedSemester.decode(String raw) {
+  factory decode(String raw) {
     final json = jsonDecode(raw) as Map<String, dynamic>;
     return RetainedSemester(
       CurrentSemester.fromJson(
