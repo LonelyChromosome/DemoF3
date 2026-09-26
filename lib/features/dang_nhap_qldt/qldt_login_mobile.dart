@@ -3,12 +3,12 @@ import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/qldt_sync_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_range.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/tracuu_api.dart';
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/verification_diagnostics.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/verification_diagnostics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -72,13 +72,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   Timer? _syncWatchdog;
   Timer? _phaseTimer;
   Timer? _sessionTimer;
-  final QldtSyncDiagnostics _diagnostics = QldtSyncDiagnostics();
+  final QldtSyncDiagnostics? _diagnostics = qldtDiagnosticsEnabled
+      ? QldtSyncDiagnostics()
+      : null;
   QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
   String? _pendingRegistrationRaw;
   String? _failureDiagnosticsJson;
   final List<String> _scheduleStages = <String>[];
-  Stopwatch? _scheduleRequestWatch;
   int _syncEpoch = 0;
   bool _pageReady = false;
   bool _syncing = false;
@@ -207,7 +208,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                               ),
                               onWebViewCreated: _onWebViewCreated,
                               onLoadStart: (_, _) {
-                                _diagnostics.mark('PAGE_LOAD_START');
                                 _readinessTimer?.cancel();
                                 if (mounted) {
                                   setState(() {
@@ -223,7 +223,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                                 }
                               },
                               onLoadStop: (controller, url) {
-                                _diagnostics.mark('PAGE_LOAD_STOP');
                                 unawaited(
                                   _handleLoginPage(controller, url?.toString()),
                                 );
@@ -330,7 +329,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                   ),
                 ),
               ),
-            if (_failureDiagnosticsJson != null && !_syncing)
+            if (qldtDiagnosticsEnabled &&
+                _failureDiagnosticsJson != null &&
+                !_syncing)
               SafeArea(
                 top: false,
                 child: Padding(
@@ -339,14 +340,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        final timing = await QldtSyncDiagnostics.exportReport();
                         await Clipboard.setData(
-                          ClipboardData(
-                            text: jsonEncode(<String, Object?>{
-                              'timing': jsonDecode(timing),
-                              'failure': jsonDecode(_failureDiagnosticsJson!),
-                            }),
-                          ),
+                          ClipboardData(text: _failureDiagnosticsJson!),
                         );
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -575,35 +570,18 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       },
     );
     if (!_syncing) {
-      _diagnostics.start(QldtSyncPhase.session);
+      _diagnostics?.start(QldtSyncPhase.session);
     }
     if (widget.cachedSession && !_syncing) {
       _sessionTimer = Timer(const Duration(seconds: 35), () {
         if (!mounted || _pageReady || _syncing) return;
-        _diagnostics.finish('SESSION_TIMEOUT');
+        _diagnostics?.finish('SESSION_TIMEOUT');
         setState(() {
           _showWebPage = true;
           _status = 'Phiên QLĐT đã hết hạn hoặc cổng sinh viên không phản hồi. Hãy đăng nhập lại.';
         });
       });
     }
-    controller.addJavaScriptHandler(
-      handlerName: 'betterPhenikaaRequestMetric',
-      callback: (arguments) {
-        if (!mounted ||
-            !_syncing ||
-            arguments.length < 4 ||
-            arguments.first?.toString() != '$_syncEpoch') {
-          return null;
-        }
-        _diagnostics.markRequest(
-          arguments[1]?.toString() ?? '',
-          (arguments[2] as num?)?.toInt() ?? 0,
-          arguments[3]?.toString() ?? '',
-        );
-        return null;
-      },
-    );
     controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaScheduleStage',
       callback: (arguments) {
@@ -619,21 +597,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             'exception',
           }.contains(stage)) {
             _scheduleStages.add(stage!);
-            if (stage == 'request') {
-              _scheduleRequestWatch = Stopwatch()..start();
-            } else if (_scheduleRequestWatch != null) {
-              _scheduleRequestWatch!.stop();
-              _diagnostics.markRequest(
-                'schedule',
-                _scheduleRequestWatch!.elapsedMilliseconds,
-                switch (stage) {
-                  'success' => 'success',
-                  'error' => 'error',
-                  _ => 'exception',
-                },
-              );
-              _scheduleRequestWatch = null;
-            }
           }
         }
         return null;
@@ -704,7 +667,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           'verification' => stage,
           _ => 'UNKNOWN',
         };
-        _diagnostics.mark('REG_STAGE_$safeStage');
+        _diagnostics?.mark('REG_STAGE_$safeStage');
         if (stage == 'semesterPlan') {
           _startPhase(
             QldtSyncPhase.semesterPlan,
@@ -756,7 +719,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
             'PLAN_AMBIGUOUS' => 'PLAN_AMBIGUOUS',
             _ => 'INVALID_RESPONSE',
           };
-          if (code == 'PLAN_AMBIGUOUS' && arguments.length >= 3) {
+          if (qldtDiagnosticsEnabled &&
+              code == 'PLAN_AMBIGUOUS' &&
+              arguments.length >= 3) {
             try {
               _failureDiagnosticsJson =
                   QldtSyncDiagnostics.sanitizePlanSnapshot(
@@ -836,11 +801,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
       _phaseTimer?.cancel();
       _syncWatchdog?.cancel();
-      _diagnostics.finish('OK');
-      try {
-        await _diagnostics.flushed.timeout(const Duration(seconds: 2));
-      } on Object {
-        // Diagnostic persistence cannot block a verified schedule.
+      _diagnostics?.finish('OK');
+      if (_diagnostics case final diagnostics?) {
+        try {
+          await diagnostics.flushed.timeout(const Duration(seconds: 2));
+        } on Object {
+          // Diagnostic persistence cannot block a verified schedule.
+        }
       }
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
       Navigator.of(context).pop(
@@ -854,7 +821,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       );
     } on Object catch (error) {
       final currentSchedule = _pendingSchedule;
-      if (registration != null && currentSchedule != null) {
+      if (qldtDiagnosticsEnabled &&
+          registration != null &&
+          currentSchedule != null) {
         try {
           final snapshot = jsonDecode(
             const VerificationDiagnostics().capture(
@@ -870,7 +839,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           _failureDiagnosticsJson = null;
         }
       }
-      if (_failureDiagnosticsJson == null) {
+      if (qldtDiagnosticsEnabled && _failureDiagnosticsJson == null) {
         final report = <String, Object?>{
           'version': 1,
           'kind': 'verification',
@@ -971,7 +940,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       if (ready && !_autoSyncStarted && !_syncing) {
         _readinessTimer?.cancel();
         _sessionTimer?.cancel();
-        _diagnostics.finish('OK');
+        _diagnostics?.finish('OK');
         _autoSyncStarted = true;
         unawaited(_rememberPortal(controller));
         await _sync();
@@ -991,7 +960,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     if (_readinessAttempt >= 35) {
       if (mounted) {
         _sessionTimer?.cancel();
-        _diagnostics.finish('SESSION_TIMEOUT');
+        _diagnostics?.finish('SESSION_TIMEOUT');
         setState(() {
           _showWebPage = true;
           _autoSyncStarted = false;
@@ -1033,7 +1002,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _pendingRegistrationRaw = null;
     _failureDiagnosticsJson = null;
     _scheduleStages.clear();
-    _scheduleRequestWatch = null;
     try {
       final dispatch = await controller.evaluateJavascript(
         source: const TracuuApi().scriptForAttempt(epoch),
@@ -1203,7 +1171,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     if (_currentPhase != null && phase.index <= _currentPhase!.index) return;
     _currentPhase = phase;
     _phaseTimer?.cancel();
-    _diagnostics.start(phase);
+    _diagnostics?.start(phase);
     _phaseTimer = Timer(limit, () {
       final reason =
           '${phase.name} không phản hồi trong ${limit.inSeconds} giây.';
@@ -1219,15 +1187,19 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     if (!mounted || epoch != _syncEpoch) return;
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
-    _diagnostics.finish(code);
-    _failureDiagnosticsJson ??= jsonEncode(<String, Object?>{
-      'version': 1,
-      'kind': 'sync_stage',
-      'failureCode': RegExp(r'^[A-Z_]{1,40}$').hasMatch(code) ? code : 'FAILED',
-      'phase': _currentPhase?.name,
-      'scheduleStages': _scheduleStages,
-      'pageReady': _pageReady,
-    });
+    _diagnostics?.finish(code);
+    if (qldtDiagnosticsEnabled) {
+      _failureDiagnosticsJson ??= jsonEncode(<String, Object?>{
+        'version': 1,
+        'kind': 'sync_stage',
+        'failureCode': RegExp(r'^[A-Z_]{1,40}$').hasMatch(code)
+            ? code
+            : 'FAILED',
+        'phase': _currentPhase?.name,
+        'scheduleStages': _scheduleStages,
+        'pageReady': _pageReady,
+      });
+    }
     _pendingSchedule = null;
     _pendingRegistrationRaw = null;
     setState(() {

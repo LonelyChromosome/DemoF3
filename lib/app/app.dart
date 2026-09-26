@@ -5,7 +5,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/exam_period.dar
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/qldt_sync_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/schedule_difference_sheet.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
@@ -535,13 +535,17 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         try {
           difference = await _save(imported);
           try {
-            await QldtSyncDiagnostics.appendSave(saveStarted, 'OK');
+            if (qldtDiagnosticsEnabled) {
+              await QldtSyncDiagnostics.appendSave(saveStarted, 'OK');
+            }
           } on Object {
             // Diagnostics must not change the saved schedule.
           }
         } on Object {
           try {
-            await QldtSyncDiagnostics.appendSave(saveStarted, 'SAVE_FAILED');
+            if (qldtDiagnosticsEnabled) {
+              await QldtSyncDiagnostics.appendSave(saveStarted, 'SAVE_FAILED');
+            }
           } on Object {
             // The original save error remains authoritative.
           }
@@ -1896,21 +1900,6 @@ class _AccountScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final report = await QldtSyncDiagnostics.exportReport();
-                      await Clipboard.setData(ClipboardData(text: report));
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Đã sao chép bản đo QLĐT.'),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.timer_outlined),
-                    label: const Text('Sao chép bản đo QLĐT'),
                   ),
                   const SizedBox(height: 12),
                   if (next != null)

@@ -1,11 +1,15 @@
 import 'dart:convert';
 
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/qldt_sync_diagnostics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('production diagnostics are disabled by default', () {
+    expect(qldtDiagnosticsEnabled, isFalse);
+  });
 
   test('records only stage, time, and fixed result code', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -33,24 +37,6 @@ void main() {
       stored[1].keys,
       containsAll(<String>['phase', 'startedAt', 'endedAt', 'code']),
     );
-  });
-
-  test('exports per-request timings without response data', () async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    var now = DateTime.utc(2026, 9, 26, 1);
-    final trail = QldtSyncDiagnostics(clock: () => now);
-    trail.start(QldtSyncPhase.semesterPlan);
-    trail.markRequest('semesters', 823, 'success');
-    trail.markRequest('password=secret', 9, 'error');
-    now = now.add(const Duration(seconds: 2));
-    trail.finish('OK');
-    await trail.flushed;
-
-    final report = await QldtSyncDiagnostics.exportReport();
-    expect(report, contains('"request":"semesters"'));
-    expect(report, contains('"elapsedMs":823'));
-    expect(report, contains('"durationMs":2000'));
-    expect(report, isNot(contains('password=secret')));
   });
 
   test(

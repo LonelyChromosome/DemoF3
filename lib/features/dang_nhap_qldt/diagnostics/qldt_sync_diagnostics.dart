@@ -2,6 +2,12 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Opt in only for a diagnostic build. Release APKs use the default false.
+const bool qldtDiagnosticsEnabled = bool.fromEnvironment(
+  'QLDT_DIAGNOSTICS',
+  defaultValue: false,
+);
+
 enum QldtSyncPhase {
   session,
   navigation,

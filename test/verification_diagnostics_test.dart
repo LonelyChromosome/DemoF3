@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/verification_diagnostics.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/verification_diagnostics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
