@@ -218,41 +218,47 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             .getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320)
         val columns = OverviewPager.columns(width)
         val distance = kotlin.math.abs(next - old) * (width - 24f) / columns
-        windowFrame(context, manager, id, items, width, columns, old, next,
-            .33f, .8f, offset * distance * .33f)
-        handler.postDelayed({
-            if (state.getInt(navigationKey(id), 0) != generation) return@postDelayed
-            windowFrame(context, manager, id, items, width, columns, old, next,
-                .67f, 0f, offset * distance * .67f)
-            state.edit().putInt(windowKey(id), next).apply()
-            // Replace the one row; the stationary track receives no action.
-            renderWindow(context, manager, id, -offset * distance * .33f)
-            handler.postDelayed({
-                if (state.getInt(navigationKey(id), 0) == generation) {
-                    windowFrame(context, manager, id, items, width, columns, old, next,
-                        1f, .8f, -offset * distance * .15f)
-                    handler.postDelayed({
-                        if (state.getInt(navigationKey(id), 0) == generation) {
-                            contentFrame(context, manager, id, 1f)
-                        }
-                    }, NAV_FRAME_DELAY_MS)
-                }
-            }, NAV_FRAME_DELAY_MS)
-        }, NAV_FRAME_DELAY_MS)
-    }
-
-    /** Draw the moving dots as one bitmap; the track view remains untouched. */
-    private fun windowFrame(context: Context, manager: AppWidgetManager, id: Int,
-                            items: List<WidgetClass>, width: Int, columns: Int,
-                            old: Int, next: Int, progress: Float,
-                            cardAlpha: Float, cardOffsetDp: Float) {
+        val provider = ScheduleWidgetProvider()
         val first = minOf(old, next)
         val last = maxOf(old, next)
-        val provider = ScheduleWidgetProvider()
         val before = provider.overviewProgress(context, width - 24,
             OverviewWindow.visible(items, first).size, columns, first, drawTrack = false)
         val after = provider.overviewProgress(context, width - 24,
             OverviewWindow.visible(items, last).size, columns, last, drawTrack = false)
+        windowFrame(context, manager, id, columns, old, next,
+            .2f, .8f, offset * distance * .2f, before, after)
+        handler.postDelayed({
+            if (state.getInt(navigationKey(id), 0) != generation) return@postDelayed
+            windowFrame(context, manager, id, columns, old, next,
+                .4f, .4f, offset * distance * .4f, before, after)
+            handler.postDelayed({
+                if (state.getInt(navigationKey(id), 0) != generation) return@postDelayed
+                windowFrame(context, manager, id, columns, old, next,
+                    .6f, 0f, offset * distance * .6f, before, after)
+                state.edit().putInt(windowKey(id), next).apply()
+                renderWindow(context, manager, id, -offset * distance * .4f)
+                handler.postDelayed({
+                    if (state.getInt(navigationKey(id), 0) != generation) return@postDelayed
+                    windowFrame(context, manager, id, columns, old, next,
+                        .8f, .6f, -offset * distance * .2f, before, after)
+                    handler.postDelayed({
+                        if (state.getInt(navigationKey(id), 0) != generation) return@postDelayed
+                        windowFrame(context, manager, id, columns, old, next,
+                            1f, 1f, 0f, before, after)
+                    }, WINDOW_FRAME_DELAY_MS)
+                }, WINDOW_FRAME_DELAY_MS)
+            }, WINDOW_FRAME_DELAY_MS)
+        }, WINDOW_FRAME_DELAY_MS)
+    }
+
+    /** Draw the moving dots as one bitmap; the track view remains untouched. */
+    private fun windowFrame(context: Context, manager: AppWidgetManager, id: Int,
+                            columns: Int,
+                            old: Int, next: Int, progress: Float,
+                            cardAlpha: Float, cardOffsetDp: Float,
+                            before: Bitmap, after: Bitmap) {
+        val first = minOf(old, next)
+        val last = maxOf(old, next)
         val result = Bitmap.createBitmap(before.width, before.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
         val density = context.resources.displayMetrics.density
@@ -297,10 +303,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                     Context.MODE_PRIVATE).edit()
                     .putString(ScheduleWidgetProvider.selectedDateKey(id), target).apply()
             }
-            val count = WidgetSnapshotStore.readOverview(context, id,
-                state.getBoolean(modeKey(id), false)).size
-            state.edit().putInt(windowKey(id),
-                if (direction < 0) OverviewWindow.lastStart(count) else 0).apply()
+            state.edit().putInt(windowKey(id), 0).apply()
             render(context, manager, id, contentAlpha = 0f)
             handler.postDelayed({
                 if (state.getInt(navigationKey(id), 0) == generation) {
@@ -435,6 +438,18 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         populateCards(context, views, items, start, columns, width, cardHeight,
             compact, examMode, textColor, ScheduleWidgetProvider().isBetterDefault(context),
             WidgetFont.hasSelectedFont(context), openApp)
+        if (items.isNotEmpty()) {
+            views.setViewVisibility(R.id.overview_progress, View.VISIBLE)
+            views.setViewVisibility(R.id.overview_dots, View.VISIBLE)
+            views.setImageViewBitmap(R.id.overview_progress,
+                ScheduleWidgetProvider().overviewProgress(context, width - 24,
+                    OverviewWindow.visible(items, start).size, columns, start,
+                    drawDots = false))
+            views.setImageViewBitmap(R.id.overview_dots,
+                ScheduleWidgetProvider().overviewProgress(context, width - 24,
+                    OverviewWindow.visible(items, start).size, columns, start,
+                    drawTrack = false))
+        }
         manager.partiallyUpdateAppWidget(id, views)
     }
 
@@ -514,7 +529,8 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             examMode -> "Lịch thi · Học kỳ hiện tại"
             else -> if (selected == today) "Hôm nay · $date" else "Ngày $date"
         }
-        val subtitle = if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học"
+        val subtitle = if (!error.isNullOrEmpty() && started > succeeded) error
+            else if (examMode) "${items.size} môn thi sắp tới" else "${items.size} môn học"
         views.setTextViewText(R.id.overview_title, WidgetFont.text(context, title))
         views.setTextViewText(R.id.overview_subtitle, WidgetFont.text(context, subtitle))
         val statusLabel = when {
@@ -575,8 +591,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             views.setViewVisibility(R.id.overview_empty_font, View.VISIBLE)
             views.setTextColor(R.id.overview_empty, android.graphics.Color.TRANSPARENT)
         }
-        val showProgress = items.isNotEmpty() &&
-            (examMode || error.isNullOrEmpty() || started <= succeeded)
+        val showProgress = items.isNotEmpty()
         views.setViewVisibility(R.id.overview_progress,
             if (showProgress) View.VISIBLE else View.GONE)
         views.setViewVisibility(R.id.overview_dots,
@@ -648,6 +663,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         const val THEME_FRAME_COUNT = 9
         const val THEME_FRAME_DELAY_MS = 30L
         const val NAV_FRAME_DELAY_MS = 38L
+        const val WINDOW_FRAME_DELAY_MS = 24L
         fun pageKey(id: Int) = WidgetRefreshDecision.overviewPageKey(id)
         fun windowKey(id: Int) = "window_start_$id"
         fun renderedDateKey(id: Int) = "rendered_date_$id"

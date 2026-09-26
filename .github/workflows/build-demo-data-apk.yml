@@ -9,6 +9,8 @@ on:
       - 'assets/demo/**'
       - 'lib/demo/**'
       - 'lib/main.dart'
+      - 'lib/app/app.dart'
+      - 'android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/OverviewWidgetProvider.kt'
       - 'lib/features/tien_ich_lich_hoc/widget_publisher.dart'
       - 'lib/theme/app_theme.dart'
       - 'pubspec.yaml'

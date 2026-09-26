@@ -20,13 +20,12 @@ class OverviewWindowTest {
         }
     }
 
-    @Test fun backwardReturnsToFirstWindowThenPreviousDayLastWindow() {
+    @Test fun backwardReturnsToFirstWindowBeforeCrossingDay() {
         val seven = (1..7).toList()
         assertEquals(listOf(4, 5, 6, 7), OverviewWindow.visible(seven, 3))
         val first = OverviewWindow.withinDay(3, 7, -1)!!
         assertEquals(listOf(1, 2, 3, 4), OverviewWindow.visible(seven, first))
         assertNull(OverviewWindow.withinDay(first, 7, -1))
-        assertEquals(listOf(3, 4, 5, 6), OverviewWindow.visible((1..6).toList(),
-            OverviewWindow.lastStart(6)))
+        assertEquals(listOf(1, 2, 3, 4), OverviewWindow.visible((1..6).toList(), 0))
     }
 }

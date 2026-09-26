@@ -86,6 +86,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   _AppPage _notificationReturnPage = _AppPage.timetable;
   Timer? _examClockTimer;
   Timer? _syncStaleTimer;
+  Timer? _exitGestureTimer;
+  bool _exitGestureArmed = false;
   DateTime? _lastSuccessfulSync;
   AssistantPack _assistantPack = AssistantPack.normal;
   static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
@@ -108,6 +110,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void dispose() {
     _examClockTimer?.cancel();
     _syncStaleTimer?.cancel();
+    _exitGestureTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     AppThemeController.instance.removeListener(_handleThemeChanged);
     super.dispose();
@@ -508,6 +511,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _openPage(_AppPage page) {
+    _exitGestureTimer?.cancel();
+    _exitGestureArmed = false;
     setState(() {
       _page = page;
       _panelOpen = false;
@@ -517,6 +522,40 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _closeNotificationCenter() => _openPage(_notificationReturnPage);
+
+  void _handleSystemBack(bool didPop) {
+    if (didPop) return;
+    if (_panelOpen) {
+      setState(() => _panelOpen = false);
+      return;
+    }
+    if (_page == _AppPage.notifications) {
+      _closeNotificationCenter();
+      return;
+    }
+    if (_page != _AppPage.timetable) {
+      _openPage(_AppPage.timetable);
+      return;
+    }
+    if (_exitGestureArmed) {
+      _exitGestureTimer?.cancel();
+      unawaited(SystemNavigator.pop());
+      return;
+    }
+    _exitGestureArmed = true;
+    _exitGestureTimer?.cancel();
+    _exitGestureTimer = Timer(const Duration(seconds: 2), () {
+      _exitGestureArmed = false;
+    });
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Vuốt thêm lần nữa để thoát ứng dụng.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+  }
 
   Future<void> _acknowledgeExamNotice() async {
     try {
@@ -529,109 +568,113 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: AppThemeBackdrop(
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final desktop = constraints.maxWidth > 680;
-              return Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: desktop ? 470 : constraints.maxWidth,
-                    maxHeight: desktop ? 860 : constraints.maxHeight,
-                  ),
-                  child: Container(
-                    margin: desktop
-                        ? const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 16,
-                          )
-                        : EdgeInsets.zero,
-                    decoration: BoxDecoration(
-                      color: palette.surface.withValues(
-                        alpha: desktop ? .98 : .94,
-                      ),
-                      borderRadius: BorderRadius.circular(
-                        desktop && palette.geometry == AppThemeGeometry.rounded
-                            ? 28
-                            : 0,
-                      ),
-                      boxShadow: desktop
-                          ? const <BoxShadow>[
-                              BoxShadow(
-                                color: Color(0x140B2259),
-                                blurRadius: 36,
-                                offset: Offset(0, 14),
-                              ),
-                            ]
-                          : null,
+    return PopScope(
+      canPop: kIsWeb || defaultTargetPlatform != TargetPlatform.android,
+      onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: AppThemeBackdrop(
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final desktop = constraints.maxWidth > 680;
+                return Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: desktop ? 470 : constraints.maxWidth,
+                      maxHeight: desktop ? 860 : constraints.maxHeight,
                     ),
-                    clipBehavior: Clip.antiAlias,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 260),
-                      child: _booting
-                          ? const _SplashScreen()
-                          : _data == null
-                          ? _LoginScreen(
-                              onLogin: _loginOrSync,
-                              supportsLive: supportsLiveQldtLogin,
+                    child: Container(
+                      margin: desktop
+                          ? const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 16,
                             )
-                          : _MainShell(
-                              data: _data!,
-                              page: _page,
-                              selectedDate: _selectedDate,
-                              showPastExams: _showPastExams,
-                              panelOpen: _panelOpen,
-                              syncing: _syncing,
-                              errorMessage: _errorMessage,
-                              examNotice: _examNotice,
-                              unreadDifference: _unreadDifference,
-                              hasActiveExamPeriod:
-                                  ExamPeriod.hasActiveExamPeriod(
-                                    _data!.exams,
-                                    DateTime.now(),
-                                  ),
-                              syncStale: const SyncReminderPolicy()
-                                  .shouldRemind(
-                                    now: DateTime.now(),
-                                    lastSuccessfulSync: _lastSuccessfulSync,
-                                    lastReminder: null,
-                                  ),
-                              onSyncWarning: _showSyncWarning,
-                              assistantPack: _assistantPack,
-                              onAssistantPackChanged: (pack) async {
-                                await AssistantSelection.save(pack);
-                                if (mounted) {
-                                  setState(() => _assistantPack = pack);
-                                }
-                              },
-                              onOpenDifferences: _onNotificationTap,
-                              onCloseNotificationCenter:
-                                  _closeNotificationCenter,
-                              onOpenExamFromNotification: () =>
-                                  _openPage(_AppPage.exam),
-                              onShowDifferences: _showDifferences,
-                              latestDifference: _latestDifference,
-                              onTogglePanel: () =>
-                                  setState(() => _panelOpen = !_panelOpen),
-                              onOpenPage: _openPage,
-                              onSync: _loginOrSync,
-                              onLogout: _logout,
-                              onDateChanged: (date) => setState(
-                                () => _selectedDate = _dateOnly(date),
+                          : EdgeInsets.zero,
+                      decoration: BoxDecoration(
+                        color: palette.surface.withValues(
+                          alpha: desktop ? .98 : .94,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          desktop && palette.geometry == AppThemeGeometry.rounded
+                              ? 28
+                              : 0,
+                        ),
+                        boxShadow: desktop
+                            ? const <BoxShadow>[
+                                BoxShadow(
+                                  color: Color(0x140B2259),
+                                  blurRadius: 36,
+                                  offset: Offset(0, 14),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 260),
+                        child: _booting
+                            ? const _SplashScreen()
+                            : _data == null
+                            ? _LoginScreen(
+                                onLogin: _loginOrSync,
+                                supportsLive: supportsLiveQldtLogin,
+                              )
+                            : _MainShell(
+                                data: _data!,
+                                page: _page,
+                                selectedDate: _selectedDate,
+                                showPastExams: _showPastExams,
+                                panelOpen: _panelOpen,
+                                syncing: _syncing,
+                                errorMessage: _errorMessage,
+                                examNotice: _examNotice,
+                                unreadDifference: _unreadDifference,
+                                hasActiveExamPeriod:
+                                    ExamPeriod.hasActiveExamPeriod(
+                                      _data!.exams,
+                                      DateTime.now(),
+                                    ),
+                                syncStale: const SyncReminderPolicy()
+                                    .shouldRemind(
+                                      now: DateTime.now(),
+                                      lastSuccessfulSync: _lastSuccessfulSync,
+                                      lastReminder: null,
+                                    ),
+                                onSyncWarning: _showSyncWarning,
+                                assistantPack: _assistantPack,
+                                onAssistantPackChanged: (pack) async {
+                                  await AssistantSelection.save(pack);
+                                  if (mounted) {
+                                    setState(() => _assistantPack = pack);
+                                  }
+                                },
+                                onOpenDifferences: _onNotificationTap,
+                                onCloseNotificationCenter:
+                                    _closeNotificationCenter,
+                                onOpenExamFromNotification: () =>
+                                    _openPage(_AppPage.exam),
+                                onShowDifferences: _showDifferences,
+                                latestDifference: _latestDifference,
+                                onTogglePanel: () =>
+                                    setState(() => _panelOpen = !_panelOpen),
+                                onOpenPage: _openPage,
+                                onSync: _loginOrSync,
+                                onLogout: _logout,
+                                onDateChanged: (date) => setState(
+                                  () => _selectedDate = _dateOnly(date),
+                                ),
+                                onExamTabChanged: (past) =>
+                                    setState(() => _showPastExams = past),
+                                onDismissError: () =>
+                                    setState(() => _errorMessage = null),
                               ),
-                              onExamTabChanged: (past) =>
-                                  setState(() => _showPastExams = past),
-                              onDismissError: () =>
-                                  setState(() => _errorMessage = null),
-                            ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -892,7 +935,26 @@ class _MainShell extends StatelessWidget {
     return _PhoneSurface(
       child: Stack(
         children: <Widget>[
-          Positioned.fill(child: child),
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                if (child.key != const ValueKey<_AppPage>(_AppPage.notifications)) {
+                  return child;
+                }
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 1),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                );
+              },
+              child: KeyedSubtree(key: ValueKey<_AppPage>(page), child: child),
+            ),
+          ),
           if (errorMessage != null)
             Positioned(
               left: 16,
