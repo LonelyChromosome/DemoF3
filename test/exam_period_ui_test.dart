@@ -13,12 +13,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  setUp(() {
-    AppThemeController.instance.resetAfterLogout();
-  });
-  tearDown(() {
-    AppThemeController.instance.resetAfterLogout();
-  });
+  setUp(AppThemeController.instance.resetAfterLogout);
+  tearDown(AppThemeController.instance.resetAfterLogout);
 
   ScheduleRecord exam(DateTime start, DateTime end) => ScheduleRecord(
     id: 'exam',
