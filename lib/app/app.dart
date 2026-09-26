@@ -141,21 +141,23 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _showSyncWarning() {
-    unawaited(showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Nhắc đồng bộ'),
-        content: Text(
-          AssistantText.of(AssistantEvent.syncStale, _assistantPack),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Đóng'),
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Nhắc đồng bộ'),
+          content: Text(
+            AssistantText.of(AssistantEvent.syncStale, _assistantPack),
           ),
-        ],
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Đóng'),
+            ),
+          ],
+        ),
       ),
-    ));
+    );
   }
 
   void _scheduleExamClock() {
@@ -1307,6 +1309,11 @@ class _AccountScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
           const _TopTitle(title: 'Tài khoản', badge: null),
           const SizedBox(height: 26),
           Row(
@@ -1381,7 +1388,10 @@ class _AccountScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           if (next != null) _WidgetPreview(item: next),
-          const Spacer(),
+                ],
+              ),
+            ),
+          ),
           SizedBox(
             width: double.infinity,
             height: 48,

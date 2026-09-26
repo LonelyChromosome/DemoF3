@@ -1,0 +1,45 @@
+name: Format and verify assistant changes
+
+on:
+  push:
+    branches:
+      - feature/big-update
+    paths:
+      - '.github/workflows/format-assistant-temp.yml'
+      - 'lib/**'
+      - 'test/**'
+      - 'android/app/src/**'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: bash tool/bootstrap.sh
+      - run: dart format lib test
+      - run: zip -q formatted-assistant.zip lib/app/app.dart lib/features/dang_nhap_qldt/sync_reminder_policy.dart lib/features/dong_bo_hang_ngay/daily_sync.dart lib/features/tro_li/assistant_text.dart test/app_smoke_test.dart test/sync_reminder_policy_test.dart test/assistant_text_test.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: formatted-assistant
+          path: formatted-assistant.zip
+      - run: flutter analyze
+      - run: flutter test
+      - run: cd android && ./gradlew :app:testDebugUnitTest
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assistant-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
