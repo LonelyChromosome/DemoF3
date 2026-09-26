@@ -24,7 +24,8 @@ final class QldtSyncDiagnostics {
     final raw = prefs.getString(storageKey);
     final decoded = raw == null ? null : jsonDecode(raw);
     final records = decoded is List ? decoded : const <dynamic>[];
-    final safe = records.take(200).whereType<Map>().map((record) {
+    final safeRecords = records.take(200).whereType<Map<String, dynamic>>();
+    final safe = safeRecords.map((record) {
       final phase = record['phase']?.toString() ?? '';
       final code = record['code']?.toString() ?? '';
       final request = record['request']?.toString() ?? '';
@@ -49,10 +50,8 @@ final class QldtSyncDiagnostics {
         if (const <String>{'success', 'error', 'exception'}.contains(outcome))
           'outcome': outcome,
         if (int.tryParse(record['elapsedMs']?.toString() ?? '') != null)
-          'elapsedMs': int.parse(record['elapsedMs'].toString()).clamp(
-            0,
-            300000,
-          ),
+          'elapsedMs': int.parse(record['elapsedMs'].toString())
+              .clamp(0, 300000),
       };
     }).toList();
     return jsonEncode(<String, Object?>{

@@ -1904,7 +1904,9 @@ class _AccountScreen extends StatelessWidget {
                       await Clipboard.setData(ClipboardData(text: report));
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Đã sao chép bản đo QLĐT.')),
+                        const SnackBar(
+                          content: Text('Đã sao chép bản đo QLĐT.'),
+                        ),
                       );
                     },
                     icon: const Icon(Icons.timer_outlined),

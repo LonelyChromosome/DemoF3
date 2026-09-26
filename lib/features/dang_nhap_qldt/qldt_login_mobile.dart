@@ -341,10 +341,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                       onPressed: () async {
                         final timing = await QldtSyncDiagnostics.exportReport();
                         await Clipboard.setData(
-                          ClipboardData(text: jsonEncode(<String, Object?>{
-                            'timing': jsonDecode(timing),
-                            'failure': jsonDecode(_failureDiagnosticsJson!),
-                          })),
+                          ClipboardData(
+                            text: jsonEncode(<String, Object?>{
+                              'timing': jsonDecode(timing),
+                              'failure': jsonDecode(_failureDiagnosticsJson!),
+                            }),
+                          ),
                         );
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
