@@ -210,10 +210,11 @@ void main() {
       await showApp(tester, <ScheduleRecord>[
         exam(start, start.add(const Duration(hours: 2))),
       ], unreadDifference: true);
-      await AppThemeController.instance.select(theme);
+      final selection = AppThemeController.instance.select(theme);
       // Minecraft and Valorant keep animated backgrounds alive, so settling
       // every frame would wait forever even after the theme has applied.
       await tester.pump(const Duration(milliseconds: 700));
+      await selection;
       await tester.tap(find.byTooltip('Đang trong kỳ thi'));
       await tester.pump(const Duration(milliseconds: 700));
       expect(find.text('Bạn đang trong kỳ thi.'), findsOneWidget);
