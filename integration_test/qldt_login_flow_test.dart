@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_mobile.dart'
     as mobile;
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagnostics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -131,11 +130,10 @@ void main() {
           .evaluate()
           .map((element) => (element.widget as Text).data)
           .join(' | ');
-      final prefs = await SharedPreferences.getInstance();
       expect(
         result?.semester?.subjects.single.name,
         'Thiết kế web nâng cao',
-        reason: '$labels / ${prefs.getString(QldtSyncDiagnostics.storageKey)}',
+        reason: labels,
       );
     },
   );
