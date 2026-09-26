@@ -8,7 +8,7 @@ enum AssistantPack {
   flirtatious('Lẳng lơ'),
   academic('Học thuật');
 
-  const AssistantPack(this.label);
+  AssistantPack(this.label);
   final String label;
 }
 
@@ -55,9 +55,12 @@ abstract final class AssistantText {
       AssistantEvent.syncInitial => 'Đã lưu dữ liệu học kỳ đầu tiên.',
       AssistantEvent.syncStale =>
         'Bạn nên đồng bộ lại để đảm bảo tính chính xác của dữ liệu.',
-      AssistantEvent.syncSuccessNoChange => 'Đồng bộ thành công. Lịch không đổi.',
-      AssistantEvent.studyChanged => 'Lịch học đã thay đổi. Chạm chuông để xem chi tiết.',
-      AssistantEvent.examChanged => 'Lịch thi đã thay đổi. Chạm chuông để xem chi tiết.',
+      AssistantEvent.syncSuccessNoChange =>
+        'Đồng bộ thành công. Lịch không đổi.',
+      AssistantEvent.studyChanged =>
+        'Lịch học đã thay đổi. Chạm chuông để xem chi tiết.',
+      AssistantEvent.examChanged =>
+        'Lịch thi đã thay đổi. Chạm chuông để xem chi tiết.',
       AssistantEvent.studyAndExamChanged =>
         'Lịch học và lịch thi đã thay đổi. Chạm chuông để xem chi tiết.',
       AssistantEvent.examInDays when examCount > 1 =>
@@ -68,7 +71,8 @@ abstract final class AssistantText {
       AssistantEvent.examTomorrow => 'Ngày mai bạn có một môn thi.',
       AssistantEvent.examPeriodActive =>
         'Bạn đang trong kỳ thi. Hãy vào Lịch thi để kiểm tra.',
-      AssistantEvent.examCountdownMultiple => 'Bạn có $examCount môn thi sắp tới.',
+      AssistantEvent.examCountdownMultiple =>
+        'Bạn có $examCount môn thi sắp tới.',
     };
   }
 }

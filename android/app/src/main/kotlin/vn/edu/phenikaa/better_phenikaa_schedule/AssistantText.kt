@@ -9,6 +9,7 @@ internal enum class AssistantPack {
 internal enum class AssistantEvent {
     sync_stale, study_changed, exam_changed, study_and_exam_changed,
     exam_in_days, exam_tomorrow, exam_period_active,
+    exam_notice,
 }
 
 /** The native workers use the same selection as Flutter's AssistantSelection. */
@@ -35,6 +36,8 @@ internal object AssistantText {
                 else "Ngày mai bạn có một môn thi."
             AssistantEvent.exam_period_active ->
                 "Bạn đang trong kỳ thi. Hãy vào Lịch thi để kiểm tra."
+            AssistantEvent.exam_notice ->
+                "Bạn có $examCount thay đổi lịch thi. Mở lịch thi để kiểm tra."
         }
     }
 }

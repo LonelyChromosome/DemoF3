@@ -30,7 +30,7 @@ jobs:
           cache: true
       - run: bash tool/bootstrap.sh
       - run: dart format lib test
-      - run: zip -q formatted-assistant.zip lib/app/app.dart lib/features/dang_nhap_qldt/sync_reminder_policy.dart lib/features/dong_bo_hang_ngay/daily_sync.dart lib/features/tro_li/assistant_text.dart test/sync_reminder_policy_test.dart test/assistant_text_test.dart
+      - run: zip -q formatted-assistant.zip lib/app/app.dart lib/features/dang_nhap_qldt/sync_reminder_policy.dart lib/features/dong_bo_hang_ngay/daily_sync.dart lib/features/tro_li/assistant_text.dart test/app_smoke_test.dart test/sync_reminder_policy_test.dart test/assistant_text_test.dart
       - uses: actions/upload-artifact@v4
         with:
           name: formatted-assistant

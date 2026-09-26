@@ -14,7 +14,10 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import androidx.work.WorkManager
+import org.json.JSONObject
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 internal object SyncStaleReminderPolicy {
@@ -57,7 +60,7 @@ internal object SyncStaleReminderScheduler {
             WorkManager.getInstance(context).cancelUniqueWork(WORK)
             return
         }
-        val success = (DailySyncScheduler.status(context)["lastSuccessAtMillis"] as? Long) ?: 0L
+        val success = lastSuccess(context)
         if (success <= 0) return
         val now = System.currentTimeMillis()
         val last = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -81,7 +84,7 @@ internal object SyncStaleReminderScheduler {
 
     fun deliver(context: Context) {
         if (!hasSemester(context)) return
-        val success = (DailySyncScheduler.status(context)["lastSuccessAtMillis"] as? Long) ?: 0L
+        val success = lastSuccess(context)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         if (SyncStaleReminderPolicy.due(now, success, prefs.getLong(LAST_NOTIFIED, 0L)) &&
@@ -116,8 +119,21 @@ internal object SyncStaleReminderScheduler {
     }
 
     private fun hasSemester(context: Context): Boolean =
-        context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            .contains("flutter.better_phenikaa_current_semester_v1")
+        context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE).let {
+            it.contains("flutter.better_phenikaa_current_semester_v1") ||
+                it.contains("flutter.better_phenikaa_snapshot_v1")
+        }
+
+    private fun lastSuccess(context: Context): Long {
+        val native = (DailySyncScheduler.status(context)["lastSuccessAtMillis"] as? Long) ?: 0L
+        if (native > 0) return native
+        val snapshot = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+            .getString("flutter.better_phenikaa_snapshot_v1", null) ?: return 0L
+        return runCatching {
+            val date = JSONObject(snapshot).getString("syncedAt").take(23)
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US).parse(date)?.time ?: 0L
+        }.getOrDefault(0L)
+    }
 }
 
 class SyncStaleReminderWorker(context: Context, params: WorkerParameters) : Worker(context, params) {

@@ -15,8 +15,15 @@ void main() {
   test('missing pack copy falls back without changing event logic', () {
     for (final pack in AssistantPack.values) {
       expect(AssistantText.of(AssistantEvent.syncStale, pack), isNotEmpty);
-      expect(AssistantText.of(AssistantEvent.examInDays, pack,
-        days: 5, examCount: 2), contains('5 ngày'));
+      expect(
+        AssistantText.of(
+          AssistantEvent.examInDays,
+          pack,
+          days: 5,
+          examCount: 2,
+        ),
+        contains('5 ngày'),
+      );
     }
   });
 }

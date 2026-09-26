@@ -9,12 +9,12 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_sync_diagn
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/schedule_difference_sheet.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/sync_reminder_policy.dart';
 import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
 import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
 import 'package:better_phenikaa_schedule/features/tro_li/assistant_text.dart';
-import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/sync_reminder_policy.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -124,7 +124,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   Future<void> _refreshSyncStatus() async {
     try {
-      final last = await DailySync.lastSuccessfulSync();
+      final last = await DailySync.lastSuccessfulSync() ?? _data?.syncedAt;
       if (!mounted) return;
       setState(() => _lastSuccessfulSync = last);
       _syncStaleTimer?.cancel();
@@ -141,11 +141,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _showSyncWarning() {
-    showDialog<void>(
+    unawaited(showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Nhắc đồng bộ'),
-        content: Text(AssistantText.of(AssistantEvent.syncStale, _assistantPack)),
+        content: Text(
+          AssistantText.of(AssistantEvent.syncStale, _assistantPack),
+        ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -153,7 +155,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           ),
         ],
       ),
-    );
+    ));
   }
 
   void _scheduleExamClock() {
@@ -190,7 +192,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(AssistantText.of(AssistantEvent.examPeriodActive, _assistantPack)),
+        content: Text(
+          AssistantText.of(AssistantEvent.examPeriodActive, _assistantPack),
+        ),
         action: SnackBarAction(
           label: _unreadDifference ? 'Xem thay đổi' : 'Lịch thi',
           onPressed: _unreadDifference
@@ -422,7 +426,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                   AssistantText.of(
                     difference.initial
                         ? AssistantEvent.syncInitial
-                        : difference.study.hasChanges && difference.exams.hasChanges
+                        : difference.study.hasChanges &&
+                              difference.exams.hasChanges
                         ? AssistantEvent.studyAndExamChanged
                         : difference.study.hasChanges
                         ? AssistantEvent.studyChanged
@@ -591,22 +596,25 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                               errorMessage: _errorMessage,
                               examNotice: _examNotice,
                               unreadDifference: _unreadDifference,
-                               hasActiveExamPeriod:
-                                   ExamPeriod.hasActiveExamPeriod(
-                                     _data!.exams,
-                                     DateTime.now(),
-                                   ),
-                               syncStale: const SyncReminderPolicy().shouldRemind(
-                                 now: DateTime.now(),
-                                 lastSuccessfulSync: _lastSuccessfulSync,
-                                 lastReminder: null,
-                               ),
-                               onSyncWarning: _showSyncWarning,
-                               assistantPack: _assistantPack,
-                               onAssistantPackChanged: (pack) async {
-                                 await AssistantSelection.save(pack);
-                                 if (mounted) setState(() => _assistantPack = pack);
-                               },
+                              hasActiveExamPeriod:
+                                  ExamPeriod.hasActiveExamPeriod(
+                                    _data!.exams,
+                                    DateTime.now(),
+                                  ),
+                              syncStale: const SyncReminderPolicy()
+                                  .shouldRemind(
+                                    now: DateTime.now(),
+                                    lastSuccessfulSync: _lastSuccessfulSync,
+                                    lastReminder: null,
+                                  ),
+                              onSyncWarning: _showSyncWarning,
+                              assistantPack: _assistantPack,
+                              onAssistantPackChanged: (pack) async {
+                                await AssistantSelection.save(pack);
+                                if (mounted) {
+                                  setState(() => _assistantPack = pack);
+                                }
+                              },
                               onOpenDifferences: _onNotificationTap,
                               onTogglePanel: () =>
                                   setState(() => _panelOpen = !_panelOpen),
@@ -1339,10 +1347,12 @@ class _AccountScreen extends StatelessWidget {
             tooltip: 'Chọn Trợ lí',
             onSelected: onAssistantPackChanged,
             itemBuilder: (context) => AssistantPack.values
-                .map((pack) => PopupMenuItem(
-                      value: pack,
-                      child: Text(pack.label, overflow: TextOverflow.ellipsis),
-                    ))
+                .map(
+                  (pack) => PopupMenuItem(
+                    value: pack,
+                    child: Text(pack.label, overflow: TextOverflow.ellipsis),
+                  ),
+                )
                 .toList(),
             child: Container(
               constraints: const BoxConstraints(minHeight: 44),
@@ -1357,8 +1367,13 @@ class _AccountScreen extends StatelessWidget {
                 children: <Widget>[
                   Icon(Icons.assistant_outlined, color: palette.primary),
                   const SizedBox(width: 10),
-                  Expanded(child: Text('Trợ lí: ${assistantPack.label}',
-                    maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  Expanded(
+                    child: Text(
+                      'Trợ lí: ${assistantPack.label}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                   const Icon(Icons.arrow_drop_down),
                 ],
               ),

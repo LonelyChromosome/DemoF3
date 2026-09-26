@@ -9,16 +9,16 @@ class ExamChangeNotifierTest {
         {"examSchedules":[{},{}]}, {"examSchedules":[]}
     ]}"""
 
-    @Test fun firstVerifiedImportAnnouncesExistingExams() {
-        assertEquals("Bạn có 2 lịch thi mới. Mở lịch thi để kiểm tra.",
-            ExamChangeNotifier.messageFor(semester, """{"initial":true}"""))
+    @Test fun firstVerifiedImportIsNotAChange() {
+        assertNull(ExamChangeNotifier.messageFor(semester, """{"initial":true}"""))
     }
 
-    @Test fun laterSyncOnlyAnnouncesNewOrChangedExam() {
-        assertEquals("Bạn có 2 lịch thi mới. Mở lịch thi để kiểm tra.",
+    @Test fun laterSyncSummarizesAnyExamChange() {
+        assertEquals("Bạn có 2 thay đổi lịch thi. Mở lịch thi để kiểm tra.",
             ExamChangeNotifier.messageFor(semester,
                 """{"initial":false,"exams":{"added":1,"modified":1,"removed":0}}"""))
-        assertNull(ExamChangeNotifier.messageFor(semester,
-            """{"initial":false,"exams":{"added":0,"modified":0,"removed":1}}"""))
+        assertEquals("Bạn có 1 thay đổi lịch thi. Mở lịch thi để kiểm tra.",
+            ExamChangeNotifier.messageFor(semester,
+                """{"initial":false,"exams":{"added":0,"modified":0,"removed":1}}"""))
     }
 }

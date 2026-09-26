@@ -11,7 +11,8 @@ final class SyncReminderPolicy {
     if (!now.isAfter(dueAt)) return false;
     return lastReminder == null ||
         lastReminder.isBefore(lastSuccessfulSync) ||
-        DateTime(now.year, now.month, now.day)
-            .isAfter(DateTime(lastReminder.year, lastReminder.month, lastReminder.day));
+        DateTime(now.year, now.month, now.day).isAfter(
+          DateTime(lastReminder.year, lastReminder.month, lastReminder.day),
+        );
   }
 }

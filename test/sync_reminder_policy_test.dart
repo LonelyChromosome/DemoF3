@@ -5,24 +5,27 @@ void main() {
   const policy = SyncReminderPolicy();
   final sync = DateTime(2026, 9, 20, 15);
 
-  test('does not remind at or before two days or without a successful sync', () {
-    expect(
-      policy.shouldRemind(
-        now: sync.add(const Duration(days: 2)),
-        lastSuccessfulSync: sync,
-        lastReminder: null,
-      ),
-      isFalse,
-    );
-    expect(
-      policy.shouldRemind(
-        now: sync.add(const Duration(days: 4)),
-        lastSuccessfulSync: null,
-        lastReminder: null,
-      ),
-      isFalse,
-    );
-  });
+  test(
+    'does not remind at or before two days or without a successful sync',
+    () {
+      expect(
+        policy.shouldRemind(
+          now: sync.add(const Duration(days: 2)),
+          lastSuccessfulSync: sync,
+          lastReminder: null,
+        ),
+        isFalse,
+      );
+      expect(
+        policy.shouldRemind(
+          now: sync.add(const Duration(days: 4)),
+          lastSuccessfulSync: null,
+          lastReminder: null,
+        ),
+        isFalse,
+      );
+    },
+  );
 
   test(
     'a successful sync resets reminder age; repeated reminders are spaced',
@@ -55,22 +58,34 @@ void main() {
     },
   );
 
-  test('reminds once per local day and resets after the next successful sync', () {
-    final due = DateTime(2026, 9, 22, 16);
-    expect(policy.shouldRemind(
-      now: due,
-      lastSuccessfulSync: sync,
-      lastReminder: DateTime(2026, 9, 22, 9),
-    ), isFalse);
-    expect(policy.shouldRemind(
-      now: DateTime(2026, 9, 23, 9),
-      lastSuccessfulSync: sync,
-      lastReminder: due,
-    ), isTrue);
-    expect(policy.shouldRemind(
-      now: DateTime(2026, 9, 23, 9),
-      lastSuccessfulSync: DateTime(2026, 9, 23, 8),
-      lastReminder: due,
-    ), isFalse);
-  });
+  test(
+    'reminds once per local day and resets after the next successful sync',
+    () {
+      final due = DateTime(2026, 9, 22, 16);
+      expect(
+        policy.shouldRemind(
+          now: due,
+          lastSuccessfulSync: sync,
+          lastReminder: DateTime(2026, 9, 22, 9),
+        ),
+        isFalse,
+      );
+      expect(
+        policy.shouldRemind(
+          now: DateTime(2026, 9, 23, 9),
+          lastSuccessfulSync: sync,
+          lastReminder: due,
+        ),
+        isTrue,
+      );
+      expect(
+        policy.shouldRemind(
+          now: DateTime(2026, 9, 23, 9),
+          lastSuccessfulSync: DateTime(2026, 9, 23, 8),
+          lastReminder: due,
+        ),
+        isFalse,
+      );
+    },
+  );
 }

@@ -78,7 +78,7 @@ internal object ExamReminderPlanner {
         fun grouped(items: List<PlannedExamReminder>): List<PlannedExamReminder> =
             items.groupBy { it.key }.values.map { group ->
                 group.first().copy(
-                    subjects = group.flatMap { it.subjects },
+                    subjects = group.flatMap { it.subjects }.distinct(),
                     milestoneKeys = group.flatMap { it.milestoneKeys }.toSet(),
                 )
             }

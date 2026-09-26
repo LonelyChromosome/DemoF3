@@ -125,4 +125,86 @@ void main() {
     expect(find.text('Thiết kế web nâng cao'), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
   });
+
+  testWidgets('stale warning mirrors FAB, opens and closes across widths', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final old = DateTime.now().subtract(const Duration(days: 3));
+    final snapshot = ImportedScheduleData(
+      displayName: 'Sinh viên',
+      records: const <ScheduleRecord>[],
+      syncedAt: old,
+    );
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'better_phenikaa_snapshot_v1': snapshot.encode(),
+    });
+    for (final width in <double>[360, 800]) {
+      tester.view.physicalSize = Size(width, 800);
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(const BetterPhenikaaScheduleApp());
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+      final warning = find.byTooltip('Đã lâu chưa đồng bộ');
+      final options = find.ancestor(
+        of: find.byIcon(Icons.grid_view_rounded),
+        matching: find.byType(FloatingActionButton),
+      );
+      expect(warning, findsOneWidget);
+      expect(options, findsOneWidget);
+      final left = tester.getRect(warning);
+      final right = tester.getRect(options);
+      expect(left.size, right.size);
+      expect(left.top, right.top);
+      expect(left.left + right.right, closeTo(width, 1));
+      await tester.tap(warning);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Bạn nên đồng bộ lại'), findsOneWidget);
+      await tester.tap(find.text('Đóng'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+    }
+    await tester.pumpWidget(const SizedBox());
+    tester.view.resetPhysicalSize();
+    tester.view.resetDevicePixelRatio();
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('recent sync hides warning; assistant selection survives restart', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final snapshot = ImportedScheduleData(
+      displayName: 'Sinh viên',
+      records: const <ScheduleRecord>[],
+      syncedAt: DateTime.now().subtract(const Duration(hours: 47)),
+    );
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'better_phenikaa_snapshot_v1': snapshot.encode(),
+    });
+    await tester.pumpWidget(const BetterPhenikaaScheduleApp());
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Đã lâu chưa đồng bộ'), findsNothing);
+    await tester.tap(find.byIcon(Icons.grid_view_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tài khoản').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Chọn Trợ lí'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Học thuật').last);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Trợ lí: Học thuật'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(const BetterPhenikaaScheduleApp());
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.grid_view_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tài khoản').first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Trợ lí: Học thuật'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    debugDefaultTargetPlatformOverride = null;
+  });
 }
