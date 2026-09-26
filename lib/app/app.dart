@@ -607,7 +607,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                   setState(() => _assistantPack = pack);
                                 }
                               },
-                               onOpenDifferences: _onNotificationTap,
+                              onOpenDifferences: _onNotificationTap,
                               onCloseNotificationCenter:
                                   _closeNotificationCenter,
                               onOpenExamFromNotification: () =>
@@ -880,8 +880,6 @@ class _MainShell extends StatelessWidget {
         onAssistantPackChanged: onAssistantPackChanged,
       ),
       _AppPage.notifications => _NotificationCenterScreen(
-        data: data,
-        unreadDifference: unreadDifference,
         hasActiveExamPeriod: hasActiveExamPeriod,
         onBack: onCloseNotificationCenter,
         onOpenExam: onOpenExamFromNotification,
@@ -935,31 +933,31 @@ class _MainShell extends StatelessWidget {
             ),
           if (page != _AppPage.notifications)
             Positioned(
-            right: 22,
-            bottom: 28,
-            child: FloatingActionButton(
-              heroTag: 'control-panel',
-              onPressed: onTogglePanel,
-              backgroundColor: palette.primary,
-              foregroundColor: palette.id == AppThemeId.lol
-                  ? const Color(0xFF06171D)
-                  : Colors.white,
-              elevation: palette.geometry == AppThemeGeometry.pixel ? 0 : 8,
-              shape: themeButtonShape(palette),
-              child: AnimatedRotation(
-                turns: panelOpen ? .125 : 0,
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: Icon(
-                    panelOpen ? Icons.close : Icons.grid_view_rounded,
-                    key: ValueKey<bool>(panelOpen),
+              right: 22,
+              bottom: 28,
+              child: FloatingActionButton(
+                heroTag: 'control-panel',
+                onPressed: onTogglePanel,
+                backgroundColor: palette.primary,
+                foregroundColor: palette.id == AppThemeId.lol
+                    ? const Color(0xFF06171D)
+                    : Colors.white,
+                elevation: palette.geometry == AppThemeGeometry.pixel ? 0 : 8,
+                shape: themeButtonShape(palette),
+                child: AnimatedRotation(
+                  turns: panelOpen ? .125 : 0,
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: Icon(
+                      panelOpen ? Icons.close : Icons.grid_view_rounded,
+                      key: ValueKey<bool>(panelOpen),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
           if (page != _AppPage.notifications && syncStale)
             Positioned(
               left: 22,
@@ -1270,8 +1268,6 @@ class _ExamScreen extends StatelessWidget {
 
 class _NotificationCenterScreen extends StatelessWidget {
   const new({
-    required this.data,
-    required this.unreadDifference,
     required this.hasActiveExamPeriod,
     required this.onBack,
     required this.onOpenExam,
@@ -1280,8 +1276,6 @@ class _NotificationCenterScreen extends StatelessWidget {
     required this.difference,
   });
 
-  final ImportedScheduleData data;
-  final bool unreadDifference;
   final bool hasActiveExamPeriod;
   final VoidCallback onBack;
   final VoidCallback onOpenExam;
@@ -1293,7 +1287,8 @@ class _NotificationCenterScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = appThemePalette;
     final currentDifference = difference;
-    final hasStudy = currentDifference?.study.hasChanges == true ||
+    final hasStudy =
+        currentDifference?.study.hasChanges == true ||
         currentDifference?.addedSubjects.isNotEmpty == true ||
         currentDifference?.removedSubjects.isNotEmpty == true;
     final hasExam = currentDifference?.exams.hasChanges == true;
@@ -1356,7 +1351,8 @@ class _NotificationCenterScreen extends StatelessWidget {
                       icon: Icons.event_available_rounded,
                       title: 'Thay đổi môn học',
                       description: 'Có thay đổi lịch học',
-                      count: (currentDifference?.study.added ?? 0) +
+                      count:
+                          (currentDifference?.study.added ?? 0) +
                           (currentDifference?.study.removed ?? 0) +
                           (currentDifference?.study.modified ?? 0) +
                           (currentDifference?.addedSubjects.length ?? 0) +
@@ -1369,7 +1365,8 @@ class _NotificationCenterScreen extends StatelessWidget {
                       icon: Icons.assignment_rounded,
                       title: 'Thay đổi lịch thi',
                       description: 'Có thay đổi lịch thi',
-                      count: (currentDifference?.exams.added ?? 0) +
+                      count:
+                          (currentDifference?.exams.added ?? 0) +
                           (currentDifference?.exams.removed ?? 0) +
                           (currentDifference?.exams.modified ?? 0),
                       palette: palette,
@@ -1426,43 +1423,43 @@ class _NotificationExamCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: palette.cardAlt,
-          borderRadius: BorderRadius.circular(
-            palette.geometry == AppThemeGeometry.rounded ? 16 : 0,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: palette.cardAlt,
+      borderRadius: BorderRadius.circular(
+        palette.geometry == AppThemeGeometry.rounded ? 16 : 0,
+      ),
+      border: Border.all(color: palette.primary, width: 1.4),
+    ),
+    child: Row(
+      children: <Widget>[
+        Icon(Icons.school_rounded, color: palette.primary, size: 26),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: palette.textPrimary,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          border: Border.all(color: palette.primary, width: 1.4),
         ),
-        child: Row(
-          children: <Widget>[
-            Icon(Icons.school_rounded, color: palette.primary, size: 26),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  color: palette.textPrimary,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: 'Mở lịch thi',
-              onPressed: onOpenExam,
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-              padding: EdgeInsets.zero,
-              style: IconButton.styleFrom(
-                backgroundColor: palette.primary,
-                foregroundColor: _contrastForeground(palette.primary),
-                shape: const CircleBorder(),
-              ),
-              icon: const Icon(Icons.arrow_forward_rounded),
-            ),
-          ],
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: 'Mở lịch thi',
+          onPressed: onOpenExam,
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          padding: EdgeInsets.zero,
+          style: IconButton.styleFrom(
+            backgroundColor: palette.primary,
+            foregroundColor: _contrastForeground(palette.primary),
+            shape: const CircleBorder(),
+          ),
+          icon: const Icon(Icons.arrow_forward_rounded),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _NotificationChangeCard extends StatelessWidget {
@@ -1482,48 +1479,45 @@ class _NotificationChangeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: palette.surface,
-          borderRadius: BorderRadius.circular(
-            palette.geometry == AppThemeGeometry.rounded ? 16 : 0,
-          ),
-          border: Border.all(color: palette.border),
-        ),
-        child: Row(
-          children: <Widget>[
-            Icon(icon, color: palette.primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: palette.textPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    description,
-                    style: TextStyle(color: palette.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            if (count > 0)
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: palette.surface,
+      borderRadius: BorderRadius.circular(
+        palette.geometry == AppThemeGeometry.rounded ? 16 : 0,
+      ),
+      border: Border.all(color: palette.border),
+    ),
+    child: Row(
+      children: <Widget>[
+        Icon(icon, color: palette.primary),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
               Text(
-                '$count',
+                title,
                 style: TextStyle(
-                  color: palette.primary,
-                  fontWeight: FontWeight.w900,
+                  color: palette.textPrimary,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-          ],
+              const SizedBox(height: 3),
+              Text(description, style: TextStyle(color: palette.textSecondary)),
+            ],
+          ),
         ),
-      );
+        if (count > 0)
+          Text(
+            '$count',
+            style: TextStyle(
+              color: palette.primary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 class _AccountScreen extends StatelessWidget {
