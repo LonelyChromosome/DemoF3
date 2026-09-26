@@ -32,3 +32,5 @@ jobs:
             test/exam_period_test.dart
             test/exam_period_ui_test.dart
           retention-days: 1
+
+# Format after focused UI tests
