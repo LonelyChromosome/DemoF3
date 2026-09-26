@@ -40,4 +40,13 @@ internal object AssistantText {
                 "Bạn có $examCount thay đổi lịch thi. Mở lịch thi để kiểm tra."
         }
     }
+
+    fun titleOf(event: AssistantEvent, pack: AssistantPack): String = when (event) {
+        AssistantEvent.sync_stale -> "Đã lâu chưa đồng bộ"
+        AssistantEvent.study_changed, AssistantEvent.exam_changed,
+        AssistantEvent.study_and_exam_changed, AssistantEvent.exam_notice ->
+            "Lịch học kỳ thay đổi"
+        AssistantEvent.exam_in_days, AssistantEvent.exam_tomorrow -> "Nhắc lịch thi"
+        AssistantEvent.exam_period_active -> "Lịch thi"
+    }
 }

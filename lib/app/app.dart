@@ -145,7 +145,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Nhắc đồng bộ'),
+        title: Text(AssistantText.titleOf(AssistantEvent.syncStale, _assistantPack)),
           content: Text(
             AssistantText.of(AssistantEvent.syncStale, _assistantPack),
           ),

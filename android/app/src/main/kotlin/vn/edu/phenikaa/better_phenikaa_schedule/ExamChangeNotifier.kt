@@ -117,7 +117,8 @@ internal object ExamChangeNotifier {
         }
         manager.notify(NOTIFICATION_ID, NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Lịch học kỳ thay đổi")
+            .setContentTitle(AssistantText.titleOf(
+                AssistantEvent.exam_notice, AssistantText.selected(context)))
             .setContentText(message)
             .setAutoCancel(true)
             .setContentIntent(openApp)

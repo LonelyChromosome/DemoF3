@@ -1,14 +1,14 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum AssistantPack {
-  normal('Bình thường'),
-  serious('Nghiêm túc'),
-  playful('Nhí nhảnh'),
-  affectionate('Tình cảm'),
-  flirtatious('Lẳng lơ'),
-  academic('Học thuật');
+  normal._('Bình thường'),
+  serious._('Nghiêm túc'),
+  playful._('Nhí nhảnh'),
+  affectionate._('Tình cảm'),
+  flirtatious._('Lẳng lơ'),
+  academic._('Học thuật');
 
-  (this.label);
+  AssistantPack._(this.label);
   final String label;
 }
 
@@ -44,6 +44,20 @@ abstract final class AssistantSelection {
 }
 
 abstract final class AssistantText {
+  static String titleOf(AssistantEvent event, AssistantPack pack) =>
+      switch (event) {
+        AssistantEvent.syncStale => 'Nhắc đồng bộ',
+        AssistantEvent.syncInitial ||
+        AssistantEvent.syncSuccessNoChange ||
+        AssistantEvent.studyChanged ||
+        AssistantEvent.examChanged ||
+        AssistantEvent.studyAndExamChanged => 'Đồng bộ QLĐT',
+        AssistantEvent.examInDays ||
+        AssistantEvent.examTomorrow ||
+        AssistantEvent.examCountdownMultiple ||
+        AssistantEvent.examPeriodActive => 'Lịch thi',
+      };
+
   static String of(
     AssistantEvent event,
     AssistantPack pack, {

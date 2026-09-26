@@ -92,7 +92,7 @@ internal object ExamReminderScheduler {
         val event = if (days == 1) AssistantEvent.exam_tomorrow else AssistantEvent.exam_in_days
         val notification = NotificationCompat.Builder(context, "exam_reminders")
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Nhắc lịch thi")
+            .setContentTitle(AssistantText.titleOf(event, AssistantText.selected(context)))
             .setContentText(AssistantText.of(event, AssistantText.selected(context),
                 days = days, examCount = subjects.size))
             .setAutoCancel(true)

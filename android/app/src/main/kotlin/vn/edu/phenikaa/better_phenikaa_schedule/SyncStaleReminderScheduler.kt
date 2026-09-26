@@ -102,7 +102,8 @@ internal object SyncStaleReminderScheduler {
             }
             manager.notify(NOTIFICATION, NotificationCompat.Builder(context, CHANNEL)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle("Đã lâu chưa đồng bộ")
+                .setContentTitle(AssistantText.titleOf(
+                    AssistantEvent.sync_stale, AssistantText.selected(context)))
                 .setContentText(AssistantText.of(AssistantEvent.sync_stale, AssistantText.selected(context)))
                 .setContentIntent(pending).setAutoCancel(true).build())
             prefs.edit().putLong(LAST_NOTIFIED, now).commit()
