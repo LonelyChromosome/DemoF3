@@ -23,6 +23,9 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
+  assets:
+    - assets/demo/current_semester.json
+
   fonts:
     - family: MinecraftCustom
       fonts:

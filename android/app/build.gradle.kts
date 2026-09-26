@@ -14,6 +14,7 @@ android {
     namespace = "vn.edu.phenikaa.better_phenikaa_schedule"
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
+    val demoBuild = providers.gradleProperty("betterPhenikaaDemo").orNull == "true"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -23,6 +24,7 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "vn.edu.phenikaa.better_phenikaa_schedule"
+        manifestPlaceholders["appLabel"] = if (demoBuild) "Better Phenikaa Demo" else "Better Phenikaa App"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -40,6 +42,9 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            if (demoBuild) {
+                applicationIdSuffix = ".demo"
+            }
         }
     }
 }
