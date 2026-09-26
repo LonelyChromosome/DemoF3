@@ -1,7 +1,6 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WidgetGeometryTest {
@@ -18,20 +17,18 @@ class WidgetGeometryTest {
             WidgetGeometry.legacySize(0, 0, 0, 0, false, 320, 64))
     }
 
-    @Test fun overviewKeepsReferenceGeometryAndFillsTallerHost() {
-        val reference = WidgetGeometry.overview(150)
-        assertEquals(150, reference.panelHeight)
-        assertEquals(42, reference.headerHeight)
-        assertEquals(24, reference.footerHeight)
-        assertEquals(69, reference.cardHeight)
+    @Test fun overviewUsesReferenceAspectWithinHostAndClamp() {
+        val reference = WidgetGeometry.overview(320, 270)
+        assertEquals(124, reference.panelHeight)
+        assertEquals(36, reference.headerHeight)
+        assertEquals(20, reference.footerHeight)
+        assertEquals(53, reference.cardHeight)
         assertEquals(6, reference.topPadding)
         assertEquals(4, reference.bottomPadding)
-
-        val tall = WidgetGeometry.overview(270)
-        assertEquals(270, tall.panelHeight)
-        assertEquals(WidgetGeometry.overview(156).cardHeight, tall.cardHeight)
-        assertEquals(270 - 156, tall.topPadding + tall.bottomPadding - 10)
-        assertTrue(tall.cardHeight > 0)
-        assertEquals(104, WidgetGeometry.overview(100).panelHeight)
+        assertEquals(reference, WidgetGeometry.overview(320, 400))
+        assertEquals(104, WidgetGeometry.overview(260, 300).panelHeight)
+        assertEquals(156, WidgetGeometry.overview(500, 300).panelHeight)
+        assertEquals(110, WidgetGeometry.overview(500, 110).panelHeight)
+        assertEquals(104, WidgetGeometry.overview(320, 100).panelHeight)
     }
 }

@@ -26,21 +26,19 @@ internal object WidgetGeometry {
         val bottomPadding: Int,
     )
 
-    fun overview(height: Int): Overview {
-        // The reference geometry remains byte-for-byte equivalent through 156dp.
-        val panel = height.coerceAtLeast(104)
-        val reference = panel.coerceAtMost(156)
-        val compact = reference < 120
-        val header = if (compact) 32 else if (reference >= 140) 42 else 36
-        val footer = if (compact) 16 else if (reference >= 140) 24 else 20
+    fun overview(width: Int, height: Int): Overview {
+        // The reference panel is about 320 x 124dp. A launcher may grant much
+        // more vertical space for a two-row cell; that space is not panel height.
+        val proportional = (width.toLong() * 124 / 320).toInt().coerceIn(104, 156)
+        val panel = minOf(proportional, height.coerceAtLeast(104))
+        val compact = panel < 120
+        val header = if (compact) 32 else if (panel >= 140) 42 else 36
+        val footer = if (compact) 16 else if (panel >= 140) 24 else 20
         val basePadding = if (compact) 4 else 10
-        val extra = panel - reference
-        // Fill a taller host without stretching cards, circles or the timeline.
-        // Keep the card/track group together and center its reference geometry.
-        val top = (if (compact) 2 else 6) + extra / 2
-        val bottom = (if (compact) 2 else 4) + extra - extra / 2
+        val top = if (compact) 2 else 6
+        val bottom = if (compact) 2 else 4
         return Overview(panel, header, footer,
-            reference - basePadding - header - footer - 5,
+            panel - basePadding - header - footer - 5,
             compact, top, bottom)
     }
 }

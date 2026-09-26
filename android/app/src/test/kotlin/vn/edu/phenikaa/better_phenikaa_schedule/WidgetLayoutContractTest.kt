@@ -57,12 +57,16 @@ class WidgetLayoutContractTest {
             .getAttributeNS(androidNamespace, "layout_height").isNotEmpty())
     }
 
-    @Test fun tallHostLayoutFillsOnlyItsSeparatePanel() {
+    @Test fun oversizedHostUsesTopAlignedReferenceHeightPanels() {
         val reference = layout("overview_widget").documentElement
-        val tall = layout("overview_widget_tall").documentElement
         assertEquals("104dp", element("overview_panel", reference)
             .getAttributeNS(androidNamespace, "layout_height"))
-        assertEquals("match_parent", element("overview_panel", tall)
-            .getAttributeNS(androidNamespace, "layout_height"))
+        for ((name, height) in listOf("overview_widget_adaptive" to "104dp",
+            "overview_widget_124" to "124dp", "overview_widget_140" to "140dp",
+            "overview_widget_tall" to "156dp")) {
+            val panel = element("overview_panel", layout(name).documentElement)
+            assertEquals(height, panel.getAttributeNS(androidNamespace, "layout_height"))
+            assertEquals("top", panel.getAttributeNS(androidNamespace, "layout_gravity"))
+        }
     }
 }

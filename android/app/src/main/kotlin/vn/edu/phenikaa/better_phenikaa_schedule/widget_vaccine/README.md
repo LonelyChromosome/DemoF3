@@ -11,9 +11,11 @@ remain the baseline.
   When only legacy ranges are available, portrait uses the narrow/tall pair and
   landscape uses the wide/short pair. Transient bitmaps use the closest exact
   size for the current orientation.
-- `WidgetGeometry` preserves the 4×2 reference dimensions through 156dp.
-  A taller host fills its panel while keeping the card, track and dot geometry
-  together; the additional space is distributed around that group.
+- `WidgetGeometry` derives the 4×2 panel height from the host width using the
+  reference panel's 320:124 ratio, clamps it to 104–156dp, and caps it at the
+  host height. Extra two-row host height remains outside the panel. When the
+  host is taller than the panel, an adaptive layout anchors it at the top so
+  the gap after the small widget stays faithful to the reference.
 
 ## Compatibility, tracked separately
 
@@ -24,7 +26,7 @@ launcher observations and tests. Geometry passing does not establish that
 those compatibility cases pass.
 
 Android 11 and older cannot set the 4×2 panel height through the Android 12
-`RemoteViews` size API. Only taller hosts use the separate
-`overview_widget_tall.xml` layout; the reference XML remains untouched.
-Its output still needs a launcher screenshot and interaction check before it
-can be marked as passing visual parity.
+`RemoteViews` size API. They select a fixed 104/124/140/156dp layout closest
+to the calculated height. The original reference XML remains untouched.
+Each launcher still needs a screenshot and interaction check before visual
+parity can be marked as passing.

@@ -39,8 +39,21 @@ internal object WidgetHostSizeResolver {
         return nearest ?: SizeF(legacy.width.toFloat(), legacy.height.toFloat())
     }
 
-    fun overviewLayout(context: Context, options: Bundle): Int =
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S &&
-            currentSize(context, options, 320, 150).height > 156f)
-            R.layout.overview_widget_tall else R.layout.overview_widget
+    fun overviewLayout(context: Context, options: Bundle): Int {
+        val size = currentSize(context, options, 320, 150)
+        val target = WidgetGeometry.overview(size.width.toInt(), size.height.toInt()).panelHeight
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return if (size.height > target + 8f) R.layout.overview_widget_adaptive
+                else R.layout.overview_widget
+        }
+        // Before Android 12, RemoteViews cannot change this layout height.
+        // Pick a fixed reference-height variant that fits inside the host.
+        return when {
+            target >= 148 && size.height >= 156f -> R.layout.overview_widget_tall
+            target >= 132 && size.height >= 140f -> R.layout.overview_widget_140
+            target >= 114 && size.height >= 124f -> R.layout.overview_widget_124
+            size.height > 112f -> R.layout.overview_widget_adaptive
+            else -> R.layout.overview_widget
+        }
+    }
 }

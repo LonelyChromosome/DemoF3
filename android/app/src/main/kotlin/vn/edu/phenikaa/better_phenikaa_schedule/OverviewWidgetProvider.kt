@@ -429,7 +429,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val items = WidgetSnapshotStore.readOverview(context, id, examMode)
         val size = hostSize(context, manager, id)
         val width = size.width.toInt()
-        val geometry = WidgetGeometry.overview(size.height.toInt())
+        val geometry = WidgetGeometry.overview(width, size.height.toInt())
         val cardHeight = geometry.cardHeight
         val compact = geometry.compact
         val columns = OverviewPager.columns(width)
@@ -473,7 +473,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         val items = WidgetSnapshotStore.readOverview(context, id, examMode)
         val size = hostSize(context, manager, id)
         val width = size.width.toInt()
-        val geometry = WidgetGeometry.overview(size.height.toInt())
+        val geometry = WidgetGeometry.overview(width, size.height.toInt())
         val panelHeight = geometry.panelHeight
         val compact = geometry.compact
         val headerHeight = geometry.headerHeight
@@ -518,12 +518,6 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 TypedValue.COMPLEX_UNIT_DIP)
             views.setViewLayoutHeight(R.id.overview_footer, footerHeight.toFloat(),
                 TypedValue.COMPLEX_UNIT_DIP)
-        } else if (panelHeight > 156) {
-            // The separate tall XML fills older hosts; the reference XML stays intact.
-            val density = context.resources.displayMetrics.density
-            views.setViewPadding(R.id.overview_content, (12 * density).toInt(),
-                (geometry.topPadding * density).toInt(), (12 * density).toInt(),
-                (geometry.bottomPadding * density).toInt())
         }
         views.setTextViewTextSize(R.id.overview_title, TypedValue.COMPLEX_UNIT_SP,
             if (compact) 14f else 16f)

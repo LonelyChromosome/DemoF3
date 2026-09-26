@@ -3,7 +3,7 @@
  android:id="@+id/overview_root" android:layout_width="match_parent" android:layout_height="match_parent"
  android:clipChildren="false">
  <FrameLayout android:id="@+id/overview_panel" android:layout_width="match_parent"
-  android:layout_height="156dp" android:layout_gravity="top"
+  android:layout_height="140dp" android:layout_gravity="top"
   android:background="@drawable/schedule_widget_outline"
   android:clipToOutline="true" android:outlineProvider="background">
  <ImageView android:id="@+id/overview_background" android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="fitXY" android:contentDescription="@null"/>
