@@ -1,5 +1,7 @@
 # DemoF3 QLĐT Schedule Diagnostic
 
+> QLĐT chậm hay app sai, đo xong rồi nói. Đoán mò vừa nhanh vừa vô dụng.
+
 Extension Chrome cục bộ để so sánh API lịch cá nhân trên trang QLĐT với timeout trong app. Phép thử gọi đúng hàm, action, khoảng ngày và tham số như app; chỉ đọc dữ liệu.
 
 1. Giải nén ZIP. Mở `chrome://extensions`, bật **Developer mode**, chọn **Load unpacked** và trỏ vào thư mục có `manifest.json`.

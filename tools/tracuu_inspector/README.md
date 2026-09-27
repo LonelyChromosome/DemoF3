@@ -1,5 +1,8 @@
 # DemoF3 TraCuu Inspector
 
+> Trang giấu dữ liệu ở đâu thì tìm đúng chỗ đó. Không bịa endpoint cho code có
+> vẻ thông minh.
+
 Extension Chrome cục bộ để tìm lời gọi QLĐT sau khi JavaScript của trang đã xử lý `Data.B`. Không thay đổi trang hoặc tự gửi request đăng ký.
 
 1. Vào `chrome://extensions`, bật Developer mode và chọn **Load unpacked** với thư mục này.

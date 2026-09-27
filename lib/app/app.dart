@@ -2689,6 +2689,20 @@ class _InfoPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const _AccountInfoRow(label: 'Nguồn', value: 'QLĐT Phenikaa'),
+          const SizedBox(height: 14),
+          Divider(color: palette.border, height: 1),
+          const SizedBox(height: 12),
+          Text(
+            'Better Phenikaa là dự án độc lập do sinh viên phát triển, '
+            'không phải ứng dụng chính thức và không đại diện cho '
+            'Trường Đại học Phenikaa.',
+            style: TextStyle(
+              color: palette.textSecondary,
+              fontSize: 11,
+              height: 1.4,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );

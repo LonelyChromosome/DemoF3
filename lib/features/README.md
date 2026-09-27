@@ -1,5 +1,7 @@
 # Cau truc feature DemoF3
 
+> Luoi mo QLDT khong co nghia la duoc phep sap code nhu mot bai tap nop luc 23:59.
+
 Ten nhanh thu muc trong `features/` dung tieng Viet khong dau. Ten bat buoc cua
 Flutter, Android, API QLDT va cac lop da public duoc giu on dinh de tranh loi
 tuong thich.

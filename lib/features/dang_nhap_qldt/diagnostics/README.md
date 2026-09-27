@@ -1,5 +1,7 @@
 # QLĐT diagnostics (opt in)
 
+> Đo cho ra lỗi thì đo. Đo cho vui rồi bê dữ liệu thật lên Git thì thôi.
+
 The normal app and release APK build with `QLDT_DIAGNOSTICS=false`. In that
 mode, the timing recorder is not created, no timing data is persisted, and the
 copy-diagnostics action is hidden. The login, retry, timeout, verification and

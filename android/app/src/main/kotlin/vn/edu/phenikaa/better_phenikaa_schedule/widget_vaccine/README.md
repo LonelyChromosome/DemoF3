@@ -1,5 +1,8 @@
 # ThemeVaccine
 
+> Launcher thích tự do diễn giải kích thước. Còn widget thì vẫn phải ra đúng
+> thiết kế.
+
 This directory contains only widget host size and render geometry adaptation.
 The reference widget XML, themes, actions, schedule data, sync, and notifications
 remain the baseline.
