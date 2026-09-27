@@ -1,5 +1,7 @@
 # Better Phenikaa Web Bridge - QLĐT Beta
 
+> Đăng nhập một lần cho tử tế, đừng bắt người dùng làm lễ trước QLĐT mỗi ngày.
+
 Chrome extension cục bộ dùng cho **Better Phenikaa App trên web** để đăng nhập và đọc lịch từ QLĐT beta mà không thu mật khẩu trong app.
 
 QLĐT sử dụng đúng địa chỉ:
