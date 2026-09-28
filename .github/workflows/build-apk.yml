@@ -7,6 +7,7 @@ on:
       - main
       - experiment/native-qldt-integrated
       - experiment/native-qldt-widget-sync
+      - demo/legacy-native-fallback
 
 permissions:
   contents: read
