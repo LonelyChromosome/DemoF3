@@ -20,6 +20,9 @@ const bool supportsLiveQldtLogin = true;
 const _sessionKey = 'qldt_verified_session';
 const _portalPathKey = 'qldt_verified_portal_path';
 const _nativeSessionKey = 'better_phenikaa_qldt_native_session_v1';
+const _syncModeKey = 'better_phenikaa_qldt_sync_mode_v1';
+const _legacyMode = 'legacy';
+const _nativeMode = 'native';
 const _credentialChannel = MethodChannel('better_phenikaa/qldt_credentials');
 
 Future<void> clearQldtSession() async {
@@ -29,6 +32,7 @@ Future<void> clearQldtSession() async {
   await prefs.remove(_sessionKey);
   await prefs.remove(_portalPathKey);
   await prefs.remove(_nativeSessionKey);
+  await prefs.remove(_syncModeKey);
 }
 
 Future<QldtLoginResult?> openQldtLogin(
@@ -76,6 +80,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   Timer? _syncWatchdog;
   Timer? _phaseTimer;
   Timer? _sessionTimer;
+  Timer? _legacyFallbackTimer;
   final QldtSyncDiagnostics? _diagnostics = qldtDiagnosticsEnabled
       ? QldtSyncDiagnostics()
       : null;
@@ -89,6 +94,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   bool _pageReady = false;
   bool _syncing = false;
   bool _autoSyncStarted = false;
+  bool _usingNativeTransport = false;
+  bool _switchingToNative = false;
   bool _rendererGone = false;
   bool _webCanGoBack = false;
   bool _allowRoutePop = false;
@@ -127,6 +134,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
     _sessionTimer?.cancel();
+    _legacyFallbackTimer?.cancel();
     _controller = null;
     super.dispose();
   }
@@ -438,6 +446,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _phaseTimer?.cancel();
     _syncWatchdog?.cancel();
     _sessionTimer?.cancel();
+    _legacyFallbackTimer?.cancel();
     ++_syncEpoch;
     _autoSyncStarted = false;
     _pendingSchedule = null;
@@ -1041,46 +1050,116 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   Future<void> _sync() async {
     final controller = _controller;
-    if (controller == null || _syncing) {
-      return;
-    }
+    if (controller == null || _syncing) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || _syncing) return;
+    final mode = prefs.getString(_syncModeKey) ?? _legacyMode;
+
     final epoch = ++_syncEpoch;
     _currentPhase = null;
     _syncWatchdog?.cancel();
-    _syncWatchdog = Timer(const Duration(seconds: 100), () {
-      _stopSync(
-        epoch,
-        'Đồng bộ quá 100 giây. Dữ liệu cũ được giữ nguyên. Hãy thử lại.',
-        code: 'TOTAL_TIMEOUT',
-      );
-    });
-    _startPhase(
-      QldtSyncPhase.semesterPlan,
-      const Duration(seconds: 20),
-      epoch,
-    );
+    _phaseTimer?.cancel();
+    _legacyFallbackTimer?.cancel();
+    _switchingToNative = false;
+    _usingNativeTransport = mode == _nativeMode;
+
     setState(() {
       _syncing = true;
       _showWebPage = false;
-      _status = 'Đang đồng bộ trực tiếp với QLĐT...';
+      _status = _usingNativeTransport
+          ? 'Đang đồng bộ bằng native HTTP...'
+          : 'Đang đồng bộ bằng luồng QLĐT chính...';
     });
     _pendingSchedule = null;
     _pendingRegistrationRaw = null;
     _failureDiagnosticsJson = null;
     _scheduleStages.clear();
 
+    if (_usingNativeTransport) {
+      try {
+        await _syncNative(epoch);
+      } on Object catch (error) {
+        if (!mounted || !_syncing || epoch != _syncEpoch) return;
+        _stopSync(
+          epoch,
+          'Native HTTP lỗi: ${error.runtimeType}: $error',
+          code: 'NATIVE_SYNC_FAILED',
+        );
+      }
+      return;
+    }
+
+    _startPhase(
+      QldtSyncPhase.semesterPlan,
+      const Duration(seconds: 20),
+      epoch,
+    );
+    _legacyFallbackTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted &&
+          _syncing &&
+          !_usingNativeTransport &&
+          epoch == _syncEpoch) {
+        unawaited(_switchToNative('LEGACY_5S_TIMEOUT'));
+      }
+    });
+    await _syncLegacyDispatch(controller, epoch);
+  }
+
+  bool _shouldFallbackFromLegacy(String code) {
+    return <String>{
+      'NETWORK_ERROR',
+      'REQUEST_ERROR',
+      'SESSION_EXPIRED',
+      'HTTP_ERROR',
+      'RENDERER_GONE',
+      'LEGACY_DISPATCH_ERROR',
+      'LEGACY_SCHEDULE_DISPATCH_ERROR',
+    }.contains(code);
+  }
+
+  Future<void> _switchToNative(String reason) async {
+    if (!mounted ||
+        !_syncing ||
+        _usingNativeTransport ||
+        _switchingToNative) {
+      return;
+    }
+    _switchingToNative = true;
+    _legacyFallbackTimer?.cancel();
+    _syncWatchdog?.cancel();
+    _phaseTimer?.cancel();
+
+    final nativeEpoch = ++_syncEpoch;
+    _usingNativeTransport = true;
+    _currentPhase = null;
+    _pendingSchedule = null;
+    _pendingRegistrationRaw = null;
+    _scheduleStages.clear();
+
     try {
-      await _syncNative(epoch);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_syncModeKey, _nativeMode);
+    } on Object {
+      // The current fallback can still run even if mode persistence fails.
+    }
+
+    if (!mounted || !_syncing || nativeEpoch != _syncEpoch) return;
+    setState(() {
+      _status = 'Luồng chính lỗi ($reason). Đang chuyển sang native HTTP...';
+    });
+
+    try {
+      await _syncNative(nativeEpoch);
     } on Object catch (error) {
-      if (!mounted || !_syncing || epoch != _syncEpoch) return;
-      _pendingSchedule = null;
-      _pendingRegistrationRaw = null;
-      _scheduleStages.clear();
+      if (!mounted || !_syncing || nativeEpoch != _syncEpoch) return;
       _stopSync(
-        epoch,
+        nativeEpoch,
         'Native HTTP lỗi: ${error.runtimeType}: $error',
         code: 'NATIVE_SYNC_FAILED',
       );
+    } finally {
+      _switchingToNative = false;
     }
   }
 
@@ -1155,6 +1234,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       _stopSync(
         epoch,
         'Không thể yêu cầu môn đăng ký từ QLĐT. Hãy thử lại.',
+        code: 'LEGACY_DISPATCH_ERROR',
       );
     }
   }
@@ -1299,7 +1379,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         _scheduleStages.add('request');
       }
     } on Object {
-      _stopSync(epoch, 'Không thể yêu cầu lịch QLĐT. Hãy thử lại.');
+      _stopSync(
+        epoch,
+        'Không thể yêu cầu lịch QLĐT. Hãy thử lại.',
+        code: 'LEGACY_SCHEDULE_DISPATCH_ERROR',
+      );
     }
   }
 
@@ -1321,6 +1405,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   void _stopSync(int epoch, String status, {String code = 'FAILED'}) {
     if (!mounted || epoch != _syncEpoch) return;
+    if (!_usingNativeTransport && _shouldFallbackFromLegacy(code)) {
+      unawaited(_switchToNative(code));
+      return;
+    }
+    _legacyFallbackTimer?.cancel();
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
     _diagnostics?.finish(code);
