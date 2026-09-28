@@ -79,6 +79,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       : null;
   QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
+  QldtNativeSession? _nativeSession;
   String? _pendingRegistrationRaw;
   String? _failureDiagnosticsJson;
   final List<String> _scheduleStages = <String>[];
@@ -422,6 +423,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     ++_syncEpoch;
     _autoSyncStarted = false;
     _pendingSchedule = null;
+    _nativeSession = null;
     _pendingRegistrationRaw = null;
     _currentPhase = null;
     setState(() {
@@ -917,32 +919,66 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
   Future<void> _checkReady() async {
     final controller = _controller;
-    if (controller == null) {
-      return;
-    }
+    if (controller == null) return;
+
     try {
-      final result = await controller.evaluateJavascript(
-        source: '''
-          Boolean(
-            window.edu && edu.system &&
-            edu.system.userId &&
-            edu.system.iM != null &&
-            edu.system.tokenJWT &&
-            edu.system.appId &&
-            edu.system.strChucNang_Id
-          );
+      final raw = await controller.evaluateJavascript(
+        source: r'''
+          (function () {
+            try {
+              var s = window.edu && edu.system;
+              if (!s || !s.userId || s.iM == null || !s.tokenJWT ||
+                  !s.appId || !s.strChucNang_Id) {
+                return null;
+              }
+              var name = '';
+              var node = document.querySelector('#lblHoTenNguoiDangNhap');
+              if (node) name = (node.textContent || '').trim();
+              if (!name) {
+                var spans = document.querySelectorAll('.nav-account button > span');
+                for (var i = 0; i < spans.length; i++) {
+                  var candidate = (spans[i].textContent || '').trim();
+                  if (candidate) {
+                    name = candidate;
+                    break;
+                  }
+                }
+              }
+              return JSON.stringify({
+                tokenJWT: String(s.tokenJWT),
+                userId: String(s.userId),
+                iM: String(s.iM),
+                appId: String(s.appId),
+                strChucNangId: String(s.strChucNang_Id),
+                cookie: String(document.cookie || ''),
+                name: name
+              });
+            } catch (_) {
+              return null;
+            }
+          })();
         ''',
       );
-      final ready = result == true || result?.toString() == 'true';
-      if (!mounted || (_autoSyncStarted && !_syncing)) {
-        return;
+
+      QldtNativeSession? session;
+      final text = raw?.toString();
+      if (text != null && text.isNotEmpty && text != 'null') {
+        final candidate = QldtNativeSession.fromJson(
+          jsonDecode(text) as Map<String, dynamic>,
+        );
+        if (candidate.isValid) session = candidate;
       }
+
+      if (!mounted || (_autoSyncStarted && !_syncing)) return;
+
+      final ready = session != null;
+      if (ready) _nativeSession = session;
 
       setState(() {
         _pageReady = ready;
         _status = ready
-            ? 'Đã nhận phiên QLĐT. App đang đồng bộ bằng native HTTP...'
-            : 'Hoàn tất đăng nhập Microsoft; app sẽ tự đồng bộ khi session QLĐT sẵn sàng.';
+            ? 'Đã nhận session QLĐT. App đang đồng bộ bằng native HTTP...'
+            : 'Đang lấy session QLĐT sau đăng nhập...';
       });
 
       if (ready && !_autoSyncStarted && !_syncing) {
@@ -956,16 +992,15 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         _scheduleReadinessRetry();
       }
     } on Object {
-      if (mounted) {
-        setState(() => _pageReady = false);
-        _scheduleReadinessRetry();
-      }
+      if (!mounted) return;
+      setState(() => _pageReady = false);
+      _scheduleReadinessRetry();
     }
   }
 
   void _scheduleReadinessRetry() {
     _readinessAttempt += 1;
-    if (_readinessAttempt >= 35) {
+    if (_readinessAttempt >= 60) {
       if (mounted) {
         _sessionTimer?.cancel();
         _diagnostics?.finish('SESSION_TIMEOUT');
@@ -978,7 +1013,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       return;
     }
     _readinessTimer?.cancel();
-    _readinessTimer = Timer(const Duration(seconds: 1), () {
+    _readinessTimer = Timer(const Duration(milliseconds: 300), () {
       if (mounted) {
         unawaited(_checkReady());
       }
@@ -1016,7 +1051,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _scheduleStages.clear();
 
     try {
-      await _syncNative(controller, epoch);
+      await _syncNative(epoch);
     } on Object catch (error) {
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
       _pendingSchedule = null;
@@ -1030,58 +1065,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     }
   }
 
-  Future<void> _syncNative(
-    InAppWebViewController controller,
-    int epoch,
-  ) async {
-    final sessionRaw = await controller.evaluateJavascript(
-      source: r'''
-        (function () {
-          try {
-            var s = window.edu && edu.system;
-            if (!s || !s.userId || s.iM == null || !s.tokenJWT ||
-                !s.appId || !s.strChucNang_Id) {
-              return null;
-            }
-            var name = '';
-            var node = document.querySelector('#lblHoTenNguoiDangNhap');
-            if (node) name = (node.textContent || '').trim();
-            if (!name) {
-              var spans = document.querySelectorAll('.nav-account button > span');
-              for (var i = 0; i < spans.length; i++) {
-                var candidate = (spans[i].textContent || '').trim();
-                if (candidate) {
-                  name = candidate;
-                  break;
-                }
-              }
-            }
-            return JSON.stringify({
-              tokenJWT: String(s.tokenJWT),
-              userId: String(s.userId),
-              iM: String(s.iM),
-              appId: String(s.appId),
-              strChucNangId: String(s.strChucNang_Id),
-              cookie: String(document.cookie || ''),
-              name: name
-            });
-          } catch (_) {
-            return null;
-          }
-        })();
-      ''',
-    );
-    if (!mounted || !_syncing || epoch != _syncEpoch) return;
-
-    final text = sessionRaw?.toString();
-    if (text == null || text.isEmpty || text == 'null') {
+  Future<void> _syncNative(int epoch) async {
+    final session = _nativeSession;
+    if (session == null || !session.isValid) {
       throw const FormatException('NATIVE_SESSION_UNAVAILABLE');
-    }
-    final session = QldtNativeSession.fromJson(
-      jsonDecode(text) as Map<String, dynamic>,
-    );
-    if (!session.isValid) {
-      throw const FormatException('NATIVE_SESSION_INVALID');
     }
 
     final transport = const QldtNativeTransport();
