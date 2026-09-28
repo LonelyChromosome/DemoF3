@@ -5,6 +5,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/qld
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/verification_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_native_transport.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_range.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_schedule_verifier.dart';
@@ -1000,16 +1001,141 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         code: 'TOTAL_TIMEOUT',
       );
     });
-    _startPhase(QldtSyncPhase.semesterPlan, const Duration(seconds: 20), epoch);
+    _startPhase(
+      QldtSyncPhase.semesterPlan,
+      const Duration(seconds: 20),
+      epoch,
+    );
     setState(() {
       _syncing = true;
       _showWebPage = false;
-      _status = 'Đang xác định học kỳ và môn đăng ký từ QLĐT...';
+      _status = 'Đang đồng bộ trực tiếp với QLĐT...';
     });
     _pendingSchedule = null;
     _pendingRegistrationRaw = null;
     _failureDiagnosticsJson = null;
     _scheduleStages.clear();
+
+    try {
+      await _syncNative(controller, epoch);
+    } on Object {
+      if (!mounted || !_syncing || epoch != _syncEpoch) return;
+      _pendingSchedule = null;
+      _pendingRegistrationRaw = null;
+      _scheduleStages.clear();
+      _phaseTimer?.cancel();
+      _currentPhase = null;
+      setState(() {
+        _status = 'Native HTTP lỗi, đang thử lại bằng cơ chế QLĐT cũ...';
+      });
+      _startPhase(
+        QldtSyncPhase.semesterPlan,
+        const Duration(seconds: 20),
+        epoch,
+      );
+      await _syncLegacyDispatch(controller, epoch);
+    }
+  }
+
+  Future<void> _syncNative(
+    InAppWebViewController controller,
+    int epoch,
+  ) async {
+    final sessionRaw = await controller.evaluateJavascript(
+      source: r'''
+        (function () {
+          try {
+            var s = window.edu && edu.system;
+            if (!s || !s.userId || s.iM == null || !s.tokenJWT ||
+                !s.appId || !s.strChucNang_Id) {
+              return null;
+            }
+            var name = '';
+            var node = document.querySelector('#lblHoTenNguoiDangNhap');
+            if (node) name = (node.textContent || '').trim();
+            if (!name) {
+              var spans = document.querySelectorAll('.nav-account button > span');
+              for (var i = 0; i < spans.length; i++) {
+                var candidate = (spans[i].textContent || '').trim();
+                if (candidate) {
+                  name = candidate;
+                  break;
+                }
+              }
+            }
+            return JSON.stringify({
+              tokenJWT: String(s.tokenJWT),
+              userId: String(s.userId),
+              iM: String(s.iM),
+              appId: String(s.appId),
+              strChucNangId: String(s.strChucNang_Id),
+              cookie: String(document.cookie || ''),
+              name: name
+            });
+          } catch (_) {
+            return null;
+          }
+        })();
+      ''',
+    );
+    if (!mounted || !_syncing || epoch != _syncEpoch) return;
+
+    final text = sessionRaw?.toString();
+    if (text == null || text.isEmpty || text == 'null') {
+      throw const FormatException('NATIVE_SESSION_UNAVAILABLE');
+    }
+    final session = QldtNativeSession.fromJson(
+      jsonDecode(text) as Map<String, dynamic>,
+    );
+    if (!session.isValid) {
+      throw const FormatException('NATIVE_SESSION_INVALID');
+    }
+
+    final transport = const QldtNativeTransport();
+    final registration = await transport.fetchRegistration(session);
+    if (!mounted || !_syncing || epoch != _syncEpoch) return;
+
+    _startPhase(
+      QldtSyncPhase.subjects,
+      const Duration(seconds: 20),
+      epoch,
+    );
+    final parsedRegistration = const TracuuApi().parse(registration.raw);
+    final range = SemesterScheduleRange.fromRegistration(parsedRegistration);
+    if (range == null) {
+      throw const FormatException('NO_SUBJECTS');
+    }
+    if (DateTime.now().isAfter(range.end.add(const Duration(days: 1)))) {
+      throw const FormatException('SEMESTER_EXPIRED');
+    }
+
+    _startPhase(
+      QldtSyncPhase.schedule,
+      const Duration(seconds: 45),
+      epoch,
+    );
+    if (mounted) {
+      setState(() => _status = 'Đang lấy lịch cá nhân bằng native HTTP...');
+    }
+
+    final scheduleRaw = await transport.fetchScheduleEnvelope(
+      session: session,
+      start: range.start,
+      end: range.end,
+    );
+    if (!mounted || !_syncing || epoch != _syncEpoch) return;
+
+    _pendingSchedule = const QldtParser().parseLiveEnvelope(
+      scheduleRaw,
+      strict: true,
+    );
+    await _completeRegistration(epoch, registration.raw);
+  }
+
+  Future<void> _syncLegacyDispatch(
+    InAppWebViewController controller,
+    int epoch,
+  ) async {
     try {
       final dispatch = await controller.evaluateJavascript(
         source: const TracuuApi().scriptForAttempt(epoch),
@@ -1027,7 +1153,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         _beginReadinessChecks();
       }
     } on Object {
-      _stopSync(epoch, 'Không thể yêu cầu môn đăng ký từ QLĐT. Hãy thử lại.');
+      _stopSync(
+        epoch,
+        'Không thể yêu cầu môn đăng ký từ QLĐT. Hãy thử lại.',
+      );
     }
   }
 
