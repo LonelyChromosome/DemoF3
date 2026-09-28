@@ -38,7 +38,7 @@ class QldtDailySyncWorker(
     workerParameters: WorkerParameters,
 ) : Worker(appContext, workerParameters) {
     @Volatile
-    private var activeSync: HeadlessQldtSync? = null
+    private var activeSync: NativeQldtWidgetSync? = null
     private val syncToken: Long get() = inputData.getLong("sync_token", 0L)
 
     override fun doWork(): Result {
@@ -53,7 +53,7 @@ class QldtDailySyncWorker(
         var reminderSemester: String? = null
         try {
             // Keep the user-initiated widget sync alive when the app goes to the background.
-            // Wait until WorkManager has promoted it before starting the hidden WebView.
+            // Data transport is native HTTP; no hidden WebView is started.
             setForegroundAsync(syncForegroundInfo()).get()
             if (isStopped) return Result.success()
             val preferences = applicationContext.getSharedPreferences(
@@ -66,8 +66,12 @@ class QldtDailySyncWorker(
                 return Result.success()
             }
 
-            val cachedRoute = preferences.getString(REGISTRATION_ROUTE_KEY, null)
-            val synchronizer = HeadlessQldtSync(applicationContext, cachedRoute)
+            val nativeSession = preferences.getString(NATIVE_SESSION_KEY, null)
+            if (nativeSession.isNullOrBlank()) {
+                syncError = "SESSION_EXPIRED: Hãy mở app và đồng bộ lại để làm mới phiên QLĐT."
+                return Result.success()
+            }
+            val synchronizer = NativeQldtWidgetSync(nativeSession)
             activeSync = synchronizer
             val syncResult = try {
                 synchronizer.run()
@@ -80,7 +84,7 @@ class QldtDailySyncWorker(
             }
 
             when (syncResult) {
-                is HeadlessQldtSync.Result.Success -> {
+                is NativeQldtWidgetSync.Result.Success -> {
                     val bundle = NativeSemesterVerifier.verify(
                         syncResult.envelope,
                         syncResult.registration,
@@ -133,7 +137,7 @@ class QldtDailySyncWorker(
                     syncSucceeded = true
                     reminderSemester = bundle.semester
                 }
-                is HeadlessQldtSync.Result.Failure -> {
+                is NativeQldtWidgetSync.Result.Failure -> {
                     syncError = syncResult.message
                 }
             }
@@ -265,6 +269,7 @@ class QldtDailySyncWorker(
         const val PREVIOUS_SEMESTER_KEY = "flutter.better_phenikaa_previous_semester_v1"
         const val DIFFERENCE_KEY = "flutter.better_phenikaa_semester_difference_v1"
         const val REGISTRATION_ROUTE_KEY = "flutter.better_phenikaa_qldt_registration_route_v1"
+        const val NATIVE_SESSION_KEY = "flutter.better_phenikaa_qldt_native_session_v1"
         const val SYNC_CHANNEL = "widget_sync_progress"
         const val SYNC_NOTIFICATION_ID = 2819
     }
