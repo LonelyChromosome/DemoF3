@@ -27,6 +27,7 @@ Future<void> clearQldtSession() async {
   final prefs = await SharedPreferences.getInstance();
   await prefs.remove(_sessionKey);
   await prefs.remove(_portalPathKey);
+  await prefs.remove(_nativeSessionKey);
 }
 
 Future<QldtLoginResult?> openQldtLogin(
@@ -375,6 +376,22 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       return _qldtUri.toString();
     }
     return Uri.parse(_qldtUri.toString()).resolve(path).toString();
+  }
+
+  Future<void> _cacheNativeSession(QldtNativeSession session) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _nativeSessionKey,
+      jsonEncode(<String, dynamic>{
+        'tokenJWT': session.tokenJwt,
+        'userId': session.userId,
+        'iM': session.iM,
+        'appId': session.appId,
+        'strChucNangId': session.functionId,
+        'cookie': session.cookie,
+        'name': session.displayName,
+      }),
+    );
   }
 
   Future<void> _rememberPortal(InAppWebViewController controller) async {
@@ -986,6 +1003,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         _sessionTimer?.cancel();
         _diagnostics?.finish('OK');
         _autoSyncStarted = true;
+        await _cacheNativeSession(session);
         unawaited(_rememberPortal(controller));
         await _sync();
       } else if (!ready) {
