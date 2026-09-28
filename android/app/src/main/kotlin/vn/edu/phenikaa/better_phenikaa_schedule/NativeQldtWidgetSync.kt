@@ -35,8 +35,9 @@ internal class NativeQldtWidgetSync(sessionJson: String) {
         cancelled.set(true)
     }
 
-    fun run(): Result = try {
-        requireSession()
+    fun run(): Result {
+        return try {
+            requireSession()
         val registration = fetchRegistration()
         if (cancelled.get()) {
             Result.Failure("SYNC_STOPPED: Tác vụ đồng bộ đã dừng.")
@@ -52,13 +53,14 @@ internal class NativeQldtWidgetSync(sessionJson: String) {
                 Result.Success(schedule, registration)
             }
         }
-    } catch (error: NativeSyncException) {
-        Result.Failure(error.message ?: "NATIVE_SYNC_FAILED")
-    } catch (error: Exception) {
-        Result.Failure(
-            "NATIVE_SYNC_EXCEPTION: ${error.javaClass.simpleName}: " +
-                error.message.orEmpty().take(120),
-        )
+        } catch (error: NativeSyncException) {
+            Result.Failure(error.message ?: "NATIVE_SYNC_FAILED")
+        } catch (error: Exception) {
+            Result.Failure(
+                "NATIVE_SYNC_EXCEPTION: ${error.javaClass.simpleName}: " +
+                    error.message.orEmpty().take(120),
+            )
+        }
     }
 
     private fun fetchRegistration(): String {
