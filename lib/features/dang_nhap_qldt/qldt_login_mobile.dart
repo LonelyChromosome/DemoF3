@@ -19,6 +19,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 const bool supportsLiveQldtLogin = true;
 const _sessionKey = 'qldt_verified_session';
 const _portalPathKey = 'qldt_verified_portal_path';
+const _nativeSessionKey = 'better_phenikaa_qldt_native_session_v1';
 const _credentialChannel = MethodChannel('better_phenikaa/qldt_credentials');
 
 Future<void> clearQldtSession() async {
