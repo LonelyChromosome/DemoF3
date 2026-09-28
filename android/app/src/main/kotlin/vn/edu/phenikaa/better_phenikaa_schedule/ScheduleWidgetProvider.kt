@@ -298,9 +298,17 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             val readyThemeKey = intent.getStringExtra(EXTRA_READY_THEME_KEY)
             if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID && readyThemeKey != null) {
                 maybeStartFadeIn(context, widgetId, readyThemeKey)
-                Handler(Looper.getMainLooper()).postDelayed({
-                    applyPendingSelection(context, AppWidgetManager.getInstance(context), widgetId)
-                }, 80L)
+                val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
+                val pending = state.getString(pendingSelectionKey(widgetId), null)
+                if (pending != null) {
+                    val manager = AppWidgetManager.getInstance(context)
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        applyPendingSelection(context, manager, widgetId, pending, finish = false)
+                    }, 160L)
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        applyPendingSelection(context, manager, widgetId, pending, finish = true)
+                    }, 500L)
+                }
             }
             return
         }
@@ -487,9 +495,13 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 PHASE_WAITING_TARGET) {
                 scheduleRefreshCoverHide(context, appWidgetManager, widgetId, contentToken)
             }
+            // A selection sent before the remote adapter connects is ignored by
+            // AdapterViewAnimator. Give the factory time to report a frame before
+            // this bounded fallback releases the refresh cover.
             Handler(Looper.getMainLooper()).postDelayed({
-                applyPendingSelection(context, appWidgetManager, widgetId)
-            }, 260L)
+                applyPendingSelection(context, appWidgetManager, widgetId,
+                    contentToken, finish = true)
+            }, 1200L)
         } else if (themeChanged && !hasActiveThemeTransition(renderStatePrefs, widgetId)) {
             appWidgetManager.partiallyUpdateAppWidget(widgetId, views)
             appWidgetManager.notifyAppWidgetViewDataChanged(widgetId, R.id.widget_list)
@@ -524,15 +536,19 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         }, 700L)
     }
 
-    private fun applyPendingSelection(context: Context, manager: AppWidgetManager, widgetId: Int) {
+    private fun applyPendingSelection(
+        context: Context, manager: AppWidgetManager, widgetId: Int,
+        expectedToken: String, finish: Boolean,
+    ) {
         val state = context.getSharedPreferences(WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
         val pending = state.getString(pendingSelectionKey(widgetId), null) ?: return
+        if (pending != expectedToken) return
         if (pending != state.getString(contentTokenKey(widgetId), null)) return
         val selected = WidgetSnapshotStore.read(context, widgetId).selectedIndex
         val views = RemoteViews(context.packageName, R.layout.schedule_widget)
         views.setDisplayedChild(R.id.widget_list, selected)
         manager.partiallyUpdateAppWidget(widgetId, views)
-        state.edit().remove(pendingSelectionKey(widgetId)).apply()
+        if (finish) state.edit().remove(pendingSelectionKey(widgetId)).apply()
     }
 
     private fun animateModeSlide(
@@ -846,7 +862,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             Handler(Looper.getMainLooper()).postDelayed({
                 if (readThemeColors(context).key != targetThemeKey ||
                     hasActiveThemeTransition(state, widgetId)) return@postDelayed
-                applyPendingSelection(context, manager, widgetId)
+                val pending = state.getString(pendingSelectionKey(widgetId), null)
+                if (pending != null) {
+                    applyPendingSelection(context, manager, widgetId, pending, finish = true)
+                }
                 val token = state.getString(contentTokenKey(widgetId), null)
                 if (token != null) scheduleRefreshCoverHide(context, manager, widgetId, token)
             }, 450L)
