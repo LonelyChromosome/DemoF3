@@ -328,10 +328,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                     width: double.infinity,
                     height: 48,
                     child: OutlinedButton.icon(
-                      onPressed:
-                          _pageReady && _scheduleStages.contains('request')
-                          ? _sync
-                          : _reload,
+                      onPressed: _pageReady ? _sync : _reload,
                       icon: const Icon(Icons.refresh_rounded),
                       label: const Text('Thử đồng bộ lại'),
                     ),
@@ -927,10 +924,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       final result = await controller.evaluateJavascript(
         source: '''
           Boolean(
-            window.edu && edu.system && edu.system.userId &&
-            edu.system.iM != null && typeof edu.system.makeRequest === 'function' &&
-            window.flutter_inappwebview &&
-            typeof window.flutter_inappwebview.callHandler === 'function'
+            window.edu && edu.system &&
+            edu.system.userId &&
+            edu.system.iM != null &&
+            edu.system.tokenJWT &&
+            edu.system.appId &&
+            edu.system.strChucNang_Id
           );
         ''',
       );
@@ -942,8 +941,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       setState(() {
         _pageReady = ready;
         _status = ready
-            ? 'Đã nhận phiên QLĐT. App đang tự lấy lịch và sẽ quay lại ngay khi hoàn tất.'
-            : 'Hoàn tất đăng nhập Microsoft; app sẽ tự đồng bộ khi QLĐT sẵn sàng.';
+            ? 'Đã nhận phiên QLĐT. App đang đồng bộ bằng native HTTP...'
+            : 'Hoàn tất đăng nhập Microsoft; app sẽ tự đồng bộ khi session QLĐT sẵn sàng.';
       });
 
       if (ready && !_autoSyncStarted && !_syncing) {
@@ -1018,22 +1017,16 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
     try {
       await _syncNative(controller, epoch);
-    } on Object {
+    } on Object catch (error) {
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
       _pendingSchedule = null;
       _pendingRegistrationRaw = null;
       _scheduleStages.clear();
-      _phaseTimer?.cancel();
-      _currentPhase = null;
-      setState(() {
-        _status = 'Native HTTP lỗi, đang thử lại bằng cơ chế QLĐT cũ...';
-      });
-      _startPhase(
-        QldtSyncPhase.semesterPlan,
-        const Duration(seconds: 20),
+      _stopSync(
         epoch,
+        'Native HTTP lỗi: ${error.runtimeType}: $error',
+        code: 'NATIVE_SYNC_FAILED',
       );
-      await _syncLegacyDispatch(controller, epoch);
     }
   }
 
