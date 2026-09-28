@@ -40,4 +40,18 @@ class WidgetTimelineDateTest {
         assertEquals("2026-09-26", stack.items[stack.selectedIndex + 1].dateKey)
         assertEquals("2026-09-27", stack.items.last().dateKey)
     }
+    @Test fun selectedCardKeepsPreviousAndNextSwipeItems() {
+        val timeline = WidgetTimeline.arrange(
+            listOf(item("2026-08-28"), item("2026-09-27"), item("2026-09-28")),
+            "2026-09-27", "2026-09-27", "2026-09-27T08:00:00",
+        )
+        assertEquals(1, timeline.selectedIndex)
+        assertEquals(
+            listOf("2026-08-28", "2026-09-27", "2026-09-28"),
+            timeline.items.map { it.dateKey },
+        )
+        assertEquals("2026-08-28", timeline.items[timeline.selectedIndex - 1].dateKey)
+        assertEquals("2026-09-28", timeline.items[timeline.selectedIndex + 1].dateKey)
+    }
+
 }
