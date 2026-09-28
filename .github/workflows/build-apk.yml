@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - experiment/native-qldt-integrated
+      - experiment/native-qldt-widget-sync
 
 permissions:
   contents: read
