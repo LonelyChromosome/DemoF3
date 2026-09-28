@@ -202,7 +202,6 @@ class QldtDailySyncWorker(
                     syncSucceeded = true
                     reminderSemester = bundle.semester
                 }
-            }
         } catch (error: IllegalArgumentException) {
             syncError = "VERIFY: " + error.message.orEmpty().take(150)
         } catch (error: Exception) {
