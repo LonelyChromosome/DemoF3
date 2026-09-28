@@ -38,7 +38,10 @@ class QldtDailySyncWorker(
     workerParameters: WorkerParameters,
 ) : Worker(appContext, workerParameters) {
     @Volatile
-    private var activeSync: NativeQldtWidgetSync? = null
+    private var activeLegacySync: HeadlessQldtSync? = null
+
+    @Volatile
+    private var activeNativeSync: NativeQldtWidgetSync? = null
     private val syncToken: Long get() = inputData.getLong("sync_token", 0L)
 
     override fun doWork(): Result {
@@ -71,30 +74,92 @@ class QldtDailySyncWorker(
                 syncError = "SESSION_EXPIRED: Hãy mở app và đồng bộ lại để làm mới phiên QLĐT."
                 return Result.success()
             }
-            val synchronizer = NativeQldtWidgetSync(nativeSession)
-            activeSync = synchronizer
-            val syncResult = try {
-                synchronizer.run()
-            } finally {
-                activeSync = null
+
+            val mode = preferences.getString(SYNC_MODE_KEY, LEGACY_MODE) ?: LEGACY_MODE
+            var envelope: String? = null
+            var registration: String? = null
+
+            if (mode == NATIVE_MODE) {
+                val synchronizer = NativeQldtWidgetSync(nativeSession)
+                activeNativeSync = synchronizer
+                val nativeResult = try {
+                    synchronizer.run()
+                } finally {
+                    activeNativeSync = null
+                }
+                when (nativeResult) {
+                    is NativeQldtWidgetSync.Result.Success -> {
+                        envelope = nativeResult.envelope
+                        registration = nativeResult.registration
+                    }
+                    is NativeQldtWidgetSync.Result.Failure -> {
+                        syncError = nativeResult.message
+                        return Result.success()
+                    }
+                }
+            } else {
+                val cachedRoute = preferences.getString(REGISTRATION_ROUTE_KEY, null)
+                val synchronizer = HeadlessQldtSync(applicationContext, cachedRoute)
+                activeLegacySync = synchronizer
+                val legacyResult = try {
+                    synchronizer.run(LEGACY_TIMEOUT_SECONDS)
+                } finally {
+                    activeLegacySync = null
+                }
+
+                when (legacyResult) {
+                    is HeadlessQldtSync.Result.Success -> {
+                        envelope = legacyResult.envelope
+                        registration = legacyResult.registration
+                    }
+                    is HeadlessQldtSync.Result.Failure -> {
+                        if (!shouldFallbackLegacy(legacyResult.message)) {
+                            syncError = legacyResult.message
+                            return Result.success()
+                        }
+                        preferences.edit().putString(SYNC_MODE_KEY, NATIVE_MODE).commit()
+                        val nativeSync = NativeQldtWidgetSync(nativeSession)
+                        activeNativeSync = nativeSync
+                        val nativeResult = try {
+                            nativeSync.run()
+                        } finally {
+                            activeNativeSync = null
+                        }
+                        when (nativeResult) {
+                            is NativeQldtWidgetSync.Result.Success -> {
+                                envelope = nativeResult.envelope
+                                registration = nativeResult.registration
+                            }
+                            is NativeQldtWidgetSync.Result.Failure -> {
+                                syncError = nativeResult.message
+                                return Result.success()
+                            }
+                        }
+                    }
+                }
             }
+
             if (isStopped || !WidgetSyncIndicator.isCurrent(applicationContext, syncToken)) {
                 syncError = "SYNC_STOPPED: Tác vụ đồng bộ đã dừng."
                 return Result.success()
             }
 
-            when (syncResult) {
-                is NativeQldtWidgetSync.Result.Success -> {
+            val syncEnvelope = envelope
+                ?: return Result.success().also { syncError = "SYNC_NO_ENVELOPE" }
+            val syncRegistration = registration
+                ?: return Result.success().also { syncError = "SYNC_NO_REGISTRATION" }
+
+            run {
                     val bundle = NativeSemesterVerifier.verify(
-                        syncResult.envelope,
-                        syncResult.registration,
+                        syncEnvelope,
+                        syncRegistration,
                         previousSnapshot,
                     )
                     val difference = NativeSemesterDifference.compare(
                         preferences.getString(CURRENT_SEMESTER_KEY, null),
                         bundle.semester,
                     )
-                    val startText = registeredStart(syncResult.registration)
+                    val startText = registeredStart(syncRegistration)
                     val oldSemester = preferences.getString(CURRENT_SEMESTER_KEY, null)
                     val oldStart = preferences.getString(CURRENT_START_KEY, null)
                     val archive = if (oldSemester != null && oldStart != null &&
@@ -123,7 +188,7 @@ class QldtDailySyncWorker(
                         .apply {
                             if (archive == null) remove(PREVIOUS_SEMESTER_KEY)
                             else putString(PREVIOUS_SEMESTER_KEY, archive)
-                            val route = JSONObject(syncResult.registration).optJSONObject("route")
+                            val route = JSONObject(syncRegistration).optJSONObject("route")
                             if (route != null) putString(REGISTRATION_ROUTE_KEY, route.toString())
                         }
                         .commit()
@@ -136,9 +201,6 @@ class QldtDailySyncWorker(
                     WidgetRefreshCoordinator.refreshData(applicationContext)
                     syncSucceeded = true
                     reminderSemester = bundle.semester
-                }
-                is NativeQldtWidgetSync.Result.Failure -> {
-                    syncError = syncResult.message
                 }
             }
         } catch (error: IllegalArgumentException) {
@@ -162,13 +224,27 @@ class QldtDailySyncWorker(
     }
 
     override fun onStopped() {
-        activeSync?.cancel()
+        activeLegacySync?.cancel()
+        activeNativeSync?.cancel()
         if (WidgetSyncIndicator.finish(applicationContext, syncToken, false)) {
             DailySyncScheduler.recordFailure(applicationContext,
                 "SYNC_STOPPED: Android đã dừng tác vụ. Hãy thử lại.")
             WidgetRefreshCoordinator.refreshOverview(applicationContext)
         }
         super.onStopped()
+    }
+
+    private fun shouldFallbackLegacy(message: String): Boolean {
+        val code = message.substringBefore(':').trim()
+        return code !in setOf(
+            "NO_SUBJECTS",
+            "NO_SEMESTER",
+            "PLAN_AMBIGUOUS",
+            "INVALID_REGISTRATION",
+            "INVALID_DATE",
+            "INVALID_SUBJECT",
+            "INVALID_RESPONSE",
+        )
     }
 
     private fun syncForegroundInfo(): ForegroundInfo {
@@ -270,6 +346,10 @@ class QldtDailySyncWorker(
         const val DIFFERENCE_KEY = "flutter.better_phenikaa_semester_difference_v1"
         const val REGISTRATION_ROUTE_KEY = "flutter.better_phenikaa_qldt_registration_route_v1"
         const val NATIVE_SESSION_KEY = "flutter.better_phenikaa_qldt_native_session_v1"
+        const val SYNC_MODE_KEY = "flutter.better_phenikaa_qldt_sync_mode_v1"
+        const val LEGACY_MODE = "legacy"
+        const val NATIVE_MODE = "native"
+        const val LEGACY_TIMEOUT_SECONDS = 5L
         const val SYNC_CHANNEL = "widget_sync_progress"
         const val SYNC_NOTIFICATION_ID = 2819
     }
@@ -303,17 +383,17 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
     private var authEmailSubmitted = false
     private var authPasswordSubmitted = false
 
-    fun run(): Result {
+    fun run(timeoutSeconds: Long = SYNC_TIMEOUT_SECONDS): Result {
         mainHandler.post(::createAndLoadWebView)
         val finished = try {
-            latch.await(SYNC_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            latch.await(timeoutSeconds, TimeUnit.SECONDS)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             false
         }
         if (!finished) {
             complete(Result.Failure(
-                "QLDT_TIMEOUT_${stage.get()}: QLĐT không phản hồi trong 50 giây."))
+                "QLDT_TIMEOUT_${stage.get()}: QLĐT không phản hồi trong ${timeoutSeconds} giây."))
         }
         disposeWebViewAsync()
         return result.get() ?: Result.Failure("QLĐT không trả kết quả đồng bộ.")
