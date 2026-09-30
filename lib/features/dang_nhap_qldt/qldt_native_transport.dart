@@ -139,6 +139,42 @@ final class QldtNativeTransport {
     }
   }
 
+  Future<String> fetchStudentDisplayName(
+    QldtNativeSession session,
+  ) async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+    try {
+      final response = await _post(
+        client: client,
+        session: session,
+        action: 'SV_ThongTin_MH/DSA4FSkuLyYVKC8CKTQuLyYVMygvKQkuIgPP',
+        func: 'pkg_congthongtin_hssv_thongtin.LayThongTinChuongTrinhHoc',
+        extra: const <String, dynamic>{},
+      );
+      for (final row in _rows(response)) {
+        final full = _cleanName(
+          row['QLSV_NGUOIHOC_HOTEN'] ??
+              row['HOTEN'] ??
+              row['HOVATEN'] ??
+              row['FULLNAME'],
+        );
+        if (full.isNotEmpty) return full;
+
+        final family = _cleanName(
+          row['QLSV_NGUOIHOC_HODEM'] ?? row['HODEM'] ?? row['HO'],
+        );
+        final given = _cleanName(
+          row['QLSV_NGUOIHOC_TEN'] ?? row['TEN'],
+        );
+        final combined = _cleanName('$family $given');
+        if (combined.isNotEmpty) return combined;
+      }
+      return '';
+    } finally {
+      client.close(force: true);
+    }
+  }
+
   Future<String> fetchScheduleEnvelope({
     required QldtNativeSession session,
     required DateTime start,
@@ -267,6 +303,12 @@ final class QldtNativeTransport {
       chars.add(cipherText.codeUnitAt(i) ^ key.codeUnitAt(i % key.length));
     }
     return String.fromCharCodes(chars);
+  }
+
+  static String _cleanName(Object? value) {
+    final text = value?.toString().replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
+    if (text.length < 2 || text.length > 120 || text.contains('@')) return '';
+    return text;
   }
 
   static String _formatDate(DateTime value) {

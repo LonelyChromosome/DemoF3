@@ -27,7 +27,7 @@ const _nativeMode = 'native';
 const _credentialChannel = MethodChannel('better_phenikaa/qldt_credentials');
 
 String _sanitizeQldtProfileName(Object? raw) {
-  final value = raw?.toString().replaceAll(RegExp(r'\\s+'), ' ').trim() ?? '';
+  final value = raw?.toString().replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
   if (value.length < 3 || value.length > 120 || value.contains('@')) return '';
   final lower = value.toLowerCase();
   if (<String>{
@@ -91,7 +91,7 @@ String _profileNameFromObject(Object? node, [int depth = 0]) {
       }
     }
     if (given.isNotEmpty && family.isNotEmpty) {
-      return ('$family $given').replaceAll(RegExp(r'\\s+'), ' ').trim();
+      return ('$family $given').replaceAll(RegExp(r'\s+'), ' ').trim();
     }
 
     for (final value in node.values) {
@@ -228,6 +228,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
   QldtNativeSession? _nativeSession;
+  Future<String>? _studentDisplayNameFuture;
   String _resolvedDisplayName = '';
   int _profileProbeGeneration = 0;
   String? _pendingRegistrationRaw;
@@ -836,6 +837,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _autoSyncStarted = false;
     _pendingSchedule = null;
     _nativeSession = null;
+    _studentDisplayNameFuture = null;
     _pendingRegistrationRaw = null;
     _currentPhase = null;
     setState(() {
@@ -1192,6 +1194,20 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       var displayName = _cleanProfileName(schedule.displayName);
       final session = _nativeSession;
       if (displayName.isEmpty) {
+        try {
+          displayName = _cleanProfileName(
+            await (_studentDisplayNameFuture ??
+                (session == null
+                    ? Future<String>.value('')
+                    : const QldtNativeTransport()
+                        .fetchStudentDisplayName(session)
+                        .catchError((Object _) => ''))),
+          );
+        } on Object {
+          displayName = '';
+        }
+      }
+      if (displayName.isEmpty) {
         displayName = _resolvedDisplayName;
       }
       if (displayName.isEmpty && session != null) {
@@ -1454,6 +1470,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       final ready = session != null;
       if (ready) {
         _nativeSession = session;
+        _studentDisplayNameFuture ??= const QldtNativeTransport()
+            .fetchStudentDisplayName(session)
+            .then((name) => _cleanProfileName(name))
+            .catchError((Object _) => '');
         unawaited(_startProfileProbe(session, controller));
       }
 
