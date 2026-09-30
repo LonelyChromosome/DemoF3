@@ -1072,16 +1072,17 @@ class _MainShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
-    final child = switch (page) {
-      _AppPage.timetable => _TimetableScreen(
-        data: data,
-        assistantPack: assistantPack,
-        selectedDate: selectedDate,
-        onDateChanged: onDateChanged,
-        unreadDifference: unreadDifference,
-        hasActiveExamPeriod: hasActiveExamPeriod,
-        onOpenDifferences: onOpenDifferences,
-      ),
+    final timetable = _TimetableScreen(
+      data: data,
+      assistantPack: assistantPack,
+      selectedDate: selectedDate,
+      onDateChanged: onDateChanged,
+      unreadDifference: unreadDifference,
+      hasActiveExamPeriod: hasActiveExamPeriod,
+      onOpenDifferences: onOpenDifferences,
+    );
+
+    final secondary = switch (page) {
       _AppPage.exam => _ExamScreen(
         data: data,
         assistantPack: assistantPack,
@@ -1106,47 +1107,48 @@ class _MainShell extends StatelessWidget {
         assistantPack: assistantPack,
         difference: latestDifference,
       ),
+      _AppPage.timetable => null,
     };
 
     return _PhoneSurface(
       child: Stack(
         children: <Widget>[
           Positioned.fill(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 260),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              // F3's stable page rule: animate only the incoming page. Keeping
-              // transparent outgoing Premium pages alive for the switch duration
-              // makes two screens visibly stick together.
-              layoutBuilder: (current, previous) =>
-                  current ?? const SizedBox.shrink(),
-              transitionBuilder: (child, animation) {
-                final isNotifications =
-                    child.key ==
-                    const ValueKey<_AppPage>(_AppPage.notifications);
-                final slide = Tween<Offset>(
-                  begin: isNotifications
-                      ? const Offset(0, 1)
-                      : const Offset(.035, 0),
-                  end: Offset.zero,
-                ).animate(animation);
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(position: slide, child: child),
-                );
-              },
-              child: KeyedSubtree(
+            child: Offstage(
+              offstage: page != _AppPage.timetable,
+              child: TickerMode(
+                enabled: page == _AppPage.timetable,
+                child: RepaintBoundary(child: timetable),
+              ),
+            ),
+          ),
+          if (secondary != null)
+            Positioned.fill(
+              child: TweenAnimationBuilder<double>(
                 key: ValueKey<_AppPage>(page),
+                tween: Tween<double>(begin: .88, end: 1),
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, child) {
+                  final isNotifications = page == _AppPage.notifications;
+                  final dx = isNotifications ? 0.0 : (1 - value) * 10;
+                  final dy = isNotifications ? (1 - value) * 18 : 0.0;
+                  return Opacity(
+                    opacity: value,
+                    child: Transform.translate(
+                      offset: Offset(dx, dy),
+                      child: child,
+                    ),
+                  );
+                },
                 child: ColoredBox(
                   color: palette.id == AppThemeId.tienMonPremium
                       ? Colors.transparent
                       : palette.surface,
-                  child: child,
+                  child: secondary,
                 ),
               ),
             ),
-          ),
           if (errorMessage != null)
             Positioned(
               left: 16,

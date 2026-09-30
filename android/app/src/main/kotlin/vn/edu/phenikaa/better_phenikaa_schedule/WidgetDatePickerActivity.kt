@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.GridLayout
@@ -68,6 +69,26 @@ class WidgetDatePickerActivity : Activity() {
             setBackgroundColor(Color.TRANSPARENT)
             isClickable = true
             setOnClickListener { finish() }
+            setOnApplyWindowInsetsListener { view, insets ->
+                val insetBottom = if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    insets.getInsets(WindowInsets.Type.navigationBars()).bottom
+                } else {
+                    @Suppress("DEPRECATION")
+                    insets.systemWindowInsetBottom
+                }
+                val resourceId = resources.getIdentifier(
+                    "navigation_bar_height",
+                    "dimen",
+                    "android",
+                )
+                val fallback = if (resourceId > 0) {
+                    resources.getDimensionPixelSize(resourceId)
+                } else {
+                    dp(24)
+                }
+                view.setPadding(0, 0, 0, maxOf(insetBottom, fallback) + dp(18))
+                insets
+            }
         }
 
         val sheet = LinearLayout(this).apply {

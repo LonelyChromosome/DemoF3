@@ -974,19 +974,55 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                   !s.appId || !s.strChucNang_Id) {
                 return null;
               }
-              var name = '';
-              var node = document.querySelector('#lblHoTenNguoiDangNhap');
-              if (node) name = (node.textContent || '').trim();
-              if (!name) {
-                var spans = document.querySelectorAll('.nav-account button > span');
-                for (var i = 0; i < spans.length; i++) {
-                  var candidate = (spans[i].textContent || '').trim();
-                  if (candidate) {
-                    name = candidate;
-                    break;
+              function cleanName(value) {
+                if (value == null) return '';
+                var text = String(value).replace(/\s+/g, ' ').trim();
+                if (text.length < 3 || text.length > 120) return '';
+                var lower = text.toLowerCase();
+                if (lower === 'tài khoản' || lower === 'đăng xuất' ||
+                    lower === 'account' || lower === 'profile') return '';
+                return text;
+              }
+              function resolveName(system) {
+                var direct = [
+                  system && system.hoTen,
+                  system && system.HoTen,
+                  system && system.ho_ten,
+                  system && system.fullName,
+                  system && system.FullName,
+                  system && system.userName,
+                  system && system.UserName,
+                  system && system.name,
+                  system && system.user && system.user.name,
+                  system && system.userInfo && system.userInfo.name,
+                  system && system.userInfo && system.userInfo.hoTen,
+                  system && system.userInfo && system.userInfo.HoTen
+                ];
+                for (var d = 0; d < direct.length; d++) {
+                  var value = cleanName(direct[d]);
+                  if (value) return value;
+                }
+                var selectors = [
+                  '#lblHoTenNguoiDangNhap',
+                  '[id*="HoTenNguoiDangNhap"]',
+                  '.nav-account button > span',
+                  '.nav-account .user-name',
+                  '.user-name',
+                  '.username',
+                  '.account-name',
+                  '[class*="user-name"]',
+                  '[class*="username"]'
+                ];
+                for (var sIndex = 0; sIndex < selectors.length; sIndex++) {
+                  var nodes = document.querySelectorAll(selectors[sIndex]);
+                  for (var n = 0; n < nodes.length; n++) {
+                    var candidate = cleanName(nodes[n].textContent);
+                    if (candidate) return candidate;
                   }
                 }
+                return '';
               }
+              var name = resolveName(s);
               return JSON.stringify({
                 tokenJWT: String(s.tokenJWT),
                 userId: String(s.userId),
@@ -1316,15 +1352,51 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           edu.system.makeRequest({
             success: function (response) {
               scheduleStage('success');
-              var nameNode = document.querySelector('#lblHoTenNguoiDangNhap');
-              var name = nameNode ? (nameNode.textContent || '').trim() : '';
+              function cleanName(value) {
+                if (value == null) return '';
+                var text = String(value).replace(/\s+/g, ' ').trim();
+                if (text.length < 3 || text.length > 120) return '';
+                var lower = text.toLowerCase();
+                if (lower === 'tài khoản' || lower === 'đăng xuất' ||
+                    lower === 'account' || lower === 'profile') return '';
+                return text;
+              }
+              var system = window.edu && edu.system;
+              var direct = [
+                system && system.hoTen,
+                system && system.HoTen,
+                system && system.ho_ten,
+                system && system.fullName,
+                system && system.FullName,
+                system && system.userName,
+                system && system.UserName,
+                system && system.name,
+                system && system.user && system.user.name,
+                system && system.userInfo && system.userInfo.name,
+                system && system.userInfo && system.userInfo.hoTen,
+                system && system.userInfo && system.userInfo.HoTen
+              ];
+              var name = '';
+              for (var d = 0; d < direct.length && !name; d++) {
+                name = cleanName(direct[d]);
+              }
               if (!name) {
-                var spans = document.querySelectorAll('.nav-account button > span');
-                for (var i = 0; i < spans.length; i++) {
-                  var candidate = (spans[i].textContent || '').trim();
-                  if (candidate) {
-                    name = candidate;
-                    break;
+                var selectors = [
+                  '#lblHoTenNguoiDangNhap',
+                  '[id*="HoTenNguoiDangNhap"]',
+                  '.nav-account button > span',
+                  '.nav-account .user-name',
+                  '.user-name',
+                  '.username',
+                  '.account-name',
+                  '[class*="user-name"]',
+                  '[class*="username"]'
+                ];
+                for (var si = 0; si < selectors.length && !name; si++) {
+                  var nodes = document.querySelectorAll(selectors[si]);
+                  for (var ni = 0; ni < nodes.length; ni++) {
+                    name = cleanName(nodes[ni].textContent);
+                    if (name) break;
                   }
                 }
               }

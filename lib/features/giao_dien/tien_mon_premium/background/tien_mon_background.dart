@@ -255,11 +255,12 @@ class TienMonPersistentBackground extends StatefulWidget {
 
 class _TienMonPersistentBackgroundState
     extends State<TienMonPersistentBackground> {
+  Timer? _precacheTimer;
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_changed);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _precacheAdjacent());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleAdjacentPrecache());
   }
 
   @override
@@ -273,7 +274,16 @@ class _TienMonPersistentBackgroundState
 
   void _changed() {
     setState(() {});
-    _precacheAdjacent();
+    _scheduleAdjacentPrecache(delay: const Duration(milliseconds: 350));
+  }
+
+  void _scheduleAdjacentPrecache({
+    Duration delay = const Duration(milliseconds: 900),
+  }) {
+    _precacheTimer?.cancel();
+    _precacheTimer = Timer(delay, () {
+      if (mounted) unawaited(_precacheAdjacent());
+    });
   }
 
   Future<void> _precacheAdjacent() async {
@@ -287,6 +297,7 @@ class _TienMonPersistentBackgroundState
 
   @override
   void dispose() {
+    _precacheTimer?.cancel();
     widget.controller.removeListener(_changed);
     super.dispose();
   }
@@ -393,7 +404,7 @@ class _FullBleedSceneArtwork extends StatelessWidget {
       fit: BoxFit.cover,
       alignment: Alignment.center,
       gaplessPlayback: true,
-      filterQuality: FilterQuality.high,
+      filterQuality: FilterQuality.medium,
     ),
   );
 }
