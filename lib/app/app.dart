@@ -2970,9 +2970,14 @@ class _InfoPanel extends StatelessWidget {
           Divider(color: palette.border, height: 1),
           const SizedBox(height: 12),
           Text(
-            'Better Phenikaa là dự án độc lập do sinh viên phát triển, '
-            'không phải ứng dụng chính thức và không đại diện cho '
-            'Trường Đại học Phenikaa.',
+            palette.id == AppThemeId.tienMonPremium
+                ? 'Better Phenikaa vốn là ngoại môn tiểu giới do môn sinh '
+                      'Phenikaa tự khai, tự vận hành ngoài mắt Thiên Đạo; '
+                      'chưa từng thụ chính mạch sắc phong, mọi pháp chỉ nơi '
+                      'đây đều không thể coi là ý chỉ của tông môn.'
+                : 'Better Phenikaa là dự án độc lập do sinh viên phát triển, '
+                      'không phải ứng dụng chính thức và không đại diện cho '
+                      'Trường Đại học Phenikaa.',
             style: TextStyle(
               color: palette.textSecondary,
               fontSize: 11,
