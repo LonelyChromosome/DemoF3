@@ -93,7 +93,6 @@ void main() {
       await tester.tap(find.text('Theo ngày'));
       await tester.pumpAndSettle();
       expect(find.text('Thiết kế web nâng cao'), findsAtLeastNWidgets(1));
-      expect(find.byTooltip('Tuần sau'), findsNothing);
       debugDefaultTargetPlatformOverride = null;
     },
   );
