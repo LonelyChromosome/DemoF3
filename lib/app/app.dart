@@ -2197,45 +2197,37 @@ class _AccountScreen extends StatelessWidget {
 
     if (!context.mounted) return;
     final palette = appThemePalette;
-    Widget surface;
-    switch (useCase) {
-      case 10:
-        surface = _NotificationExamCard(
-          text: message,
-          palette: palette,
-          onOpenExam: () => Navigator.of(context).pop(),
-        );
-      case 14:
-        surface = _NotificationChangeCard(
-          icon: Icons.notifications_active_rounded,
-          title: 'Thay đổi lịch',
-          description: message,
-          count: 1,
-          palette: palette,
-        );
-      case 15:
-        surface = _EmptyState(
-          icon: Icons.assignment_turned_in_outlined,
-          title: message,
-          message:
-              'Dữ liệu sẽ được cập nhật sau lần đồng bộ QLĐT tiếp theo.',
-        );
-      case 16:
-        surface = _EmptyState(
-          icon: Icons.event_available_outlined,
-          title: message,
-          message:
-              'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
-        );
-      case 17:
-      case 18:
-        surface = _ErrorBanner(
-          message: message,
-          onDismiss: () => Navigator.of(context).pop(),
-        );
-      default:
-        return;
-    }
+    final Widget? surface = switch (useCase) {
+      10 => _NotificationExamCard(
+        text: message,
+        palette: palette,
+        onOpenExam: () => Navigator.of(context).pop(),
+      ),
+      14 => _NotificationChangeCard(
+        icon: Icons.notifications_active_rounded,
+        title: 'Thay đổi lịch',
+        description: message,
+        count: 1,
+        palette: palette,
+      ),
+      15 => _EmptyState(
+        icon: Icons.assignment_turned_in_outlined,
+        title: message,
+        message: 'Dữ liệu sẽ được cập nhật sau lần đồng bộ QLĐT tiếp theo.',
+      ),
+      16 => _EmptyState(
+        icon: Icons.event_available_outlined,
+        title: message,
+        message:
+            'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
+      ),
+      17 || 18 => _ErrorBanner(
+        message: message,
+        onDismiss: () => Navigator.of(context).pop(),
+      ),
+      _ => null,
+    };
+    if (surface == null) return;
 
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
