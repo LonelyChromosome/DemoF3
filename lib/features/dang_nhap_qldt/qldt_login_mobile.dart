@@ -590,159 +590,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       final raw = await controller.evaluateJavascript(
         source: r'''
           (function () {
-            function clean(value) {
-              if (value == null) return '';
-              var text = String(value).replace(/\s+/g, ' ').trim();
-              if (text.length < 3 || text.length > 120 || text.indexOf('@') >= 0) {
-                return '';
-              }
-              var lower = text.toLowerCase();
-              if (['tài khoản','đăng xuất','account','profile','người dùng','sinh viên']
-                    .indexOf(lower) >= 0) return '';
-              return text;
-            }
-
-            // First choice: the exact visible account name rendered by QLĐT.
-            // Keep the text's original token order/casing; only normalize
-            // whitespace introduced by HTML layout.
-            var selectors = [
-              '#lblHoTenNguoiDangNhap',
-              '[id*="HoTenNguoiDangNhap"]',
-              '.nav-account button > span',
-              '.nav-account .user-name',
-              '.navbar .user-name',
-              '.navbar .username',
-              '.header .user-name',
-              '.header .username',
-              '.account-name',
-              '.student-name',
-              '.profile-name',
-              '[class*="student-name"]',
-              '[class*="profile-name"]',
-              '[class*="user-name"]',
-              '[class*="username"]',
-              '[class*="account"] [class*="name"]',
-              '[class*="user"] [class*="name"]'
-            ];
-            for (var ds = 0; ds < selectors.length; ds++) {
-              var nodes = document.querySelectorAll(selectors[ds]);
-              for (var dn = 0; dn < nodes.length; dn++) {
-                var node = nodes[dn];
-                try {
-                  var style = window.getComputedStyle(node);
-                  if (style.display === 'none' || style.visibility === 'hidden') {
-                    continue;
-                  }
-                  var rect = node.getBoundingClientRect();
-                  if (rect.width <= 0 || rect.height <= 0) continue;
-                } catch (_) {}
-                var visibleName = clean(node.textContent);
-                if (visibleName) return JSON.stringify(visibleName);
-              }
-            }
-
-            function keyLooksLikeName(key) {
-              var k = String(key || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-              return k === 'HOTEN' ||
-                     k === 'HOVATEN' ||
-                     k === 'FULLNAME' ||
-                     k === 'DISPLAYNAME' ||
-                     k === 'TENNGUOIHOC' ||
-                     k === 'NGUOIHOTEN' ||
-                     k === 'SINHVIENTEN' ||
-                     k === 'TENSINHVIEN' ||
-                     k === 'TENNGUOIDUNG' ||
-                     (k.indexOf('NGUOIHOC') >= 0 && k.endsWith('TEN'));
-            }
-
-            function scanObject(root, depth, seen) {
-              if (!root || typeof root !== 'object' || depth > 5) return '';
-              if (seen.indexOf(root) >= 0) return '';
-              seen.push(root);
-              var keys;
-              try { keys = Object.keys(root); } catch (_) { return ''; }
-
-              for (var i = 0; i < keys.length; i++) {
-                var key = keys[i];
-                if (!keyLooksLikeName(key)) continue;
-                try {
-                  var candidate = clean(root[key]);
-                  if (candidate) return candidate;
-                } catch (_) {}
-              }
-
-              for (var j = 0; j < keys.length; j++) {
-                var child;
-                try { child = root[keys[j]]; } catch (_) { continue; }
-                if (!child || typeof child !== 'object') continue;
-                var nested = scanObject(child, depth + 1, seen);
-                if (nested) return nested;
-              }
-              return '';
-            }
-
-            var roots = [
-              window.edu && edu.system,
-              window.edu,
-              window.userInfo,
-              window.currentUser
-            ];
-            for (var r = 0; r < roots.length; r++) {
-              var fromObject = scanObject(roots[r], 0, []);
-              if (fromObject) return JSON.stringify(fromObject);
-            }
-
-            // QLĐT/Microsoft auth can keep the account object in web storage
-            // even when the visible account header has not rendered yet.
-            var stores = [];
-            try { stores.push(window.localStorage); } catch (_) {}
-            try { stores.push(window.sessionStorage); } catch (_) {}
-            for (var st = 0; st < stores.length; st++) {
-              var store = stores[st];
-              if (!store) continue;
-              for (var si = 0; si < store.length; si++) {
-                var skey = '';
-                try { skey = store.key(si) || ''; } catch (_) { continue; }
-                var rawValue = '';
-                try { rawValue = store.getItem(skey) || ''; } catch (_) { continue; }
-                if (!rawValue || rawValue.length > 200000) continue;
-                try {
-                  var parsed = JSON.parse(rawValue);
-                  var fromStorage = scanObject(parsed, 0, []);
-                  if (fromStorage) return JSON.stringify(fromStorage);
-                } catch (_) {}
-              }
-            }
-
-            // Last cheap in-page fallback: inspect likely account/profile globals
-            // only, rather than walking the whole window object.
-            var globalKeys = [];
-            try { globalKeys = Object.keys(window); } catch (_) {}
-            for (var g = 0; g < globalKeys.length; g++) {
-              var gkey = String(globalKeys[g] || '').toLowerCase();
-              if (!(gkey.indexOf('user') >= 0 ||
-                    gkey.indexOf('account') >= 0 ||
-                    gkey.indexOf('profile') >= 0 ||
-                    gkey.indexOf('student') >= 0 ||
-                    gkey.indexOf('nguoi') >= 0)) {
-                continue;
-              }
-              try {
-                var globalValue = window[globalKeys[g]];
-                var fromGlobal = scanObject(globalValue, 0, []);
-                if (fromGlobal) return JSON.stringify(fromGlobal);
-              } catch (_) {}
-            }
-
-            var bodyText = (document.body && document.body.innerText) || '';
-            var match = bodyText.match(
-              /(?:Họ\s*(?:và\s*)?tên|Họ tên)\s*[:：]\s*([^\n\r]{3,120})/i
-            );
-            if (match) {
-              var fromLabel = clean(match[1]);
-              if (fromLabel) return JSON.stringify(fromLabel);
-            }
-            return JSON.stringify('');
+            var node = document.getElementById('lblHoTenNguoiDangNhap');
+            if (!node) return JSON.stringify('');
+            var text = String(node.textContent || '')
+              .replace(/\s+/g, ' ')
+              .trim();
+            return JSON.stringify(text);
           })();
         ''',
       );
@@ -755,14 +608,23 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     }
   }
 
+  Future<String> _waitForQldtHtmlDisplayName(
+    InAppWebViewController controller, {
+    int attempts = 24,
+  }) async {
+    for (var attempt = 0; attempt < attempts; attempt++) {
+      final name = await _readProfileNameFromPage(controller);
+      if (name.isNotEmpty) return name;
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+    return '';
+  }
+
   Future<void> _startProfileProbe(
     QldtNativeSession session,
     InAppWebViewController controller,
   ) async {
     final generation = ++_profileProbeGeneration;
-
-    // Prefer the name exactly as QLĐT renders it in the logged-in HTML.
-    // The header can appear a little after edu.system/session becomes ready.
     for (var attempt = 0; attempt < 24; attempt++) {
       if (!mounted || generation != _profileProbeGeneration) return;
       final name = await _readProfileNameFromPage(controller);
@@ -772,35 +634,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       }
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-
-    // Only fall back when the visible QLĐT name never became available.
-    final sessionName = _cleanProfileName(session.displayName);
-    if (sessionName.isNotEmpty) {
-      await _rememberProfileName(session, sessionName);
-      return;
-    }
-
-    final tokenName = _displayNameFromJwtToken(session.tokenJwt);
-    if (tokenName.isNotEmpty) {
-      await _rememberProfileName(session, tokenName);
-      return;
-    }
-
-    final cached = await _cachedProfileNameFor(session.userId);
-    if (cached.isNotEmpty) {
-      _resolvedDisplayName = cached;
-    }
   }
 
   Future<void> _cacheNativeSession(QldtNativeSession session) async {
     final prefs = await SharedPreferences.getInstance();
-    var name = _cleanProfileName(session.displayName);
-    if (name.isEmpty) name = _resolvedDisplayName;
-    if (name.isEmpty) name = _displayNameFromJwtToken(session.tokenJwt);
-    if (name.isEmpty) name = await _cachedProfileNameFor(session.userId);
-    if (name.isNotEmpty) {
-      await _rememberProfileName(session, name);
-    }
+    // Never persist Microsoft/JWT/API display-name guesses as the student's
+    // canonical name. Only the exact QLĐT HTML account element may populate it.
+    final name = _cleanProfileName(_resolvedDisplayName);
     await prefs.setString(
       _nativeSessionKey,
       jsonEncode(<String, dynamic>{
@@ -1221,34 +1061,16 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       var displayName = '';
       final controller = _controller;
       if (controller != null) {
-        displayName = await _readProfileNameFromPage(controller);
-      }
-      if (displayName.isEmpty && session != null) {
-        try {
-          displayName = _cleanProfileName(
-            await (_studentDisplayNameFuture ??
-                const QldtNativeTransport()
-                    .fetchStudentDisplayName(session)
-                    .catchError((Object _) => '')),
-          );
-        } on Object {
-          displayName = '';
-        }
-      }
-      if (displayName.isEmpty) {
-        displayName = _cleanProfileName(schedule.displayName);
+        displayName = await _waitForQldtHtmlDisplayName(
+          controller,
+          attempts: 16,
+        );
       }
       if (displayName.isEmpty) {
         displayName = _resolvedDisplayName;
       }
-      if (displayName.isEmpty && session != null) {
-        displayName = _cleanProfileName(session.displayName);
-      }
-      if (displayName.isEmpty && session != null) {
-        displayName = _displayNameFromJwtToken(session.tokenJwt);
-      }
-      if (displayName.isEmpty && session != null) {
-        displayName = await _cachedProfileNameFor(session.userId);
+      if (displayName.isEmpty) {
+        displayName = _cleanProfileName(schedule.displayName);
       }
       if (displayName.isEmpty) {
         try {
@@ -1425,46 +1247,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                     lower === 'account' || lower === 'profile') return '';
                 return text;
               }
-              function resolveName(system) {
-                var direct = [
-                  system && system.hoTen,
-                  system && system.HoTen,
-                  system && system.ho_ten,
-                  system && system.fullName,
-                  system && system.FullName,
-                  system && system.userName,
-                  system && system.UserName,
-                  system && system.name,
-                  system && system.user && system.user.name,
-                  system && system.userInfo && system.userInfo.name,
-                  system && system.userInfo && system.userInfo.hoTen,
-                  system && system.userInfo && system.userInfo.HoTen
-                ];
-                for (var d = 0; d < direct.length; d++) {
-                  var value = cleanName(direct[d]);
-                  if (value) return value;
-                }
-                var selectors = [
-                  '#lblHoTenNguoiDangNhap',
-                  '[id*="HoTenNguoiDangNhap"]',
-                  '.nav-account button > span',
-                  '.nav-account .user-name',
-                  '.user-name',
-                  '.username',
-                  '.account-name',
-                  '[class*="user-name"]',
-                  '[class*="username"]'
-                ];
-                for (var sIndex = 0; sIndex < selectors.length; sIndex++) {
-                  var nodes = document.querySelectorAll(selectors[sIndex]);
-                  for (var n = 0; n < nodes.length; n++) {
-                    var candidate = cleanName(nodes[n].textContent);
-                    if (candidate) return candidate;
-                  }
-                }
-                return '';
+              function resolveName() {
+                var node = document.getElementById('lblHoTenNguoiDangNhap');
+                return node ? cleanName(node.textContent) : '';
               }
-              var name = resolveName(s);
+              var name = resolveName();
               return JSON.stringify({
                 tokenJWT: String(s.tokenJWT),
                 userId: String(s.userId),
