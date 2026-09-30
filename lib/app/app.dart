@@ -2393,8 +2393,6 @@ Future<void> _showCalendarPicker(
 ) async {
   var draft = _dateOnly(selectedDate);
   final palette = appThemePalette;
-  final view = View.of(context);
-  final bottomSystemInset = view.padding.bottom / view.devicePixelRatio;
   final picked = await showModalBottomSheet<DateTime>(
     context: context,
     isScrollControlled: true,
@@ -2402,6 +2400,12 @@ Future<void> _showCalendarPicker(
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: .48),
     builder: (context) {
+      final screenHeight = MediaQuery.sizeOf(context).height;
+      // Reserve a percentage of the whole screen instead of trusting Android
+      // navigation insets. Some edge-to-edge devices report a zero/consumed
+      // bottom inset inside a modal route even though the system bar still
+      // overlays the sheet.
+      final bottomReserve = screenHeight * 0.08;
       return StatefulBuilder(
         builder: (context, setModalState) {
           return TweenAnimationBuilder<double>(
@@ -2418,7 +2422,7 @@ Future<void> _showCalendarPicker(
                 18,
                 10,
                 18,
-                18 + bottomSystemInset,
+                18 + bottomReserve,
               ),
               decoration: BoxDecoration(
                   color: palette.surface,
