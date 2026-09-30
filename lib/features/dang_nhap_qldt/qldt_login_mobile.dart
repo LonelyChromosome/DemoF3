@@ -804,11 +804,27 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         schedule: schedule,
       );
       verificationStage = 'semester_build';
+      var displayName = schedule.displayName.trim();
+      if (displayName.isEmpty) {
+        final sessionName = _nativeSession?.displayName.trim() ?? '';
+        if (sessionName.isNotEmpty) {
+          displayName = sessionName;
+        }
+      }
+      if (displayName.isEmpty) {
+        try {
+          displayName =
+              (await CurrentSemesterStore().read())?.displayName.trim() ?? '';
+        } on Object {
+          // A missing cached name must not block a verified schedule.
+        }
+      }
+
       final semester = const SemesterDataBuilder().build(
         registration: registration,
         studySchedules: verified.studySchedules,
         examSchedules: verified.examSchedules,
-        displayName: schedule.displayName,
+        displayName: displayName,
         syncedAt: schedule.syncedAt,
       );
       _startPhase(
