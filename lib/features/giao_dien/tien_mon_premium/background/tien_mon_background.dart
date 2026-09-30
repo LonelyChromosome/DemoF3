@@ -312,63 +312,13 @@ class _TienMonPersistentBackgroundState
   }
 }
 
-class TienMonPersistentAmbient extends StatefulWidget {
+class TienMonPersistentAmbient extends StatelessWidget {
   const TienMonPersistentAmbient({required this.controller, super.key});
 
   final TienMonSceneController controller;
 
   @override
-  State<TienMonPersistentAmbient> createState() =>
-      _TienMonPersistentAmbientState();
-}
-
-/// Ambient motion has its own persistent lifecycle. Page/content rebuilds never
-/// restart it. A real scene change does: the outgoing ambient profile fades
-/// away while a fresh loop for the new scene begins from phase zero, matching
-/// the three-second artwork crossfade.
-class _TienMonPersistentAmbientState extends State<TienMonPersistentAmbient> {
-  late int _scene;
-
-  @override
-  void initState() {
-    super.initState();
-    _scene = widget.controller.scene;
-    widget.controller.addListener(_handleSceneChanged);
-  }
-
-  @override
-  void didUpdateWidget(covariant TienMonPersistentAmbient oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.removeListener(_handleSceneChanged);
-      widget.controller.addListener(_handleSceneChanged);
-      _scene = widget.controller.scene;
-    }
-  }
-
-  void _handleSceneChanged() {
-    final nextScene = widget.controller.scene;
-    if (nextScene == _scene || !mounted) return;
-    setState(() => _scene = nextScene);
-  }
-
-  @override
-  void dispose() {
-    widget.controller.removeListener(_handleSceneChanged);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedSwitcher(
-    duration: TienMonPremiumContract.sceneCrossfade,
-    switchInCurve: Curves.easeInOutCubic,
-    switchOutCurve: Curves.easeInOutCubic,
-    layoutBuilder: (current, previous) => Stack(
-      fit: StackFit.expand,
-      children: <Widget>[...previous, if (current != null) current],
-    ),
-    child: _AmbientMotion(key: ValueKey<int>(_scene), scene: _scene),
-  );
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _FullBleedSceneArtwork extends StatelessWidget {

@@ -1072,84 +1072,77 @@ class _MainShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
-    final timetable = _TimetableScreen(
-      data: data,
-      assistantPack: assistantPack,
-      selectedDate: selectedDate,
-      onDateChanged: onDateChanged,
-      unreadDifference: unreadDifference,
-      hasActiveExamPeriod: hasActiveExamPeriod,
-      onOpenDifferences: onOpenDifferences,
-    );
-
-    final secondary = switch (page) {
-      _AppPage.exam => _ExamScreen(
-        data: data,
-        assistantPack: assistantPack,
-        showPast: showPastExams,
-        onTabChanged: onExamTabChanged,
-        unreadDifference: unreadDifference,
-        hasActiveExamPeriod: hasActiveExamPeriod,
-        onOpenDifferences: onOpenDifferences,
-      ),
-      _AppPage.account => _AccountScreen(
-        data: data,
-        onLogout: onLogout,
-        onSync: onSync,
-        assistantPack: assistantPack,
-        onAssistantPackChanged: onAssistantPackChanged,
-      ),
-      _AppPage.notifications => _NotificationCenterScreen(
-        hasActiveExamPeriod: hasActiveExamPeriod,
-        onBack: onCloseNotificationCenter,
-        onOpenExam: onOpenExamFromNotification,
-        onDetails: onShowDifferences,
-        assistantPack: assistantPack,
-        difference: latestDifference,
-      ),
-      _AppPage.timetable => null,
+    final pageIndex = switch (page) {
+      _AppPage.timetable => 0,
+      _AppPage.exam => 1,
+      _AppPage.account => 2,
+      _AppPage.notifications => 3,
     };
 
     return _PhoneSurface(
       child: Stack(
         children: <Widget>[
           Positioned.fill(
-            child: Offstage(
-              offstage: page != _AppPage.timetable,
-              child: TickerMode(
-                enabled: page == _AppPage.timetable,
-                child: RepaintBoundary(child: timetable),
-              ),
+            child: IndexedStack(
+              index: pageIndex,
+              sizing: StackFit.expand,
+              children: <Widget>[
+                TickerMode(
+                  enabled: page == _AppPage.timetable,
+                  child: RepaintBoundary(
+                    child: _TimetableScreen(
+                      data: data,
+                      assistantPack: assistantPack,
+                      selectedDate: selectedDate,
+                      onDateChanged: onDateChanged,
+                      unreadDifference: unreadDifference,
+                      hasActiveExamPeriod: hasActiveExamPeriod,
+                      onOpenDifferences: onOpenDifferences,
+                    ),
+                  ),
+                ),
+                TickerMode(
+                  enabled: page == _AppPage.exam,
+                  child: RepaintBoundary(
+                    child: _ExamScreen(
+                      data: data,
+                      assistantPack: assistantPack,
+                      showPast: showPastExams,
+                      onTabChanged: onExamTabChanged,
+                      unreadDifference: unreadDifference,
+                      hasActiveExamPeriod: hasActiveExamPeriod,
+                      onOpenDifferences: onOpenDifferences,
+                    ),
+                  ),
+                ),
+                TickerMode(
+                  enabled: page == _AppPage.account,
+                  child: RepaintBoundary(
+                    child: _AccountScreen(
+                      data: data,
+                      onLogout: onLogout,
+                      onSync: onSync,
+                      assistantPack: assistantPack,
+                      onAssistantPackChanged: onAssistantPackChanged,
+                    ),
+                  ),
+                ),
+                TickerMode(
+                  enabled: page == _AppPage.notifications,
+                  child: RepaintBoundary(
+                    child: _NotificationCenterScreen(
+                      hasActiveExamPeriod: hasActiveExamPeriod,
+                      onBack: onCloseNotificationCenter,
+                      onOpenExam: onOpenExamFromNotification,
+                      onDetails: onShowDifferences,
+                      assistantPack: assistantPack,
+                      difference: latestDifference,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          if (secondary != null)
-            Positioned.fill(
-              child: TweenAnimationBuilder<double>(
-                key: ValueKey<_AppPage>(page),
-                tween: Tween<double>(begin: .88, end: 1),
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                builder: (context, value, child) {
-                  final isNotifications = page == _AppPage.notifications;
-                  final dx = isNotifications ? 0.0 : (1 - value) * 10;
-                  final dy = isNotifications ? (1 - value) * 18 : 0.0;
-                  final translated = Transform.translate(
-                    offset: Offset(dx, dy),
-                    child: child,
-                  );
-                  if (palette.id == AppThemeId.tienMonPremium) {
-                    return translated;
-                  }
-                  return Opacity(opacity: value, child: translated);
-                },
-                child: ColoredBox(
-                  color: palette.id == AppThemeId.tienMonPremium
-                      ? Colors.transparent
-                      : palette.surface,
-                  child: secondary,
-                ),
-              ),
-            ),
           if (errorMessage != null)
             Positioned(
               left: 16,
@@ -1203,10 +1196,10 @@ class _MainShell extends StatelessWidget {
                 shape: themeButtonShape(palette),
                 child: AnimatedRotation(
                   turns: panelOpen ? .125 : 0,
-                  duration: const Duration(milliseconds: 260),
+                  duration: const Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 180),
+                    duration: const Duration(milliseconds: 140),
                     child: Icon(
                       panelOpen ? Icons.close : Icons.grid_view_rounded,
                       key: ValueKey<bool>(panelOpen),
@@ -1968,9 +1961,9 @@ class _AccountScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 24),
-                  _InfoPanel(data: data),
+                  RepaintBoundary(child: _InfoPanel(data: data)), 
                   const SizedBox(height: 12),
-                  const AppThemeSettingButton(),
+                  const RepaintBoundary(child: AppThemeSettingButton()),
                   const SizedBox(height: 12),
                   Text(
                     'Model Trợ Lí',
@@ -2040,7 +2033,9 @@ class _AccountScreen extends StatelessWidget {
                           unawaited(_showWidgetOptions(context, 'small')),
                       onLongPress: () =>
                           unawaited(_requestWidgetPin(context, 'small')),
-                      child: _WidgetPreview(item: next),
+                      child: RepaintBoundary(
+                        child: _WidgetPreview(item: next),
+                      ),
                     ),
                   const SizedBox(height: 16),
                   GestureDetector(
@@ -2048,9 +2043,11 @@ class _AccountScreen extends StatelessWidget {
                         unawaited(_showWidgetOptions(context, 'overview')),
                     onLongPress: () =>
                         unawaited(_requestWidgetPin(context, 'overview')),
-                    child: _OverviewWidgetPreview(
-                      data: data,
-                      date: next?.startAt,
+                    child: RepaintBoundary(
+                      child: _OverviewWidgetPreview(
+                        data: data,
+                        date: next?.startAt,
+                      ),
                     ),
                   ),
                 ],

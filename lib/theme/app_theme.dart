@@ -892,8 +892,7 @@ class AppThemeController extends ChangeNotifier {
 }
 
 const List<Shadow> tienMonTextShadows = <Shadow>[
-  Shadow(color: Colors.black, blurRadius: 3, offset: Offset(0, 1)),
-  Shadow(color: Color(0xCC000000), blurRadius: 7, offset: Offset(0, 2)),
+  Shadow(color: Color(0xB3000000), blurRadius: 2, offset: Offset(0, 1)),
 ];
 
 TextTheme _withTienMonTextShadows(TextTheme theme) {

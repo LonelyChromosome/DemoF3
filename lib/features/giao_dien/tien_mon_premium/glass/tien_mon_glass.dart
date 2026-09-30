@@ -1,8 +1,5 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
-import '../background/tien_mon_background.dart';
 
 abstract final class TienMonGlassTokens {
   static const double cardBlur = 9;
@@ -45,94 +42,67 @@ class TienMonGlass extends StatelessWidget {
         borderColor ??
         (selected ? TienMonGlassTokens.gold : TienMonGlassTokens.silver);
 
-    Widget surface() => Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        color: TienMonGlassTokens.ink.withValues(
-          alpha: opaqueSheet ? .30 : .16,
-        ),
-        border: Border.all(
-          color: border.withValues(alpha: selected ? .78 : .50),
-        ),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            Colors.white.withValues(alpha: opaqueSheet ? .18 : .25),
-            TienMonGlassTokens.ink.withValues(
-              alpha: opaqueSheet
-                  ? TienMonGlassTokens.sheetOpacity
-                  : TienMonGlassTokens.cardOpacity,
-            ),
-          ],
-        ),
-      ),
-      child: Stack(
-        children: <Widget>[
-          child,
-          Positioned(
-            left: radius * .45,
-            right: radius * .45,
-            top: 0,
-            height: 1,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: <Color>[
-                    Colors.transparent,
-                    Colors.white.withValues(
-                      alpha: TienMonGlassTokens.highlightOpacity,
-                    ),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: TienMonGlassTokens.ink.withValues(
-              alpha: TienMonGlassTokens.shadowOpacity,
-            ),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: TienMonGlassTokens.ink.withValues(alpha: .24),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
           ),
           if (glowStrength > 0)
             BoxShadow(
-              color: border.withValues(alpha: .18 + glowStrength * .18),
-              blurRadius: 14 + glowStrength * 10,
-              spreadRadius: glowStrength * 1.5,
+              color: border.withValues(alpha: .14 + glowStrength * .10),
+              blurRadius: 8 + glowStrength * 6,
             ),
         ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
-        child: ValueListenableBuilder<bool>(
-          valueListenable: tienMonAmbientPaused,
-          child: surface(),
-          builder: (context, scrolling, child) {
-            if (scrolling) return child!;
-            return BackdropFilter(
-              blendMode: BlendMode.src,
-              filter: ImageFilter.blur(
-                sigmaX: opaqueSheet
-                    ? TienMonGlassTokens.sheetBlur
-                    : TienMonGlassTokens.cardBlur,
-                sigmaY: opaqueSheet
-                    ? TienMonGlassTokens.sheetBlur
-                    : TienMonGlassTokens.cardBlur,
+        child: Container(
+          padding: padding,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            color: TienMonGlassTokens.ink.withValues(
+              alpha: opaqueSheet ? .42 : .22,
+            ),
+            border: Border.all(
+              color: border.withValues(alpha: selected ? .78 : .50),
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                Colors.white.withValues(alpha: opaqueSheet ? .16 : .20),
+                TienMonGlassTokens.ink.withValues(
+                  alpha: opaqueSheet ? .58 : .28,
+                ),
+              ],
+            ),
+          ),
+          child: Stack(
+            children: <Widget>[
+              child,
+              Positioned(
+                left: radius * .45,
+                right: radius * .45,
+                top: 0,
+                height: 1,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: <Color>[
+                        Colors.transparent,
+                        Colors.white.withValues(alpha: .26),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
+                ),
               ),
-              child: child,
-            );
-          },
+            ],
+          ),
         ),
       ),
     );
