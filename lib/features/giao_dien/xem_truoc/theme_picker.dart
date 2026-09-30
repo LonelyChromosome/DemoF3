@@ -765,9 +765,9 @@ class _RgbColorPickerState extends State<_RgbColorPicker> {
     final current = _color;
     final next = Color.fromARGB(
       255,
-      red ?? current.r.round(),
-      green ?? current.g.round(),
-      blue ?? current.b.round(),
+      red ?? (current.r * 255).round(),
+      green ?? (current.g * 255).round(),
+      blue ?? (current.b * 255).round(),
     );
     setState(() => _hsv = HSVColor.fromColor(next));
   }
@@ -838,19 +838,19 @@ class _RgbColorPickerState extends State<_RgbColorPicker> {
               const SizedBox(height: 10),
               _RgbSlider(
                 label: 'R',
-                value: rgb.r.round(),
+                value: (rgb.r * 255).round(),
                 color: const Color(0xFFFF5A5A),
                 onChanged: (value) => _setRgb(red: value),
               ),
               _RgbSlider(
                 label: 'G',
-                value: rgb.g.round(),
+                value: (rgb.g * 255).round(),
                 color: const Color(0xFF5DDB7A),
                 onChanged: (value) => _setRgb(green: value),
               ),
               _RgbSlider(
                 label: 'B',
-                value: rgb.b.round(),
+                value: (rgb.b * 255).round(),
                 color: const Color(0xFF6DA9FF),
                 onChanged: (value) => _setRgb(blue: value),
               ),
