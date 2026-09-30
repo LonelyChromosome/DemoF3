@@ -936,7 +936,7 @@ class _SplashScreen extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            '2.1.2 • Lịch học & Lịch thi',
+            'cooc.1.0 • Lịch học & Lịch thi',
             style: TextStyle(color: palette.textSecondary, fontSize: 15),
           ),
           const SizedBox(height: 120),
@@ -2036,6 +2036,9 @@ class _NotificationChangeCard extends StatelessWidget {
 }
 
 class _AccountScreen extends StatelessWidget {
+  static const bool _assistantTestPanelEnabled = bool.fromEnvironment(
+    'ASSISTANT_TEST_PANEL',
+  );
   const new({
     required this.data,
     required this.accountDisplayName,
@@ -2304,67 +2307,69 @@ class _AccountScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Theme(
-                    data: Theme.of(context).copyWith(
-                      dividerColor: Colors.transparent,
-                    ),
-                    child: ExpansionTile(
-                      tilePadding: EdgeInsets.zero,
-                      childrenPadding: const EdgeInsets.only(bottom: 4),
-                      title: Text(
-                        'Kiểm tra 18 use case trợ lí',
-                        style: TextStyle(
-                          color: palette.textPrimary,
-                          fontWeight: FontWeight.w800,
-                        ),
+                  if (_assistantTestPanelEnabled) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Theme(
+                      data: Theme.of(context).copyWith(
+                        dividerColor: Colors.transparent,
                       ),
-                      subtitle: Text(
-                        'Preview đúng nội dung đang dùng • U9: X=5 • U11: X=5, N=2',
-                        style: TextStyle(
-                          color: palette.textSecondary,
-                          fontSize: 11.5,
-                        ),
-                      ),
-                      children: <Widget>[
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: List<Widget>.generate(18, (index) {
-                              final useCase = index + 1;
-                              return SizedBox(
-                                width: 54,
-                                height: 40,
-                                child: OutlinedButton(
-                                  onPressed: () => unawaited(
-                                    _showAssistantUseCasePreview(
-                                      context,
-                                      useCase,
-                                    ),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: EdgeInsets.zero,
-                                    side: BorderSide(color: palette.border),
-                                    shape: themeButtonShape(palette),
-                                  ),
-                                  child: Text(
-                                    'U$useCase',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: const EdgeInsets.only(bottom: 4),
+                        title: Text(
+                          'Kiểm tra 18 use case trợ lí',
+                          style: TextStyle(
+                            color: palette.textPrimary,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                      ],
+                        subtitle: Text(
+                          'Preview đúng nội dung đang dùng • U9: X=5 • U11: X=5, N=2',
+                          style: TextStyle(
+                            color: palette.textSecondary,
+                            fontSize: 11.5,
+                          ),
+                        ),
+                        children: <Widget>[
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: List<Widget>.generate(18, (index) {
+                                final useCase = index + 1;
+                                return SizedBox(
+                                  width: 54,
+                                  height: 40,
+                                  child: OutlinedButton(
+                                    onPressed: () => unawaited(
+                                      _showAssistantUseCasePreview(
+                                        context,
+                                        useCase,
+                                      ),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: EdgeInsets.zero,
+                                      side: BorderSide(color: palette.border),
+                                      shape: themeButtonShape(palette),
+                                    ),
+                                    child: Text(
+                                      'U$useCase',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
+                    const SizedBox(height: 12),
+                  ],
                   if (next != null)
                     GestureDetector(
                       onTap: () =>
