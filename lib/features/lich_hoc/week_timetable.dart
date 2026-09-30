@@ -7,10 +7,7 @@ import 'package:flutter/material.dart';
 DateTime weekMonday(DateTime date) =>
     DateTime(date.year, date.month, date.day - date.weekday + 1);
 
-const _premiumGoldShadows = <Shadow>[
-  Shadow(color: Colors.black, blurRadius: 3, offset: Offset(0, 1)),
-  Shadow(color: Color(0xCC000000), blurRadius: 7, offset: Offset(0, 2)),
-];
+const _premiumGoldShadows = tienMonTextShadows;
 
 class WeekTimetable extends StatelessWidget {
   const new({

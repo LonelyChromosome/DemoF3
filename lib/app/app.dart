@@ -1257,6 +1257,8 @@ class _TimetableScreen extends StatefulWidget {
 class _TimetableScreenState extends State<_TimetableScreen>
     with WidgetsBindingObserver {
   bool _weekly = false;
+  int _modeSwitchSerial = 0;
+  final ValueNotifier<bool> _weeklySelection = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _weeklyMode = ValueNotifier<bool>(false);
   DateTime _week = weekMonday(DateTime.now());
 
@@ -1269,6 +1271,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _weeklySelection.dispose();
     _weeklyMode.dispose();
     super.dispose();
   }
@@ -1394,19 +1397,32 @@ class _TimetableScreenState extends State<_TimetableScreen>
             ),
             const SizedBox(height: 12),
             ValueListenableBuilder<bool>(
-              valueListenable: _weeklyMode,
+              valueListenable: _weeklySelection,
               builder: (context, weekly, _) => _TimetableModeSelector(
                 weekly: weekly,
                 onChanged: (nextWeekly) {
                   if (_weekly == nextWeekly) return;
                   _weekly = nextWeekly;
-                  if (!nextWeekly) {
-                    _week = weekMonday(DateTime.now());
-                    _weeklyMode.value = false;
-                    widget.onDateChanged(DateTime.now());
-                  } else {
-                    _weeklyMode.value = true;
-                  }
+                  final serial = ++_modeSwitchSerial;
+
+                  // Paint the button response first. Week/day content can be
+                  // expensive on its first raster; moving it one frame later
+                  // prevents the selector from feeling stuck.
+                  _weeklySelection.value = nextWeekly;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted ||
+                        serial != _modeSwitchSerial ||
+                        _weekly != nextWeekly) {
+                      return;
+                    }
+                    if (!nextWeekly) {
+                      _week = weekMonday(DateTime.now());
+                      _weeklyMode.value = false;
+                      widget.onDateChanged(DateTime.now());
+                    } else {
+                      _weeklyMode.value = true;
+                    }
+                  });
                 },
               ),
             ),
@@ -1444,19 +1460,16 @@ class _TimetableScreenState extends State<_TimetableScreen>
                             const SizedBox(height: 18),
                             Expanded(
                               child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 200),
-                                switchInCurve: Curves.easeOutCubic,
-                                switchOutCurve: Curves.easeInCubic,
-                                transitionBuilder: (child, animation) {
-                                  final slide = Tween<Offset>(
-                                    begin: const Offset(.08, 0),
-                                    end: Offset.zero,
-                                  ).animate(animation);
-                                  return SlideTransition(
-                                    position: slide,
-                                    child: child,
-                                  );
-                                },
+                                duration: const Duration(milliseconds: 140),
+                                switchInCurve: Curves.easeOut,
+                                switchOutCurve: Curves.easeOut,
+                                layoutBuilder: (current, previous) =>
+                                    current ?? const SizedBox.shrink(),
+                                transitionBuilder: (child, animation) =>
+                                    FadeTransition(
+                                      opacity: animation,
+                                      child: child,
+                                    ),
                                 child: KeyedSubtree(
                                   key: ValueKey<String>(
                                     '${widget.selectedDate.year}-${widget.selectedDate.month}-${widget.selectedDate.day}',
@@ -2248,12 +2261,14 @@ class _TimetableModeSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = appThemePalette;
     final premium = palette.id == AppThemeId.tienMonPremium;
+    final radius = premium ? 20.0 : palette.radius;
+
     return Container(
       height: 46,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: premium ? Colors.transparent : palette.cardAlt,
-        borderRadius: BorderRadius.circular(premium ? 20 : palette.radius),
+        borderRadius: BorderRadius.circular(radius),
         border: Border.all(
           color: premium ? const Color(0xCCFFD66B) : palette.border,
           width: premium ? 1.15 : 1,
@@ -2261,73 +2276,88 @@ class _TimetableModeSelector extends StatelessWidget {
         boxShadow: premium
             ? <BoxShadow>[
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: .34),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
+                  color: Colors.black.withValues(alpha: .24),
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
                 ),
               ]
             : null,
       ),
-      child: Stack(
-        children: <Widget>[
-          AnimatedAlign(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            alignment: weekly ? Alignment.centerRight : Alignment.centerLeft,
-            child: FractionallySizedBox(
-              widthFactor: .5,
-              heightFactor: 1,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: premium ? const Color(0x22FFD66B) : palette.primary,
-                  borderRadius: BorderRadius.circular(
-                    premium ? 16 : palette.radius,
-                  ),
-                  border: premium
-                      ? Border.all(color: const Color(0xFFFFD66B), width: 1)
-                      : null,
-                  boxShadow: premium
-                      ? <BoxShadow>[
-                          BoxShadow(
-                            color: const Color(0xFFFFD66B)
-                                .withValues(alpha: .22),
-                            blurRadius: 10,
-                          ),
-                        ]
-                      : null,
-                ),
-              ),
-            ),
-          ),
-          Row(
-            children: <Widget>[
-              for (final value in <bool>[false, true])
-                Expanded(
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () => onChanged(value),
-                    child: Center(
-                      child: Text(
-                        value ? 'Theo tuần' : 'Theo ngày',
-                        style: TextStyle(
-                          color: premium
-                              ? const Color(0xFFFFD66B)
-                              : weekly == value
-                              ? Colors.white
-                              : palette.textPrimary,
-                          fontWeight: FontWeight.w900,
-                          shadows: premium ? tienMonTextShadows : null,
-                        ),
+      child: CustomPaint(
+        painter: _TimetableModeSelectorPainter(
+          weekly: weekly,
+          premium: premium,
+          primary: palette.primary,
+          radius: radius - 3,
+        ),
+        child: Row(
+          children: <Widget>[
+            for (final value in <bool>[false, true])
+              Expanded(
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(radius - 3),
+                  onTap: () => onChanged(value),
+                  child: Center(
+                    child: Text(
+                      value ? 'Theo tuần' : 'Theo ngày',
+                      style: TextStyle(
+                        color: premium
+                            ? const Color(0xFFFFD66B)
+                            : weekly == value
+                            ? Colors.white
+                            : palette.textPrimary,
+                        fontWeight: FontWeight.w900,
+                        shadows: premium ? tienMonTextShadows : null,
                       ),
                     ),
                   ),
                 ),
-            ],
-          ),
-        ],
+              ),
+          ],
+        ),
       ),
     );
   }
+}
+
+class _TimetableModeSelectorPainter extends CustomPainter {
+  const _TimetableModeSelectorPainter({
+    required this.weekly,
+    required this.premium,
+    required this.primary,
+    required this.radius,
+  });
+
+  final bool weekly;
+  final bool premium;
+  final Color primary;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final half = size.width / 2;
+    final rect = Rect.fromLTWH(weekly ? half : 0, 0, half, size.height);
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
+
+    final fill = Paint()
+      ..color = premium ? const Color(0x22FFD66B) : primary;
+    canvas.drawRRect(rrect, fill);
+
+    if (premium) {
+      final stroke = Paint()
+        ..color = const Color(0xFFFFD66B)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1;
+      canvas.drawRRect(rrect.deflate(.5), stroke);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TimetableModeSelectorPainter oldDelegate) =>
+      oldDelegate.weekly != weekly ||
+      oldDelegate.premium != premium ||
+      oldDelegate.primary != primary ||
+      oldDelegate.radius != radius;
 }
 
 class _DateNavigator extends StatelessWidget {
