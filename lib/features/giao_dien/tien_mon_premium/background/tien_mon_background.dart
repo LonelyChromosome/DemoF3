@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../tien_mon_premium_contract.dart';
 
@@ -255,12 +256,10 @@ class TienMonPersistentBackground extends StatefulWidget {
 
 class _TienMonPersistentBackgroundState
     extends State<TienMonPersistentBackground> {
-  Timer? _precacheTimer;
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_changed);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _scheduleAdjacentPrecache());
   }
 
   @override
@@ -273,31 +272,11 @@ class _TienMonPersistentBackgroundState
   }
 
   void _changed() {
-    setState(() {});
-    _scheduleAdjacentPrecache(delay: const Duration(milliseconds: 350));
-  }
-
-  void _scheduleAdjacentPrecache({
-    Duration delay = const Duration(milliseconds: 900),
-  }) {
-    _precacheTimer?.cancel();
-    _precacheTimer = Timer(delay, () {
-      if (mounted) unawaited(_precacheAdjacent());
-    });
-  }
-
-  Future<void> _precacheAdjacent() async {
-    if (!mounted) return;
-    final next = widget.controller.scene == 8 ? 1 : widget.controller.scene + 1;
-    await precacheImage(
-      AssetImage(TienMonPremiumContract.appSceneAssets[next - 1]),
-      context,
-    );
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _precacheTimer?.cancel();
     widget.controller.removeListener(_changed);
     super.dispose();
   }
@@ -398,15 +377,31 @@ class _FullBleedSceneArtwork extends StatelessWidget {
   final String asset;
 
   @override
-  Widget build(BuildContext context) => SizedBox.expand(
-    child: Image.asset(
-      asset,
-      fit: BoxFit.cover,
-      alignment: Alignment.center,
-      gaplessPlayback: true,
-      filterQuality: FilterQuality.medium,
-    ),
-  );
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    final targetHeight = (media.size.height * media.devicePixelRatio)
+        .round()
+        .clamp(1280, 2560);
+    return SizedBox.expand(
+      child: Image.asset(
+        asset,
+        fit: BoxFit.cover,
+        alignment: Alignment.center,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+        cacheHeight: targetHeight,
+        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+          if (wasSynchronouslyLoaded) return child;
+          return AnimatedOpacity(
+            opacity: frame == null ? 0 : 1,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            child: child,
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _EdgeBlendMist extends StatelessWidget {
@@ -464,13 +459,12 @@ class _AmbientMotion extends StatefulWidget {
 
 class _AmbientMotionState extends State<_AmbientMotion>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 72),
-  );
+  late final Ticker _ticker = createTicker(_onTick);
   late final DateTime _startedAt = DateTime.now();
   Duration _pausedDuration = Duration.zero;
   DateTime? _pauseStarted;
+  DateTime? _lastPaintAt;
+  double _elapsedSeconds = 0;
 
   @override
   void initState() {
@@ -480,14 +474,27 @@ class _AmbientMotionState extends State<_AmbientMotion>
     _syncAmbientState();
   }
 
+  void _onTick(Duration _) {
+    if (!mounted || tienMonAmbientPaused.value) return;
+    final now = DateTime.now();
+    final last = _lastPaintAt;
+    if (last != null &&
+        now.difference(last) < const Duration(milliseconds: 32)) {
+      return;
+    }
+    _lastPaintAt = now;
+    _elapsedSeconds =
+        (now.difference(_startedAt) - _pausedDuration).inMicroseconds /
+        Duration.microsecondsPerSecond;
+    setState(() {});
+  }
+
   void _syncAmbientState() {
     if (!mounted) return;
     final paused = tienMonAmbientPaused.value;
     if (paused) {
       _pauseStarted ??= DateTime.now();
-      if (_controller.isAnimating) {
-        _controller.stop(canceled: false);
-      }
+      if (_ticker.isActive) _ticker.stop();
       return;
     }
 
@@ -496,9 +503,8 @@ class _AmbientMotionState extends State<_AmbientMotion>
       _pausedDuration += DateTime.now().difference(pauseStarted);
       _pauseStarted = null;
     }
-    if (!_controller.isAnimating) {
-      _controller.repeat();
-    }
+    _lastPaintAt = null;
+    if (!_ticker.isActive) _ticker.start();
   }
 
   @override
@@ -508,9 +514,7 @@ class _AmbientMotionState extends State<_AmbientMotion>
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      if (_controller.isAnimating) {
-        _controller.stop(canceled: false);
-      }
+      if (_ticker.isActive) _ticker.stop();
     }
   }
 
@@ -518,29 +522,19 @@ class _AmbientMotionState extends State<_AmbientMotion>
   void dispose() {
     tienMonAmbientPaused.removeListener(_syncAmbientState);
     WidgetsBinding.instance.removeObserver(this);
-    _controller.dispose();
+    _ticker.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
     child: RepaintBoundary(
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          final pauseStarted = _pauseStarted;
-          final now = pauseStarted ?? DateTime.now();
-          final elapsedSeconds =
-              (now.difference(_startedAt) - _pausedDuration).inMicroseconds /
-              Duration.microsecondsPerSecond;
-          return CustomPaint(
-            painter: _AmbientPainter(
-              elapsedSeconds: elapsedSeconds,
-              profile: _ambientProfiles[widget.scene - 1],
-              scene: widget.scene,
-            ),
-          );
-        },
+      child: CustomPaint(
+        painter: _AmbientPainter(
+          elapsedSeconds: _elapsedSeconds,
+          profile: _ambientProfiles[widget.scene - 1],
+          scene: widget.scene,
+        ),
       ),
     ),
   );

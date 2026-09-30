@@ -683,17 +683,11 @@ class _ThemePickerSheet extends StatelessWidget {
       await presented.future;
       await Future<void>.delayed(const Duration(milliseconds: 80));
 
-      final scene = TienMonPremiumContract.appSceneFor(DateTime.now());
-      final currentAsset = TienMonPremiumContract.appSceneAssets[scene - 1];
-
-      // Decode only the frame we are about to show. The persistent background
-      // warms the adjacent scene afterwards, avoiding two 2K decodes on the
-      // theme-selection frame.
-      await precacheImage(AssetImage(currentAsset), context);
-
+      // Mount Premium immediately under the loading cover. The wallpaper
+      // now decodes asynchronously at the display target size and fades in on
+      // its first frame, so selecting the theme never waits on a 2K decode.
       await controller.select(id);
       await WidgetsBinding.instance.endOfFrame;
-      await Future<void>.delayed(const Duration(milliseconds: 40));
     } finally {
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop();

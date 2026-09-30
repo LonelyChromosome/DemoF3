@@ -86,7 +86,10 @@ class WidgetDatePickerActivity : Activity() {
                 } else {
                     dp(24)
                 }
-                view.setPadding(0, 0, 0, maxOf(insetBottom, fallback) + dp(18))
+                val screenReserve =
+                    (resources.displayMetrics.heightPixels * 0.20f).toInt()
+                val systemReserve = maxOf(insetBottom, fallback) + dp(18)
+                view.setPadding(0, 0, 0, maxOf(screenReserve, systemReserve))
                 insets
             }
         }

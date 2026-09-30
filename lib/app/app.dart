@@ -1133,13 +1133,14 @@ class _MainShell extends StatelessWidget {
                   final isNotifications = page == _AppPage.notifications;
                   final dx = isNotifications ? 0.0 : (1 - value) * 10;
                   final dy = isNotifications ? (1 - value) * 18 : 0.0;
-                  return Opacity(
-                    opacity: value,
-                    child: Transform.translate(
-                      offset: Offset(dx, dy),
-                      child: child,
-                    ),
+                  final translated = Transform.translate(
+                    offset: Offset(dx, dy),
+                    child: child,
                   );
+                  if (palette.id == AppThemeId.tienMonPremium) {
+                    return translated;
+                  }
+                  return Opacity(opacity: value, child: translated);
                 },
                 child: ColoredBox(
                   color: palette.id == AppThemeId.tienMonPremium
@@ -1418,117 +1419,106 @@ class _TimetableScreenState extends State<_TimetableScreen>
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  ValueListenableBuilder<bool>(
-                    valueListenable: _weeklyMode,
-                    child: Column(
-                      children: <Widget>[
-                        _DateNavigator(
-                          date: widget.selectedDate,
-                          onTap: () => _showCalendarPicker(
-                            context,
-                            widget.selectedDate,
-                            widget.onDateChanged,
-                          ),
-                          onPrevious: () => widget.onDateChanged(
-                            widget.selectedDate.subtract(
-                              const Duration(days: 1),
-                            ),
-                          ),
-                          onNext: () => widget.onDateChanged(
-                            widget.selectedDate.add(const Duration(days: 1)),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Expanded(
-                          child: AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 320),
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeInCubic,
-                            transitionBuilder: (child, animation) {
-                              final slide = Tween<Offset>(
-                                begin: const Offset(.14, 0),
-                                end: Offset.zero,
-                              ).animate(animation);
-                              return FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: slide,
-                                  child: child,
-                                ),
-                              );
-                            },
-                            child: KeyedSubtree(
-                              key: ValueKey<String>(
-                                '${widget.selectedDate.year}-${widget.selectedDate.month}-${widget.selectedDate.day}',
+              child: ValueListenableBuilder<bool>(
+                valueListenable: _weeklyMode,
+                builder: (context, weekly, _) => IndexedStack(
+                  index: weekly ? 1 : 0,
+                  sizing: StackFit.expand,
+                  children: <Widget>[
+                    TickerMode(
+                      enabled: !weekly,
+                      child: RepaintBoundary(
+                        child: Column(
+                          children: <Widget>[
+                            _DateNavigator(
+                              date: widget.selectedDate,
+                              onTap: () => _showCalendarPicker(
+                                context,
+                                widget.selectedDate,
+                                widget.onDateChanged,
                               ),
-                              child: items.isEmpty
-                                  ? _EmptyState(
-                                      icon: Icons.event_available_outlined,
-                                      title:
-                                          _sameDay(
-                                            widget.selectedDate,
-                                            DateTime.now(),
-                                          )
-                                          ? AssistantText.of(
-                                              AssistantEvent.studyTodayEmpty,
-                                              widget.assistantPack,
-                                            )
-                                          : 'Không có lịch học',
-                                      message: 'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
-                                    )
-                                  : ListView.separated(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 82,
-                                      ),
-                                      itemCount: items.length,
-                                      separatorBuilder: (_, _) =>
-                                          const SizedBox(height: 14),
-                                      itemBuilder: (context, index) =>
-                                          _ScheduleCard(
-                                            item: items[index],
-                                            accent: _accentFor(index),
-                                          ),
-                                    ),
+                              onPrevious: () => widget.onDateChanged(
+                                widget.selectedDate.subtract(
+                                  const Duration(days: 1),
+                                ),
+                              ),
+                              onNext: () => widget.onDateChanged(
+                                widget.selectedDate.add(
+                                  const Duration(days: 1),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    builder: (context, weekly, child) => IgnorePointer(
-                      ignoring: weekly,
-                      child: TickerMode(
-                        enabled: !weekly,
-                        child: Opacity(
-                          opacity: weekly ? .004 : .996,
-                          child: RepaintBoundary(child: child),
+                            const SizedBox(height: 18),
+                            Expanded(
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 200),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeInCubic,
+                                transitionBuilder: (child, animation) {
+                                  final slide = Tween<Offset>(
+                                    begin: const Offset(.08, 0),
+                                    end: Offset.zero,
+                                  ).animate(animation);
+                                  return SlideTransition(
+                                    position: slide,
+                                    child: child,
+                                  );
+                                },
+                                child: KeyedSubtree(
+                                  key: ValueKey<String>(
+                                    '${widget.selectedDate.year}-${widget.selectedDate.month}-${widget.selectedDate.day}',
+                                  ),
+                                  child: items.isEmpty
+                                      ? _EmptyState(
+                                          icon:
+                                              Icons.event_available_outlined,
+                                          title:
+                                              _sameDay(
+                                                widget.selectedDate,
+                                                DateTime.now(),
+                                              )
+                                              ? AssistantText.of(
+                                                  AssistantEvent.studyTodayEmpty,
+                                                  widget.assistantPack,
+                                                )
+                                              : 'Không có lịch học',
+                                          message:
+                                              'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
+                                        )
+                                      : ListView.separated(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 82,
+                                          ),
+                                          itemCount: items.length,
+                                          separatorBuilder: (_, _) =>
+                                              const SizedBox(height: 14),
+                                          itemBuilder: (context, index) =>
+                                              _ScheduleCard(
+                                                item: items[index],
+                                                accent: _accentFor(index),
+                                              ),
+                                        ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                  ValueListenableBuilder<bool>(
-                    valueListenable: _weeklyMode,
-                    child: WeekTimetable(
-                      data: widget.data,
-                      week: _week,
-                      onWeekChanged: (value) =>
-                          setState(() => _week = weekMonday(value)),
-                      onPickWeek: _pickWeek,
-                    ),
-                    builder: (context, weekly, child) => IgnorePointer(
-                      ignoring: !weekly,
-                      child: TickerMode(
-                        enabled: weekly,
-                        child: Opacity(
-                          opacity: weekly ? .996 : .004,
-                          child: RepaintBoundary(child: child),
+                    TickerMode(
+                      enabled: weekly,
+                      child: RepaintBoundary(
+                        child: WeekTimetable(
+                          data: widget.data,
+                          week: _week,
+                          onWeekChanged: (value) =>
+                              setState(() => _week = weekMonday(value)),
+                          onPickWeek: _pickWeek,
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -2284,8 +2274,8 @@ class _TimetableModeSelector extends StatelessWidget {
       child: Stack(
         children: <Widget>[
           AnimatedAlign(
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeInOutCubic,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
             alignment: weekly ? Alignment.centerRight : Alignment.centerLeft,
             child: FractionallySizedBox(
               widthFactor: .5,
