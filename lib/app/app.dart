@@ -1288,28 +1288,70 @@ class _TimetableScreenState extends State<_TimetableScreen>
     final palette = appThemePalette;
     final picked = await showModalBottomSheet<DateTime>(
       context: context,
-      builder: (context) => SafeArea(
-        child: SizedBox(
-          height: 440,
-          child: Column(
-            children: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.pop(context, DateTime.now()),
-                child: const Text('Về tuần hiện tại'),
-              ),
-              Expanded(
-                child: CalendarDatePicker(
-                  initialDate: _week,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime(2100),
-                  onDateChanged: (date) => Navigator.pop(context, date),
+      isScrollControlled: true,
+      showDragHandle: false,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: .48),
+      builder: (sheetContext) {
+        final screenHeight = MediaQuery.sizeOf(sheetContext).height;
+        final bottomReserve = _calendarBottomReserve(sheetContext);
+        final sheetHeight = screenHeight * .62 < 440
+            ? screenHeight * .62
+            : 440.0;
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomReserve),
+          child: Container(
+            height: sheetHeight,
+            decoration: BoxDecoration(
+              color: palette.surface,
+              border: Border(top: BorderSide(color: palette.border)),
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(
+                  palette.geometry == AppThemeGeometry.rounded ? 30 : 0,
                 ),
               ),
-            ],
+            ),
+            child: Column(
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          'Chọn tuần',
+                          style: TextStyle(
+                            color: palette.textPrimary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () =>
+                            Navigator.pop(sheetContext, DateTime.now()),
+                        child: const Text('Tuần hiện tại'),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Theme(
+                    data: buildBetterTheme(palette),
+                    child: CalendarDatePicker(
+                      initialDate: _week,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2100),
+                      onDateChanged: (date) =>
+                          Navigator.pop(sheetContext, date),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
-      backgroundColor: palette.surface,
+        );
+      },
     );
     if (picked != null && mounted) {
       setState(() => _week = weekMonday(picked));
@@ -2390,6 +2432,22 @@ class _DateNavigator extends StatelessWidget {
   }
 }
 
+double _calendarBottomReserve(BuildContext context) {
+  final view = View.of(context);
+  final viewBottom = view.padding.bottom / view.devicePixelRatio;
+  final mediaBottom = MediaQuery.viewPaddingOf(context).bottom;
+  final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
+  var systemBottom = viewBottom;
+  if (mediaBottom > systemBottom) systemBottom = mediaBottom;
+  if (keyboardBottom > systemBottom) systemBottom = keyboardBottom;
+
+  // Some edge-to-edge Android builds report a consumed/zero navigation inset
+  // to modal routes. Keep a visible physical reserve even in that case.
+  final minimumReserve = MediaQuery.sizeOf(context).height * .12;
+  final resolved = systemBottom + 18;
+  return resolved > minimumReserve ? resolved : minimumReserve;
+}
+
 Future<void> _showCalendarPicker(
   BuildContext context,
   DateTime selectedDate,
@@ -2403,29 +2461,31 @@ Future<void> _showCalendarPicker(
     showDragHandle: false,
     backgroundColor: Colors.transparent,
     barrierColor: Colors.black.withValues(alpha: .48),
-    builder: (context) {
-      final screenHeight = MediaQuery.sizeOf(context).height;
-      // Physically lift the whole calendar sheet above the bottom 20% of the
-      // display. Do not rely on Android navigation insets here: on some
-      // edge-to-edge devices the modal route receives a consumed/zero inset.
-      final bottomGap = screenHeight * 0.20;
+    builder: (sheetContext) {
+      final screenHeight = MediaQuery.sizeOf(sheetContext).height;
+      final bottomReserve = _calendarBottomReserve(sheetContext);
+      final maxSheetHeight = screenHeight - bottomReserve - 24;
+      final wantedHeight = screenHeight * .68;
+      final sheetHeight = wantedHeight < maxSheetHeight
+          ? wantedHeight
+          : maxSheetHeight;
       return Padding(
-        padding: EdgeInsets.only(bottom: bottomGap),
+        padding: EdgeInsets.only(bottom: bottomReserve),
         child: StatefulBuilder(
-          builder: (context, setModalState) {
+          builder: (sheetContext, setModalState) {
             return TweenAnimationBuilder<double>(
-            tween: Tween<double>(begin: .94, end: 1),
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOutBack,
-            builder: (context, value, child) => Transform.scale(
-              alignment: Alignment.bottomCenter,
-              scale: value,
-              child: child,
-            ),
-            child: Container(
-              constraints: BoxConstraints(maxHeight: screenHeight * 0.76),
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-              decoration: BoxDecoration(
+              tween: Tween<double>(begin: .94, end: 1),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) => Transform.scale(
+                alignment: Alignment.bottomCenter,
+                scale: value,
+                child: child,
+              ),
+              child: Container(
+                height: sheetHeight,
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 14),
+                decoration: BoxDecoration(
                   color: palette.surface,
                   border: Border(top: BorderSide(color: palette.border)),
                   borderRadius: BorderRadius.vertical(
@@ -2441,11 +2501,8 @@ Future<void> _showCalendarPicker(
                     ),
                   ],
                 ),
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
+                child: Column(
+                  children: <Widget>[
                     Container(
                       width: 42,
                       height: 5,
@@ -2476,28 +2533,34 @@ Future<void> _showCalendarPicker(
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Theme(
-                      data: buildBetterTheme(palette),
-                      child: CalendarDatePicker(
-                        initialDate: draft,
-                        firstDate: DateTime(2020),
-                        lastDate: DateTime(2035, 12, 31),
-                        onDateChanged: (value) =>
-                            setModalState(() => draft = _dateOnly(value)),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: Theme(
+                          data: buildBetterTheme(palette),
+                          child: CalendarDatePicker(
+                            initialDate: draft,
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2035, 12, 31),
+                            onDateChanged: (value) => setModalState(
+                              () => draft = _dateOnly(value),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
                       height: 48,
                       child: FilledButton.icon(
-                        onPressed: () => Navigator.of(context).pop(draft),
+                        onPressed: () =>
+                            Navigator.of(sheetContext).pop(draft),
                         icon: const Icon(Icons.check_rounded),
                         label: Text('Xem ${_dateLabel(draft)}'),
                       ),
                     ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
             );
