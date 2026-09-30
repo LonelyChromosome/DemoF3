@@ -26,6 +26,18 @@ const _legacyMode = 'legacy';
 const _nativeMode = 'native';
 const _credentialChannel = MethodChannel('better_phenikaa/qldt_credentials');
 
+String _normalizeVietnameseDisplayName(String value) {
+  return value
+      .split(' ')
+      .where((part) => part.isNotEmpty)
+      .map((part) {
+        final lower = part.toLowerCase();
+        if (lower.length == 1) return lower.toUpperCase();
+        return '${lower[0].toUpperCase()}${lower.substring(1)}';
+      })
+      .join(' ');
+}
+
 String _sanitizeQldtProfileName(Object? raw) {
   final value = raw?.toString().replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
   if (value.length < 3 || value.length > 120 || value.contains('@')) return '';
@@ -42,7 +54,7 @@ String _sanitizeQldtProfileName(Object? raw) {
   }.contains(lower)) {
     return '';
   }
-  return value;
+  return _normalizeVietnameseDisplayName(value);
 }
 
 String _profileNameFromObject(Object? node, [int depth = 0]) {

@@ -302,7 +302,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     final store = CurrentSemesterStore();
     final semester = await store.read();
-    if (semester != null && semester.displayName.trim().isEmpty) {
+    if (semester != null && semester.displayName.trim() != name) {
       await store.save(
         CurrentSemester(
           semesterId: semester.semesterId,
@@ -318,7 +318,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     if (raw != null && raw.isNotEmpty) {
       try {
         final data = ImportedScheduleData.decode(raw);
-        if (data.displayName.trim().isEmpty) {
+        if (data.displayName.trim() != name) {
           await prefs.setString(
             _storageKey,
             ImportedScheduleData(
