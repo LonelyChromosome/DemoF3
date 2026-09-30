@@ -245,6 +245,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   final List<String> _scheduleStages = <String>[];
   int _syncEpoch = 0;
   int _registrationCompletionEpoch = -1;
+  bool _registrationCompletionRunning = false;
+  bool _registrationCompletionSucceeded = false;
+  Future<void>? _accountNameSetupFuture;
+  bool _accountNameSetupFinished = false;
   bool _pageReady = false;
   bool _syncing = false;
   bool _autoSyncStarted = false;
@@ -695,6 +699,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     _legacyFallbackTimer?.cancel();
     ++_syncEpoch;
     _registrationCompletionEpoch = -1;
+    _registrationCompletionRunning = false;
     _autoSyncStarted = false;
     _pendingSchedule = null;
     _nativeSession = null;
@@ -1051,8 +1056,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
   Future<void> _completeRegistration(int epoch, String raw) async {
     if (!mounted || !_syncing || epoch != _syncEpoch) return;
+    if (_registrationCompletionSucceeded || _registrationCompletionRunning) {
+      return;
+    }
     if (_registrationCompletionEpoch == epoch) return;
     _registrationCompletionEpoch = epoch;
+    _registrationCompletionRunning = true;
     RegisteredSemester? registration;
     var verificationStage = 'registration_parse';
     try {
@@ -1127,6 +1136,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
       await _ensureAccountDisplayName(displayName);
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
+      _registrationCompletionSucceeded = true;
+      _registrationCompletionRunning = false;
       Navigator.of(context).pop(
         QldtLoginResult(
           schedule: semester.toImportedScheduleData(),
@@ -1137,6 +1148,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         ),
       );
     } on Object catch (error) {
+      _registrationCompletionRunning = false;
+      _registrationCompletionEpoch = -1;
       final currentSchedule = _pendingSchedule;
       if (qldtDiagnosticsEnabled &&
           registration != null &&
@@ -1179,9 +1192,24 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     }
   }
 
-  Future<void> _ensureAccountDisplayName(String fullName) async {
+  Future<void> _ensureAccountDisplayName(String fullName) {
+    if (widget.cachedSession || _accountNameSetupFinished) {
+      return Future<void>.value();
+    }
+    final running = _accountNameSetupFuture;
+    if (running != null) return running;
+
+    final future = _runAccountDisplayNameSetup(fullName);
+    _accountNameSetupFuture = future;
+    return future;
+  }
+
+  Future<void> _runAccountDisplayNameSetup(String fullName) async {
     final existing = await readQldtAccountDisplayName();
-    if (existing.isNotEmpty) return;
+    if (existing.isNotEmpty) {
+      _accountNameSetupFinished = true;
+      return;
+    }
 
     final words = fullName
         .split(RegExp(r'\s+'))
@@ -1201,7 +1229,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     if (arranged == null || arranged.trim().isEmpty) {
       throw const FormatException('ACCOUNT_DISPLAY_NAME_REQUIRED');
     }
+
+    // Persist before returning from the only welcome route. Every later sync
+    // reads this value and must never launch the mini game again.
     await _saveQldtAccountDisplayName(arranged);
+    _accountNameSetupFinished = true;
   }
 
   String _verificationErrorCategory(Object error) {
