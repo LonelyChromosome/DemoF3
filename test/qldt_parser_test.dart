@@ -53,6 +53,16 @@ void main() {
     }
   });
 
+  test('returns the exact real QLĐT HTML name without normalization', () {
+    const html = '''
+      <li class="img-user">
+        <span id="lblHoTenNguoiDangNhap">NguyễN Minh ĐạO</span>
+      </li>
+    ''';
+
+    expect(parser.parseDisplayName(html), 'NguyễN Minh ĐạO');
+  });
+
   test('does not treat generic account display names as student names', () {
     const html = '''
       <div class="nav-account">
