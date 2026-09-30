@@ -193,9 +193,11 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
   }
 
   Future<void> _chooseColor(int index) async {
-    final selected = await showDialog<Color>(
+    final selected = await showModalBottomSheet<Color>(
       context: context,
-      builder: (context) => _HsvColorPicker(initial: _colors[index]),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _RgbColorPicker(initial: _colors[index]),
     );
     if (selected == null) return;
     setState(() => _colors[index] = selected);
@@ -681,154 +683,180 @@ class _ThemePreview extends StatelessWidget {
   }
 }
 
-class _HsvColorPicker extends StatefulWidget {
-  const new({required this.initial});
+class _RgbColorPicker extends StatefulWidget {
+  const _RgbColorPicker({required this.initial});
 
   final Color initial;
 
   @override
-  State<_HsvColorPicker> createState() => _HsvColorPickerState();
+  State<_RgbColorPicker> createState() => _RgbColorPickerState();
 }
 
-class _HsvColorPickerState extends State<_HsvColorPicker> {
-  late HSVColor _color = HSVColor.fromColor(widget.initial);
-  final TextEditingController _hexController = TextEditingController();
-  String? _hexError;
+class _RgbColorPickerState extends State<_RgbColorPicker> {
+  late HSVColor _hsv = HSVColor.fromColor(widget.initial);
 
-  @override
-  void initState() {
-    super.initState();
-    _updateHexText();
-  }
+  Color get _color => _hsv.toColor();
 
-  @override
-  void dispose() {
-    _hexController.dispose();
-    super.dispose();
-  }
+  void _setHsv(HSVColor value) => setState(() => _hsv = value);
 
-  void _updateHexText() {
-    final digits = _color
-        .toColor()
-        .toARGB32()
-        .toRadixString(16)
-        .padLeft(8, '0');
-    final value = '#${digits.substring(2).toUpperCase()}';
-    _hexController.value = TextEditingValue(
-      text: value,
-      selection: TextSelection.collapsed(offset: value.length),
+  void _setRgb({int? red, int? green, int? blue}) {
+    final current = _color;
+    final next = Color.fromARGB(
+      255,
+      red ?? (current.r * 255).round(),
+      green ?? (current.g * 255).round(),
+      blue ?? (current.b * 255).round(),
     );
-    _hexError = null;
-  }
-
-  void _setColor(HSVColor color) {
-    setState(() {
-      _color = color;
-      _updateHexText();
-    });
-  }
-
-  void _setHex(String value) {
-    final hex = value.trim().replaceFirst(RegExp('^#'), '');
-    if (!RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(hex)) {
-      setState(() => _hexError = 'Nhập 6 ký tự HEX, ví dụ #1747B5');
-      return;
-    }
-    setState(() {
-      _color = HSVColor.fromColor(Color(int.parse('FF$hex', radix: 16)));
-      _hexError = null;
-    });
+    setState(() => _hsv = HSVColor.fromColor(next));
   }
 
   @override
   Widget build(BuildContext context) {
-    final hueColor = HSVColor.fromAHSV(1, _color.hue, 1, 1).toColor();
-    return AlertDialog(
-      title: const Text('Chọn màu'),
-      content: SizedBox(
-        width: 300,
+    final palette = appThemePalette;
+    final hueColor = HSVColor.fromAHSV(1, _hsv.hue, 1, 1).toColor();
+    final rgb = _color;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+        decoration: BoxDecoration(
+          color: palette.surface,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(
+              palette.geometry == AppThemeGeometry.rounded ? 24 : 0,
+            ),
+          ),
+          border: Border(top: BorderSide(color: palette.border)),
+        ),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              Text(
+                'Chọn màu custom',
+                style: TextStyle(
+                  color: palette.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'Kéo hoặc chạm trực tiếp trên bảng màu, hoặc chỉnh RGB.',
+                style: TextStyle(
+                  color: palette.textSecondary,
+                  fontSize: 12.5,
+                ),
+              ),
+              const SizedBox(height: 14),
               SizedBox(
-                height: 180,
+                height: 190,
                 width: double.infinity,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final pickerSize = Size(constraints.maxWidth, 180);
+                    final size = Size(constraints.maxWidth, 190);
                     return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (details) =>
+                          _setFromOffset(details.localPosition, size),
                       onPanDown: (details) =>
-                          _setFromOffset(details.localPosition, pickerSize),
+                          _setFromOffset(details.localPosition, size),
                       onPanUpdate: (details) =>
-                          _setFromOffset(details.localPosition, pickerSize),
+                          _setFromOffset(details.localPosition, size),
                       child: CustomPaint(
-                        painter: _SaturationValuePainter(hueColor),
-                        foregroundPainter: _SelectionPainter(
-                          _color.saturation,
-                          _color.value,
+                        painter: _RgbSpectrumPainter(hueColor),
+                        foregroundPainter: _RgbSelectionPainter(
+                          _hsv.saturation,
+                          _hsv.value,
                         ),
                       ),
                     );
                   },
                 ),
               ),
-              Slider(
-                value: _color.hue,
-                max: 360,
-                onChanged: (value) => _setColor(_color.withHue(value)),
+              const SizedBox(height: 8),
+              _HueBar(
+                hue: _hsv.hue,
+                onChanged: (value) => _setHsv(_hsv.withHue(value)),
               ),
+              const SizedBox(height: 10),
+              _RgbSlider(
+                label: 'R',
+                value: (rgb.r * 255).round(),
+                color: const Color(0xFFFF5A5A),
+                onChanged: (value) => _setRgb(red: value),
+              ),
+              _RgbSlider(
+                label: 'G',
+                value: (rgb.g * 255).round(),
+                color: const Color(0xFF5DDB7A),
+                onChanged: (value) => _setRgb(green: value),
+              ),
+              _RgbSlider(
+                label: 'B',
+                value: (rgb.b * 255).round(),
+                color: const Color(0xFF6DA9FF),
+                onChanged: (value) => _setRgb(blue: value),
+              ),
+              const SizedBox(height: 10),
               Container(
-                height: 42,
+                height: 48,
+                width: double.infinity,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: _color.toColor(),
-                  borderRadius: BorderRadius.circular(10),
+                  color: rgb,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: palette.border),
+                ),
+                child: Text(
+                  _colorHex(rgb),
+                  style: TextStyle(
+                    color: ThemeData.estimateBrightnessForColor(rgb) ==
+                            Brightness.dark
+                        ? Colors.white
+                        : Colors.black,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _hexController,
-                maxLength: 7,
-                textCapitalization: TextCapitalization.characters,
-                decoration: InputDecoration(
-                  labelText: 'Mã màu HEX',
-                  hintText: '#1747B5',
-                  errorText: _hexError,
-                  counterText: '',
-                  border: const OutlineInputBorder(),
-                ),
-                onChanged: _setHex,
+              const SizedBox(height: 14),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Hủy'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).pop(rgb),
+                      child: const Text('Chọn'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Hủy'),
-        ),
-        FilledButton(
-          onPressed: _hexError == null
-              ? () => Navigator.pop(context, _color.toColor())
-              : null,
-          child: const Text('Chọn'),
-        ),
-      ],
     );
   }
 
   void _setFromOffset(Offset offset, Size size) {
-    _setColor(
-      _color
+    _setHsv(
+      _hsv
           .withSaturation((offset.dx / size.width).clamp(0.0, 1.0))
-          .withValue((1 - (offset.dy / size.height)).clamp(0.0, 1.0)),
+          .withValue((1 - offset.dy / size.height).clamp(0.0, 1.0)),
     );
   }
 }
 
-class _SaturationValuePainter extends CustomPainter {
-  const new(this.hue);
+class _RgbSpectrumPainter extends CustomPainter {
+  const _RgbSpectrumPainter(this.hue);
 
   final Color hue;
 
@@ -838,8 +866,9 @@ class _SaturationValuePainter extends CustomPainter {
     canvas.drawRect(
       rect,
       Paint()
-        ..shader = LinearGradient(colors: <Color>[Colors.white, hue])
-            .createShader(rect),
+        ..shader = LinearGradient(
+          colors: <Color>[Colors.white, hue],
+        ).createShader(rect),
     );
     canvas.drawRect(
       rect,
@@ -853,12 +882,12 @@ class _SaturationValuePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _SaturationValuePainter oldDelegate) =>
+  bool shouldRepaint(covariant _RgbSpectrumPainter oldDelegate) =>
       oldDelegate.hue != hue;
 }
 
-class _SelectionPainter extends CustomPainter {
-  const new(this.saturation, this.value);
+class _RgbSelectionPainter extends CustomPainter {
+  const _RgbSelectionPainter(this.saturation, this.value);
 
   final double saturation;
   final double value;
@@ -868,25 +897,131 @@ class _SelectionPainter extends CustomPainter {
     final center = Offset(size.width * saturation, size.height * (1 - value));
     canvas.drawCircle(
       center,
-      7,
+      8,
       Paint()
         ..color = Colors.white
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
+        ..strokeWidth = 2.5,
     );
     canvas.drawCircle(
       center,
-      5,
+      5.5,
       Paint()
         ..color = Colors.black
-        ..style = PaintingStyle.stroke,
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _SelectionPainter oldDelegate) =>
+  bool shouldRepaint(covariant _RgbSelectionPainter oldDelegate) =>
       oldDelegate.saturation != saturation || oldDelegate.value != value;
 }
+
+class _HueBar extends StatelessWidget {
+  const _HueBar({required this.hue, required this.onChanged});
+
+  final double hue;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 34,
+    child: Stack(
+      alignment: Alignment.center,
+      children: <Widget>[
+        ClipRRect(
+          borderRadius: BorderRadius.circular(99),
+          child: const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: <Color>[
+                  Color(0xFFFF0000),
+                  Color(0xFFFFFF00),
+                  Color(0xFF00FF00),
+                  Color(0xFF00FFFF),
+                  Color(0xFF0000FF),
+                  Color(0xFFFF00FF),
+                  Color(0xFFFF0000),
+                ],
+              ),
+            ),
+            child: SizedBox.expand(),
+          ),
+        ),
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 0,
+            activeTrackColor: Colors.transparent,
+            inactiveTrackColor: Colors.transparent,
+            overlayColor: Colors.white24,
+            thumbColor: Colors.white,
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+          ),
+          child: Slider(
+            value: hue,
+            max: 360,
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _RgbSlider extends StatelessWidget {
+  const _RgbSlider({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.onChanged,
+  });
+
+  final String label;
+  final int value;
+  final Color color;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = appThemePalette;
+    return Row(
+      children: <Widget>[
+        SizedBox(
+          width: 22,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: palette.textPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.toDouble(),
+            min: 0,
+            max: 255,
+            divisions: 255,
+            activeColor: color,
+            onChanged: (next) => onChanged(next.round()),
+          ),
+        ),
+        SizedBox(
+          width: 38,
+          child: Text(
+            '$value',
+            textAlign: TextAlign.right,
+            style: TextStyle(color: palette.textSecondary),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _colorHex(Color color) =>
+    '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
 
 extension on AppThemePalette {
   Color get errorFallback =>
