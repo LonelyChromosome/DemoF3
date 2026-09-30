@@ -1203,21 +1203,22 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         schedule: schedule,
       );
       verificationStage = 'semester_build';
-      var displayName = _cleanProfileName(schedule.displayName);
       final session = _nativeSession;
-      if (displayName.isEmpty) {
+      var displayName = '';
+      if (session != null) {
         try {
           displayName = _cleanProfileName(
             await (_studentDisplayNameFuture ??
-                (session == null
-                    ? Future<String>.value('')
-                    : const QldtNativeTransport()
-                        .fetchStudentDisplayName(session)
-                        .catchError((Object _) => ''))),
+                const QldtNativeTransport()
+                    .fetchStudentDisplayName(session)
+                    .catchError((Object _) => '')),
           );
         } on Object {
           displayName = '';
         }
+      }
+      if (displayName.isEmpty) {
+        displayName = _cleanProfileName(schedule.displayName);
       }
       if (displayName.isEmpty) {
         displayName = _resolvedDisplayName;
