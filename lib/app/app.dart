@@ -1997,7 +1997,7 @@ class _AccountScreen extends StatelessWidget {
                   const AppThemeSettingButton(),
                   const SizedBox(height: 12),
                   Text(
-                    'Assistant Pack',
+                    'Gói Trợ lí',
                     style: TextStyle(
                       color: palette.textPrimary,
                       fontWeight: FontWeight.w800,
