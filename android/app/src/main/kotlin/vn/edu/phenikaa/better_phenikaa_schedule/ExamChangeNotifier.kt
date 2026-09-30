@@ -19,7 +19,7 @@ internal object ExamChangeNotifier {
     private const val SYSTEM_MESSAGE = "system_message"
     private const val NOTIFIED = "notified"
     private const val INITIALIZED = "initialized"
-    private const val CHANNEL = "new_exam_schedule"
+    private const val CHANNEL = "schedule_changes_heads_up_v2"
     private const val NOTIFICATION_ID = 2817
 
     fun messageFor(semesterJson: String, differenceJson: String,
@@ -124,9 +124,16 @@ internal object ExamChangeNotifier {
             PackageManager.PERMISSION_GRANTED) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(NotificationChannel(
-                CHANNEL, "Lịch thi mới", NotificationManager.IMPORTANCE_HIGH,
-            ))
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL,
+                    "Thay đổi lịch",
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    description = "Báo thay đổi lịch học hoặc lịch thi"
+                    enableVibration(true)
+                },
+            )
         }
         val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
         val openApp = launch?.let {
@@ -138,6 +145,10 @@ internal object ExamChangeNotifier {
             .setContentTitle(AssistantText.titleOf(
                 AssistantEvent.exam_notice, AssistantText.selected(context)))
             .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
             .setContentIntent(openApp)
             .build())
