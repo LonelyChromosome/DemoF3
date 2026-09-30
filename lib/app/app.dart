@@ -2393,6 +2393,8 @@ Future<void> _showCalendarPicker(
 ) async {
   var draft = _dateOnly(selectedDate);
   final palette = appThemePalette;
+  final view = View.of(context);
+  final bottomSystemInset = view.padding.bottom / view.devicePixelRatio;
   final picked = await showModalBottomSheet<DateTime>(
     context: context,
     isScrollControlled: true,
@@ -2411,13 +2413,14 @@ Future<void> _showCalendarPicker(
               scale: value,
               child: child,
             ),
-            child: SafeArea(
-              top: false,
-              maintainBottomViewPadding: true,
-              minimum: const EdgeInsets.only(bottom: 8),
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-                decoration: BoxDecoration(
+            child: Container(
+              padding: EdgeInsets.fromLTRB(
+                18,
+                10,
+                18,
+                18 + bottomSystemInset,
+              ),
+              decoration: BoxDecoration(
                   color: palette.surface,
                   border: Border(top: BorderSide(color: palette.border)),
                   borderRadius: BorderRadius.vertical(
@@ -2486,8 +2489,7 @@ Future<void> _showCalendarPicker(
                         label: Text('Xem ${_dateLabel(draft)}'),
                       ),
                     ),
-                  ],
-                ),
+                ],
               ),
             ),
           );
