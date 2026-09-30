@@ -218,7 +218,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
   QldtNativeSession? _nativeSession;
-  Future<String>? _studentDisplayNameFuture;
   String _resolvedDisplayName = '';
   int _profileProbeGeneration = 0;
   String? _pendingRegistrationRaw;
@@ -672,7 +671,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _autoSyncStarted = false;
     _pendingSchedule = null;
     _nativeSession = null;
-    _studentDisplayNameFuture = null;
     _pendingRegistrationRaw = null;
     _currentPhase = null;
     setState(() {
@@ -1027,19 +1025,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       );
       verificationStage = 'semester_build';
       final session = _nativeSession;
-      var displayName = '';
-      final controller = _controller;
-      if (controller != null) {
-        displayName = await _waitForQldtHtmlDisplayName(
-          controller,
-          attempts: 24,
-        );
-      }
-      if (displayName.isEmpty) {
-        displayName = _resolvedDisplayName;
-      }
-      if (displayName.isNotEmpty && session != null) {
-        await _rememberProfileName(session, displayName);
+      var displayName = _resolvedDisplayName;
+      if (displayName.isEmpty && session != null) {
+        displayName = await _cachedProfileNameFor(session.userId);
+        if (displayName.isNotEmpty) {
+          _resolvedDisplayName = displayName;
+        }
       }
 
       final semester = const SemesterDataBuilder().build(
@@ -1240,11 +1231,22 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       final ready = session != null;
       if (ready) {
         _nativeSession = session;
-        _studentDisplayNameFuture ??= const QldtNativeTransport()
-            .fetchStudentDisplayName(session)
-            .then((name) => _cleanProfileName(name))
-            .catchError((Object _) => '');
-        unawaited(_startProfileProbe(session, controller));
+
+        // The canonical QLĐT name is captured once per login lifecycle.
+        // While the same account remains logged in, always reuse the local
+        // qldt_html cache and never probe HTML/API/JWT again.
+        final cachedName = await _cachedProfileNameFor(session.userId);
+        if (cachedName.isNotEmpty) {
+          _resolvedDisplayName = cachedName;
+        } else {
+          final htmlName = await _waitForQldtHtmlDisplayName(
+            controller,
+            attempts: 24,
+          );
+          if (htmlName.isNotEmpty) {
+            await _rememberProfileName(session, htmlName);
+          }
+        }
       }
 
       setState(() {
