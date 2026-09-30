@@ -98,6 +98,22 @@ class MainActivity : FlutterActivity() {
                 ComponentName(this, OverviewWidgetProvider::class.java),
             )
 
+            if (request.theme == "tien_mon_premium" &&
+                currentToken != request.token) {
+                // Tiên Môn must be committed while the app process is alive.
+                // The previous path deferred the real widget theme update to
+                // onStop() + delayed Handler callbacks; launcher/lifecycle races
+                // could therefore leave Classic/default rendered indefinitely.
+                pendingWidgetApply?.let(widgetHandler::removeCallbacks)
+                pendingWidgetApply = null
+                pendingWidgetFromToken = null
+                pendingWidgetRequest = null
+                commitWidgetTheme(prefs, request, refreshOverview = false)
+                WidgetRefreshCoordinator.refreshData(this)
+                result.success(widgetIds.size + overviewIds.size)
+                return@setMethodCallHandler
+            }
+
             if (currentToken == request.token && fontChanged) {
                 commitWidgetTheme(prefs, request, refreshOverview = false)
                 WidgetRefreshCoordinator.refreshData(this)
