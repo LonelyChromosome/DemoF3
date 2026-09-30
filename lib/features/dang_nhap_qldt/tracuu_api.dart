@@ -255,6 +255,33 @@ final class TracuuApi {
     );
   }
 
+  String displayNameFromVerifiedResult(String raw) {
+    final payload = jsonDecode(raw) as Map<String, dynamic>;
+    final rows = _data(payload['registrations']);
+    for (final row in rows) {
+      final family = _string(row['QLSV_NGUOIHOC_HODEM']);
+      final given = _string(row['QLSV_NGUOIHOC_TEN']);
+      if (family.isNotEmpty && given.isNotEmpty) {
+        return '$family $given';
+      }
+
+      for (final key in const <String>[
+        'QLSV_NGUOIHOC_HOTEN',
+        'HOTEN',
+        'HO_TEN',
+        'HOVATEN',
+        'FULLNAME',
+      ]) {
+        final full = _string(row[key]);
+        if (full.isNotEmpty) return full;
+      }
+
+      if (family.isNotEmpty) return family;
+      if (given.isNotEmpty) return given;
+    }
+    return '';
+  }
+
   /// Persist only verified routing identifiers, never credentials or responses.
   String routeForVerifiedResult(String raw) {
     final payload = jsonDecode(raw) as Map<String, dynamic>;
