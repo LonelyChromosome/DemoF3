@@ -27,9 +27,144 @@ const _nativeMode = 'native';
 const _credentialChannel = MethodChannel('better_phenikaa/qldt_credentials');
 
 String _sanitizeQldtProfileName(Object? raw) {
-  final value = raw?.toString().replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
+  final value = raw?.toString().replaceAll(RegExp(r'\\s+'), ' ').trim() ?? '';
   if (value.length < 3 || value.length > 120 || value.contains('@')) return '';
-  if (RegExp(r'^[0-9a-fA-F-]{24,}
+  final lower = value.toLowerCase();
+  if (<String>{
+    'tài khoản',
+    'đăng xuất',
+    'account',
+    'profile',
+    'người dùng',
+    'sinh viên',
+    'student',
+    'user',
+  }.contains(lower)) {
+    return '';
+  }
+  return value;
+}
+
+String _profileNameFromObject(Object? node, [int depth = 0]) {
+  if (node == null || depth > 5) return '';
+  if (node is Map) {
+    const exactKeys = <String>{
+      'NAME',
+      'FULLNAME',
+      'FULL_NAME',
+      'DISPLAYNAME',
+      'DISPLAY_NAME',
+      'HOTEN',
+      'HO_TEN',
+      'HOVATEN',
+      'TENNGUOIHOC',
+      'NGUOIHOTEN',
+      'SINHVIENTEN',
+      'TENSINHVIEN',
+      'TENNGUOIDUNG',
+    };
+    for (final entry in node.entries) {
+      final key = entry.key.toString().trim().toUpperCase();
+      final compact = key.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+      final looksLikeName =
+          exactKeys.contains(key) ||
+          exactKeys.contains(compact) ||
+          compact.endsWith('FULLNAME') ||
+          compact.endsWith('DISPLAYNAME') ||
+          compact.endsWith('HOTEN') ||
+          (compact.contains('NGUOIHOC') && compact.endsWith('TEN'));
+      if (!looksLikeName) continue;
+      final candidate = _sanitizeQldtProfileName(entry.value);
+      if (candidate.isNotEmpty) return candidate;
+    }
+
+    String given = '';
+    String family = '';
+    for (final entry in node.entries) {
+      final key = entry.key.toString().trim().toLowerCase();
+      if (key == 'given_name' || key == 'givenname') {
+        given = _sanitizeQldtProfileName(entry.value);
+      } else if (key == 'family_name' ||
+          key == 'familyname' ||
+          key == 'surname') {
+        family = _sanitizeQldtProfileName(entry.value);
+      }
+    }
+    if (given.isNotEmpty && family.isNotEmpty) {
+      return ('$family $given').replaceAll(RegExp(r'\\s+'), ' ').trim();
+    }
+
+    for (final value in node.values) {
+      if (value is Map || value is List) {
+        final nested = _profileNameFromObject(value, depth + 1);
+        if (nested.isNotEmpty) return nested;
+      }
+    }
+  } else if (node is List) {
+    for (final value in node) {
+      final nested = _profileNameFromObject(value, depth + 1);
+      if (nested.isNotEmpty) return nested;
+    }
+  }
+  return '';
+}
+
+String _displayNameFromJwtToken(String rawToken) {
+  try {
+    var token = rawToken.trim();
+    if (token.toLowerCase().startsWith('bearer ')) {
+      token = token.substring(7).trim();
+    }
+    final parts = token.split('.');
+    if (parts.length < 2) return '';
+    final payload = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+    final decoded = jsonDecode(payload);
+    return _profileNameFromObject(decoded);
+  } on Object {
+    return '';
+  }
+}
+
+Future<String> readCachedQldtDisplayName() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+
+    final profileRaw = prefs.getString(_profileKey);
+    if (profileRaw != null && profileRaw.isNotEmpty) {
+      try {
+        final profile = Map<String, dynamic>.from(
+          jsonDecode(profileRaw) as Map<dynamic, dynamic>,
+        );
+        final cached = _sanitizeQldtProfileName(profile['name']);
+        if (cached.isNotEmpty) return cached;
+      } on Object {
+        // Fall through to the session/JWT cache.
+      }
+    }
+
+    final sessionRaw = prefs.getString(_nativeSessionKey);
+    if (sessionRaw == null || sessionRaw.isEmpty) return '';
+    final session = Map<String, dynamic>.from(
+      jsonDecode(sessionRaw) as Map<dynamic, dynamic>,
+    );
+    var name = _sanitizeQldtProfileName(session['name']);
+    if (name.isEmpty) {
+      name = _displayNameFromJwtToken((session['tokenJWT'] ?? '').toString());
+    }
+    if (name.isEmpty) return '';
+
+    final userId = (session['userId'] ?? '').toString();
+    if (userId.isNotEmpty) {
+      await prefs.setString(
+        _profileKey,
+        jsonEncode(<String, String>{'userId': userId, 'name': name}),
+      );
+    }
+    return name;
+  } on Object {
+    return '';
+  }
+}
 Future<void> clearQldtSession() async {
   await CookieManager.instance().deleteAllCookies();
   await _credentialChannel.invokeMethod<void>('clear');
