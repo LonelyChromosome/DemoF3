@@ -14,3 +14,6 @@ Future<void> clearQldtSession() => implementation.clearQldtSession();
 
 Future<String> readCachedQldtDisplayName() =>
     implementation.readCachedQldtDisplayName();
+
+Future<String> readQldtAccountDisplayName() =>
+    implementation.readQldtAccountDisplayName();
