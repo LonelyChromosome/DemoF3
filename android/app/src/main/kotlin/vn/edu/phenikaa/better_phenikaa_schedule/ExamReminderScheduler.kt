@@ -75,6 +75,20 @@ internal object ExamReminderScheduler {
         reconcile(context, semester)
     }
 
+    internal fun publishForAssistantTest(
+        context: Context,
+        useCase: Int,
+    ) {
+        if (!canNotify(context)) return
+        when (useCase) {
+            6 -> notify(context, listOf("Môn thử nghiệm"), setOf(7))
+            7 -> notify(context, listOf("Môn thử nghiệm"), setOf(3))
+            8 -> notify(context, listOf("Môn thử nghiệm"), setOf(1))
+            9 -> notify(context, listOf("Môn thử nghiệm"), setOf(5))
+            11 -> notify(context, listOf("Môn A", "Môn B"), setOf(5, 3))
+        }
+    }
+
     private fun canNotify(context: Context): Boolean =
         Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
             context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
