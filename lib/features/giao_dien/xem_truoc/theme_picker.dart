@@ -159,7 +159,7 @@ class _ThemePickerSheet extends StatelessWidget {
                             onPressed: () => _showTienMonFontPicker(context),
                             icon: const Icon(Icons.font_download_outlined),
                             label: Text(
-                              'Font Tiên Môn · ${controller.tienMonFont.label}',
+                              'Khẩu Quyết · ${controller.tienMonFont.label}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -178,7 +178,7 @@ class _ThemePickerSheet extends StatelessWidget {
                             label: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: <Widget>[
-                                const Text('Màu chữ Tiên Môn  '),
+                                const Text('Bản Môn Sắc Diện  '),
                                 _FontColorChip(
                                   label: 'A',
                                   color: controller.tienMonTextPrimary,
@@ -333,7 +333,7 @@ class _ThemePickerSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     const Text(
-                      'Font Tiên Môn',
+                      'Khẩu Quyết',
                       style: TextStyle(
                         color: Color(0xFFFFD66B),
                         fontSize: 18,
@@ -580,7 +580,7 @@ class _ThemePickerSheet extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     const Text(
-                      'Màu chữ Tiên Môn  [ A | B ]',
+                      'Bản Môn Sắc Diện  [ A | B ]',
                       style: TextStyle(
                         color: Color(0xFFFFD66B),
                         fontSize: 18,
