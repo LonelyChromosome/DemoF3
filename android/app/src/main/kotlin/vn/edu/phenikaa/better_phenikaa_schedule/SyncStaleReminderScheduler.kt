@@ -52,7 +52,7 @@ internal object SyncStaleReminderScheduler {
     private const val PREFS = "better_phenikaa_sync_stale"
     private const val LAST_NOTIFIED = "last_notified"
     private const val WORK = "better_phenikaa_sync_stale_reminder"
-    private const val CHANNEL = "sync_stale"
+    private const val CHANNEL = "sync_stale_heads_up_v2"
     private const val NOTIFICATION = 2820
 
     fun reconcile(context: Context) {
@@ -107,8 +107,16 @@ internal object SyncStaleReminderScheduler {
     private fun publishNotification(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(NotificationChannel(
-                CHANNEL, "Nhắc đồng bộ", NotificationManager.IMPORTANCE_DEFAULT))
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL,
+                    "Nhắc đồng bộ",
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    description = "Nhắc khi dữ liệu QLĐT đã lâu chưa đồng bộ"
+                    enableVibration(true)
+                },
+            )
         }
         val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
         val pending = launch?.let {
@@ -121,7 +129,18 @@ internal object SyncStaleReminderScheduler {
                 AssistantEvent.sync_stale, AssistantText.selected(context)))
             .setContentText(AssistantText.of(
                 AssistantEvent.sync_stale, AssistantText.selected(context)))
-            .setContentIntent(pending).setAutoCancel(true).build())
+            .setStyle(NotificationCompat.BigTextStyle().bigText(
+                AssistantText.of(
+                    AssistantEvent.sync_stale,
+                    AssistantText.selected(context),
+                ),
+            ))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setContentIntent(pending)
+            .setAutoCancel(true)
+            .build())
     }
 
     private fun schedule(context: Context, at: Long) {
