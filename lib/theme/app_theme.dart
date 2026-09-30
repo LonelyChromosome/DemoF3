@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_tokens.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme_repository.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_choice.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_manager.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/background/tien_mon_background.dart';
 import 'package:flutter/foundation.dart';
@@ -176,6 +177,29 @@ class AppThemePalette {
         dark: dark,
         fontFamily: fontFamily,
       );
+
+  AppThemePalette withFontFamily(String? family) => AppThemePalette(
+    id: id,
+    pageStart: pageStart,
+    pageEnd: pageEnd,
+    surface: surface,
+    card: card,
+    cardAlt: cardAlt,
+    primary: primary,
+    accent: accent,
+    textPrimary: textPrimary,
+    textSecondary: textSecondary,
+    border: border,
+    shadow: shadow,
+    widgetStart: widgetStart,
+    widgetEnd: widgetEnd,
+    widgetText: widgetText,
+    widgetSubtext: widgetSubtext,
+    radius: radius,
+    geometry: geometry,
+    dark: dark,
+    fontFamily: family,
+  );
 
   ThemeTokens toTokens() => ThemeTokens(
     background: pageStart,
@@ -457,6 +481,13 @@ class AppThemeController extends ChangeNotifier {
   static const _widgetPreferenceKey = 'appTheme';
   static const _tienMonTextPrimaryKey = 'tien_mon_text_primary_v1';
   static const _tienMonTextSecondaryKey = 'tien_mon_text_secondary_v1';
+  static const _tienMonFontKey = 'tien_mon_font_v1';
+  static const AppFontChoice tienMonDefaultFont = AppFontChoice(
+    id: 'tien_mon_default',
+    label: 'Tiên Môn mặc định',
+    kind: AppFontKind.builtIn,
+    family: 'FzCoTrang',
+  );
   static const MethodChannel _widgetThemeChannel = MethodChannel(
     'better_phenikaa/widget_theme',
   );
@@ -472,10 +503,14 @@ class AppThemeController extends ChangeNotifier {
   bool _loaded = false;
   Color _tienMonTextPrimary = const Color(0xFFFFD66B);
   Color _tienMonTextSecondary = const Color(0xFFFFE7A6);
+  AppFontChoice _tienMonFont = tienMonDefaultFont;
+  String? _tienMonFontFamily = tienMonDefaultFont.family;
 
   AppThemeId get theme => _theme;
   Color get tienMonTextPrimary => _tienMonTextPrimary;
   Color get tienMonTextSecondary => _tienMonTextSecondary;
+  AppFontChoice get tienMonFont => _tienMonFont;
+  String? get tienMonFontFamily => _tienMonFontFamily;
   AppThemePalette get palette =>
       _transitionPalette ?? _resolvedPalette(_theme, _activeCustomTheme);
   List<CustomThemeDefinition> get customThemes =>
@@ -511,7 +546,9 @@ class AppThemeController extends ChangeNotifier {
     }
     final base = appThemePalettes[id] ?? appThemePalettes[AppThemeId.classic]!;
     if (id == AppThemeId.tienMonPremium) {
-      return base.withTextColors(_tienMonTextPrimary, _tienMonTextSecondary);
+      return base
+          .withTextColors(_tienMonTextPrimary, _tienMonTextSecondary)
+          .withFontFamily(_tienMonFontFamily);
     }
     return base;
   }
@@ -526,6 +563,27 @@ class AppThemeController extends ChangeNotifier {
     _tienMonTextSecondary = Color(
       prefs.getInt(_tienMonTextSecondaryKey) ?? 0xFFFFE7A6,
     );
+    final savedTienMonFont = prefs.getString(_tienMonFontKey);
+    if (savedTienMonFont != null) {
+      try {
+        final decoded = jsonDecode(savedTienMonFont);
+        if (decoded is Map<String, dynamic>) {
+          _tienMonFont = AppFontChoice.fromJson(
+            Map<String, Object?>.from(decoded),
+          );
+        }
+      } on Object {
+        _tienMonFont = tienMonDefaultFont;
+      }
+    }
+    _tienMonFontFamily = await ThemeFontManager.instance.resolveFamily(
+      _tienMonFont,
+    );
+    if (_tienMonFontFamily == null) {
+      _tienMonFont = tienMonDefaultFont;
+      _tienMonFontFamily = tienMonDefaultFont.family;
+      await prefs.remove(_tienMonFontKey);
+    }
     _customThemes = await const CustomThemeRepository().readAll();
     final saved =
         prefs.getString(_preferenceKey) ??
@@ -584,6 +642,28 @@ class AppThemeController extends ChangeNotifier {
     await prefs.setInt(_tienMonTextPrimaryKey, primary.toARGB32());
     await prefs.setInt(_tienMonTextSecondaryKey, secondary.toARGB32());
     notifyListeners();
+  }
+
+  Future<void> setTienMonFont(AppFontChoice choice) async {
+    final resolved = await ThemeFontManager.instance.resolveFamily(choice);
+    if (choice.kind == AppFontKind.imported && resolved == null) {
+      throw const FormatException('Không đọc được font đã nhập.');
+    }
+    _tienMonFont = choice;
+    _tienMonFontFamily = resolved;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_tienMonFontKey, jsonEncode(choice.toJson()));
+    notifyListeners();
+
+    if (_theme == AppThemeId.tienMonPremium) {
+      final target = _resolvedPalette(_theme, _activeCustomTheme);
+      final widgetKey = _widgetThemeKey;
+      final nativeApplied = await _applyWidgetTheme(widgetKey, target);
+      if (!nativeApplied) {
+        await prefs.setString(_widgetPreferenceKey, widgetKey);
+        await _syncWidgetTheme();
+      }
+    }
   }
 
   Future<void> select(AppThemeId value) async {
@@ -757,6 +837,8 @@ class AppThemeController extends ChangeNotifier {
           'fontFamily': target.fontFamily ?? '',
           'fontPath': _theme == AppThemeId.custom
               ? _activeCustomTheme?.font.path ?? ''
+              : _theme == AppThemeId.tienMonPremium
+              ? _tienMonFont.path ?? ''
               : '',
         },
       );
