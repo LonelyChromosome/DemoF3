@@ -2401,7 +2401,7 @@ class _AccountScreen extends StatelessWidget {
                                   height: 40,
                                   child: OutlinedButton(
                                     onPressed: () => unawaited(
-                                      _showAssistantUseCasePreview(
+                                      _triggerAssistantUseCase(
                                         context,
                                         useCase,
                                       ),
