@@ -13,6 +13,8 @@ const bool supportsLiveQldtLogin = true;
 
 Future<void> clearQldtSession() async {}
 
+Future<String> readCachedQldtDisplayName() async => '';
+
 Future<QldtLoginResult?> openQldtLogin(BuildContext context) {
   return showDialog<QldtLoginResult>(
     context: context,

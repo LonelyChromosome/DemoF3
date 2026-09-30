@@ -295,8 +295,49 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _repairStoredDisplayName() async {
+    final name = (await readCachedQldtDisplayName()).trim();
+    if (name.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final store = CurrentSemesterStore();
+    final semester = await store.read();
+    if (semester != null && semester.displayName.trim().isEmpty) {
+      await store.save(
+        CurrentSemester(
+          semesterId: semester.semesterId,
+          semesterName: semester.semesterName,
+          displayName: name,
+          syncedAt: semester.syncedAt,
+          subjects: semester.subjects,
+        ),
+      );
+    }
+
+    final raw = prefs.getString(_storageKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final data = ImportedScheduleData.decode(raw);
+        if (data.displayName.trim().isEmpty) {
+          await prefs.setString(
+            _storageKey,
+            ImportedScheduleData(
+              displayName: name,
+              records: data.records,
+              syncedAt: data.syncedAt,
+              source: data.source,
+            ).encode(),
+          );
+        }
+      } on Object {
+        // A profile repair must never invalidate the saved timetable.
+      }
+    }
+  }
+
   Future<void> _restore() async {
     try {
+      await _repairStoredDisplayName();
       final prefs = await SharedPreferences.getInstance();
       _assistantPack = await AssistantSelection.load();
       var raw = prefs.getString(_storageKey);
@@ -536,6 +577,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         SemesterDifference? difference;
         try {
           difference = await _save(imported);
+          await _repairStoredDisplayName();
           try {
             if (qldtDiagnosticsEnabled) {
               await QldtSyncDiagnostics.appendSave(saveStarted, 'OK');

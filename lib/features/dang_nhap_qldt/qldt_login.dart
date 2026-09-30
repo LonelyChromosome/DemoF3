@@ -11,3 +11,6 @@ Future<QldtLoginResult?> openQldtLogin(BuildContext context) {
 }
 
 Future<void> clearQldtSession() => implementation.clearQldtSession();
+
+Future<String> readCachedQldtDisplayName() =>
+    implementation.readCachedQldtDisplayName();
