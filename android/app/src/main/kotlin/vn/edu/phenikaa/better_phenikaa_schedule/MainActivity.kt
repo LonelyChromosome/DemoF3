@@ -210,6 +210,15 @@ class MainActivity : FlutterActivity() {
                 result.error("invalid_use_case", "Thiếu use case.", null)
                 return@setMethodCallHandler
             }
+            val notificationCases = setOf(1, 3, 4, 5, 6, 7, 8, 9, 11)
+            if (useCase in notificationCases &&
+                Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                result.success(false)
+                return@setMethodCallHandler
+            }
             when (useCase) {
                 1 -> SyncStaleReminderScheduler.publishForAssistantTest(applicationContext)
                 3, 4, 5 -> ExamChangeNotifier.publishForAssistantTest(
