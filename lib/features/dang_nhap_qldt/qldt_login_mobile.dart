@@ -244,6 +244,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   String? _failureDiagnosticsJson;
   final List<String> _scheduleStages = <String>[];
   int _syncEpoch = 0;
+  int _registrationCompletionEpoch = -1;
   bool _pageReady = false;
   bool _syncing = false;
   bool _autoSyncStarted = false;
@@ -483,7 +484,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                             ),
                           ),
                         ),
-                        if (_portalInputLocked || !_showWebPage)
+                        if (!_portalInputLocked && !_showWebPage)
                           Positioned.fill(
                             child: Stack(
                               fit: StackFit.expand,
@@ -557,45 +558,21 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       ),
           if (_portalInputLocked)
             Positioned.fill(
-              child: Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  const ModalBarrier(
-                    dismissible: false,
-                    color: Colors.white,
-                  ),
-                  SafeArea(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            RotationTransition(
-                              turns: _reloadSpinController,
-                              child: const Icon(
-                                Icons.refresh_rounded,
-                                size: 52,
-                                color: Color(0xFF1747B5),
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                            Text(
-                              _status,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Color(0xFF334155),
-                                fontSize: 14,
-                                height: 1.35,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
+              child: Material(
+                color: Colors.white,
+                child: AbsorbPointer(
+                  absorbing: true,
+                  child: Center(
+                    child: RotationTransition(
+                      turns: _reloadSpinController,
+                      child: const Icon(
+                        Icons.refresh_rounded,
+                        size: 52,
+                        color: Color(0xFF1747B5),
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
             ),
         ],
@@ -717,6 +694,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     _sessionTimer?.cancel();
     _legacyFallbackTimer?.cancel();
     ++_syncEpoch;
+    _registrationCompletionEpoch = -1;
     _autoSyncStarted = false;
     _pendingSchedule = null;
     _nativeSession = null;
@@ -1073,6 +1051,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
   Future<void> _completeRegistration(int epoch, String raw) async {
     if (!mounted || !_syncing || epoch != _syncEpoch) return;
+    if (_registrationCompletionEpoch == epoch) return;
+    _registrationCompletionEpoch = epoch;
     RegisteredSemester? registration;
     var verificationStage = 'registration_parse';
     try {
@@ -1925,7 +1905,7 @@ class _QldtNameArrangeScreenState extends State<_QldtNameArrangeScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 72),
                 ],
               ),
             ),
