@@ -9,6 +9,8 @@ import 'package:home_widget/home_widget.dart';
 abstract final class WidgetPublisher {
   static const _storageKey = 'better_phenikaa_widget_snapshot_v1';
   static const _provider = 'ScheduleWidgetProvider';
+  static const _qualifiedProvider =
+      'vn.edu.phenikaa.better_phenikaa_schedule.ScheduleWidgetProvider';
 
   static Future<void> publish(
     ImportedScheduleData data, {
@@ -31,6 +33,21 @@ abstract final class WidgetPublisher {
             },
           )
           .toList(growable: false),
+      'exams':
+          (data.exams.toList()
+                ..sort((left, right) => left.startAt.compareTo(right.startAt)))
+              .map(
+                (item) => <String, Object?>{
+                  'id': item.id,
+                  'subjectName': item.subjectName,
+                  'room': item.room,
+                  'examForm': item.examForm,
+                  'className': item.className,
+                  'startAt': item.startAt.toIso8601String(),
+                  'endAt': item.endAt.toIso8601String(),
+                },
+              )
+              .toList(growable: false),
     });
     await HomeWidget.saveWidgetData<String>(_storageKey, snapshot);
     if (resetToToday) {
@@ -46,8 +63,10 @@ abstract final class WidgetPublisher {
     await _refresh();
   }
 
-  static Future<void> _refresh() =>
-      HomeWidget.updateWidget(name: _provider, androidName: _provider);
+  static Future<void> _refresh() => HomeWidget.updateWidget(
+    name: _provider,
+    qualifiedAndroidName: _qualifiedProvider,
+  );
 
   static bool get _isSupported =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;

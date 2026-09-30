@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
@@ -87,7 +88,6 @@ private class ScheduleWidgetFactory(
             R.id.widget_slide_image,
             renderSlide(item),
         )
-        rememberVisiblePosition(position)
         signalReadyOnce()
         views.setOnClickFillInIntent(
             R.id.widget_slide_item,
@@ -130,19 +130,6 @@ private class ScheduleWidgetFactory(
         items = WidgetSnapshotStore.read(context, widgetId).items
     }
 
-    private fun rememberVisiblePosition(position: Int) {
-        if (
-            widgetId == AppWidgetManager.INVALID_APPWIDGET_ID ||
-            widgetThemeTransitionActive(context, widgetId)
-        ) {
-            return
-        }
-        context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putInt(visiblePositionKey(widgetId), position)
-            .apply()
-    }
-
     private fun signalReadyOnce() {
         if (readySignalSent || widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             return
@@ -162,7 +149,7 @@ private class ScheduleWidgetFactory(
         renderWidgetSlide(context, item, renderWidthDp, renderHeightDp)
 }
 
-private fun renderWidgetSlide(
+internal fun renderWidgetSlide(
     context: Context,
     item: WidgetClass,
     renderWidthDp: Int,
@@ -180,34 +167,41 @@ private fun renderWidgetSlide(
     val heightPx = height.toFloat()
     val theme = themeOverrideKey?.let { widgetThemeForKey(context, it) }
         ?: readWidgetTheme(context)
-
     val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        shader = LinearGradient(
-            0f,
-            0f,
-            widthPx,
-            0f,
-            theme.startColor,
-            theme.endColor,
-            Shader.TileMode.CLAMP,
-        )
+        shader = if (theme.key == "tien_mon_premium") {
+            LinearGradient(
+                0f, 0f, widthPx, 0f,
+                intArrayOf(0xFF082D2B.toInt(), 0xFF155953.toInt(), 0xFF667E7B.toInt()),
+                floatArrayOf(0f, 0.60f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+        } else {
+            LinearGradient(
+                0f, 0f, widthPx, 0f,
+                theme.startColor,
+                theme.endColor,
+                Shader.TileMode.CLAMP,
+            )
+        }
     }
     canvas.drawRect(0f, 0f, widthPx, heightPx, backgroundPaint)
-
     val left = widthPx * CONTENT_LEFT_FRACTION
-    val titleRight = widthPx * TITLE_RIGHT_FRACTION
+    // The three actions form a narrow vertical rail at the right edge.
+    val titleRight = minOf(widthPx * TITLE_RIGHT_FRACTION, widthPx - 50f * density)
     val detailRight = widthPx * DETAIL_RIGHT_FRACTION
 
     val subjectPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = theme.textColor
         textSize = heightPx * SUBJECT_TEXT_HEIGHT_FRACTION
-        typeface = themedTypeface(context, theme, Typeface.BOLD)
+        typeface = WidgetFont.typeface(context, Typeface.BOLD)
+        textSize *= WidgetFont.scaleLikeSystem(this, Typeface.BOLD)
         setShadowLayer(heightPx * 0.018f, 0f, heightPx * 0.008f, 0x66000000)
     }
     val detailPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = theme.subtextColor
         textSize = heightPx * DETAIL_TEXT_HEIGHT_FRACTION
-        typeface = themedTypeface(context, theme, Typeface.NORMAL)
+        typeface = WidgetFont.typeface(context, Typeface.NORMAL)
+        textSize *= WidgetFont.scaleLikeSystem(this, Typeface.NORMAL)
         setShadowLayer(heightPx * 0.015f, 0f, heightPx * 0.006f, 0x66000000)
     }
 
@@ -229,9 +223,21 @@ private fun renderWidgetSlide(
     canvas.drawText(
         subject.toString(),
         left,
-        heightPx * SUBJECT_BASELINE_HEIGHT_FRACTION,
+        heightPx * (if (item.isExam) 0.29f else SUBJECT_BASELINE_HEIGHT_FRACTION),
         subjectPaint,
     )
+
+    if (item.isExam) {
+        val formPaint = TextPaint(detailPaint).apply {
+            color = theme.textColor
+            textSize = heightPx * 0.145f
+            typeface = WidgetFont.typeface(context, Typeface.BOLD)
+            textSize *= WidgetFont.scaleLikeSystem(this, Typeface.BOLD)
+        }
+        val label = "Thi: ${item.examForm.ifBlank { "Chưa rõ hình thức" }}"
+        canvas.drawText(TextUtils.ellipsize(label, formPaint, titleMaxWidth,
+            TextUtils.TruncateAt.END).toString(), left, heightPx * 0.56f, formPaint)
+    }
 
     var timeWidth = detailPaint.measureText(item.time)
     val availableDetailWidth = (detailRight - left).coerceAtLeast(1f)
@@ -255,14 +261,14 @@ private fun renderWidgetSlide(
     canvas.drawText(
         room.toString(),
         left,
-        heightPx * DETAIL_BASELINE_HEIGHT_FRACTION,
+        heightPx * (if (item.isExam) 0.84f else DETAIL_BASELINE_HEIGHT_FRACTION),
         detailPaint,
     )
     if (item.time.isNotBlank()) {
         canvas.drawText(
             item.time,
             detailRight - timeWidth,
-            heightPx * DETAIL_BASELINE_HEIGHT_FRACTION,
+            heightPx * (if (item.isExam) 0.84f else DETAIL_BASELINE_HEIGHT_FRACTION),
             detailPaint,
         )
     }
@@ -278,13 +284,34 @@ internal fun renderWidgetRefreshCover(
     themeOverrideKey: String? = null,
 ): Bitmap? {
     val current = currentWidgetClass(context, widgetId) ?: return null
-    return renderWidgetSlide(
+    return renderWidgetStackCover(
         context,
         current,
         renderWidthDp,
         renderHeightDp,
         themeOverrideKey,
     )
+}
+
+/** Match the resting StackView card, including its 10% perspective inset and frame padding. */
+internal fun renderWidgetStackCover(
+    context: Context,
+    item: WidgetClass,
+    renderWidthDp: Int,
+    renderHeightDp: Int,
+    themeOverrideKey: String? = null,
+): Bitmap {
+    val source = renderWidgetSlide(context, item, renderWidthDp, renderHeightDp, themeOverrideKey)
+    val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+    val density = context.resources.displayMetrics.density
+    val inset = kotlin.math.ceil(4f * density).toFloat()
+    val cardWidth = source.width * 0.9f
+    val cardHeight = source.height * 0.9f
+    Canvas(output).drawBitmap(source, null, RectF(
+        inset, source.height * 0.1f + inset,
+        cardWidth - inset, source.height * 0.1f + cardHeight - inset,
+    ), Paint(Paint.FILTER_BITMAP_FLAG))
+    return output
 }
 
 internal fun renderWidgetTransitionFrame(
@@ -339,6 +366,46 @@ internal fun renderWidgetTransitionFrame(
     return output
 }
 
+private fun drawTienMonBamboo(canvas: Canvas, width: Float, height: Float) {
+    val stem = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x52FFD66B
+        strokeWidth = (height * 0.018f).coerceAtLeast(1.5f)
+        strokeCap = Paint.Cap.ROUND
+    }
+    val leaf = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x3B74D8B1
+        style = Paint.Style.FILL
+    }
+    val baseX = width * 0.065f
+    val baseY = height * 1.03f
+    val tipX = width * 0.145f
+    val tipY = -height * 0.07f
+    canvas.drawLine(baseX, baseY, tipX, tipY, stem)
+    for (index in 1..5) {
+        val t = index / 6.7f
+        val cx = baseX + (tipX - baseX) * t
+        val cy = baseY + (tipY - baseY) * t
+        canvas.drawCircle(cx, cy, (height * 0.016f).coerceAtLeast(1.5f), stem)
+        val direction = if (index % 2 == 0) 1f else -1f
+        val save = canvas.save()
+        canvas.rotate(-28f * direction, cx, cy)
+        val leafWidth = width * 0.075f
+        val leafHeight = height * 0.075f
+        canvas.drawOval(
+            RectF(cx, cy - leafHeight / 2f, cx + leafWidth * direction, cy + leafHeight / 2f)
+                .let { if (it.left <= it.right) it else RectF(it.right, it.top, it.left, it.bottom) },
+            leaf,
+        )
+        canvas.restoreToCount(save)
+    }
+    val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x2EFFD66B
+        style = Paint.Style.STROKE
+        strokeWidth = (height * 0.009f).coerceAtLeast(1f)
+    }
+    canvas.drawCircle(width * 0.052f, height * 0.22f, height * 0.11f, ring)
+}
+
 private data class WidgetTheme(
     val key: String,
     val startColor: Int,
@@ -355,11 +422,8 @@ private fun readWidgetTheme(context: Context): WidgetTheme {
 }
 
 private fun widgetThemeForKey(context: Context, key: String): WidgetTheme {
-    if (key.startsWith("custom:")) {
-        val colors = key.split(':').drop(1).map(String::toIntOrNull)
-        if (colors.size == 5 && colors.all { it != null }) {
-            return WidgetTheme(key, colors[0]!!, colors[1]!!, colors[2]!!, colors[3]!!)
-        }
+    WidgetVisualPalette.customColors(key)?.let { colors ->
+        return WidgetTheme(key, colors[0], colors[1], colors[2], colors[3])
     }
     if (key == "custom") {
         val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
@@ -381,19 +445,12 @@ private fun widgetThemeForKey(context: Context, key: String): WidgetTheme {
     "ben10" -> WidgetTheme(key, 0xFF101510.toInt(), 0xFF1D5F22.toInt(), 0xFFFFFFFF.toInt(), 0xFF7CFF00.toInt())
     "youtube" -> WidgetTheme(key, 0xFF181818.toInt(), 0xFF2B0E14.toInt(), 0xFFFFFFFF.toInt(), 0xFFFF8A9F.toInt())
     "steam" -> WidgetTheme(key, 0xFF171D25.toInt(), 0xFF1B3D55.toInt(), 0xFFD6E9F8.toInt(), 0xFF66C0F4.toInt())
+    // Keep the Premium collection and native root on one blue surface. The
+    // previous missing case fell back to a `classic` token while the root was
+    // jade, so StackView rear cards visibly leaked and theme handoff could wait
+    // for the wrong ready-token.
+    "tien_mon_premium" -> WidgetTheme(key, 0xFF082D2B.toInt(), 0xFF667E7B.toInt(), 0xFFFFD66B.toInt(), 0xFFFFE7A3.toInt())
     else -> WidgetTheme("classic", 0xFF173A8E.toInt(), 0xFF315AB5.toInt(), 0xFFFFFFFF.toInt(), 0xFFDDE8FF.toInt())
-    }
-}
-
-private fun themedTypeface(context: Context, theme: WidgetTheme, style: Int): Typeface {
-    if (theme.key != "minecraft") {
-        return Typeface.create(Typeface.DEFAULT, style)
-    }
-    return try {
-        val base = context.resources.getFont(R.font.minecraft_custom)
-        Typeface.create(base, style)
-    } catch (_: Exception) {
-        Typeface.create(Typeface.MONOSPACE, style)
     }
 }
 
@@ -401,14 +458,7 @@ private fun currentWidgetClass(context: Context, widgetId: Int): WidgetClass? {
     val collection = WidgetSnapshotStore.read(context, widgetId)
     val items = collection.items
     if (items.isEmpty()) return null
-    val position = if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
-        collection.selectedIndex
-    } else {
-        context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
-            .getInt(visiblePositionKey(widgetId), 0)
-            .coerceIn(0, items.lastIndex)
-    }
-    return items.getOrNull(position) ?: items.firstOrNull()
+    return items.getOrNull(collection.selectedIndex) ?: items.firstOrNull()
 }
 
 private fun widgetThemeTransitionActive(context: Context, widgetId: Int): Boolean =

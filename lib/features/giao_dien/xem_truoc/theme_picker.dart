@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_source.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/custom_theme_editor.dart';
@@ -109,7 +111,7 @@ class _ThemePickerSheet extends StatelessWidget {
                 slivers: <Widget>[
                   SliverToBoxAdapter(child: _heading('Preset có sẵn', palette)),
                   SliverPadding(
-                    padding: const EdgeInsets.only(top: 9, bottom: 16),
+                    padding: const EdgeInsets.only(top: 9),
                     sliver: SliverGrid(
                       gridDelegate:
                           const SliverGridDelegateWithFixedCrossAxisCount(
@@ -122,9 +124,51 @@ class _ThemePickerSheet extends StatelessWidget {
                         (context, index) => _PresetCard(
                           id: _presetIds[index],
                           selected: controller.theme == _presetIds[index],
-                          onTap: () => controller.select(_presetIds[index]),
+                          onTap: () => _selectPreset(context, _presetIds[index]),
                         ),
                         childCount: _presetIds.length,
+                      ),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 10, bottom: 16),
+                      child: SizedBox(
+                        height: 142,
+                        child: _PresetCard(
+                          id: AppThemeId.tienMonPremium,
+                          selected:
+                              controller.theme == AppThemeId.tienMonPremium,
+                          onTap: () =>
+                              _selectPreset(context, AppThemeId.tienMonPremium),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: OutlinedButton.icon(
+                        onPressed: () => _showTienMonFontColors(context),
+                        icon: const Icon(Icons.format_color_text_rounded),
+                        label: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            const Text('Màu chữ Tiên Môn  '),
+                            _FontColorChip(
+                              label: 'A',
+                              color: controller.tienMonTextPrimary,
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 4),
+                              child: Text('|'),
+                            ),
+                            _FontColorChip(
+                              label: 'B',
+                              color: controller.tienMonTextSecondary,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -173,6 +217,204 @@ class _ThemePickerSheet extends StatelessWidget {
     );
   }
 
+
+  Future<void> _showTienMonFontColors(BuildContext context) async {
+    var primary = controller.tienMonTextPrimary;
+    var secondary = controller.tienMonTextSecondary;
+    final primaryHex = TextEditingController(text: _colorHex(primary));
+    final secondaryHex = TextEditingController(text: _colorHex(secondary));
+    const choices = <Color>[
+      Color(0xFFFFD66B),
+      Color(0xFFFFE7A6),
+      Color(0xFFFFFFFF),
+      Color(0xFFB8FFE5),
+      Color(0xFF74D8B1),
+      Color(0xFFBFE8FF),
+      Color(0xFFFFC9D8),
+      Color(0xFFD7C8FF),
+    ];
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          Widget editor(
+            String label,
+            Color selected,
+            TextEditingController hexController,
+            ValueChanged<Color> onChanged,
+          ) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    _FontColorChip(label: label, color: selected),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        label == 'A' ? 'Màu chữ chính' : 'Màu chữ phụ',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 9,
+                  runSpacing: 9,
+                  children: choices
+                      .map(
+                        (color) => InkWell(
+                          onTap: () {
+                            onChanged(color);
+                            hexController.text = _colorHex(color);
+                          },
+                          borderRadius: BorderRadius.circular(99),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: color.toARGB32() == selected.toARGB32()
+                                    ? Colors.white
+                                    : Colors.white24,
+                                width: color.toARGB32() == selected.toARGB32()
+                                    ? 3
+                                    : 1,
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: hexController,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: InputDecoration(
+                    labelText: 'Mã màu $label',
+                    hintText: '#FFD66B',
+                    prefixIcon: const Icon(Icons.tag_rounded),
+                  ),
+                  onChanged: (value) {
+                    final color = _parseHexColor(value);
+                    if (color != null) onChanged(color);
+                  },
+                ),
+              ],
+            );
+          }
+
+          return SafeArea(
+            top: false,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(
+                18,
+                14,
+                18,
+                18 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+              ),
+              decoration: const BoxDecoration(
+                color: Color(0xFF102820),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border(
+                  top: BorderSide(color: Color(0x99FFD66B)),
+                ),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'Màu chữ Tiên Môn  [ A | B ]',
+                      style: TextStyle(
+                        color: Color(0xFFFFD66B),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    editor(
+                      'A',
+                      primary,
+                      primaryHex,
+                      (color) => setSheetState(() => primary = color),
+                    ),
+                    const SizedBox(height: 18),
+                    editor(
+                      'B',
+                      secondary,
+                      secondaryHex,
+                      (color) => setSheetState(() => secondary = color),
+                    ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () async {
+                          final parsedPrimary =
+                              _parseHexColor(primaryHex.text) ?? primary;
+                          final parsedSecondary =
+                              _parseHexColor(secondaryHex.text) ?? secondary;
+                          await controller.setTienMonTextColors(
+                            parsedPrimary,
+                            parsedSecondary,
+                          );
+                          if (sheetContext.mounted) {
+                            Navigator.of(sheetContext).pop();
+                          }
+                        },
+                        child: const Text('Áp dụng'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    primaryHex.dispose();
+    secondaryHex.dispose();
+  }
+
+  Future<void> _selectPreset(BuildContext context, AppThemeId id) async {
+    if (controller.theme == id) return;
+    if (id != AppThemeId.tienMonPremium) {
+      await controller.select(id);
+      return;
+    }
+
+    // Tiên Môn owns a deliberate loading/entry moment, but it is never the
+    // fresh-install default. Show it only after the user explicitly chooses
+    // Premium, while the theme + native widget transition is being committed.
+    unawaited(
+      showGeneralDialog<void>(
+        context: context,
+        useRootNavigator: true,
+        barrierDismissible: false,
+        barrierColor: Colors.black.withValues(alpha: .72),
+        transitionDuration: const Duration(milliseconds: 180),
+        pageBuilder: (_, _, _) => const _TienMonThemeLoading(),
+      ),
+    );
+    try {
+      await controller.select(id);
+    } finally {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+  }
+
   Widget _heading(String label, AppThemePalette palette) => Text(
     label,
     style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w800),
@@ -201,6 +443,99 @@ class _ThemePickerSheet extends StatelessWidget {
     );
     if (confirmed == true) await controller.deleteCustomTheme(theme.id);
   }
+}
+
+
+String _colorHex(Color color) =>
+    '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
+
+Color? _parseHexColor(String raw) {
+  var value = raw.trim().replaceAll('#', '');
+  if (value.length == 6) value = 'FF$value';
+  if (value.length != 8) return null;
+  final parsed = int.tryParse(value, radix: 16);
+  return parsed == null ? null : Color(parsed);
+}
+
+class _FontColorChip extends StatelessWidget {
+  const _FontColorChip({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 28,
+    height: 28,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: color,
+      borderRadius: BorderRadius.circular(7),
+      border: Border.all(color: Colors.white30),
+      boxShadow: const <BoxShadow>[
+        BoxShadow(color: Color(0x55000000), blurRadius: 4),
+      ],
+    ),
+    child: Text(
+      label,
+      style: const TextStyle(
+        color: Colors.black87,
+        fontWeight: FontWeight.w900,
+        fontSize: 12,
+      ),
+    ),
+  );
+}
+
+class _TienMonThemeLoading extends StatelessWidget {
+  const _TienMonThemeLoading();
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: const Color(0xFF0B211C),
+    child: SafeArea(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const Icon(
+              Icons.auto_awesome_rounded,
+              color: Color(0xFFFFD66B),
+              size: 56,
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Tiên Môn Premium',
+              style: TextStyle(
+                color: Color(0xFFFFD66B),
+                fontSize: 27,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .3,
+              ),
+            ),
+            const SizedBox(height: 7),
+            const Text(
+              'Đang mở Tiên Môn...',
+              style: TextStyle(
+                color: Color(0xFFD5E9DF),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const SizedBox(
+              width: 118,
+              child: LinearProgressIndicator(
+                minHeight: 3,
+                backgroundColor: Color(0x553A7964),
+                color: Color(0xFFFFD66B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _PresetCard extends StatelessWidget {

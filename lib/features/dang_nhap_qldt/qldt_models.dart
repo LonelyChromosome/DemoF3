@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:html/parser.dart' as html_parser;
 
 final class ScheduleRecord {
@@ -125,7 +126,10 @@ final class QldtParser {
     return '';
   }
 
-  ImportedScheduleData parseLiveEnvelope(String envelopeJson) {
+  ImportedScheduleData parseLiveEnvelope(
+    String envelopeJson, {
+    bool strict = false,
+  }) {
     final envelope = jsonDecode(envelopeJson) as Map<String, dynamic>;
     final displayName = (envelope['name'] as String? ?? '').trim();
     final response = envelope['response'];
@@ -135,12 +139,14 @@ final class QldtParser {
     return parseApiResponse(
       Map<String, dynamic>.from(response),
       displayName: displayName,
+      strict: strict,
     );
   }
 
   ImportedScheduleData parseApiResponse(
     Map<String, dynamic> response, {
     required String displayName,
+    bool strict = false,
   }) {
     if (response['Success'] != true) {
       throw const FormatException('QLĐT returned Success != true.');
@@ -153,12 +159,24 @@ final class QldtParser {
     final recordsById = <String, ScheduleRecord>{};
     for (final rawItem in rawData) {
       if (rawItem is! Map) {
+        if (strict) {
+          throw const FormatException('QLĐT có bản ghi không hợp lệ.');
+        }
         continue;
       }
       final item = Map<String, dynamic>.from(rawItem);
+      if (strict &&
+          !<String>{
+            'LICHHOC',
+            'LICHTHI',
+          }.contains(_string(item['PHANLOAI']).toUpperCase())) {
+        throw const FormatException('QLĐT có loại lịch không xác định.');
+      }
       final record = _parseRecord(item);
       if (record != null) {
         recordsById[record.id] = record;
+      } else if (strict) {
+        throw const FormatException('QLĐT có bản ghi thiếu trường bắt buộc.');
       }
     }
 
@@ -176,7 +194,7 @@ final class QldtParser {
   }
 
   ScheduleRecord? _parseRecord(Map<String, dynamic> item) {
-    final subjectName = _string(item['TENHOCPHAN']);
+    final subjectName = subjectDisplayName(_string(item['TENHOCPHAN']));
     final dateText = _string(item['NGAYHOC']);
     if (subjectName.isEmpty || dateText.isEmpty) {
       return null;
@@ -212,7 +230,10 @@ final class QldtParser {
     final room = isExam
         ? _firstNonEmpty(<Object?>[item['PHONGHOC_TEN'], item['PHONGTHI']])
         : _firstNonEmpty(<Object?>[item['PHONGHOC_TEN'], item['TENPHONGHOC']]);
-    final className = _string(item['TENLOPHOCPHAN']);
+    final className = _string(item['TENLOPHOCPHAN'])
+        .split(RegExp(r'<br\s*/?>', caseSensitive: false))
+        .first
+        .trim();
     final examForm = _string(item['DANGKY_LOPHOCPHAN_TEN']);
     final startAt = DateTime(
       day.year,
@@ -231,6 +252,7 @@ final class QldtParser {
       subjectName,
       '$startHour:$startMinute',
       room,
+      className,
     ].join('|');
 
     return ScheduleRecord(

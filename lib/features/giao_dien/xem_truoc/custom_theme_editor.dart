@@ -279,12 +279,26 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
                 ButtonSegment(
                   value: ThemeSourceKind.image,
                   icon: Icon(Icons.image_outlined),
-                  label: Text('Ảnh'),
+                  label: SizedBox(
+                    width: 76,
+                    child: Text(
+                      'Ảnh',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
                 ButtonSegment(
                   value: ThemeSourceKind.colorMix,
                   icon: Icon(Icons.palette_outlined),
-                  label: Text('Phối màu'),
+                  label: SizedBox(
+                    width: 76,
+                    child: Text(
+                      'Phối màu',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ),
               ],
               selected: <ThemeSourceKind>{_kind},
@@ -341,15 +355,22 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
             const SizedBox(height: 12),
             _SectionTitle('Font'),
             DropdownButtonFormField<String>(
+              isExpanded: true,
               initialValue: _font.kind == AppFontKind.imported
                   ? 'imported'
                   : _font.id,
               decoration: const InputDecoration(border: OutlineInputBorder()),
               items: <DropdownMenuItem<String>>[
                 for (final item in AppFontChoice.builtIns)
-                  DropdownMenuItem(value: item.id, child: Text(item.label)),
+                  DropdownMenuItem(
+                    value: item.id,
+                    child: Text(item.label, overflow: TextOverflow.ellipsis),
+                  ),
                 if (_font.kind == AppFontKind.imported)
-                  DropdownMenuItem(value: 'imported', child: Text(_font.label)),
+                  DropdownMenuItem(
+                    value: 'imported',
+                    child: Text(_font.label, overflow: TextOverflow.ellipsis),
+                  ),
               ],
               onChanged: (value) {
                 if (value == null || value == 'imported') return;
@@ -387,14 +408,22 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: _busy ? null : () => _save(apply: false),
-                  child: const Text('Lưu theme'),
+                  child: const Text(
+                    'Lưu theme',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
                   onPressed: _busy ? null : () => _save(apply: true),
-                  child: Text(_busy ? 'Đang xử lý…' : 'Lưu & Áp dụng'),
+                  child: Text(
+                    _busy ? 'Đang xử lý…' : 'Lưu & Áp dụng',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],
@@ -432,7 +461,10 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: active.border),
             ),
-            child: const Text('Chưa chọn ảnh / screenshot / wallpaper'),
+            child: const Text(
+              'Chưa chọn ảnh / screenshot / wallpaper',
+              textAlign: TextAlign.center,
+            ),
           ),
         if (_imageName != null) ...<Widget>[
           const SizedBox(height: 6),
@@ -520,13 +552,13 @@ class _SectionTitle extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Text(
-      text,
-      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-    ),
-  );
+  Widget build(BuildContext context) {
+    final heading = Theme.of(context).textTheme.titleMedium;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(text, style: heading?.copyWith(fontWeight: FontWeight.w800)),
+    );
+  }
 }
 
 class _SwatchRow extends StatelessWidget {
@@ -550,9 +582,11 @@ class _ThemePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final fontScale = themeFontSizeFactor(fontFamily);
     final baseStyle = TextStyle(
       fontFamily: fontFamily,
       color: tokens.textPrimary,
+      fontSize: 14 * fontScale,
     );
     return Container(
       padding: const EdgeInsets.all(14),
@@ -569,7 +603,7 @@ class _ThemePreview extends StatelessWidget {
           Text(
             'Better Phenikaa App',
             style: baseStyle.copyWith(
-              fontSize: 18,
+              fontSize: 18 * fontScale,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -597,7 +631,7 @@ class _ThemePreview extends StatelessWidget {
                         'A6-205 • 09:30–12:10',
                         style: baseStyle.copyWith(
                           color: tokens.textSecondary,
-                          fontSize: 12,
+                          fontSize: 12 * fontScale,
                         ),
                       ),
                     ],
@@ -635,7 +669,7 @@ class _ThemePreview extends StatelessWidget {
                   'A5-301 • 13:00–15:40',
                   style: baseStyle.copyWith(
                     color: tokens.widgetSubtext,
-                    fontSize: 12,
+                    fontSize: 12 * fontScale,
                   ),
                 ),
               ],
@@ -658,6 +692,53 @@ class _HsvColorPicker extends StatefulWidget {
 
 class _HsvColorPickerState extends State<_HsvColorPicker> {
   late HSVColor _color = HSVColor.fromColor(widget.initial);
+  final TextEditingController _hexController = TextEditingController();
+  String? _hexError;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateHexText();
+  }
+
+  @override
+  void dispose() {
+    _hexController.dispose();
+    super.dispose();
+  }
+
+  void _updateHexText() {
+    final digits = _color
+        .toColor()
+        .toARGB32()
+        .toRadixString(16)
+        .padLeft(8, '0');
+    final value = '#${digits.substring(2).toUpperCase()}';
+    _hexController.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+    _hexError = null;
+  }
+
+  void _setColor(HSVColor color) {
+    setState(() {
+      _color = color;
+      _updateHexText();
+    });
+  }
+
+  void _setHex(String value) {
+    final hex = value.trim().replaceFirst(RegExp('^#'), '');
+    if (!RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(hex)) {
+      setState(() => _hexError = 'Nhập 6 ký tự HEX, ví dụ #1747B5');
+      return;
+    }
+    setState(() {
+      _color = HSVColor.fromColor(Color(int.parse('FF$hex', radix: 16)));
+      _hexError = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -666,45 +747,60 @@ class _HsvColorPickerState extends State<_HsvColorPicker> {
       title: const Text('Chọn màu'),
       content: SizedBox(
         width: 300,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            SizedBox(
-              height: 180,
-              width: double.infinity,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final pickerSize = Size(constraints.maxWidth, 180);
-                  return GestureDetector(
-                    onPanDown: (details) =>
-                        _setFromOffset(details.localPosition, pickerSize),
-                    onPanUpdate: (details) =>
-                        _setFromOffset(details.localPosition, pickerSize),
-                    child: CustomPaint(
-                      painter: _SaturationValuePainter(hueColor),
-                      foregroundPainter: _SelectionPainter(
-                        _color.saturation,
-                        _color.value,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SizedBox(
+                height: 180,
+                width: double.infinity,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final pickerSize = Size(constraints.maxWidth, 180);
+                    return GestureDetector(
+                      onPanDown: (details) =>
+                          _setFromOffset(details.localPosition, pickerSize),
+                      onPanUpdate: (details) =>
+                          _setFromOffset(details.localPosition, pickerSize),
+                      child: CustomPaint(
+                        painter: _SaturationValuePainter(hueColor),
+                        foregroundPainter: _SelectionPainter(
+                          _color.saturation,
+                          _color.value,
+                        ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-            Slider(
-              value: _color.hue,
-              max: 360,
-              onChanged: (value) =>
-                  setState(() => _color = _color.withHue(value)),
-            ),
-            Container(
-              height: 42,
-              decoration: BoxDecoration(
-                color: _color.toColor(),
-                borderRadius: BorderRadius.circular(10),
+              Slider(
+                value: _color.hue,
+                max: 360,
+                onChanged: (value) => _setColor(_color.withHue(value)),
               ),
-            ),
-          ],
+              Container(
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _color.toColor(),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _hexController,
+                maxLength: 7,
+                textCapitalization: TextCapitalization.characters,
+                decoration: InputDecoration(
+                  labelText: 'Mã màu HEX',
+                  hintText: '#1747B5',
+                  errorText: _hexError,
+                  counterText: '',
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: _setHex,
+              ),
+            ],
+          ),
         ),
       ),
       actions: <Widget>[
@@ -713,7 +809,9 @@ class _HsvColorPickerState extends State<_HsvColorPicker> {
           child: const Text('Hủy'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, _color.toColor()),
+          onPressed: _hexError == null
+              ? () => Navigator.pop(context, _color.toColor())
+              : null,
           child: const Text('Chọn'),
         ),
       ],
@@ -721,11 +819,11 @@ class _HsvColorPickerState extends State<_HsvColorPicker> {
   }
 
   void _setFromOffset(Offset offset, Size size) {
-    setState(() {
-      _color = _color
+    _setColor(
+      _color
           .withSaturation((offset.dx / size.width).clamp(0.0, 1.0))
-          .withValue((1 - (offset.dy / size.height)).clamp(0.0, 1.0));
-    });
+          .withValue((1 - (offset.dy / size.height)).clamp(0.0, 1.0)),
+    );
   }
 }
 
