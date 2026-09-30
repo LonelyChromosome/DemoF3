@@ -34,6 +34,22 @@ jobs:
       - name: Bootstrap project
         run: bash tool/bootstrap.sh
 
+      - name: Verify standalone main source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f assets/tien_mon_premium/app_backgrounds/tienmon_1_1440x2560.png
+          test -f assets/tien_mon_premium/app_backgrounds/tienmon_8_1440x2560.png
+          test -f assets/tien_mon_premium/fonts/FzCoTrang.ttf
+          test -f assets/tien_mon_premium/widget_overview/wid_sang.png
+          test -f android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/NativeQldtWidgetSync.kt
+          grep -F 'ValueNotifier<bool> _weeklyMode' lib/app/app.dart
+          grep -F 'opacity: weekly ? .996 : .004' lib/app/app.dart
+          grep -F 'applyPendingSelection' android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt
+          ! grep -F 'pinSelectedFirst()' android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/WidgetSnapshotStore.kt
+          test -x android/gradlew
+          test -f android/gradle/wrapper/gradle-wrapper.jar
+
       - name: Test
         run: flutter test
 
@@ -43,9 +59,20 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release
 
+      - name: Package APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-main.apk
+          sha256sum dist/Better-Phenikaa-main.apk > dist/Better-Phenikaa-main.sha256
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: better-phenikaa-schedule-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: better-phenikaa-main-apk
+          path: |
+            dist/Better-Phenikaa-main.apk
+            dist/Better-Phenikaa-main.sha256
           retention-days: 14
+          if-no-files-found: error

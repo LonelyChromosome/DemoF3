@@ -6,8 +6,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AssistantTextTest {
-    @Test fun allSevenPacksHaveAllApprovedUseCases() {
-        assertEquals(7, AssistantPack.entries.size)
+    @Test fun allPacksHaveAllApprovedUseCases() {
+        assertEquals(8, AssistantPack.entries.size)
         for (pack in AssistantPack.entries) {
             assertEquals((1..18).toSet(), AssistantCatalog.texts.getValue(pack.name).keys)
         }

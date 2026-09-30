@@ -293,9 +293,7 @@ class _TienMonScheduleCardState extends State<TienMonScheduleCard>
             width: 3,
             height: widget.compact ? 38 : 52,
             decoration: BoxDecoration(
-              color: widget.item.isActive
-                  ? TienMonGlassTokens.gold
-                  : _outline,
+              color: widget.item.isActive ? TienMonGlassTokens.gold : _outline,
               borderRadius: BorderRadius.circular(8),
               boxShadow: <BoxShadow>[
                 BoxShadow(
@@ -528,7 +526,11 @@ class _ProductionEmptyDay extends StatelessWidget {
           TienMonText(
             'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xE6FFD66B), height: 1.45, fontSize: 13),
+            style: TextStyle(
+              color: Color(0xE6FFD66B),
+              height: 1.45,
+              fontSize: 13,
+            ),
           ),
         ],
       ),

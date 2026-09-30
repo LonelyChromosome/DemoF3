@@ -1090,11 +1090,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       return;
     }
 
-    _startPhase(
-      QldtSyncPhase.semesterPlan,
-      const Duration(seconds: 20),
-      epoch,
-    );
+    _startPhase(QldtSyncPhase.semesterPlan, const Duration(seconds: 20), epoch);
     _legacyFallbackTimer = Timer(const Duration(seconds: 5), () {
       if (mounted &&
           _syncing &&
@@ -1119,10 +1115,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   }
 
   Future<void> _switchToNative(String reason) async {
-    if (!mounted ||
-        !_syncing ||
-        _usingNativeTransport ||
-        _switchingToNative) {
+    if (!mounted || !_syncing || _usingNativeTransport || _switchingToNative) {
       return;
     }
     _switchingToNative = true;
@@ -1173,11 +1166,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     final registration = await transport.fetchRegistration(session);
     if (!mounted || !_syncing || epoch != _syncEpoch) return;
 
-    _startPhase(
-      QldtSyncPhase.subjects,
-      const Duration(seconds: 20),
-      epoch,
-    );
+    _startPhase(QldtSyncPhase.subjects, const Duration(seconds: 20), epoch);
     final parsedRegistration = const TracuuApi().parse(registration.raw);
     final range = SemesterScheduleRange.fromRegistration(parsedRegistration);
     if (range == null) {
@@ -1187,11 +1176,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       throw const FormatException('SEMESTER_EXPIRED');
     }
 
-    _startPhase(
-      QldtSyncPhase.schedule,
-      const Duration(seconds: 45),
-      epoch,
-    );
+    _startPhase(QldtSyncPhase.schedule, const Duration(seconds: 45), epoch);
     if (mounted) {
       setState(() => _status = 'Đang lấy lịch cá nhân bằng native HTTP...');
     }

@@ -175,89 +175,91 @@ class _TienMonPremiumHarnessState extends State<TienMonPremiumHarness> {
                 child: IconTheme(
                   data: IconThemeData(color: _sceneForeground(_scenes.scene)),
                   child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  _Header(
-                    scheduleMode: _schedule,
-                    onCalendar: _pickAnchor,
-                    onNotifications: _showNotifications,
-                    onScheduleToggle: () => setState(() {
-                      _direction = 0;
-                      _schedule = _schedule == TienMonScheduleMode.study
-                          ? TienMonScheduleMode.exam
-                          : TienMonScheduleMode.study;
-                    }),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: _Segmented<TienMonCalendarMode>(
-                      values: TienMonCalendarMode.values,
-                      selected: _calendar,
-                      labels: const <String>['Theo ngày', 'Theo tuần'],
-                      onChanged: (value) => setState(() {
-                        _direction = 0;
-                        _calendar = value;
-                        if (value == TienMonCalendarMode.day) {
-                          _anchor = DateTime.now();
-                        } else {
-                          _anchor = _weekMonday(DateTime.now());
-                        }
-                      }),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _DateNavigator(
-                    anchor: _anchor,
-                    calendarMode: _calendar,
-                    onTap: _pickAnchor,
-                    onPrevious: () => _navigate(-1),
-                    onNext: () => _navigate(1),
-                  ),
-                  if (_calendar == TienMonCalendarMode.day)
-                    const SizedBox(height: 18),
-                  Expanded(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onHorizontalDragEnd: _calendar == TienMonCalendarMode.day
-                          ? (details) {
-                              final velocity = details.primaryVelocity ?? 0;
-                              if (velocity.abs() < 180) return;
-                              _navigate(velocity < 0 ? 1 : -1);
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      _Header(
+                        scheduleMode: _schedule,
+                        onCalendar: _pickAnchor,
+                        onNotifications: _showNotifications,
+                        onScheduleToggle: () => setState(() {
+                          _direction = 0;
+                          _schedule = _schedule == TienMonScheduleMode.study
+                              ? TienMonScheduleMode.exam
+                              : TienMonScheduleMode.study;
+                        }),
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: _Segmented<TienMonCalendarMode>(
+                          values: TienMonCalendarMode.values,
+                          selected: _calendar,
+                          labels: const <String>['Theo ngày', 'Theo tuần'],
+                          onChanged: (value) => setState(() {
+                            _direction = 0;
+                            _calendar = value;
+                            if (value == TienMonCalendarMode.day) {
+                              _anchor = DateTime.now();
+                            } else {
+                              _anchor = _weekMonday(DateTime.now());
                             }
-                          : null,
-                      child: AnimatedSwitcher(
-                      duration:
-                          TienMonPremiumContract.calendarNavigationTransition,
-                      transitionBuilder: (child, animation) => FadeTransition(
-                        opacity: animation,
-                        child: SlideTransition(
-                          position: Tween<Offset>(
-                            begin: Offset(.035 * _direction, 0),
-                            end: Offset.zero,
-                          ).animate(animation),
-                          child: child,
+                          }),
                         ),
                       ),
-                      child: _calendar == TienMonCalendarMode.day
-                          ? TienMonDayView(
-                              key: ValueKey<String>(
-                                'day-${_anchor.toIso8601String()}-$_schedule-$_animationEpoch',
-                              ),
-                              day: selected,
-                              scene: _scenes.scene,
-                            )
-                          : TienMonWeekView(
-                              key: ValueKey<String>(
-                                'week-${week.first.date.toIso8601String()}-$_schedule-$_animationEpoch',
-                              ),
-                              days: week,
-                              scene: _scenes.scene,
-                            ),
+                      const SizedBox(height: 12),
+                      _DateNavigator(
+                        anchor: _anchor,
+                        calendarMode: _calendar,
+                        onTap: _pickAnchor,
+                        onPrevious: () => _navigate(-1),
+                        onNext: () => _navigate(1),
                       ),
-                    ),
-                  ),
-                ],
+                      if (_calendar == TienMonCalendarMode.day)
+                        const SizedBox(height: 18),
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onHorizontalDragEnd:
+                              _calendar == TienMonCalendarMode.day
+                              ? (details) {
+                                  final velocity = details.primaryVelocity ?? 0;
+                                  if (velocity.abs() < 180) return;
+                                  _navigate(velocity < 0 ? 1 : -1);
+                                }
+                              : null,
+                          child: AnimatedSwitcher(
+                            duration: TienMonPremiumContract
+                                .calendarNavigationTransition,
+                            transitionBuilder: (child, animation) =>
+                                FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: Offset(.035 * _direction, 0),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
+                                ),
+                            child: _calendar == TienMonCalendarMode.day
+                                ? TienMonDayView(
+                                    key: ValueKey<String>(
+                                      'day-${_anchor.toIso8601String()}-$_schedule-$_animationEpoch',
+                                    ),
+                                    day: selected,
+                                    scene: _scenes.scene,
+                                  )
+                                : TienMonWeekView(
+                                    key: ValueKey<String>(
+                                      'week-${week.first.date.toIso8601String()}-$_schedule-$_animationEpoch',
+                                    ),
+                                    days: week,
+                                    scene: _scenes.scene,
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -537,10 +539,7 @@ class _Header extends StatelessWidget {
             key: ValueKey<TienMonScheduleMode>(scheduleMode),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 25,
-              fontWeight: FontWeight.w900,
-            ),
+            style: const TextStyle(fontSize: 25, fontWeight: FontWeight.w900),
           ),
         ),
       ),
@@ -555,10 +554,11 @@ class _Header extends StatelessWidget {
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: (scheduleMode == TienMonScheduleMode.study
-                      ? TienMonGlassTokens.gold
-                      : TienMonGlassTokens.jade)
-                  .withValues(alpha: .92),
+              color:
+                  (scheduleMode == TienMonScheduleMode.study
+                          ? TienMonGlassTokens.gold
+                          : TienMonGlassTokens.jade)
+                      .withValues(alpha: .92),
               width: 1.1,
             ),
           ),
@@ -583,9 +583,7 @@ class _Header extends StatelessWidget {
         onPressed: onNotifications,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-        icon: const Icon(
-          Icons.notifications_none_rounded,
-        ),
+        icon: const Icon(Icons.notifications_none_rounded),
       ),
       IconButton.filledTonal(
         tooltip: 'Chọn ngày',
@@ -595,8 +593,9 @@ class _Header extends StatelessWidget {
         style: IconButton.styleFrom(
           backgroundColor: Colors.transparent,
           side: BorderSide(
-            color: (IconTheme.of(context).color ?? Colors.white)
-                .withValues(alpha: .55),
+            color: (IconTheme.of(context).color ?? Colors.white).withValues(
+              alpha: .55,
+            ),
           ),
         ),
         icon: const Icon(Icons.calendar_month_outlined),
@@ -665,7 +664,8 @@ class _DateNavigator extends StatelessWidget {
                       Icon(
                         Icons.expand_more_rounded,
                         size: 18,
-                        color: IconTheme.of(context).color?.withValues(alpha: .88),
+                        color: IconTheme.of(context).color
+                            ?.withValues(alpha: .88),
                       ),
                     ],
                   ],

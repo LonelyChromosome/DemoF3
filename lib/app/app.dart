@@ -1122,7 +1122,8 @@ class _MainShell extends StatelessWidget {
               layoutBuilder: (current, previous) =>
                   current ?? const SizedBox.shrink(),
               transitionBuilder: (child, animation) {
-                final isNotifications = child.key ==
+                final isNotifications =
+                    child.key ==
                     const ValueKey<_AppPage>(_AppPage.notifications);
                 final slide = Tween<Offset>(
                   begin: isNotifications
@@ -1388,7 +1389,9 @@ class _TimetableScreenState extends State<_TimetableScreen>
                             widget.onDateChanged,
                           ),
                           onPrevious: () => widget.onDateChanged(
-                            widget.selectedDate.subtract(const Duration(days: 1)),
+                            widget.selectedDate.subtract(
+                              const Duration(days: 1),
+                            ),
                           ),
                           onNext: () => widget.onDateChanged(
                             widget.selectedDate.add(const Duration(days: 1)),
@@ -1407,7 +1410,10 @@ class _TimetableScreenState extends State<_TimetableScreen>
                               ).animate(animation);
                               return FadeTransition(
                                 opacity: animation,
-                                child: SlideTransition(position: slide, child: child),
+                                child: SlideTransition(
+                                  position: slide,
+                                  child: child,
+                                ),
                               );
                             },
                             child: KeyedSubtree(
@@ -1417,27 +1423,30 @@ class _TimetableScreenState extends State<_TimetableScreen>
                               child: items.isEmpty
                                   ? _EmptyState(
                                       icon: Icons.event_available_outlined,
-                                      title: _sameDay(
-                                        widget.selectedDate,
-                                        DateTime.now(),
-                                      )
+                                      title:
+                                          _sameDay(
+                                            widget.selectedDate,
+                                            DateTime.now(),
+                                          )
                                           ? AssistantText.of(
                                               AssistantEvent.studyTodayEmpty,
                                               widget.assistantPack,
                                             )
                                           : 'Không có lịch học',
-                                      message:
-                                          'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
+                                      message: 'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
                                     )
                                   : ListView.separated(
-                                      padding: const EdgeInsets.only(bottom: 82),
+                                      padding: const EdgeInsets.only(
+                                        bottom: 82,
+                                      ),
                                       itemCount: items.length,
                                       separatorBuilder: (_, _) =>
                                           const SizedBox(height: 14),
-                                      itemBuilder: (context, index) => _ScheduleCard(
-                                        item: items[index],
-                                        accent: _accentFor(index),
-                                      ),
+                                      itemBuilder: (context, index) =>
+                                          _ScheduleCard(
+                                            item: items[index],
+                                            accent: _accentFor(index),
+                                          ),
                                     ),
                             ),
                           ),
@@ -2245,17 +2254,18 @@ class _TimetableModeSelector extends StatelessWidget {
               heightFactor: 1,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: premium
-                      ? const Color(0x22FFD66B)
-                      : palette.primary,
-                  borderRadius: BorderRadius.circular(premium ? 16 : palette.radius),
+                  color: premium ? const Color(0x22FFD66B) : palette.primary,
+                  borderRadius: BorderRadius.circular(
+                    premium ? 16 : palette.radius,
+                  ),
                   border: premium
                       ? Border.all(color: const Color(0xFFFFD66B), width: 1)
                       : null,
                   boxShadow: premium
                       ? <BoxShadow>[
                           BoxShadow(
-                            color: const Color(0xFFFFD66B).withValues(alpha: .22),
+                            color: const Color(0xFFFFD66B)
+                                .withValues(alpha: .22),
                             blurRadius: 10,
                           ),
                         ]
@@ -2546,7 +2556,8 @@ class _ScheduleCard extends StatelessWidget {
                   icon: Icons.access_time_rounded,
                   text: '${_time(item.startAt)} - ${_time(item.endAt)}',
                 ),
-                if (item.periodStart != null && item.periodEnd != null) ...<Widget>[
+                if (item.periodStart != null &&
+                    item.periodEnd != null) ...<Widget>[
                   const SizedBox(height: 5),
                   _MetaLine(
                     icon: Icons.menu_book_outlined,

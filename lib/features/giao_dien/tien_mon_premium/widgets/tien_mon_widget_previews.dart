@@ -66,25 +66,14 @@ class _TienMonOverviewWidgetPreviewState
       room: 'A6-503 (PC)',
       active: true,
     ),
-    _OverviewPreviewItem(
-      time: '15:45',
-      subject: 'TKWNC',
-      room: 'A6-105 (PC)',
-    ),
+    _OverviewPreviewItem(time: '15:45', subject: 'TKWNC', room: 'A6-105 (PC)'),
   ];
 
-  static const List<_OverviewPreviewItem> _studyTomorrow = <_OverviewPreviewItem>[
-    _OverviewPreviewItem(
-      time: '07:00',
-      subject: 'PTTKHT',
-      room: 'A2-301',
-    ),
-    _OverviewPreviewItem(
-      time: '13:00',
-      subject: 'ATTT',
-      room: 'A4-402',
-    ),
-  ];
+  static const List<_OverviewPreviewItem> _studyTomorrow =
+      <_OverviewPreviewItem>[
+        _OverviewPreviewItem(time: '07:00', subject: 'PTTKHT', room: 'A2-301'),
+        _OverviewPreviewItem(time: '13:00', subject: 'ATTT', room: 'A4-402'),
+      ];
 
   static const List<_OverviewPreviewItem> _examToday = <_OverviewPreviewItem>[
     _OverviewPreviewItem(
@@ -144,7 +133,8 @@ class _TienMonOverviewWidgetPreviewState
     return _dateOffset == 0 ? _studyToday : _studyTomorrow;
   }
 
-  String get _dateLabel => _dateOffset == 0 ? 'Hôm nay \u00B7 29/09' : 'Ngày mai \u00B7 30/09';
+  String get _dateLabel =>
+      _dateOffset == 0 ? 'Hôm nay \u00B7 29/09' : 'Ngày mai \u00B7 30/09';
 
   void _applySyncState(TienMonSyncState state) {
     if (state == TienMonSyncState.loading) {
@@ -306,7 +296,9 @@ class _OverviewBody extends StatelessWidget {
                     : Icons.event_available_outlined,
                 size: 25,
                 color: headerText,
-                shadows: const <Shadow>[Shadow(color: Colors.black54, blurRadius: 4)],
+                shadows: const <Shadow>[
+                  Shadow(color: Colors.black54, blurRadius: 4),
+                ],
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -324,7 +316,9 @@ class _OverviewBody extends StatelessWidget {
                         color: headerText,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w900,
-                        shadows: const <Shadow>[Shadow(color: Colors.black54, blurRadius: 4)],
+                        shadows: const <Shadow>[
+                          Shadow(color: Colors.black54, blurRadius: 4),
+                        ],
                       ),
                     ),
                     TienMonText(
@@ -335,7 +329,9 @@ class _OverviewBody extends StatelessWidget {
                         color: headerText.withValues(alpha: .78),
                         fontSize: 9.5,
                         fontWeight: FontWeight.w700,
-                        shadows: const <Shadow>[Shadow(color: Colors.black54, blurRadius: 3)],
+                        shadows: const <Shadow>[
+                          Shadow(color: Colors.black54, blurRadius: 3),
+                        ],
                       ),
                     ),
                   ],
@@ -373,10 +369,16 @@ class _OverviewBody extends StatelessWidget {
             transitionBuilder: (child, animation) => FadeTransition(
               opacity: animation,
               child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: Offset(.08 * direction, 0),
-                  end: Offset.zero,
-                ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                position:
+                    Tween<Offset>(
+                      begin: Offset(.08 * direction, 0),
+                      end: Offset.zero,
+                    ).animate(
+                      CurvedAnimation(
+                        parent: animation,
+                        curve: Curves.easeOutCubic,
+                      ),
+                    ),
                 child: child,
               ),
             ),
@@ -448,7 +450,10 @@ class _OverviewCards extends StatelessWidget {
               padding: EdgeInsets.only(right: index == columns - 1 ? 0 : gap),
               child: SizedBox(
                 width: cardWidth,
-                child: _F3SkinnedCard(item: items[index], exam: mode == TienMonScheduleMode.exam),
+                child: _F3SkinnedCard(
+                  item: items[index],
+                  exam: mode == TienMonScheduleMode.exam,
+                ),
               ),
             );
           }),
@@ -472,14 +477,16 @@ class _F3SkinnedCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       color: const Color(0xA0183431),
       border: Border.all(
-        color: item.active
-            ? const Color(0xFFD8B768)
-            : const Color(0x9AE8F2EE),
+        color: item.active ? const Color(0xFFD8B768) : const Color(0x9AE8F2EE),
         width: item.active ? 1.25 : .75,
       ),
       boxShadow: item.active
-          ? const <BoxShadow>[BoxShadow(color: Color(0x6673D9BD), blurRadius: 8)]
-          : const <BoxShadow>[BoxShadow(color: Color(0x42000000), blurRadius: 4)],
+          ? const <BoxShadow>[
+              BoxShadow(color: Color(0x6673D9BD), blurRadius: 8),
+            ]
+          : const <BoxShadow>[
+              BoxShadow(color: Color(0x42000000), blurRadius: 4),
+            ],
     ),
     child: Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -488,7 +495,11 @@ class _F3SkinnedCard extends StatelessWidget {
         if (exam && item.date != null)
           TienMonText(
             item.date!,
-            style: const TextStyle(fontSize: 7.5, color: Color(0xFFE8D69A), height: 1),
+            style: const TextStyle(
+              fontSize: 7.5,
+              color: Color(0xFFE8D69A),
+              height: 1,
+            ),
           ),
         TienMonText(
           item.time,
@@ -653,8 +664,10 @@ class _F3TimelinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _F3TimelinePainter oldDelegate) =>
-      oldDelegate.count != count || oldDelegate.active != active ||
-      oldDelegate.color != color || oldDelegate.track != track;
+      oldDelegate.count != count ||
+      oldDelegate.active != active ||
+      oldDelegate.color != color ||
+      oldDelegate.track != track;
 }
 
 class TienMonSmallWidgetPreview extends StatefulWidget {
@@ -687,48 +700,50 @@ class _TienMonSmallWidgetPreviewState extends State<TienMonSmallWidgetPreview>
     duration: const Duration(milliseconds: 820),
   );
 
-  static const Map<int, _OverviewPreviewItem> _study = <int, _OverviewPreviewItem>{
-    -1: _OverviewPreviewItem(
-      date: '28/09',
-      time: '13:00 - 15:40',
-      subject: 'An toàn thông tin',
-      room: 'A4-402',
-    ),
-    0: _OverviewPreviewItem(
-      date: '29/09',
-      time: '15:45 - 18:25',
-      subject: 'Thiết kế web nâng cao',
-      room: 'A6-105 (PC)',
-      active: true,
-    ),
-    1: _OverviewPreviewItem(
-      date: '30/09',
-      time: '07:00 - 09:30',
-      subject: 'Phân tích thiết kế hệ thống',
-      room: 'A2-301',
-    ),
-  };
+  static const Map<int, _OverviewPreviewItem> _study =
+      <int, _OverviewPreviewItem>{
+        -1: _OverviewPreviewItem(
+          date: '28/09',
+          time: '13:00 - 15:40',
+          subject: 'An toàn thông tin',
+          room: 'A4-402',
+        ),
+        0: _OverviewPreviewItem(
+          date: '29/09',
+          time: '15:45 - 18:25',
+          subject: 'Thiết kế web nâng cao',
+          room: 'A6-105 (PC)',
+          active: true,
+        ),
+        1: _OverviewPreviewItem(
+          date: '30/09',
+          time: '07:00 - 09:30',
+          subject: 'Phân tích thiết kế hệ thống',
+          room: 'A2-301',
+        ),
+      };
 
-  static const Map<int, _OverviewPreviewItem> _exam = <int, _OverviewPreviewItem>{
-    -1: _OverviewPreviewItem(
-      date: '02/10',
-      time: '08:00',
-      subject: 'Trí tuệ nhân tạo',
-      room: 'A2-402',
-    ),
-    0: _OverviewPreviewItem(
-      date: '06/10',
-      time: '13:30',
-      subject: 'An toàn thông tin',
-      room: 'A6-205',
-    ),
-    1: _OverviewPreviewItem(
-      date: '10/10',
-      time: '09:00',
-      subject: 'Thiết kế web nâng cao',
-      room: 'A6-301',
-    ),
-  };
+  static const Map<int, _OverviewPreviewItem> _exam =
+      <int, _OverviewPreviewItem>{
+        -1: _OverviewPreviewItem(
+          date: '02/10',
+          time: '08:00',
+          subject: 'Trí tuệ nhân tạo',
+          room: 'A2-402',
+        ),
+        0: _OverviewPreviewItem(
+          date: '06/10',
+          time: '13:30',
+          subject: 'An toàn thông tin',
+          room: 'A6-205',
+        ),
+        1: _OverviewPreviewItem(
+          date: '10/10',
+          time: '09:00',
+          subject: 'Thiết kế web nâng cao',
+          room: 'A6-301',
+        ),
+      };
 
   @override
   void initState() {
@@ -836,7 +851,11 @@ class _TienMonSmallWidgetPreviewState extends State<TienMonSmallWidgetPreview>
               stops: <double>[0, .60, 1],
             ),
             boxShadow: const <BoxShadow>[
-              BoxShadow(color: Color(0x55000000), blurRadius: 10, offset: Offset(0, 4)),
+              BoxShadow(
+                color: Color(0x55000000),
+                blurRadius: 10,
+                offset: Offset(0, 4),
+              ),
             ],
           ),
           child: ClipRRect(
@@ -858,13 +877,16 @@ class _TienMonSmallWidgetPreviewState extends State<TienMonSmallWidgetPreview>
                     transitionBuilder: (child, animation) => FadeTransition(
                       opacity: animation,
                       child: SlideTransition(
-                        position: Tween<Offset>(
-                          begin: Offset(0, .14 * _direction),
-                          end: Offset.zero,
-                        ).animate(CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeOutCubic,
-                        )),
+                        position:
+                            Tween<Offset>(
+                              begin: Offset(0, .14 * _direction),
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: animation,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            ),
                         child: child,
                       ),
                     ),

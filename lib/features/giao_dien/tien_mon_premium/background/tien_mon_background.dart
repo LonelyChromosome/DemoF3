@@ -209,13 +209,16 @@ class TienMonSceneController extends ChangeNotifier {
     final now = _clock();
     final next = TienMonPremiumContract.nextAppSceneBoundaryAfter(now);
     final delay = next.difference(now);
-    _timer = Timer(delay.isNegative || delay == Duration.zero
-        ? const Duration(milliseconds: 1)
-        : delay, () {
-      if (!_automatic) return;
-      _resolveAuto();
-      _scheduleNextBoundary();
-    });
+    _timer = Timer(
+      delay.isNegative || delay == Duration.zero
+          ? const Duration(milliseconds: 1)
+          : delay,
+      () {
+        if (!_automatic) return;
+        _resolveAuto();
+        _scheduleNextBoundary();
+      },
+    );
   }
 
   bool _setScene(int value) {
@@ -366,10 +369,7 @@ class _TienMonPersistentAmbientState extends State<TienMonPersistentAmbient> {
       fit: StackFit.expand,
       children: <Widget>[...previous, if (current != null) current],
     ),
-    child: _AmbientMotion(
-      key: ValueKey<int>(_scene),
-      scene: _scene,
-    ),
+    child: _AmbientMotion(key: ValueKey<int>(_scene), scene: _scene),
   );
 }
 
@@ -486,9 +486,8 @@ class _AmbientMotionState extends State<_AmbientMotion>
           // The loop starts at phase zero only when the scene actually changes.
           // Resuming the app keeps the same start instant, so ordinary lifecycle
           // and page rebuilds do not restart ambient motion.
-          final elapsedSeconds = DateTime.now()
-                  .difference(_startedAt)
-                  .inMicroseconds /
+          final elapsedSeconds =
+              DateTime.now().difference(_startedAt).inMicroseconds /
               Duration.microsecondsPerSecond;
           return CustomPaint(
             painter: _AmbientPainter(
@@ -537,7 +536,10 @@ class _AmbientPainter extends CustomPainter {
       final phase = elapsedSeconds * math.pi * 2 / period + config.$5;
       final center = Offset(
         size.width * config.$1 +
-            math.sin(phase) * size.width * (.105 + index * .0225) * _ambientMotionStrength,
+            math.sin(phase) *
+                size.width *
+                (.105 + index * .0225) *
+                _ambientMotionStrength,
         size.height * config.$2 +
             math.cos(phase * .71) * (10.5 + index * 3) * _ambientMotionStrength,
       );
@@ -546,9 +548,10 @@ class _AmbientPainter extends CustomPainter {
         width: size.width * config.$3,
         height: size.height * config.$4,
       );
-      final alpha = (profile.mistOpacity * _ambientOpacityBoost * (1 - index * .18))
-          .clamp(0.0, .72)
-          .toDouble();
+      final alpha =
+          (profile.mistOpacity * _ambientOpacityBoost * (1 - index * .18))
+              .clamp(0.0, .72)
+              .toDouble();
       final paint = Paint()
         ..shader = RadialGradient(
           colors: <Color>[
@@ -561,8 +564,8 @@ class _AmbientPainter extends CustomPainter {
       canvas.drawOval(rect, paint);
     }
 
-    final hazeBreathe = .88 +
-        .12 * math.sin(elapsedSeconds * math.pi * 2 / 47 + scene * .43);
+    final hazeBreathe =
+        .88 + .12 * math.sin(elapsedSeconds * math.pi * 2 / 47 + scene * .43);
     final hazeRect = Rect.fromLTWH(
       0,
       size.height * .08,
@@ -575,9 +578,10 @@ class _AmbientPainter extends CustomPainter {
         end: Alignment.bottomRight,
         colors: <Color>[
           Colors.white.withValues(
-            alpha: (profile.hazeOpacity * _ambientOpacityBoost * .35 * hazeBreathe)
-                .clamp(0.0, .48)
-                .toDouble(),
+            alpha:
+                (profile.hazeOpacity * _ambientOpacityBoost * .35 * hazeBreathe)
+                    .clamp(0.0, .48)
+                    .toDouble(),
           ),
           Colors.white.withValues(
             alpha: (profile.hazeOpacity * _ambientOpacityBoost * hazeBreathe)
@@ -604,9 +608,10 @@ class _AmbientPainter extends CustomPainter {
     );
     final warm = scene == 5 || scene == 6;
     final lightColor = warm ? const Color(0xFFFFD39B) : Colors.white;
-    final alpha = (profile.lightPulse * _ambientOpacityBoost * (.52 + breathe * .48))
-        .clamp(0.0, .58)
-        .toDouble();
+    final alpha =
+        (profile.lightPulse * _ambientOpacityBoost * (.52 + breathe * .48))
+            .clamp(0.0, .58)
+            .toDouble();
     final paint = Paint()
       ..shader = RadialGradient(
         colors: <Color>[
@@ -635,7 +640,8 @@ class _AmbientPainter extends CustomPainter {
           start + width * .50,
           y +
               math.sin(elapsedSeconds * math.pi * 2 / 13 + index * 1.17) *
-                  3.75 * _ambientMotionStrength,
+                  3.75 *
+                  _ambientMotionStrength,
           start + width,
           y,
         );
@@ -644,9 +650,12 @@ class _AmbientPainter extends CustomPainter {
         ..strokeWidth = 1.1 + index * .18
         ..strokeCap = StrokeCap.round
         ..color = Colors.white.withValues(
-          alpha: (profile.shimmerOpacity * _ambientOpacityBoost * (1 - index * .09))
-              .clamp(0.0, .42)
-              .toDouble(),
+          alpha:
+              (profile.shimmerOpacity *
+                      _ambientOpacityBoost *
+                      (1 - index * .09))
+                  .clamp(0.0, .42)
+                  .toDouble(),
         );
       canvas.drawPath(path, paint);
     }
@@ -667,7 +676,8 @@ class _AmbientPainter extends CustomPainter {
           -size.height * .09 +
           p * size.height * 1.18 +
           math.cos(swayPhase * .82) * 6 * _ambientMotionStrength;
-      final opacity = math.sin(p * math.pi).clamp(0.0, 1.0).toDouble() *
+      final opacity =
+          math.sin(p * math.pi).clamp(0.0, 1.0).toDouble() *
           ((.18 + (index % 2) * .045) * _ambientOpacityBoost);
       final safeOpacity = opacity.clamp(0.0, .92).toDouble();
       if (safeOpacity <= .01) continue;
@@ -678,10 +688,11 @@ class _AmbientPainter extends CustomPainter {
       canvas.rotate(rotation);
       canvas.scale(scale);
       final paint = Paint()
-        ..color = (profile.particleKind == _AmbientParticleKind.petal
-                ? const Color(0xFFFFE3E6)
-                : const Color(0xFFBFDDA8))
-            .withValues(alpha: safeOpacity);
+        ..color =
+            (profile.particleKind == _AmbientParticleKind.petal
+                    ? const Color(0xFFFFE3E6)
+                    : const Color(0xFFBFDDA8))
+                .withValues(alpha: safeOpacity);
       canvas.drawPath(
         profile.particleKind == _AmbientParticleKind.petal
             ? _petalPath()
@@ -701,22 +712,22 @@ class _AmbientPainter extends CustomPainter {
       final travel = 38.0 + (index % 5) * 7.0;
       final p = (elapsedSeconds / travel + index * .127) % 1;
       final phase = p * math.pi * 2 + index * .93;
-      final x = ((index * .173) % 1) * size.width +
-          math.sin(phase * .71) *
-              size.width *
-              .028 *
-              _ambientMotionStrength;
+      final x =
+          ((index * .173) % 1) * size.width +
+          math.sin(phase * .71) * size.width * .028 * _ambientMotionStrength;
       final y = ((index * .091 + p * .34) % 1) * size.height;
       final twinkle = .45 + .55 * math.sin(phase).abs();
-      final alpha = ((scene <= 5 ? .105 : .065) * _ambientOpacityBoost * twinkle)
-          .clamp(0.0, .34)
-          .toDouble();
+      final alpha =
+          ((scene <= 5 ? .105 : .065) * _ambientOpacityBoost * twinkle)
+              .clamp(0.0, .34)
+              .toDouble();
       final radius = .7 + (index % 3) * .45;
       final paint = Paint()
-        ..color = (scene == 5 || scene == 6
-                ? const Color(0xFFFFE0A8)
-                : const Color(0xFFE6F7F2))
-            .withValues(alpha: alpha);
+        ..color =
+            (scene == 5 || scene == 6
+                    ? const Color(0xFFFFE0A8)
+                    : const Color(0xFFE6F7F2))
+                .withValues(alpha: alpha);
       canvas.drawCircle(Offset(x, y), radius, paint);
     }
   }

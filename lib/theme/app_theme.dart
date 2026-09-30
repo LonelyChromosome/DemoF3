@@ -30,9 +30,8 @@ enum AppThemeId {
 enum AppThemeGeometry { rounded, square, valorant, lol, pixel }
 
 extension AppThemeIdUi on AppThemeId {
-  String get storageKey => this == AppThemeId.tienMonPremium
-      ? 'tien_mon_premium'
-      : name;
+  String get storageKey =>
+      this == AppThemeId.tienMonPremium ? 'tien_mon_premium' : name;
 
   String get label => switch (this) {
     AppThemeId.classic => 'Better mặc định',

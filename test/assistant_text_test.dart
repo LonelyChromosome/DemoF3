@@ -9,17 +9,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('all seven packs persist through a new selection load', () async {
+  test('all packs persist through a new selection load', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     expect(await AssistantSelection.load(), AssistantPack.normal);
-    expect(AssistantPack.values, hasLength(7));
+    expect(AssistantPack.values, hasLength(8));
     for (final pack in AssistantPack.values) {
       await AssistantSelection.save(pack);
       expect(await AssistantSelection.load(), pack);
     }
   });
 
-  test('all 126 approved lines are copied verbatim into the catalog', () {
+  test('all approved lines are copied verbatim into the catalog', () {
     final source = jsonDecode(
       File('tool/assistant_pack_texts.json').readAsStringSync(),
     ) as Map<String, dynamic>;
