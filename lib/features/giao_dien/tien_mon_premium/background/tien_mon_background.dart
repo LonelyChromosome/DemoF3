@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 
 import '../tien_mon_premium_contract.dart';
 
@@ -312,13 +311,59 @@ class _TienMonPersistentBackgroundState
   }
 }
 
-class TienMonPersistentAmbient extends StatelessWidget {
+class TienMonPersistentAmbient extends StatefulWidget {
   const TienMonPersistentAmbient({required this.controller, super.key});
 
   final TienMonSceneController controller;
 
   @override
-  Widget build(BuildContext context) => const SizedBox.shrink();
+  State<TienMonPersistentAmbient> createState() =>
+      _TienMonPersistentAmbientState();
+}
+
+class _TienMonPersistentAmbientState extends State<TienMonPersistentAmbient> {
+  late int _scene;
+
+  @override
+  void initState() {
+    super.initState();
+    _scene = widget.controller.scene;
+    widget.controller.addListener(_handleSceneChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant TienMonPersistentAmbient oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller.removeListener(_handleSceneChanged);
+      widget.controller.addListener(_handleSceneChanged);
+      _scene = widget.controller.scene;
+    }
+  }
+
+  void _handleSceneChanged() {
+    final nextScene = widget.controller.scene;
+    if (nextScene == _scene || !mounted) return;
+    setState(() => _scene = nextScene);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_handleSceneChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: TienMonPremiumContract.sceneCrossfade,
+    switchInCurve: Curves.easeInOutCubic,
+    switchOutCurve: Curves.easeInOutCubic,
+    layoutBuilder: (current, previous) => Stack(
+      fit: StackFit.expand,
+      children: <Widget>[...previous, if (current != null) current],
+    ),
+    child: _AmbientMotion(key: ValueKey<int>(_scene), scene: _scene),
+  );
 }
 
 class _FullBleedSceneArtwork extends StatelessWidget {
@@ -410,82 +455,56 @@ class _AmbientMotion extends StatefulWidget {
 
 class _AmbientMotionState extends State<_AmbientMotion>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  late final Ticker _ticker = createTicker(_onTick);
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 72),
+  );
   late final DateTime _startedAt = DateTime.now();
-  Duration _pausedDuration = Duration.zero;
-  DateTime? _pauseStarted;
-  DateTime? _lastPaintAt;
-  double _elapsedSeconds = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    tienMonAmbientPaused.addListener(_syncAmbientState);
-    _syncAmbientState();
-  }
-
-  void _onTick(Duration _) {
-    if (!mounted || tienMonAmbientPaused.value) return;
-    final now = DateTime.now();
-    final last = _lastPaintAt;
-    if (last != null &&
-        now.difference(last) < const Duration(milliseconds: 32)) {
-      return;
-    }
-    _lastPaintAt = now;
-    _elapsedSeconds =
-        (now.difference(_startedAt) - _pausedDuration).inMicroseconds /
-        Duration.microsecondsPerSecond;
-    setState(() {});
-  }
-
-  void _syncAmbientState() {
-    if (!mounted) return;
-    final paused = tienMonAmbientPaused.value;
-    if (paused) {
-      _pauseStarted ??= DateTime.now();
-      if (_ticker.isActive) _ticker.stop();
-      return;
-    }
-
-    final pauseStarted = _pauseStarted;
-    if (pauseStarted != null) {
-      _pausedDuration += DateTime.now().difference(pauseStarted);
-      _pauseStarted = null;
-    }
-    _lastPaintAt = null;
-    if (!_ticker.isActive) _ticker.start();
+    _controller.repeat();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _syncAmbientState();
+      if (!_controller.isAnimating) _controller.repeat();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      if (_ticker.isActive) _ticker.stop();
+      if (_controller.isAnimating) {
+        _controller.stop(canceled: false);
+      }
     }
   }
 
   @override
   void dispose() {
-    tienMonAmbientPaused.removeListener(_syncAmbientState);
     WidgetsBinding.instance.removeObserver(this);
-    _ticker.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
     child: RepaintBoundary(
-      child: CustomPaint(
-        painter: _AmbientPainter(
-          elapsedSeconds: _elapsedSeconds,
-          profile: _ambientProfiles[widget.scene - 1],
-          scene: widget.scene,
-        ),
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final elapsedSeconds =
+              DateTime.now().difference(_startedAt).inMicroseconds /
+              Duration.microsecondsPerSecond;
+          return CustomPaint(
+            painter: _AmbientPainter(
+              elapsedSeconds: elapsedSeconds,
+              profile: _ambientProfiles[widget.scene - 1],
+              scene: widget.scene,
+            ),
+          );
+        },
       ),
     ),
   );

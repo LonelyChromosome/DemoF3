@@ -1082,8 +1082,6 @@ class AppThemeBackdrop extends StatefulWidget {
 
 class _AppThemeBackdropState extends State<AppThemeBackdrop>
     with WidgetsBindingObserver {
-  Timer? _ambientResumeTimer;
-
   late final TienMonSceneController _tienMonScenes = TienMonSceneController();
 
   @override
@@ -1103,27 +1101,9 @@ class _AppThemeBackdropState extends State<AppThemeBackdrop>
 
   @override
   void dispose() {
-    _ambientResumeTimer?.cancel();
-    setTienMonAmbientPaused(false);
     WidgetsBinding.instance.removeObserver(this);
     _tienMonScenes.dispose();
     super.dispose();
-  }
-
-  bool _handleScrollNotification(ScrollNotification notification) {
-    if (appThemePalette.id != AppThemeId.tienMonPremium) return false;
-    if (notification is ScrollStartNotification ||
-        notification is ScrollUpdateNotification ||
-        notification is OverscrollNotification) {
-      _ambientResumeTimer?.cancel();
-      setTienMonAmbientPaused(true);
-    } else if (notification is ScrollEndNotification) {
-      _ambientResumeTimer?.cancel();
-      _ambientResumeTimer = Timer(const Duration(milliseconds: 120), () {
-        setTienMonAmbientPaused(false);
-      });
-    }
-    return false;
   }
 
   @override
@@ -1134,10 +1114,7 @@ class _AppThemeBackdropState extends State<AppThemeBackdrop>
         children: <Widget>[
           TienMonPersistentBackground(controller: _tienMonScenes),
           TienMonPersistentAmbient(controller: _tienMonScenes),
-          NotificationListener<ScrollNotification>(
-            onNotification: _handleScrollNotification,
-            child: widget.child,
-          ),
+          widget.child,
         ],
       );
     }
