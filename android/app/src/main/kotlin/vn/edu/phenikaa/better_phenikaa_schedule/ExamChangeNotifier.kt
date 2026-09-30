@@ -78,12 +78,15 @@ internal object ExamChangeNotifier {
             5 -> AssistantEvent.study_and_exam_changed
             else -> return
         }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs.edit()
             .putString(SYSTEM_MESSAGE, AssistantText.of(
                 event, AssistantText.selected(context)))
             .putBoolean(NOTIFIED, false)
             .commit()
         publishPending(context)
+        // Test delivery must not leave synthetic change state behind.
+        prefs.edit().remove(SYSTEM_MESSAGE).remove(NOTIFIED).apply()
     }
 
     fun pending(context: Context): String? =
