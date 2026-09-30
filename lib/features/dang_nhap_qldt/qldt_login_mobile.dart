@@ -201,7 +201,7 @@ class _QldtWebLoginScreen extends StatefulWidget {
   State<_QldtWebLoginScreen> createState() => _QldtWebLoginScreenState();
 }
 
-class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
+class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>\n    with SingleTickerProviderStateMixin {
   static final WebUri _qldtUri = WebUri(
     'https://qldtbeta.phenikaa-uni.edu.vn/',
   );
@@ -232,6 +232,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   bool _webCanGoBack = false;
   bool _allowRoutePop = false;
   bool _showWebPage = false;
+  bool _portalInputLocked = false;
+  late final AnimationController _reloadSpinController;
   String? _submittedUsername;
   String? _submittedPassword;
   String? _savedUsername;
@@ -247,9 +249,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   @override
   void initState() {
     super.initState();
+    _reloadSpinController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    )..repeat();
     unawaited(_loadSavedCredentials());
     unawaited(_loadAssistantPack());
     _showWebPage = !widget.cachedSession;
+    _portalInputLocked = widget.cachedSession;
     if (widget.cachedSession) {
       _status = 'Đang kiểm tra phiên QLĐT và đồng bộ...';
     }
@@ -267,6 +274,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _phaseTimer?.cancel();
     _sessionTimer?.cancel();
     _legacyFallbackTimer?.cancel();
+    _reloadSpinController.dispose();
     _controller = null;
     super.dispose();
   }
@@ -447,15 +455,26 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
                             ),
                           ),
                         ),
-                        if (!_showWebPage)
+                        if (_portalInputLocked || !_showWebPage)
                           Positioned.fill(
-                            child: ColoredBox(
-                              color: Colors.white,
-                              child: Center(
-                                child: _syncing || !_autoSyncStarted
-                                    ? const CircularProgressIndicator()
-                                    : const Icon(Icons.error_outline, size: 48),
-                              ),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: <Widget>[
+                                const ModalBarrier(
+                                  dismissible: false,
+                                  color: Colors.white,
+                                ),
+                                Center(
+                                  child: RotationTransition(
+                                    turns: _reloadSpinController,
+                                    child: const Icon(
+                                      Icons.refresh_rounded,
+                                      size: 46,
+                                      color: Color(0xFF1747B5),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                       ],
@@ -789,6 +808,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         }
         if (arguments.isNotEmpty && arguments.first == 'password') {
           _autoPasswordSubmitted = true;
+          if (mounted) {
+            setState(() {
+              _portalInputLocked = true;
+              _showWebPage = false;
+              _status = 'Đang vào QLĐT để xác nhận tài khoản...';
+            });
+          }
         }
         return null;
       },
@@ -802,6 +828,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           _submittedUsername = value.trim();
         } else if (arguments[0] == 'password' && value.length <= 512) {
           _submittedPassword = value;
+          if (mounted) {
+            setState(() {
+              _portalInputLocked = true;
+              _showWebPage = false;
+              _status = 'Đang vào QLĐT để xác nhận tài khoản...';
+            });
+          }
         }
         return null;
       },
@@ -1014,6 +1047,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
           _resolvedDisplayName = displayName;
         }
       }
+      if (displayName.isEmpty) {
+        throw const FormatException('QLDT_CANONICAL_NAME_MISSING');
+      }
 
       final semester = const SemesterDataBuilder().build(
         registration: registration,
@@ -1210,31 +1246,32 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
 
       if (!mounted || (_autoSyncStarted && !_syncing)) return;
 
-      final ready = session != null;
-      if (ready) {
+      var ready = false;
+      if (session != null) {
         _nativeSession = session;
 
-        // The canonical QLĐT name is captured once per login lifecycle.
-        // While the same account remains logged in, always reuse the local
-        // qldt_html cache and never probe HTML/API/JWT again.
+        // Canonical-name invariant:
+        // a valid QLĐT session is NOT ready until the exact account name from
+        // #lblHoTenNguoiDangNhap has been captured once (or loaded from the
+        // qldt_html cache created by that capture).
         final cachedName = await _cachedProfileNameFor(session.userId);
         if (cachedName.isNotEmpty) {
           _resolvedDisplayName = cachedName;
         } else {
-          final htmlName = await _waitForQldtHtmlDisplayName(
-            controller,
-            attempts: 24,
-          );
+          final htmlName = await _readProfileNameFromPage(controller);
           if (htmlName.isNotEmpty) {
             await _rememberProfileName(session, htmlName);
           }
         }
+        ready = _resolvedDisplayName.isNotEmpty;
       }
 
       setState(() {
         _pageReady = ready;
         _status = ready
-            ? 'Đã nhận session QLĐT. App đang đồng bộ bằng native HTTP...'
+            ? 'Đã xác nhận tài khoản QLĐT. Đang đồng bộ...'
+            : session != null
+            ? 'Đang lấy tên thật từ QLĐT...'
             : 'Đang lấy session QLĐT sau đăng nhập...';
       });
 
