@@ -26,18 +26,6 @@ const _legacyMode = 'legacy';
 const _nativeMode = 'native';
 const _credentialChannel = MethodChannel('better_phenikaa/qldt_credentials');
 
-String _normalizeVietnameseDisplayName(String value) {
-  return value
-      .split(' ')
-      .where((part) => part.isNotEmpty)
-      .map((part) {
-        final lower = part.toLowerCase();
-        if (lower.length == 1) return lower.toUpperCase();
-        return '${lower[0].toUpperCase()}${lower.substring(1)}';
-      })
-      .join(' ');
-}
-
 String _sanitizeQldtProfileName(Object? raw) {
   final value = raw?.toString().replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
   if (value.length < 3 || value.length > 120 || value.contains('@')) return '';
@@ -54,7 +42,7 @@ String _sanitizeQldtProfileName(Object? raw) {
   }.contains(lower)) {
     return '';
   }
-  return _normalizeVietnameseDisplayName(value);
+  return value;
 }
 
 String _profileNameFromObject(Object? node, [int depth = 0]) {
@@ -147,10 +135,12 @@ Future<String> readCachedQldtDisplayName() async {
         final profile = Map<String, dynamic>.from(
           jsonDecode(profileRaw) as Map<dynamic, dynamic>,
         );
-        final cached = _sanitizeQldtProfileName(profile['name']);
-        if (cached.isNotEmpty) return cached;
+        if ((profile['source'] ?? '').toString() == 'qldt_html') {
+          final cached = _sanitizeQldtProfileName(profile['name']);
+          if (cached.isNotEmpty) return cached;
+        }
       } on Object {
-        // Fall through to the session/JWT cache.
+        // Ignore legacy/untrusted profile caches.
       }
     }
 
@@ -159,20 +149,8 @@ Future<String> readCachedQldtDisplayName() async {
     final session = Map<String, dynamic>.from(
       jsonDecode(sessionRaw) as Map<dynamic, dynamic>,
     );
-    var name = _sanitizeQldtProfileName(session['name']);
-    if (name.isEmpty) {
-      name = _displayNameFromJwtToken((session['tokenJWT'] ?? '').toString());
-    }
-    if (name.isEmpty) return '';
-
-    final userId = (session['userId'] ?? '').toString();
-    if (userId.isNotEmpty) {
-      await prefs.setString(
-        _profileKey,
-        jsonEncode(<String, String>{'userId': userId, 'name': name}),
-      );
-    }
-    return name;
+    if ((session['nameSource'] ?? '').toString() != 'qldt_html') return '';
+    return _sanitizeQldtProfileName(session['name']);
   } on Object {
     return '';
   }
@@ -556,6 +534,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         jsonDecode(raw) as Map<dynamic, dynamic>,
       );
       if ((json['userId'] ?? '').toString() != userId) return '';
+      if ((json['source'] ?? '').toString() != 'qldt_html') return '';
       return _cleanProfileName(json['name']);
     } on Object {
       return '';
@@ -576,6 +555,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         jsonEncode(<String, String>{
           'userId': session.userId,
           'name': name,
+          'source': 'qldt_html',
         }),
       );
     } on Object {
@@ -587,22 +567,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     InAppWebViewController controller,
   ) async {
     try {
-      final raw = await controller.evaluateJavascript(
-        source: r'''
-          (function () {
-            var node = document.getElementById('lblHoTenNguoiDangNhap');
-            if (!node) return JSON.stringify('');
-            var text = String(node.textContent || '')
-              .replace(/\s+/g, ' ')
-              .trim();
-            return JSON.stringify(text);
-          })();
-        ''',
-      );
-      final text = raw?.toString() ?? '';
-      if (text.isEmpty || text == 'null') return '';
-      final decoded = jsonDecode(text);
-      return _cleanProfileName(decoded);
+      final html = await controller.getHtml();
+      if (html == null || html.isEmpty) return '';
+      final name = const QldtParser().parseDisplayName(html);
+      return _cleanProfileName(name);
     } on Object {
       return '';
     }
@@ -651,6 +619,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         'strChucNangId': session.functionId,
         'cookie': session.cookie,
         'name': name,
+        'nameSource': name.isEmpty ? '' : 'qldt_html',
       }),
     );
   }
@@ -1063,22 +1032,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       if (controller != null) {
         displayName = await _waitForQldtHtmlDisplayName(
           controller,
-          attempts: 16,
+          attempts: 24,
         );
       }
       if (displayName.isEmpty) {
         displayName = _resolvedDisplayName;
-      }
-      if (displayName.isEmpty) {
-        displayName = _cleanProfileName(schedule.displayName);
-      }
-      if (displayName.isEmpty) {
-        try {
-          displayName =
-              (await CurrentSemesterStore().read())?.displayName.trim() ?? '';
-        } on Object {
-          // A missing cached name must not block a verified schedule.
-        }
       }
       if (displayName.isNotEmpty && session != null) {
         await _rememberProfileName(session, displayName);
