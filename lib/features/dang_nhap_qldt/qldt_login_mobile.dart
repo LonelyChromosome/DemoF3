@@ -219,7 +219,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   ImportedScheduleData? _pendingSchedule;
   QldtNativeSession? _nativeSession;
   String _resolvedDisplayName = '';
-  int _profileProbeGeneration = 0;
   String? _pendingRegistrationRaw;
   String? _failureDiagnosticsJson;
   final List<String> _scheduleStages = <String>[];
@@ -268,7 +267,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _phaseTimer?.cancel();
     _sessionTimer?.cancel();
     _legacyFallbackTimer?.cancel();
-    _profileProbeGeneration += 1;
     _controller = null;
     super.dispose();
   }
@@ -585,22 +583,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
     return '';
-  }
-
-  Future<void> _startProfileProbe(
-    QldtNativeSession session,
-    InAppWebViewController controller,
-  ) async {
-    final generation = ++_profileProbeGeneration;
-    for (var attempt = 0; attempt < 24; attempt++) {
-      if (!mounted || generation != _profileProbeGeneration) return;
-      final name = await _readProfileNameFromPage(controller);
-      if (name.isNotEmpty) {
-        await _rememberProfileName(session, name);
-        return;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-    }
   }
 
   Future<void> _cacheNativeSession(QldtNativeSession session) async {
