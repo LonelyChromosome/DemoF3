@@ -904,7 +904,7 @@ class _SplashScreen extends StatelessWidget {
               color: palette.textSecondary,
               fontSize: 12,
               shadows: palette.id == AppThemeId.tienMonPremium
-                  ? _tienMonGoldShadows
+                  ? tienMonTextShadows
                   : null,
             ),
           ),
@@ -2152,7 +2152,7 @@ class _TopTitle extends StatelessWidget {
       fontWeight: FontWeight.w900,
       letterSpacing: themeLetterSpacing(palette),
       shadows: palette.id == AppThemeId.tienMonPremium
-          ? _tienMonGoldShadows
+          ? tienMonTextShadows
           : null,
     );
     return Row(
@@ -2343,7 +2343,7 @@ class _TimetableModeSelector extends StatelessWidget {
                               ? Colors.white
                               : palette.textPrimary,
                           fontWeight: FontWeight.w900,
-                          shadows: premium ? _tienMonGoldShadows : null,
+                          shadows: premium ? tienMonTextShadows : null,
                         ),
                       ),
                     ),
@@ -2381,7 +2381,7 @@ class _DateNavigator extends StatelessWidget {
           icon: Icon(
             Icons.chevron_left_rounded,
             color: palette.textSecondary,
-            shadows: premium ? _tienMonGoldShadows : null,
+            shadows: premium ? tienMonTextShadows : null,
           ),
         ),
         Expanded(
@@ -2403,7 +2403,7 @@ class _DateNavigator extends StatelessWidget {
                       style: TextStyle(
                         color: palette.textPrimary,
                         fontWeight: FontWeight.w800,
-                        shadows: premium ? _tienMonGoldShadows : null,
+                        shadows: premium ? tienMonTextShadows : null,
                       ),
                     ),
                   ),
@@ -2412,7 +2412,7 @@ class _DateNavigator extends StatelessWidget {
                     Icons.expand_more_rounded,
                     size: 18,
                     color: palette.textSecondary,
-                    shadows: premium ? _tienMonGoldShadows : null,
+                    shadows: premium ? tienMonTextShadows : null,
                   ),
                 ],
               ),
@@ -2424,7 +2424,7 @@ class _DateNavigator extends StatelessWidget {
           icon: Icon(
             Icons.chevron_right_rounded,
             color: palette.textSecondary,
-            shadows: premium ? _tienMonGoldShadows : null,
+            shadows: premium ? tienMonTextShadows : null,
           ),
         ),
       ],
@@ -2588,7 +2588,7 @@ class _ScheduleCard extends StatelessWidget {
               color: palette.primary,
               fontWeight: FontWeight.w900,
               fontSize: 17,
-              shadows: premium ? _tienMonGoldShadows : null,
+              shadows: premium ? tienMonTextShadows : null,
             ),
           ),
         ),
@@ -2605,7 +2605,7 @@ class _ScheduleCard extends StatelessWidget {
                     color: palette.textPrimary,
                     fontWeight: FontWeight.w900,
                     fontSize: 16,
-                    shadows: premium ? _tienMonGoldShadows : null,
+                    shadows: premium ? tienMonTextShadows : null,
                   ),
                 ),
                 if (item.room.isNotEmpty) ...<Widget>[
@@ -2683,7 +2683,7 @@ class _ExamCard extends StatelessWidget {
                     color: palette.primary,
                     fontSize: 20,
                     fontWeight: FontWeight.w900,
-                    shadows: premium ? _tienMonGoldShadows : null,
+                    shadows: premium ? tienMonTextShadows : null,
                   ),
                 ),
                 Text(
@@ -2691,7 +2691,7 @@ class _ExamCard extends StatelessWidget {
                   style: TextStyle(
                     color: palette.textSecondary,
                     fontSize: 10,
-                    shadows: premium ? _tienMonGoldShadows : null,
+                    shadows: premium ? tienMonTextShadows : null,
                   ),
                 ),
               ],
@@ -2707,7 +2707,7 @@ class _ExamCard extends StatelessWidget {
                   style: TextStyle(
                     color: palette.textPrimary,
                     fontWeight: FontWeight.w900,
-                    shadows: premium ? _tienMonGoldShadows : null,
+                    shadows: premium ? tienMonTextShadows : null,
                   ),
                 ),
                 if (item.examForm.isNotEmpty) ...<Widget>[
@@ -2717,7 +2717,7 @@ class _ExamCard extends StatelessWidget {
                     style: TextStyle(
                       color: premium ? const Color(0xFFFFD66B) : palette.accent,
                       fontSize: 11,
-                      shadows: premium ? _tienMonGoldShadows : null,
+                      shadows: premium ? tienMonTextShadows : null,
                     ),
                   ),
                 ],
@@ -3597,11 +3597,6 @@ Color _contrastForeground(Color background) =>
     ? const Color(0xFF101418)
     : Colors.white;
 
-const List<Shadow> _tienMonGoldShadows = <Shadow>[
-  Shadow(color: Colors.black, blurRadius: 3, offset: Offset(0, 1)),
-  Shadow(color: Color(0xCC000000), blurRadius: 7, offset: Offset(0, 2)),
-];
-
 class _MetaLine extends StatelessWidget {
   const new({required this.icon, required this.text});
 
@@ -3618,7 +3613,7 @@ class _MetaLine extends StatelessWidget {
           size: 15,
           color: palette.textSecondary,
           shadows: palette.id == AppThemeId.tienMonPremium
-              ? _tienMonGoldShadows
+              ? tienMonTextShadows
               : null,
         ),
         const SizedBox(width: 5),
