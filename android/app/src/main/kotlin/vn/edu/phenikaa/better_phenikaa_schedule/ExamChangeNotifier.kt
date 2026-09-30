@@ -71,6 +71,21 @@ internal object ExamChangeNotifier {
         if (notifySystem) publishPending(context)
     }
 
+    internal fun publishForAssistantTest(context: Context, useCase: Int) {
+        val event = when (useCase) {
+            3 -> AssistantEvent.study_changed
+            4 -> AssistantEvent.exam_changed
+            5 -> AssistantEvent.study_and_exam_changed
+            else -> return
+        }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(SYSTEM_MESSAGE, AssistantText.of(
+                event, AssistantText.selected(context)))
+            .putBoolean(NOTIFIED, false)
+            .commit()
+        publishPending(context)
+    }
+
     fun pending(context: Context): String? =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(MESSAGE, null)
 
