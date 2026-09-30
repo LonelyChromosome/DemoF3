@@ -109,21 +109,7 @@ final class QldtParser {
   String parseDisplayName(String html) {
     final document = html_parser.parse(html);
     final preferred = document.querySelector('#lblHoTenNguoiDangNhap');
-    final preferredText = preferred?.text.trim() ?? '';
-    if (preferredText.isNotEmpty) {
-      return preferredText;
-    }
-
-    final accountSpans = document.querySelectorAll(
-      '.nav-account button > span',
-    );
-    for (final span in accountSpans) {
-      final text = span.text.trim();
-      if (text.isNotEmpty) {
-        return text;
-      }
-    }
-    return '';
+    return preferred?.text.replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
   }
 
   ImportedScheduleData parseLiveEnvelope(
