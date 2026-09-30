@@ -38,6 +38,31 @@ void main() {
     expect(parser.parseDisplayName(html), 'Sinh Viên Demo');
   });
 
+  test('keeps QLĐT student-name token order for every account', () {
+    const names = <String>[
+      'Nguyễn Minh Đạo',
+      'Trần Thị Mai',
+      'Lê Nguyễn Gia Huy',
+      'Đỗ Hoàng Gia Bảo',
+    ];
+
+    for (final name in names) {
+      final html =
+          '<span id="lblHoTenNguoiDangNhap">$name</span>';
+      expect(parser.parseDisplayName(html), name);
+    }
+  });
+
+  test('does not treat generic account display names as student names', () {
+    const html = '''
+      <div class="nav-account">
+        <button><span>Microsoft Display Name</span></button>
+      </div>
+    ''';
+
+    expect(parser.parseDisplayName(html), isEmpty);
+  });
+
   test('separates study schedule and exam schedule using PHANLOAI', () {
     final parsed = parser.parseApiResponse(<String, dynamic>{
       'Success': true,
