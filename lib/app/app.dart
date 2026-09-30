@@ -2100,6 +2100,99 @@ class _AccountScreen extends StatelessWidget {
     }
   }
 
+  static const _assistantUseCaseLabels = <String>[
+    'Nhắc đã lâu chưa đồng bộ',
+    'Đồng bộ xong, không có thay đổi',
+    'Lịch học thay đổi',
+    'Lịch thi thay đổi',
+    'Lịch học và lịch thi cùng thay đổi',
+    'Còn 7 ngày tới kỳ thi',
+    'Còn 3 ngày tới kỳ thi',
+    'Ngày mai thi',
+    'Còn X ngày tới kỳ thi',
+    'Đang trong kỳ thi',
+    'Còn X ngày, có N môn thi',
+    'Widget đồng bộ xong, có thay đổi',
+    'Widget đồng bộ xong, không thay đổi',
+    'Có thay đổi chưa đọc',
+    'Chưa có lịch thi',
+    'Hôm nay không có lịch học',
+    'Đồng bộ thất bại',
+    'Đồng bộ quá lâu / timeout',
+  ];
+
+  static (AssistantEvent, int, int) _assistantPreviewSpec(int useCase) =>
+      switch (useCase) {
+        1 => (AssistantEvent.syncStale, 0, 1),
+        2 => (AssistantEvent.syncSuccessNoChange, 0, 1),
+        3 => (AssistantEvent.studyChanged, 0, 1),
+        4 => (AssistantEvent.examChanged, 0, 1),
+        5 => (AssistantEvent.studyAndExamChanged, 0, 1),
+        6 => (AssistantEvent.examInDays, 7, 1),
+        7 => (AssistantEvent.examInDays, 3, 1),
+        8 => (AssistantEvent.examTomorrow, 1, 1),
+        9 => (AssistantEvent.examInDays, 5, 1),
+        10 => (AssistantEvent.examPeriodActive, 0, 1),
+        11 => (AssistantEvent.examCountdownMultiple, 5, 2),
+        12 => (AssistantEvent.widgetSyncChanged, 0, 1),
+        13 => (AssistantEvent.widgetSyncUnchanged, 0, 1),
+        14 => (AssistantEvent.differenceUnread, 0, 1),
+        15 => (AssistantEvent.examEmpty, 0, 1),
+        16 => (AssistantEvent.studyTodayEmpty, 0, 1),
+        17 => (AssistantEvent.syncFailed, 0, 1),
+        18 => (AssistantEvent.syncTimeout, 0, 1),
+        _ => throw RangeError.range(useCase, 1, 18, 'useCase'),
+      };
+
+  Future<void> _showAssistantUseCasePreview(
+    BuildContext context,
+    int useCase,
+  ) async {
+    final (event, days, examCount) = _assistantPreviewSpec(useCase);
+    final title = AssistantText.titleOf(event, assistantPack);
+    final message = AssistantText.of(
+      event,
+      assistantPack,
+      days: days,
+      examCount: examCount,
+    );
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(
+          'U$useCase · ${_assistantUseCaseLabels[useCase - 1]}',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 10),
+            Text(message),
+            if (useCase == 9 || useCase == 11) ...<Widget>[
+              const SizedBox(height: 12),
+              Text(
+                useCase == 11
+                    ? 'Dữ liệu mẫu: X = 5 ngày, N = 2 môn'
+                    : 'Dữ liệu mẫu: X = 5 ngày',
+                style: Theme.of(dialogContext).textTheme.bodySmall,
+              ),
+            ],
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
@@ -2209,6 +2302,66 @@ class _AccountScreen extends StatelessWidget {
                           const Icon(Icons.arrow_drop_down),
                         ],
                       ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Theme(
+                    data: Theme.of(context).copyWith(
+                      dividerColor: Colors.transparent,
+                    ),
+                    child: ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: const EdgeInsets.only(bottom: 4),
+                      title: Text(
+                        'Kiểm tra 18 use case trợ lí',
+                        style: TextStyle(
+                          color: palette.textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Preview đúng nội dung đang dùng • U9: X=5 • U11: X=5, N=2',
+                        style: TextStyle(
+                          color: palette.textSecondary,
+                          fontSize: 11.5,
+                        ),
+                      ),
+                      children: <Widget>[
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: List<Widget>.generate(18, (index) {
+                              final useCase = index + 1;
+                              return SizedBox(
+                                width: 54,
+                                height: 40,
+                                child: OutlinedButton(
+                                  onPressed: () => unawaited(
+                                    _showAssistantUseCasePreview(
+                                      context,
+                                      useCase,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    side: BorderSide(color: palette.border),
+                                    shape: themeButtonShape(palette),
+                                  ),
+                                  child: Text(
+                                    'U$useCase',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 12),
