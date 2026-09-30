@@ -20,6 +20,7 @@ const bool supportsLiveQldtLogin = true;
 const _sessionKey = 'qldt_verified_session';
 const _portalPathKey = 'qldt_verified_portal_path';
 const _nativeSessionKey = 'better_phenikaa_qldt_native_session_v1';
+const _profileKey = 'better_phenikaa_qldt_profile_v1';
 const _syncModeKey = 'better_phenikaa_qldt_sync_mode_v1';
 const _legacyMode = 'legacy';
 const _nativeMode = 'native';
@@ -32,6 +33,7 @@ Future<void> clearQldtSession() async {
   await prefs.remove(_sessionKey);
   await prefs.remove(_portalPathKey);
   await prefs.remove(_nativeSessionKey);
+  await prefs.remove(_profileKey);
   await prefs.remove(_syncModeKey);
 }
 
@@ -87,6 +89,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
   QldtNativeSession? _nativeSession;
+  String _resolvedDisplayName = '';
+  int _profileProbeGeneration = 0;
   String? _pendingRegistrationRaw;
   String? _failureDiagnosticsJson;
   final List<String> _scheduleStages = <String>[];
@@ -135,6 +139,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     _phaseTimer?.cancel();
     _sessionTimer?.cancel();
     _legacyFallbackTimer?.cancel();
+    _profileProbeGeneration += 1;
     _controller = null;
     super.dispose();
   }
@@ -387,8 +392,213 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     return Uri.parse(_qldtUri.toString()).resolve(path).toString();
   }
 
+  String _cleanProfileName(Object? raw) {
+    final value = raw?.toString().replaceAll(RegExp(r'\s+'), ' ').trim() ?? '';
+    if (value.length < 3 || value.length > 120 || value.contains('@')) {
+      return '';
+    }
+    final lower = value.toLowerCase();
+    if (<String>{
+      'tài khoản',
+      'đăng xuất',
+      'account',
+      'profile',
+      'người dùng',
+      'sinh viên',
+    }.contains(lower)) {
+      return '';
+    }
+    return value;
+  }
+
+  Future<String> _cachedProfileNameFor(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_profileKey);
+      if (raw == null || raw.isEmpty) return '';
+      final json = Map<String, dynamic>.from(
+        jsonDecode(raw) as Map<dynamic, dynamic>,
+      );
+      if ((json['userId'] ?? '').toString() != userId) return '';
+      return _cleanProfileName(json['name']);
+    } on Object {
+      return '';
+    }
+  }
+
+  Future<void> _rememberProfileName(
+    QldtNativeSession session,
+    String rawName,
+  ) async {
+    final name = _cleanProfileName(rawName);
+    if (name.isEmpty) return;
+    _resolvedDisplayName = name;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _profileKey,
+        jsonEncode(<String, String>{
+          'userId': session.userId,
+          'name': name,
+        }),
+      );
+    } on Object {
+      // Profile cache must never block schedule sync.
+    }
+  }
+
+  Future<String> _readProfileNameFromPage(
+    InAppWebViewController controller,
+  ) async {
+    try {
+      final raw = await controller.evaluateJavascript(
+        source: r'''
+          (function () {
+            function clean(value) {
+              if (value == null) return '';
+              var text = String(value).replace(/\s+/g, ' ').trim();
+              if (text.length < 3 || text.length > 120 || text.indexOf('@') >= 0) {
+                return '';
+              }
+              var lower = text.toLowerCase();
+              if (['tài khoản','đăng xuất','account','profile','người dùng','sinh viên']
+                    .indexOf(lower) >= 0) return '';
+              return text;
+            }
+
+            function keyLooksLikeName(key) {
+              var k = String(key || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+              return k === 'HOTEN' ||
+                     k === 'HOVATEN' ||
+                     k === 'FULLNAME' ||
+                     k === 'DISPLAYNAME' ||
+                     k === 'TENNGUOIHOC' ||
+                     k === 'NGUOIHOTEN' ||
+                     k === 'SINHVIENTEN' ||
+                     k === 'TENSINHVIEN' ||
+                     k === 'TENNGUOIDUNG' ||
+                     (k.indexOf('NGUOIHOC') >= 0 && k.endsWith('TEN'));
+            }
+
+            function scanObject(root, depth, seen) {
+              if (!root || typeof root !== 'object' || depth > 5) return '';
+              if (seen.indexOf(root) >= 0) return '';
+              seen.push(root);
+              var keys;
+              try { keys = Object.keys(root); } catch (_) { return ''; }
+
+              for (var i = 0; i < keys.length; i++) {
+                var key = keys[i];
+                if (!keyLooksLikeName(key)) continue;
+                try {
+                  var candidate = clean(root[key]);
+                  if (candidate) return candidate;
+                } catch (_) {}
+              }
+
+              for (var j = 0; j < keys.length; j++) {
+                var child;
+                try { child = root[keys[j]]; } catch (_) { continue; }
+                if (!child || typeof child !== 'object') continue;
+                var nested = scanObject(child, depth + 1, seen);
+                if (nested) return nested;
+              }
+              return '';
+            }
+
+            var roots = [
+              window.edu && edu.system,
+              window.edu,
+              window.userInfo,
+              window.currentUser
+            ];
+            for (var r = 0; r < roots.length; r++) {
+              var fromObject = scanObject(roots[r], 0, []);
+              if (fromObject) return JSON.stringify(fromObject);
+            }
+
+            var selectors = [
+              '#lblHoTenNguoiDangNhap',
+              '[id*="HoTenNguoiDangNhap"]',
+              '[id*="HoTen"]',
+              '[id*="HOVATEN"]',
+              '.nav-account button > span',
+              '.nav-account .user-name',
+              '.user-name',
+              '.username',
+              '.account-name',
+              '.student-name',
+              '.profile-name',
+              '[class*="student-name"]',
+              '[class*="profile-name"]',
+              '[class*="user-name"]',
+              '[class*="username"]'
+            ];
+            for (var s = 0; s < selectors.length; s++) {
+              var nodes = document.querySelectorAll(selectors[s]);
+              for (var n = 0; n < nodes.length; n++) {
+                var fromDom = clean(nodes[n].textContent);
+                if (fromDom) return JSON.stringify(fromDom);
+              }
+            }
+
+            var bodyText = (document.body && document.body.innerText) || '';
+            var match = bodyText.match(
+              /(?:Họ\s*(?:và\s*)?tên|Họ tên)\s*[:：]\s*([^\n\r]{3,120})/i
+            );
+            if (match) {
+              var fromLabel = clean(match[1]);
+              if (fromLabel) return JSON.stringify(fromLabel);
+            }
+            return JSON.stringify('');
+          })();
+        ''',
+      );
+      final text = raw?.toString() ?? '';
+      if (text.isEmpty || text == 'null') return '';
+      final decoded = jsonDecode(text);
+      return _cleanProfileName(decoded);
+    } on Object {
+      return '';
+    }
+  }
+
+  Future<void> _startProfileProbe(
+    QldtNativeSession session,
+    InAppWebViewController controller,
+  ) async {
+    final generation = ++_profileProbeGeneration;
+
+    final sessionName = _cleanProfileName(session.displayName);
+    if (sessionName.isNotEmpty) {
+      await _rememberProfileName(session, sessionName);
+      return;
+    }
+
+    final cached = await _cachedProfileNameFor(session.userId);
+    if (cached.isNotEmpty) {
+      _resolvedDisplayName = cached;
+      return;
+    }
+
+    // edu.system becomes usable before the account/header DOM on QLĐT.
+    // Probe independently from schedule sync so name discovery never delays it.
+    for (var attempt = 0; attempt < 24; attempt++) {
+      if (!mounted || generation != _profileProbeGeneration) return;
+      final name = await _readProfileNameFromPage(controller);
+      if (name.isNotEmpty) {
+        await _rememberProfileName(session, name);
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+  }
+
   Future<void> _cacheNativeSession(QldtNativeSession session) async {
     final prefs = await SharedPreferences.getInstance();
+    var name = _cleanProfileName(session.displayName);
+    if (name.isEmpty) name = _resolvedDisplayName;
+    if (name.isEmpty) name = await _cachedProfileNameFor(session.userId);
     await prefs.setString(
       _nativeSessionKey,
       jsonEncode(<String, dynamic>{
@@ -398,7 +608,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         'appId': session.appId,
         'strChucNangId': session.functionId,
         'cookie': session.cookie,
-        'name': session.displayName,
+        'name': name,
       }),
     );
   }
@@ -804,11 +1014,21 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         schedule: schedule,
       );
       verificationStage = 'semester_build';
-      var displayName = schedule.displayName.trim();
+      var displayName = _cleanProfileName(schedule.displayName);
+      final session = _nativeSession;
       if (displayName.isEmpty) {
-        final sessionName = _nativeSession?.displayName.trim() ?? '';
-        if (sessionName.isNotEmpty) {
-          displayName = sessionName;
+        displayName = _resolvedDisplayName;
+      }
+      if (displayName.isEmpty && session != null) {
+        displayName = _cleanProfileName(session.displayName);
+      }
+      if (displayName.isEmpty && session != null) {
+        displayName = await _cachedProfileNameFor(session.userId);
+      }
+      if (displayName.isEmpty) {
+        final controller = _controller;
+        if (controller != null) {
+          displayName = await _readProfileNameFromPage(controller);
         }
       }
       if (displayName.isEmpty) {
@@ -818,6 +1038,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
         } on Object {
           // A missing cached name must not block a verified schedule.
         }
+      }
+      if (displayName.isNotEmpty && session != null) {
+        await _rememberProfileName(session, displayName);
       }
 
       final semester = const SemesterDataBuilder().build(
@@ -1051,7 +1274,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       if (!mounted || (_autoSyncStarted && !_syncing)) return;
 
       final ready = session != null;
-      if (ready) _nativeSession = session;
+      if (ready) {
+        _nativeSession = session;
+        unawaited(_startProfileProbe(session, controller));
+      }
 
       setState(() {
         _pageReady = ready;
