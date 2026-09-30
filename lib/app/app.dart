@@ -1012,7 +1012,7 @@ class _LoginScreen extends StatelessWidget {
   }
 }
 
-class _MainShell extends StatelessWidget {
+class _MainShell extends StatefulWidget {
   const new({
     required this.data,
     required this.page,
@@ -1070,9 +1070,78 @@ class _MainShell extends StatelessWidget {
   final VoidCallback onDismissError;
 
   @override
+  State<_MainShell> createState() => _MainShellState();
+}
+
+class _MainShellState extends State<_MainShell>
+    with SingleTickerProviderStateMixin {
+  static const Duration _pageFadeDuration = Duration(milliseconds: 240);
+
+  late _AppPage _displayPage;
+  late final AnimationController _pageFadeController = AnimationController(
+    vsync: this,
+    duration: _pageFadeDuration,
+    value: 1,
+  );
+  late final Animation<double> _pageFade = CurvedAnimation(
+    parent: _pageFadeController,
+    curve: Curves.easeOutCubic,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _displayPage = widget.page;
+  }
+
+  @override
+  void didUpdateWidget(covariant _MainShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.page == widget.page) return;
+
+    // Main navigation keeps every page mounted in the IndexedStack. Switch
+    // the active page immediately, then fade the new page in: slower than the
+    // calendar panel, but quicker than the full Day <-> Week transition.
+    setState(() => _displayPage = widget.page);
+    _pageFadeController.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _pageFadeController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final data = widget.data;
+    final page = widget.page;
+    final selectedDate = widget.selectedDate;
+    final showPastExams = widget.showPastExams;
+    final panelOpen = widget.panelOpen;
+    final syncing = widget.syncing;
+    final errorMessage = widget.errorMessage;
+    final examNotice = widget.examNotice;
+    final unreadDifference = widget.unreadDifference;
+    final hasActiveExamPeriod = widget.hasActiveExamPeriod;
+    final syncStale = widget.syncStale;
+    final onSyncWarning = widget.onSyncWarning;
+    final assistantPack = widget.assistantPack;
+    final onAssistantPackChanged = widget.onAssistantPackChanged;
+    final onOpenDifferences = widget.onOpenDifferences;
+    final onCloseNotificationCenter = widget.onCloseNotificationCenter;
+    final onOpenExamFromNotification = widget.onOpenExamFromNotification;
+    final onShowDifferences = widget.onShowDifferences;
+    final latestDifference = widget.latestDifference;
+    final onTogglePanel = widget.onTogglePanel;
+    final onOpenPage = widget.onOpenPage;
+    final onSync = widget.onSync;
+    final onLogout = widget.onLogout;
+    final onDateChanged = widget.onDateChanged;
+    final onExamTabChanged = widget.onExamTabChanged;
+    final onDismissError = widget.onDismissError;
     final palette = appThemePalette;
-    final pageIndex = switch (page) {
+    final pageIndex = switch (_displayPage) {
       _AppPage.timetable => 0,
       _AppPage.exam => 1,
       _AppPage.account => 2,
@@ -1083,12 +1152,14 @@ class _MainShell extends StatelessWidget {
       child: Stack(
         children: <Widget>[
           Positioned.fill(
-            child: IndexedStack(
-              index: pageIndex,
-              sizing: StackFit.expand,
+            child: FadeTransition(
+              opacity: _pageFade,
+              child: IndexedStack(
+                index: pageIndex,
+                sizing: StackFit.expand,
               children: <Widget>[
                 TickerMode(
-                  enabled: page == _AppPage.timetable,
+                  enabled: _displayPage == _AppPage.timetable,
                   child: RepaintBoundary(
                     child: _TimetableScreen(
                       data: data,
@@ -1102,7 +1173,7 @@ class _MainShell extends StatelessWidget {
                   ),
                 ),
                 TickerMode(
-                  enabled: page == _AppPage.exam,
+                  enabled: _displayPage == _AppPage.exam,
                   child: RepaintBoundary(
                     child: _ExamScreen(
                       data: data,
@@ -1116,7 +1187,7 @@ class _MainShell extends StatelessWidget {
                   ),
                 ),
                 TickerMode(
-                  enabled: page == _AppPage.account,
+                  enabled: _displayPage == _AppPage.account,
                   child: RepaintBoundary(
                     child: _AccountScreen(
                       data: data,
@@ -1128,7 +1199,7 @@ class _MainShell extends StatelessWidget {
                   ),
                 ),
                 TickerMode(
-                  enabled: page == _AppPage.notifications,
+                  enabled: _displayPage == _AppPage.notifications,
                   child: RepaintBoundary(
                     child: _NotificationCenterScreen(
                       hasActiveExamPeriod: hasActiveExamPeriod,
@@ -1140,7 +1211,8 @@ class _MainShell extends StatelessWidget {
                     ),
                   ),
                 ),
-              ],
+                ],
+              ),
             ),
           ),
           if (errorMessage != null)
