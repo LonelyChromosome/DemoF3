@@ -2154,25 +2154,102 @@ class _AccountScreen extends StatelessWidget {
     BuildContext context,
     int useCase,
   ) async {
-    try {
-      final delivered = await _assistantTestChannel.invokeMethod<bool>(
-        'triggerPopup',
-        useCase,
-      );
-      if (delivered == true || !context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Không thể đẩy popup. Hãy bật quyền thông báo cho ứng dụng.',
+    final (event, days, examCount) = _assistantPreviewSpec(useCase);
+
+    if (<int>{1, 3, 4, 5, 6, 7, 8, 9, 11}.contains(useCase)) {
+      try {
+        final delivered = await _assistantTestChannel.invokeMethod<bool>(
+          'trigger',
+          useCase,
+        );
+        if (delivered == true || !context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Không thể đẩy thông báo. Hãy bật quyền thông báo cho ứng dụng.',
+            ),
+          ),
+        );
+      } on PlatformException catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không gọi được notification: ${error.code}')),
+        );
+      }
+      return;
+    }
+
+    final message = AssistantText.of(
+      event,
+      assistantPack,
+      days: days,
+      examCount: examCount,
+    );
+
+    if (<int>{2, 12, 13}.contains(useCase)) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+
+    if (!context.mounted) return;
+    final palette = appThemePalette;
+    final Widget? surface = switch (useCase) {
+      10 => _NotificationExamCard(
+        text: message,
+        palette: palette,
+        onOpenExam: () => Navigator.of(context).pop(),
+      ),
+      14 => _NotificationChangeCard(
+        icon: Icons.notifications_active_rounded,
+        title: 'Thay đổi lịch',
+        description: message,
+        count: 1,
+        palette: palette,
+      ),
+      15 => _EmptyState(
+        icon: Icons.assignment_turned_in_outlined,
+        title: message,
+        message: 'Dữ liệu sẽ được cập nhật sau lần đồng bộ QLĐT tiếp theo.',
+      ),
+      16 => _EmptyState(
+        icon: Icons.event_available_outlined,
+        title: message,
+        message:
+            'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
+      ),
+      17 || 18 => _ErrorBanner(
+        message: message,
+        onDismiss: () => Navigator.of(context).pop(),
+      ),
+      _ => null,
+    };
+    if (surface == null) return;
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (routeContext) => Scaffold(
+          appBar: AppBar(
+            title: Text(
+              'U$useCase · ${_assistantUseCaseLabels[useCase - 1]}',
+            ),
+          ),
+          body: _PhoneSurface(
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Align(
+                alignment: useCase == 17 || useCase == 18
+                    ? Alignment.topCenter
+                    : Alignment.center,
+                child: surface,
+              ),
+            ),
           ),
         ),
-      );
-    } on PlatformException catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Không gọi được popup: ${error.code}')),
-      );
-    }
+      ),
+    );
   }
 
   @override
@@ -2303,7 +2380,7 @@ class _AccountScreen extends StatelessWidget {
                           ),
                         ),
                         subtitle: Text(
-                          'Bấm U để đẩy popup Android • U9: X=5 • U11: X=5, N=2',
+                          'Bấm U để gọi đúng chức năng thật • U9: X=5 • U11: X=5, N=2',
                           style: TextStyle(
                             color: palette.textSecondary,
                             fontSize: 11.5,
