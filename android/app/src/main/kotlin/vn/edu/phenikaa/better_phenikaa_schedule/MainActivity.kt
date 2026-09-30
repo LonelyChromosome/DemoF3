@@ -54,6 +54,7 @@ class MainActivity : FlutterActivity() {
         configureQldtCredentialChannel(flutterEngine)
         configureWidgetSessionChannel(flutterEngine)
         configureLocalFileChannel(flutterEngine)
+        configureAssistantTestChannel(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             WIDGET_PIN_CHANNEL).setMethodCallHandler { call, result ->
             if (call.method != "requestPin") {
@@ -193,6 +194,38 @@ class MainActivity : FlutterActivity() {
                         )
                     }
                 }
+        }
+    }
+
+    private fun configureAssistantTestChannel(flutterEngine: FlutterEngine) {
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            ASSISTANT_TEST_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "trigger") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val useCase = (call.arguments as? Number)?.toInt() ?: run {
+                result.error("invalid_use_case", "Thiếu use case.", null)
+                return@setMethodCallHandler
+            }
+            when (useCase) {
+                1 -> SyncStaleReminderScheduler.publishForAssistantTest(applicationContext)
+                3, 4, 5 -> ExamChangeNotifier.publishForAssistantTest(
+                    applicationContext,
+                    useCase,
+                )
+                6, 7, 8, 9, 11 -> ExamReminderScheduler.publishForAssistantTest(
+                    applicationContext,
+                    useCase,
+                )
+                else -> {
+                    result.success(false)
+                    return@setMethodCallHandler
+                }
+            }
+            result.success(true)
         }
     }
 
@@ -551,6 +584,7 @@ class MainActivity : FlutterActivity() {
         private const val WIDGET_THEME_CHANNEL = "better_phenikaa/widget_theme"
         private const val WIDGET_PIN_CHANNEL = "better_phenikaa/widget_pin"
         private const val LOCAL_FILE_CHANNEL = "better_phenikaa/local_files"
+        private const val ASSISTANT_TEST_CHANNEL = "better_phenikaa/assistant_test"
         private const val FLUTTER_PREFS = "FlutterSharedPreferences"
         private const val THEME_KEY = "flutter.appTheme"
         internal const val THEME_TOKEN_KEY = "flutter.widgetThemeToken"
