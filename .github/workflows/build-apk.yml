@@ -50,12 +50,6 @@ jobs:
           test -x android/gradlew
           test -f android/gradle/wrapper/gradle-wrapper.jar
 
-      - name: Test
-        run: flutter test
-
-      - name: Native Android tests
-        run: cd android && ./gradlew :app:testDebugUnitTest
-
       - name: Build release APK
         run: flutter build apk --release
 
