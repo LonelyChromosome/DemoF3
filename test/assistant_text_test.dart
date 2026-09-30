@@ -32,6 +32,21 @@ void main() {
     }
   });
 
+  test('dynamic use cases keep required placeholders in every pack', () {
+    for (final pack in AssistantPack.values) {
+      expect(
+        assistantCatalog[pack.name]![9],
+        contains('X'),
+        reason: '${pack.name} U9 must keep X',
+      );
+      expect(
+        assistantCatalog[pack.name]![11],
+        allOf(contains('X'), contains('N')),
+        reason: '${pack.name} U11 must keep X and N',
+      );
+    }
+  });
+
   test('each existing event resolves to the approved use case', () {
     final cases = <(AssistantEvent, int, int, int)>[
       (AssistantEvent.syncStale, 1, 0, 1),
