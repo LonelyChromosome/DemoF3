@@ -2453,14 +2453,15 @@ Future<void> _showCalendarPicker(
     barrierColor: Colors.black.withValues(alpha: .48),
     builder: (context) {
       final screenHeight = MediaQuery.sizeOf(context).height;
-      // Reserve a percentage of the whole screen instead of trusting Android
-      // navigation insets. Some edge-to-edge devices report a zero/consumed
-      // bottom inset inside a modal route even though the system bar still
-      // overlays the sheet.
-      final bottomReserve = screenHeight * 0.08;
-      return StatefulBuilder(
-        builder: (context, setModalState) {
-          return TweenAnimationBuilder<double>(
+      // Physically lift the whole calendar sheet above the bottom 20% of the
+      // display. Do not rely on Android navigation insets here: on some
+      // edge-to-edge devices the modal route receives a consumed/zero inset.
+      final bottomGap = screenHeight * 0.20;
+      return Padding(
+        padding: EdgeInsets.only(bottom: bottomGap),
+        child: StatefulBuilder(
+          builder: (context, setModalState) {
+            return TweenAnimationBuilder<double>(
             tween: Tween<double>(begin: .94, end: 1),
             duration: const Duration(milliseconds: 280),
             curve: Curves.easeOutBack,
@@ -2470,12 +2471,8 @@ Future<void> _showCalendarPicker(
               child: child,
             ),
             child: Container(
-              padding: EdgeInsets.fromLTRB(
-                18,
-                10,
-                18,
-                18 + bottomReserve,
-              ),
+              constraints: BoxConstraints(maxHeight: screenHeight * 0.76),
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
               decoration: BoxDecoration(
                   color: palette.surface,
                   border: Border(top: BorderSide(color: palette.border)),
@@ -2492,9 +2489,11 @@ Future<void> _showCalendarPicker(
                     ),
                   ],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
+                child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
                     Container(
                       width: 42,
                       height: 5,
@@ -2545,11 +2544,13 @@ Future<void> _showCalendarPicker(
                         label: Text('Xem ${_dateLabel(draft)}'),
                       ),
                     ),
-                ],
+                    ],
+                  ),
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       );
     },
   );
