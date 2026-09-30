@@ -861,6 +861,33 @@ class AppThemeController extends ChangeNotifier {
   }
 }
 
+const List<Shadow> tienMonTextShadows = <Shadow>[
+  Shadow(color: Colors.black, blurRadius: 3, offset: Offset(0, 1)),
+  Shadow(color: Color(0xCC000000), blurRadius: 7, offset: Offset(0, 2)),
+];
+
+TextTheme _withTienMonTextShadows(TextTheme theme) {
+  TextStyle? shadow(TextStyle? style) =>
+      style?.copyWith(shadows: tienMonTextShadows);
+  return theme.copyWith(
+    displayLarge: shadow(theme.displayLarge),
+    displayMedium: shadow(theme.displayMedium),
+    displaySmall: shadow(theme.displaySmall),
+    headlineLarge: shadow(theme.headlineLarge),
+    headlineMedium: shadow(theme.headlineMedium),
+    headlineSmall: shadow(theme.headlineSmall),
+    titleLarge: shadow(theme.titleLarge),
+    titleMedium: shadow(theme.titleMedium),
+    titleSmall: shadow(theme.titleSmall),
+    bodyLarge: shadow(theme.bodyLarge),
+    bodyMedium: shadow(theme.bodyMedium),
+    bodySmall: shadow(theme.bodySmall),
+    labelLarge: shadow(theme.labelLarge),
+    labelMedium: shadow(theme.labelMedium),
+    labelSmall: shadow(theme.labelSmall),
+  );
+}
+
 ThemeData buildBetterTheme(AppThemePalette palette) {
   final brightness = palette.dark ? Brightness.dark : Brightness.light;
   final fontScale = themeFontSizeFactor(palette.fontFamily);
@@ -870,6 +897,25 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
     fontFamily: palette.fontFamily ?? 'Roboto',
   );
   final shape = themeButtonShape(palette);
+  final appliedTextTheme = base.textTheme.apply(
+    fontFamily: palette.fontFamily ?? 'Roboto',
+    fontSizeFactor: fontScale,
+    bodyColor: palette.textPrimary,
+    displayColor: palette.textPrimary,
+  );
+  final appliedPrimaryTextTheme = base.primaryTextTheme.apply(
+    fontFamily: palette.fontFamily ?? 'Roboto',
+    fontSizeFactor: fontScale,
+  );
+  final textTheme = palette.id == AppThemeId.tienMonPremium
+      ? _withTienMonTextShadows(appliedTextTheme)
+      : appliedTextTheme;
+  final primaryTextTheme = palette.id == AppThemeId.tienMonPremium
+      ? _withTienMonTextShadows(appliedPrimaryTextTheme)
+      : appliedPrimaryTextTheme;
+  final premiumTextShadows = palette.id == AppThemeId.tienMonPremium
+      ? tienMonTextShadows
+      : null;
   return base.copyWith(
     scaffoldBackgroundColor: palette.surface,
     colorScheme:
@@ -882,16 +928,8 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
           surface: palette.surface,
           onSurface: palette.textPrimary,
         ),
-    textTheme: base.textTheme.apply(
-      fontFamily: palette.fontFamily ?? 'Roboto',
-      fontSizeFactor: fontScale,
-      bodyColor: palette.textPrimary,
-      displayColor: palette.textPrimary,
-    ),
-    primaryTextTheme: base.primaryTextTheme.apply(
-      fontFamily: palette.fontFamily ?? 'Roboto',
-      fontSizeFactor: fontScale,
-    ),
+    textTheme: textTheme,
+    primaryTextTheme: primaryTextTheme,
     iconTheme: IconThemeData(color: palette.textPrimary),
     cardTheme: CardThemeData(
       color: palette.card,
@@ -916,6 +954,7 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
           fontSize: 14 * fontScale,
           fontWeight: FontWeight.w800,
           letterSpacing: themeLetterSpacing(palette),
+          shadows: premiumTextShadows,
         ),
       ),
     ),
@@ -927,6 +966,16 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
         textStyle: TextStyle(
           fontFamily: palette.fontFamily ?? 'Roboto',
           fontSize: 14 * fontScale,
+          shadows: premiumTextShadows,
+        ),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        textStyle: TextStyle(
+          fontFamily: palette.fontFamily ?? 'Roboto',
+          fontSize: 14 * fontScale,
+          shadows: premiumTextShadows,
         ),
       ),
     ),
