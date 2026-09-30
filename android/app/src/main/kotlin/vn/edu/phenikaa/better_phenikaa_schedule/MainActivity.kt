@@ -98,12 +98,14 @@ class MainActivity : FlutterActivity() {
                 ComponentName(this, OverviewWidgetProvider::class.java),
             )
 
-            if (request.theme == "tien_mon_premium" &&
-                currentToken != request.token) {
-                // Tiên Môn must be committed while the app process is alive.
-                // The previous path deferred the real widget theme update to
-                // onStop() + delayed Handler callbacks; launcher/lifecycle races
-                // could therefore leave Classic/default rendered indefinitely.
+            if (request.theme == "tien_mon_premium") {
+                // Tiên Môn is authoritative as soon as it is selected.
+                //
+                // Even when currentToken is already tien_mon_premium, a previous
+                // Tiên Môn -> other-theme selection may still be queued in
+                // pendingWidgetRequest waiting for onStop(). If we only compare
+                // tokens here, that stale request can win later and flip the
+                // widget back to the old target after the app leaves foreground.
                 pendingWidgetApply?.let(widgetHandler::removeCallbacks)
                 pendingWidgetApply = null
                 pendingWidgetFromToken = null
