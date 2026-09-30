@@ -444,59 +444,60 @@ class _AmbientMotion extends StatefulWidget {
 }
 
 class _AmbientMotionState extends State<_AmbientMotion>
-    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 72),
-  );
+    with WidgetsBindingObserver {
+  Timer? _frameTimer;
   late final DateTime _startedAt = DateTime.now();
+  double _elapsedSeconds = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _ensureRunning();
+    _startAmbientFrames();
   }
 
-  void _ensureRunning() {
-    if (!_controller.isAnimating) _controller.repeat();
+  void _startAmbientFrames() {
+    _frameTimer?.cancel();
+    _frameTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      if (!mounted) return;
+      final next = DateTime.now().difference(_startedAt).inMicroseconds /
+          Duration.microsecondsPerSecond;
+      setState(() => _elapsedSeconds = next);
+    });
+  }
+
+  void _stopAmbientFrames() {
+    _frameTimer?.cancel();
+    _frameTimer = null;
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      _ensureRunning();
-      if (mounted) setState(() {});
+      if (_frameTimer == null) _startAmbientFrames();
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _stopAmbientFrames();
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller.dispose();
+    _stopAmbientFrames();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
     child: RepaintBoundary(
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          // The loop starts at phase zero only when the scene actually changes.
-          // Resuming the app keeps the same start instant, so ordinary lifecycle
-          // and page rebuilds do not restart ambient motion.
-          final elapsedSeconds =
-              DateTime.now().difference(_startedAt).inMicroseconds /
-              Duration.microsecondsPerSecond;
-          return CustomPaint(
-            painter: _AmbientPainter(
-              elapsedSeconds: elapsedSeconds,
-              profile: _ambientProfiles[widget.scene - 1],
-              scene: widget.scene,
-            ),
-          );
-        },
+      child: CustomPaint(
+        painter: _AmbientPainter(
+          elapsedSeconds: _elapsedSeconds,
+          profile: _ambientProfiles[widget.scene - 1],
+          scene: widget.scene,
+        ),
       ),
     ),
   );

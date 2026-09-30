@@ -99,19 +99,29 @@ class MainActivity : FlutterActivity() {
             )
 
             if (request.theme == "tien_mon_premium") {
-                // Tiên Môn is authoritative as soon as it is selected.
-                //
-                // Even when currentToken is already tien_mon_premium, a previous
-                // Tiên Môn -> other-theme selection may still be queued in
-                // pendingWidgetRequest waiting for onStop(). If we only compare
-                // tokens here, that stale request can win later and flip the
-                // widget back to the old target after the app leaves foreground.
+                // Cancel any stale intermediate target first. If the widget is
+                // already Tiên Môn there is nothing to repaint; otherwise use
+                // the same staged fade path as every other theme transition.
                 pendingWidgetApply?.let(widgetHandler::removeCallbacks)
                 pendingWidgetApply = null
                 pendingWidgetFromToken = null
                 pendingWidgetRequest = null
-                commitWidgetTheme(prefs, request, refreshOverview = false)
-                WidgetRefreshCoordinator.refreshData(this)
+
+                if (currentToken == request.token) {
+                    if (fontChanged) {
+                        commitWidgetTheme(prefs, request, refreshOverview = false)
+                        WidgetRefreshCoordinator.refreshData(this)
+                    }
+                    result.success(widgetIds.size + overviewIds.size)
+                    return@setMethodCallHandler
+                }
+
+                if (widgetIds.isNotEmpty() || overviewIds.isNotEmpty()) {
+                    pendingWidgetFromToken = currentToken
+                    pendingWidgetRequest = request
+                } else {
+                    commitWidgetTheme(prefs, request)
+                }
                 result.success(widgetIds.size + overviewIds.size)
                 return@setMethodCallHandler
             }

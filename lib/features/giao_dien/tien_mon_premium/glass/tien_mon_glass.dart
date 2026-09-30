@@ -3,8 +3,8 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 abstract final class TienMonGlassTokens {
-  static const double cardBlur = 13;
-  static const double sheetBlur = 20;
+  static const double cardBlur = 9;
+  static const double sheetBlur = 15;
   static const double cardOpacity = .24;
   static const double sheetOpacity = .73;
   static const double borderOpacity = .58;

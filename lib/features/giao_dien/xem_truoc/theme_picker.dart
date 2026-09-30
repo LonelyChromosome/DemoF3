@@ -681,24 +681,19 @@ class _ThemePickerSheet extends StatelessWidget {
 
     try {
       await presented.future;
-      await Future<void>.delayed(const Duration(milliseconds: 240));
+      await Future<void>.delayed(const Duration(milliseconds: 80));
 
       final scene = TienMonPremiumContract.appSceneFor(DateTime.now());
-      final currentAsset =
-          TienMonPremiumContract.appSceneAssets[scene - 1];
-      final nextScene = scene == 8 ? 1 : scene + 1;
-      final nextAsset =
-          TienMonPremiumContract.appSceneAssets[nextScene - 1];
+      final currentAsset = TienMonPremiumContract.appSceneAssets[scene - 1];
 
-      await Future.wait<void>(<Future<void>>[
-        precacheImage(AssetImage(currentAsset), context),
-        precacheImage(AssetImage(nextAsset), context),
-      ]);
+      // Decode only the frame we are about to show. The persistent background
+      // warms the adjacent scene afterwards, avoiding two 2K decodes on the
+      // theme-selection frame.
+      await precacheImage(AssetImage(currentAsset), context);
 
       await controller.select(id);
       await WidgetsBinding.instance.endOfFrame;
-      await WidgetsBinding.instance.endOfFrame;
-      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await Future<void>.delayed(const Duration(milliseconds: 40));
     } finally {
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop();
@@ -758,14 +753,13 @@ class _ThemePickerSheet extends StatelessWidget {
 
     try {
       await presented.future;
-      await Future<void>.delayed(const Duration(milliseconds: 240));
+      await Future<void>.delayed(const Duration(milliseconds: 80));
       await applyTarget();
 
       // Hold the default loading cover until the Theme Engine target has
       // mounted and painted, then fade cleanly into the app.
       await WidgetsBinding.instance.endOfFrame;
-      await WidgetsBinding.instance.endOfFrame;
-      await Future<void>.delayed(const Duration(milliseconds: 90));
+      await Future<void>.delayed(const Duration(milliseconds: 40));
     } finally {
       if (rootNavigator.mounted && rootNavigator.canPop()) {
         rootNavigator.pop();

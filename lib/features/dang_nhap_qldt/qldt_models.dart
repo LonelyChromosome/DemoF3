@@ -294,10 +294,7 @@ final class QldtParser {
   static String _displayNameFromResponse(
     Map<String, dynamic> response,
   ) {
-    final rawData = response['Data'];
-    if (rawData is! List) return '';
-
-    const candidateKeys = <String>[
+    const exactKeys = <String>{
       'HOTEN',
       'HO_TEN',
       'HOVATEN',
@@ -305,18 +302,45 @@ final class QldtParser {
       'NGUOIHOC_TEN',
       'QLSV_NGUOIHOC_TEN',
       'SINHVIEN_TEN',
+      'TEN_SINHVIEN',
       'FULLNAME',
-    ];
+      'FULL_NAME',
+    };
 
-    for (final rawItem in rawData) {
-      if (rawItem is! Map) continue;
-      final item = Map<String, dynamic>.from(rawItem);
-      for (final key in candidateKeys) {
-        final value = _string(item[key]);
-        if (value.isNotEmpty) return value;
+    String? walk(Object? node, [int depth = 0]) {
+      if (node == null || depth > 6) return null;
+      if (node is Map) {
+        for (final entry in node.entries) {
+          final key = entry.key.toString().trim().toUpperCase();
+          final compact = key.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+          final looksLikeStudentName =
+              exactKeys.contains(key) ||
+              compact == 'HOTEN' ||
+              compact == 'HOVATEN' ||
+              compact == 'TENNGUOIHOC' ||
+              compact == 'NGUOIHOTEN' ||
+              compact == 'SINHVIENTEN' ||
+              compact == 'TENSINHVIEN' ||
+              (compact.contains('NGUOIHOC') && compact.endsWith('TEN'));
+          if (looksLikeStudentName) {
+            final value = _string(entry.value);
+            if (value.isNotEmpty && value.length <= 120) return value;
+          }
+        }
+        for (final value in node.values) {
+          final found = walk(value, depth + 1);
+          if (found != null && found.isNotEmpty) return found;
+        }
+      } else if (node is List) {
+        for (final value in node) {
+          final found = walk(value, depth + 1);
+          if (found != null && found.isNotEmpty) return found;
+        }
       }
+      return null;
     }
-    return '';
+
+    return walk(response)?.trim() ?? '';
   }
 
   static String _firstNonEmpty(List<Object?> values) {
