@@ -1072,39 +1072,58 @@ class _MainShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
-    final child = switch (page) {
-      _AppPage.timetable => _TimetableScreen(
-        data: data,
-        assistantPack: assistantPack,
-        selectedDate: selectedDate,
-        onDateChanged: onDateChanged,
-        unreadDifference: unreadDifference,
-        hasActiveExamPeriod: hasActiveExamPeriod,
-        onOpenDifferences: onOpenDifferences,
+    // Keep the timetable mounted and lightly pre-painted while another page is
+    // open. Returning from Exam/Notifications used to rebuild _TimetableScreen
+    // from a cold tree, which caused one visible redraw hitch before the page
+    // settled. This mirrors the proven day/week strategy without changing that
+    // internal animation.
+    final timetable = _TimetableScreen(
+      key: const ValueKey<String>('persistent-timetable'),
+      data: data,
+      assistantPack: assistantPack,
+      selectedDate: selectedDate,
+      onDateChanged: onDateChanged,
+      unreadDifference: unreadDifference,
+      hasActiveExamPeriod: hasActiveExamPeriod,
+      onOpenDifferences: onOpenDifferences,
+    );
+
+    final foreground = switch (page) {
+      _AppPage.timetable => const SizedBox.expand(
+        key: ValueKey<_AppPage>(_AppPage.timetable),
       ),
-      _AppPage.exam => _ExamScreen(
-        data: data,
-        assistantPack: assistantPack,
-        showPast: showPastExams,
-        onTabChanged: onExamTabChanged,
-        unreadDifference: unreadDifference,
-        hasActiveExamPeriod: hasActiveExamPeriod,
-        onOpenDifferences: onOpenDifferences,
+      _AppPage.exam => KeyedSubtree(
+        key: const ValueKey<_AppPage>(_AppPage.exam),
+        child: _ExamScreen(
+          data: data,
+          assistantPack: assistantPack,
+          showPast: showPastExams,
+          onTabChanged: onExamTabChanged,
+          unreadDifference: unreadDifference,
+          hasActiveExamPeriod: hasActiveExamPeriod,
+          onOpenDifferences: onOpenDifferences,
+        ),
       ),
-      _AppPage.account => _AccountScreen(
-        data: data,
-        onLogout: onLogout,
-        onSync: onSync,
-        assistantPack: assistantPack,
-        onAssistantPackChanged: onAssistantPackChanged,
+      _AppPage.account => KeyedSubtree(
+        key: const ValueKey<_AppPage>(_AppPage.account),
+        child: _AccountScreen(
+          data: data,
+          onLogout: onLogout,
+          onSync: onSync,
+          assistantPack: assistantPack,
+          onAssistantPackChanged: onAssistantPackChanged,
+        ),
       ),
-      _AppPage.notifications => _NotificationCenterScreen(
-        hasActiveExamPeriod: hasActiveExamPeriod,
-        onBack: onCloseNotificationCenter,
-        onOpenExam: onOpenExamFromNotification,
-        onDetails: onShowDifferences,
-        assistantPack: assistantPack,
-        difference: latestDifference,
+      _AppPage.notifications => KeyedSubtree(
+        key: const ValueKey<_AppPage>(_AppPage.notifications),
+        child: _NotificationCenterScreen(
+          hasActiveExamPeriod: hasActiveExamPeriod,
+          onBack: onCloseNotificationCenter,
+          onOpenExam: onOpenExamFromNotification,
+          onDetails: onShowDifferences,
+          assistantPack: assistantPack,
+          difference: latestDifference,
+        ),
       ),
     };
 
@@ -1112,38 +1131,72 @@ class _MainShell extends StatelessWidget {
       child: Stack(
         children: <Widget>[
           Positioned.fill(
+            child: IgnorePointer(
+              ignoring: page != _AppPage.timetable,
+              child: TickerMode(
+                enabled: page == _AppPage.timetable,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOutCubic,
+                  opacity: page == _AppPage.timetable ? 1 : .004,
+                  child: RepaintBoundary(child: timetable),
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
               switchInCurve: Curves.easeOutCubic,
               switchOutCurve: Curves.easeInCubic,
-              // F3's stable page rule: animate only the incoming page. Keeping
-              // transparent outgoing Premium pages alive for the switch duration
-              // makes two screens visibly stick together.
-              layoutBuilder: (current, previous) =>
-                  current ?? const SizedBox.shrink(),
+              // Preserve F3's incoming-only rule between secondary pages. Only
+              // when returning to timetable do we retain the outgoing page long
+              // enough to fade it over the already-warm timetable underneath.
+              layoutBuilder: (current, previous) {
+                final returningToTimetable =
+                    current?.key ==
+                    const ValueKey<_AppPage>(_AppPage.timetable);
+                if (!returningToTimetable) {
+                  return current ?? const SizedBox.shrink();
+                }
+                return Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    ...previous,
+                    if (current != null) current,
+                  ],
+                );
+              },
               transitionBuilder: (child, animation) {
                 final isNotifications =
                     child.key ==
                     const ValueKey<_AppPage>(_AppPage.notifications);
+                final isTimetable =
+                    child.key ==
+                    const ValueKey<_AppPage>(_AppPage.timetable);
                 final slide = Tween<Offset>(
-                  begin: isNotifications
+                  begin: isTimetable
+                      ? Offset.zero
+                      : isNotifications
                       ? const Offset(0, 1)
                       : const Offset(.035, 0),
                   end: Offset.zero,
                 ).animate(animation);
                 return FadeTransition(
-                  opacity: animation,
+                  opacity: isTimetable
+                      ? const AlwaysStoppedAnimation<double>(0)
+                      : animation,
                   child: SlideTransition(position: slide, child: child),
                 );
               },
-              child: KeyedSubtree(
+              child: ColoredBox(
                 key: ValueKey<_AppPage>(page),
-                child: ColoredBox(
-                  color: palette.id == AppThemeId.tienMonPremium
-                      ? Colors.transparent
-                      : palette.surface,
-                  child: child,
-                ),
+                color: page == _AppPage.timetable
+                    ? Colors.transparent
+                    : palette.id == AppThemeId.tienMonPremium
+                    ? Colors.transparent
+                    : palette.surface,
+                child: foreground,
               ),
             ),
           ),
