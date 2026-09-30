@@ -22,6 +22,7 @@ internal object ExamReminderScheduler {
     private const val ACTIVE = "scheduled"
     private const val DELIVERED = "delivered"
     private const val SEMESTER = "flutter.better_phenikaa_current_semester_v1"
+    private const val CHANNEL = "exam_reminders_heads_up_v2"
 
     @Synchronized
     fun reconcile(context: Context, semesterJson: String) {
@@ -96,8 +97,16 @@ internal object ExamReminderScheduler {
     private fun notify(context: Context, subjects: List<String>, days: Set<Int>) {
         val notifications = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            notifications.createNotificationChannel(NotificationChannel(
-                "exam_reminders", "Nhắc lịch thi", NotificationManager.IMPORTANCE_DEFAULT))
+            notifications.createNotificationChannel(
+                NotificationChannel(
+                    CHANNEL,
+                    "Nhắc lịch thi",
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    description = "Nhắc các mốc lịch thi quan trọng"
+                    enableVibration(true)
+                },
+            )
         }
         val openApp = context.packageManager.getLaunchIntentForPackage(context.packageName)
         val pending = openApp?.let {
@@ -109,11 +118,17 @@ internal object ExamReminderScheduler {
             days.single() == 1 -> AssistantEvent.exam_tomorrow
             else -> AssistantEvent.exam_in_days
         }
-        val notification = NotificationCompat.Builder(context, "exam_reminders")
+        val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(AssistantText.titleOf(event, AssistantText.selected(context)))
             .setContentText(AssistantText.of(event, AssistantText.selected(context),
                 days = days.minOrNull() ?: 0, examCount = subjects.size))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(
+                AssistantText.of(event, AssistantText.selected(context),
+                    days = days.minOrNull() ?: 0, examCount = subjects.size)))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
             .setContentIntent(pending)
             .build()
