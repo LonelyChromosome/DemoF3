@@ -664,7 +664,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_portalPathKey, uri.path);
-      await prefs.setBool(_sessionKey, true);
     } on Object {
       return;
     }
@@ -1105,12 +1104,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         const Duration(seconds: 10),
         epoch,
       );
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool(_sessionKey, true);
-      } on Object {
-        // A cache failure must not discard a verified schedule.
-      }
       if (_submittedUsername != null && _submittedPassword != null) {
         try {
           await _credentialChannel.invokeMethod<void>('save', <String, String>{
@@ -1136,6 +1129,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
       await _ensureAccountDisplayName(displayName);
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_sessionKey, true);
+      } on Object {
+        // The verified result can still be returned; the next launch may
+        // simply require QLĐT verification again.
+      }
       _registrationCompletionSucceeded = true;
       _registrationCompletionRunning = false;
       Navigator.of(context).pop(
@@ -1192,16 +1192,23 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     }
   }
 
-  Future<void> _ensureAccountDisplayName(String fullName) {
-    if (widget.cachedSession || _accountNameSetupFinished) {
-      return Future<void>.value();
-    }
+  Future<void> _ensureAccountDisplayName(String fullName) async {
+    if (_accountNameSetupFinished) return;
     final running = _accountNameSetupFuture;
-    if (running != null) return running;
+    if (running != null) {
+      await running;
+      return;
+    }
 
     final future = _runAccountDisplayNameSetup(fullName);
     _accountNameSetupFuture = future;
-    return future;
+    try {
+      await future;
+    } finally {
+      if (identical(_accountNameSetupFuture, future)) {
+        _accountNameSetupFuture = null;
+      }
+    }
   }
 
   Future<void> _runAccountDisplayNameSetup(String fullName) async {
@@ -1233,6 +1240,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     // Persist before returning from the only welcome route. Every later sync
     // reads this value and must never launch the mini game again.
     await _saveQldtAccountDisplayName(arranged);
+    final persisted = await readQldtAccountDisplayName();
+    if (persisted.isEmpty) {
+      throw const FormatException('ACCOUNT_DISPLAY_NAME_NOT_PERSISTED');
+    }
     _accountNameSetupFinished = true;
   }
 
@@ -1778,6 +1789,7 @@ class _QldtNameArrangeScreenState extends State<_QldtNameArrangeScreen> {
   late final List<int> _availableOrder =
       _tokens.reversed.map((token) => token.id).toList(growable: false);
   final List<int> _selected = <int>[];
+  bool _submitting = false;
 
   _QldtNameToken _token(int id) =>
       _tokens.firstWhere((token) => token.id == id);
@@ -1789,6 +1801,12 @@ class _QldtNameArrangeScreenState extends State<_QldtNameArrangeScreen> {
 
   void _unselect(int id) {
     setState(() => _selected.remove(id));
+  }
+
+  void _submitName(String chosenName) {
+    if (_submitting || _selected.length != _tokens.length) return;
+    _submitting = true;
+    Navigator.of(context).pop(chosenName);
   }
 
   @override
@@ -1923,8 +1941,8 @@ class _QldtNameArrangeScreenState extends State<_QldtNameArrangeScreen> {
                         shape: const CircleBorder(),
                         child: InkWell(
                           customBorder: const CircleBorder(),
-                          onTap: complete
-                              ? () => Navigator.of(context).pop(chosenName)
+                          onTap: complete && !_submitting
+                              ? () => _submitName(chosenName)
                               : null,
                           child: Icon(
                             Icons.arrow_forward_rounded,
