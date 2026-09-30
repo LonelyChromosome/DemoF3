@@ -94,6 +94,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _exitGestureArmed = false;
   DateTime? _lastSuccessfulSync;
   AssistantPack _assistantPack = AssistantPack.normal;
+  String _accountDisplayName = '';
   static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
 
   @override
@@ -340,6 +341,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       await _repairStoredDisplayName();
       final prefs = await SharedPreferences.getInstance();
       _assistantPack = await AssistantSelection.load();
+      _accountDisplayName = await readQldtAccountDisplayName();
       var raw = prefs.getString(_storageKey);
       var semester = await CurrentSemesterStore().read();
       final startedAt = semester == null
@@ -606,12 +608,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         if (mounted) {
           final prefs = await SharedPreferences.getInstance();
           final saved = prefs.getString(_storageKey);
+          final accountDisplayName = await readQldtAccountDisplayName();
           final displayed = saved == null
               ? imported.schedule
               : ImportedScheduleData.decode(saved);
           if (!mounted) return;
           setState(() {
             _data = displayed;
+            _accountDisplayName = accountDisplayName;
             _lastSuccessfulSync = displayed.syncedAt;
             _selectedDate = _initialDateFor(displayed);
             _page = _AppPage.timetable;
@@ -703,6 +707,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         _unreadDifference = false;
         _lastSuccessfulSync = null;
         _assistantPack = AssistantPack.normal;
+        _accountDisplayName = '';
       });
     }
   }
@@ -840,6 +845,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                               )
                             : _MainShell(
                                 data: _data!,
+                                accountDisplayName: _accountDisplayName,
                                 page: _page,
                                 selectedDate: _selectedDate,
                                 showPastExams: _showPastExams,
@@ -1065,6 +1071,7 @@ class _LoginScreen extends StatelessWidget {
 class _MainShell extends StatefulWidget {
   const new({
     required this.data,
+    required this.accountDisplayName,
     required this.page,
     required this.selectedDate,
     required this.showPastExams,
@@ -1093,6 +1100,7 @@ class _MainShell extends StatefulWidget {
   });
 
   final ImportedScheduleData data;
+  final String accountDisplayName;
   final _AppPage page;
   final DateTime selectedDate;
   final bool showPastExams;
@@ -1165,6 +1173,7 @@ class _MainShellState extends State<_MainShell>
   @override
   Widget build(BuildContext context) {
     final data = widget.data;
+    final accountDisplayName = widget.accountDisplayName;
     final page = widget.page;
     final selectedDate = widget.selectedDate;
     final showPastExams = widget.showPastExams;
@@ -1241,6 +1250,7 @@ class _MainShellState extends State<_MainShell>
                   child: RepaintBoundary(
                     child: _AccountScreen(
                       data: data,
+                      accountDisplayName: accountDisplayName,
                       onLogout: onLogout,
                       onSync: onSync,
                       assistantPack: assistantPack,
@@ -2028,6 +2038,7 @@ class _NotificationChangeCard extends StatelessWidget {
 class _AccountScreen extends StatelessWidget {
   const new({
     required this.data,
+    required this.accountDisplayName,
     required this.onLogout,
     required this.onSync,
     required this.assistantPack,
@@ -2035,6 +2046,7 @@ class _AccountScreen extends StatelessWidget {
   });
 
   final ImportedScheduleData data;
+  final String accountDisplayName;
   final VoidCallback onLogout;
   final VoidCallback onSync;
   final AssistantPack assistantPack;
@@ -2120,7 +2132,9 @@ class _AccountScreen extends StatelessWidget {
                       const SizedBox(width: 18),
                       Expanded(
                         child: Text(
-                          data.displayName,
+                          accountDisplayName.isEmpty
+                              ? data.displayName
+                              : accountDisplayName,
                           style: TextStyle(
                             color: palette.textPrimary,
                             fontSize: 18,
