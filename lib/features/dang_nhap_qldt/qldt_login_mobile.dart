@@ -201,7 +201,8 @@ class _QldtWebLoginScreen extends StatefulWidget {
   State<_QldtWebLoginScreen> createState() => _QldtWebLoginScreenState();
 }
 
-class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>\n    with SingleTickerProviderStateMixin {
+class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
+    with SingleTickerProviderStateMixin {
   static final WebUri _qldtUri = WebUri(
     'https://qldtbeta.phenikaa-uni.edu.vn/',
   );
@@ -1280,7 +1281,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>\n    with Sing
         _sessionTimer?.cancel();
         _diagnostics?.finish('OK');
         _autoSyncStarted = true;
-        await _cacheNativeSession(session);
+        await _cacheNativeSession(session!);
         unawaited(_rememberPortal(controller));
         await _sync();
       } else if (!ready) {
