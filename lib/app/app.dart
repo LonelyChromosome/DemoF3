@@ -1130,14 +1130,14 @@ class _MainShell extends StatelessWidget {
       child: Stack(
         children: <Widget>[
           Positioned.fill(
-            child: IgnorePointer(
-              ignoring: page != _AppPage.timetable,
-              child: TickerMode(
-                enabled: page == _AppPage.timetable,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
-                  opacity: page == _AppPage.timetable ? 1 : .004,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              opacity: page == _AppPage.timetable ? 1 : .004,
+              child: IgnorePointer(
+                ignoring: page != _AppPage.timetable,
+                child: TickerMode(
+                  enabled: page == _AppPage.timetable,
                   child: RepaintBoundary(child: timetable),
                 ),
               ),
