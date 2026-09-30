@@ -21,6 +21,7 @@ const _sessionKey = 'qldt_verified_session';
 const _portalPathKey = 'qldt_verified_portal_path';
 const _nativeSessionKey = 'better_phenikaa_qldt_native_session_v1';
 const _profileKey = 'better_phenikaa_qldt_profile_v1';
+const _accountDisplayNameKey = 'better_phenikaa_account_display_name_v1';
 const _syncModeKey = 'better_phenikaa_qldt_sync_mode_v1';
 const _legacyMode = 'legacy';
 const _nativeMode = 'native';
@@ -135,7 +136,7 @@ Future<String> readCachedQldtDisplayName() async {
         final profile = Map<String, dynamic>.from(
           jsonDecode(profileRaw) as Map<dynamic, dynamic>,
         );
-        if ((profile['source'] ?? '').toString() == 'qldt_html') {
+        if ((profile['source'] ?? '').toString() == 'qldt_api_registration') {
           final cached = _sanitizeQldtProfileName(profile['name']);
           if (cached.isNotEmpty) return cached;
         }
@@ -149,12 +150,30 @@ Future<String> readCachedQldtDisplayName() async {
     final session = Map<String, dynamic>.from(
       jsonDecode(sessionRaw) as Map<dynamic, dynamic>,
     );
-    if ((session['nameSource'] ?? '').toString() != 'qldt_html') return '';
+    if ((session['nameSource'] ?? '').toString() != 'qldt_api_registration') return '';
     return _sanitizeQldtProfileName(session['name']);
   } on Object {
     return '';
   }
 }
+Future<String> readQldtAccountDisplayName() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    return _sanitizeQldtProfileName(prefs.getString(_accountDisplayNameKey));
+  } on Object {
+    return '';
+  }
+}
+
+Future<void> _saveQldtAccountDisplayName(String name) async {
+  final value = _sanitizeQldtProfileName(name);
+  if (value.isEmpty) {
+    throw const FormatException('ACCOUNT_DISPLAY_NAME_EMPTY');
+  }
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setString(_accountDisplayNameKey, value);
+}
+
 Future<void> clearQldtSession() async {
   await CookieManager.instance().deleteAllCookies();
   await _credentialChannel.invokeMethod<void>('clear');
@@ -163,6 +182,7 @@ Future<void> clearQldtSession() async {
   await prefs.remove(_portalPathKey);
   await prefs.remove(_nativeSessionKey);
   await prefs.remove(_profileKey);
+  await prefs.remove(_accountDisplayNameKey);
   await prefs.remove(_syncModeKey);
 }
 
@@ -234,6 +254,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   bool _allowRoutePop = false;
   bool _showWebPage = false;
   bool _portalInputLocked = false;
+  bool _sawMicrosoftAuth = false;
   late final AnimationController _reloadSpinController;
   String? _submittedUsername;
   String? _submittedPassword;
@@ -289,7 +310,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
           unawaited(_handleBack());
         }
       },
-      child: Scaffold(
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: false,
           leading: BackButton(onPressed: _handleBack),
@@ -368,7 +392,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                                 useShouldOverrideUrlLoading: false,
                               ),
                               onWebViewCreated: _onWebViewCreated,
-                              onLoadStart: (_, _) {
+                              onLoadStart: (_, url) {
+                                _trackAuthNavigation(url?.toString());
                                 _readinessTimer?.cancel();
                                 if (mounted) {
                                   setState(() {
@@ -384,6 +409,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                                 }
                               },
                               onLoadStop: (controller, url) {
+                                _trackAuthNavigation(url?.toString());
                                 unawaited(
                                   _handleLoginPage(controller, url?.toString()),
                                 );
@@ -393,6 +419,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                                 }
                               },
                               onUpdateVisitedHistory: (controller, url, _) {
+                                _trackAuthNavigation(url?.toString());
                                 unawaited(
                                   _handleLoginPage(controller, url?.toString()),
                                 );
@@ -528,6 +555,51 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
           ],
         ),
       ),
+          if (_portalInputLocked)
+            Positioned.fill(
+              child: Stack(
+                fit: StackFit.expand,
+                children: <Widget>[
+                  const ModalBarrier(
+                    dismissible: false,
+                    color: Colors.white,
+                  ),
+                  SafeArea(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            RotationTransition(
+                              turns: _reloadSpinController,
+                              child: const Icon(
+                                Icons.refresh_rounded,
+                                size: 52,
+                                color: Color(0xFF1747B5),
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            Text(
+                              _status,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Color(0xFF334155),
+                                fontSize: 14,
+                                height: 1.35,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -551,7 +623,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         jsonDecode(raw) as Map<dynamic, dynamic>,
       );
       if ((json['userId'] ?? '').toString() != userId) return '';
-      if ((json['source'] ?? '').toString() != 'qldt_html') return '';
+      if ((json['source'] ?? '').toString() != 'qldt_api_registration') return '';
       return _cleanProfileName(json['name']);
     } on Object {
       return '';
@@ -572,7 +644,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         jsonEncode(<String, String>{
           'userId': session.userId,
           'name': name,
-          'source': 'qldt_html',
+          'source': 'qldt_api_registration',
         }),
       );
     } on Object {
@@ -580,35 +652,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     }
   }
 
-  Future<String> _readProfileNameFromPage(
-    InAppWebViewController controller,
-  ) async {
-    try {
-      final html = await controller.getHtml();
-      if (html == null || html.isEmpty) return '';
-      final name = const QldtParser().parseDisplayName(html);
-      return _cleanProfileName(name);
-    } on Object {
-      return '';
-    }
-  }
-
-  Future<String> _waitForQldtHtmlDisplayName(
-    InAppWebViewController controller, {
-    int attempts = 24,
-  }) async {
-    for (var attempt = 0; attempt < attempts; attempt++) {
-      final name = await _readProfileNameFromPage(controller);
-      if (name.isNotEmpty) return name;
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-    }
-    return '';
-  }
-
   Future<void> _cacheNativeSession(QldtNativeSession session) async {
     final prefs = await SharedPreferences.getInstance();
-    // Never persist Microsoft/JWT/API display-name guesses as the student's
-    // canonical name. Only the exact QLĐT HTML account element may populate it.
+    // Raw QLĐT API name is sync metadata only. The user's chosen account
+    // display name is persisted separately and never written into schedule data.
     final name = _cleanProfileName(_resolvedDisplayName);
     await prefs.setString(
       _nativeSessionKey,
@@ -620,7 +667,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         'strChucNangId': session.functionId,
         'cookie': session.cookie,
         'name': name,
-        'nameSource': name.isEmpty ? '' : 'qldt_html',
+        'nameSource': name.isEmpty ? '' : 'qldt_api_registration',
       }),
     );
   }
@@ -698,6 +745,22 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     return host == 'login.microsoftonline.com' ||
         host == 'login.live.com' ||
         (host?.endsWith('.microsoftonline.com') ?? false);
+  }
+
+  void _trackAuthNavigation(String? url) {
+    if (widget.testHtml != null) return;
+    if (_isMicrosoftLogin(url)) {
+      _sawMicrosoftAuth = true;
+      return;
+    }
+    final host = Uri.tryParse(url ?? '')?.host.toLowerCase();
+    if (!_sawMicrosoftAuth || host != _qldtUri.host.toLowerCase()) return;
+    if (_portalInputLocked || !mounted) return;
+    setState(() {
+      _portalInputLocked = true;
+      _showWebPage = false;
+      _status = 'Đang tải dữ liệu QLĐT...';
+    });
   }
 
   Future<void> _loadSavedCredentials() async {
@@ -809,13 +872,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         }
         if (arguments.isNotEmpty && arguments.first == 'password') {
           _autoPasswordSubmitted = true;
-          if (mounted) {
-            setState(() {
-              _portalInputLocked = true;
-              _showWebPage = false;
-              _status = 'Đang vào QLĐT để xác nhận tài khoản...';
-            });
-          }
         }
         return null;
       },
@@ -829,13 +885,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
           _submittedUsername = value.trim();
         } else if (arguments[0] == 'password' && value.length <= 512) {
           _submittedPassword = value;
-          if (mounted) {
-            setState(() {
-              _portalInputLocked = true;
-              _showWebPage = false;
-              _status = 'Đang vào QLĐT để xác nhận tài khoản...';
-            });
-          }
         }
         return null;
       },
@@ -1033,6 +1082,16 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         epoch,
       );
       registration = const TracuuApi().parse(raw);
+      final apiDisplayName = const TracuuApi().displayNameFromVerifiedResult(raw);
+      if (apiDisplayName.isEmpty) {
+        throw const FormatException('QLDT_API_NAME_MISSING');
+      }
+      final session = _nativeSession;
+      if (session != null) {
+        await _rememberProfileName(session, apiDisplayName);
+      } else {
+        _resolvedDisplayName = _cleanProfileName(apiDisplayName);
+      }
       final schedule = _pendingSchedule!;
       verificationStage = 'schedule_verify';
       final verified = const SemesterScheduleVerifier().verify(
@@ -1040,16 +1099,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         schedule: schedule,
       );
       verificationStage = 'semester_build';
-      final session = _nativeSession;
-      var displayName = _resolvedDisplayName;
-      if (displayName.isEmpty && session != null) {
-        displayName = await _cachedProfileNameFor(session.userId);
-        if (displayName.isNotEmpty) {
-          _resolvedDisplayName = displayName;
-        }
-      }
+      final displayName = _resolvedDisplayName;
       if (displayName.isEmpty) {
-        throw const FormatException('QLDT_CANONICAL_NAME_MISSING');
+        throw const FormatException('QLDT_API_NAME_MISSING');
       }
 
       final semester = const SemesterDataBuilder().build(
@@ -1092,6 +1144,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
           // Diagnostic persistence cannot block a verified schedule.
         }
       }
+      if (!mounted || !_syncing || epoch != _syncEpoch) return;
+      await _ensureAccountDisplayName(displayName);
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
       Navigator.of(context).pop(
         QldtLoginResult(
@@ -1143,6 +1197,31 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       }
       _stopSync(epoch, _verificationErrorMessage(error));
     }
+  }
+
+  Future<void> _ensureAccountDisplayName(String fullName) async {
+    final existing = await readQldtAccountDisplayName();
+    if (existing.isNotEmpty) return;
+
+    final words = fullName
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList(growable: false);
+    if (words.isEmpty) {
+      throw const FormatException('QLDT_API_NAME_MISSING');
+    }
+    if (!mounted) return;
+
+    final arranged = await Navigator.of(context).push<String>(
+      MaterialPageRoute<String>(
+        fullscreenDialog: true,
+        builder: (_) => _QldtNameArrangeScreen(words: words),
+      ),
+    );
+    if (arranged == null || arranged.trim().isEmpty) {
+      throw const FormatException('ACCOUNT_DISPLAY_NAME_REQUIRED');
+    }
+    await _saveQldtAccountDisplayName(arranged);
   }
 
   String _verificationErrorCategory(Object error) {
@@ -1206,20 +1285,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                   !s.appId || !s.strChucNang_Id) {
                 return null;
               }
-              function cleanName(value) {
-                if (value == null) return '';
-                var text = String(value).replace(/\s+/g, ' ').trim();
-                if (text.length < 3 || text.length > 120) return '';
-                var lower = text.toLowerCase();
-                if (lower === 'tài khoản' || lower === 'đăng xuất' ||
-                    lower === 'account' || lower === 'profile') return '';
-                return text;
-              }
-              function resolveName() {
-                var node = document.getElementById('lblHoTenNguoiDangNhap');
-                return node ? cleanName(node.textContent) : '';
-              }
-              var name = resolveName();
               return JSON.stringify({
                 tokenJWT: String(s.tokenJWT),
                 userId: String(s.userId),
@@ -1227,7 +1292,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                 appId: String(s.appId),
                 strChucNangId: String(s.strChucNang_Id),
                 cookie: String(document.cookie || ''),
-                name: name
+                name: ''
               });
             } catch (_) {
               return null;
@@ -1247,32 +1312,19 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
       if (!mounted || (_autoSyncStarted && !_syncing)) return;
 
-      var ready = false;
+      final ready = session != null;
       if (session != null) {
         _nativeSession = session;
-
-        // Canonical-name invariant:
-        // a valid QLĐT session is NOT ready until the exact account name from
-        // #lblHoTenNguoiDangNhap has been captured once (or loaded from the
-        // qldt_html cache created by that capture).
         final cachedName = await _cachedProfileNameFor(session.userId);
         if (cachedName.isNotEmpty) {
           _resolvedDisplayName = cachedName;
-        } else {
-          final htmlName = await _readProfileNameFromPage(controller);
-          if (htmlName.isNotEmpty) {
-            await _rememberProfileName(session, htmlName);
-          }
         }
-        ready = _resolvedDisplayName.isNotEmpty;
       }
 
       setState(() {
         _pageReady = ready;
         _status = ready
-            ? 'Đã xác nhận tài khoản QLĐT. Đang đồng bộ...'
-            : session != null
-            ? 'Đang lấy tên thật từ QLĐT...'
+            ? 'Đã xác nhận phiên QLĐT. Đang đồng bộ...'
             : 'Đang lấy session QLĐT sau đăng nhập...';
       });
 
@@ -1568,60 +1620,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
           edu.system.makeRequest({
             success: function (response) {
               scheduleStage('success');
-              function cleanName(value) {
-                if (value == null) return '';
-                var text = String(value).replace(/\s+/g, ' ').trim();
-                if (text.length < 3 || text.length > 120) return '';
-                var lower = text.toLowerCase();
-                if (lower === 'tài khoản' || lower === 'đăng xuất' ||
-                    lower === 'account' || lower === 'profile') return '';
-                return text;
-              }
-              var system = window.edu && edu.system;
-              var direct = [
-                system && system.hoTen,
-                system && system.HoTen,
-                system && system.ho_ten,
-                system && system.fullName,
-                system && system.FullName,
-                system && system.userName,
-                system && system.UserName,
-                system && system.name,
-                system && system.user && system.user.name,
-                system && system.userInfo && system.userInfo.name,
-                system && system.userInfo && system.userInfo.hoTen,
-                system && system.userInfo && system.userInfo.HoTen
-              ];
-              var name = '';
-              for (var d = 0; d < direct.length && !name; d++) {
-                name = cleanName(direct[d]);
-              }
-              if (!name) {
-                var selectors = [
-                  '#lblHoTenNguoiDangNhap',
-                  '[id*="HoTenNguoiDangNhap"]',
-                  '.nav-account button > span',
-                  '.nav-account .user-name',
-                  '.user-name',
-                  '.username',
-                  '.account-name',
-                  '[class*="user-name"]',
-                  '[class*="username"]'
-                ];
-                for (var si = 0; si < selectors.length && !name; si++) {
-                  var nodes = document.querySelectorAll(selectors[si]);
-                  for (var ni = 0; ni < nodes.length; ni++) {
-                    name = cleanName(nodes[ni].textContent);
-                    if (name) break;
-                  }
-                }
-              }
               window.flutter_inappwebview.callHandler(
                 'betterPhenikaaSyncResult',
                 $epoch,
-                JSON.stringify({name: name, response: response})
-              );
-            },
+                JSON.stringify({name: '', response: response})
+              );            },
             error: function () {
               scheduleStage('error');
               window.flutter_inappwebview.callHandler(
@@ -1729,5 +1732,257 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   static String _formatDate(DateTime value) {
     String two(int number) => number.toString().padLeft(2, '0');
     return '${two(value.day)}/${two(value.month)}/${value.year}';
+  }
+}
+
+
+final class _QldtNameToken {
+  const _QldtNameToken({required this.id, required this.text});
+
+  final int id;
+  final String text;
+}
+
+class _QldtNameArrangeScreen extends StatefulWidget {
+  const _QldtNameArrangeScreen({required this.words});
+
+  final List<String> words;
+
+  @override
+  State<_QldtNameArrangeScreen> createState() => _QldtNameArrangeScreenState();
+}
+
+class _QldtNameArrangeScreenState extends State<_QldtNameArrangeScreen> {
+  static const _blue = Color(0xFF1747B5);
+  static const _ink = Color(0xFF172033);
+  static const _muted = Color(0xFF64748B);
+  static const _border = Color(0xFFD9E2F1);
+  static const _surface = Color(0xFFF7F9FD);
+
+  late final List<_QldtNameToken> _tokens = <_QldtNameToken>[
+    for (var i = 0; i < widget.words.length; i++)
+      _QldtNameToken(id: i, text: widget.words[i]),
+  ];
+  late final List<int> _availableOrder =
+      _tokens.reversed.map((token) => token.id).toList(growable: false);
+  final List<int> _selected = <int>[];
+
+  _QldtNameToken _token(int id) =>
+      _tokens.firstWhere((token) => token.id == id);
+
+  void _select(int id) {
+    if (_selected.contains(id)) return;
+    setState(() => _selected.add(id));
+  }
+
+  void _unselect(int id) {
+    setState(() => _selected.remove(id));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final complete = _selected.length == _tokens.length;
+    final chosenName = _selected.map((id) => _token(id).text).join(' ');
+    final available = _availableOrder.where((id) => !_selected.contains(id));
+
+    final fixedTheme = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: Colors.white,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: _blue,
+        brightness: Brightness.light,
+      ),
+    );
+
+    return Theme(
+      data: fixedTheme,
+      child: PopScope<void>(
+        canPop: false,
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  const Text(
+                    'Xin Chào!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _ink,
+                      fontSize: 30,
+                      height: 1.1,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Chúng tôi có thể gọi bạn là:',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _ink,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Nhấp để sắp xếp tên của bạn',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _muted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 96),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: _surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: _border),
+                      ),
+                      alignment: _selected.isEmpty
+                          ? Alignment.center
+                          : Alignment.topLeft,
+                      child: _selected.isEmpty
+                          ? const Text(
+                              'Tên của bạn',
+                              style: TextStyle(
+                                color: Color(0xFF94A3B8),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )
+                          : Wrap(
+                              spacing: 9,
+                              runSpacing: 9,
+                              children: <Widget>[
+                                for (final id in _selected)
+                                  _AnimatedNameChip(
+                                    key: ValueKey<String>('selected-$id'),
+                                    label: _token(id).text,
+                                    selectedArea: true,
+                                    onTap: () => _unselect(id),
+                                  ),
+                              ],
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: <Widget>[
+                        for (final id in available)
+                          _AnimatedNameChip(
+                            key: ValueKey<String>('available-$id'),
+                            label: _token(id).text,
+                            selectedArea: false,
+                            onTap: () => _select(id),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  Center(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: complete ? _blue : const Color(0xFFDCE2EA),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        shape: const CircleBorder(),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: complete
+                              ? () => Navigator.of(context).pop(chosenName)
+                              : null,
+                          child: Icon(
+                            Icons.arrow_forward_rounded,
+                            size: 40,
+                            color: complete
+                                ? Colors.white
+                                : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedNameChip extends StatelessWidget {
+  const _AnimatedNameChip({
+    super.key,
+    required this.label,
+    required this.selectedArea,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selectedArea;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(
+        begin: selectedArea ? 22 : -22,
+        end: 0,
+      ),
+      duration: const Duration(milliseconds: 200),
+      curve: Curves.easeOutCubic,
+      builder: (context, offset, child) => Transform.translate(
+        offset: Offset(0, offset),
+        child: child,
+      ),
+      child: Material(
+        color: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(13),
+          side: const BorderSide(color: Color(0xFFD9E2F1)),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(13),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF172033),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
