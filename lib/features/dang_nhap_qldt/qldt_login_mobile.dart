@@ -602,6 +602,45 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
               return text;
             }
 
+            // First choice: the exact visible account name rendered by QLĐT.
+            // Keep the text's original token order/casing; only normalize
+            // whitespace introduced by HTML layout.
+            var selectors = [
+              '#lblHoTenNguoiDangNhap',
+              '[id*="HoTenNguoiDangNhap"]',
+              '.nav-account button > span',
+              '.nav-account .user-name',
+              '.navbar .user-name',
+              '.navbar .username',
+              '.header .user-name',
+              '.header .username',
+              '.account-name',
+              '.student-name',
+              '.profile-name',
+              '[class*="student-name"]',
+              '[class*="profile-name"]',
+              '[class*="user-name"]',
+              '[class*="username"]',
+              '[class*="account"] [class*="name"]',
+              '[class*="user"] [class*="name"]'
+            ];
+            for (var ds = 0; ds < selectors.length; ds++) {
+              var nodes = document.querySelectorAll(selectors[ds]);
+              for (var dn = 0; dn < nodes.length; dn++) {
+                var node = nodes[dn];
+                try {
+                  var style = window.getComputedStyle(node);
+                  if (style.display === 'none' || style.visibility === 'hidden') {
+                    continue;
+                  }
+                  var rect = node.getBoundingClientRect();
+                  if (rect.width <= 0 || rect.height <= 0) continue;
+                } catch (_) {}
+                var visibleName = clean(node.textContent);
+                if (visibleName) return JSON.stringify(visibleName);
+              }
+            }
+
             function keyLooksLikeName(key) {
               var k = String(key || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
               return k === 'HOTEN' ||
@@ -695,31 +734,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
               } catch (_) {}
             }
 
-            var selectors = [
-              '#lblHoTenNguoiDangNhap',
-              '[id*="HoTenNguoiDangNhap"]',
-              '[id*="HoTen"]',
-              '[id*="HOVATEN"]',
-              '.nav-account button > span',
-              '.nav-account .user-name',
-              '.user-name',
-              '.username',
-              '.account-name',
-              '.student-name',
-              '.profile-name',
-              '[class*="student-name"]',
-              '[class*="profile-name"]',
-              '[class*="user-name"]',
-              '[class*="username"]'
-            ];
-            for (var s = 0; s < selectors.length; s++) {
-              var nodes = document.querySelectorAll(selectors[s]);
-              for (var n = 0; n < nodes.length; n++) {
-                var fromDom = clean(nodes[n].textContent);
-                if (fromDom) return JSON.stringify(fromDom);
-              }
-            }
-
             var bodyText = (document.body && document.body.innerText) || '';
             var match = bodyText.match(
               /(?:Họ\s*(?:và\s*)?tên|Họ tên)\s*[:：]\s*([^\n\r]{3,120})/i
@@ -747,6 +761,19 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
   ) async {
     final generation = ++_profileProbeGeneration;
 
+    // Prefer the name exactly as QLĐT renders it in the logged-in HTML.
+    // The header can appear a little after edu.system/session becomes ready.
+    for (var attempt = 0; attempt < 24; attempt++) {
+      if (!mounted || generation != _profileProbeGeneration) return;
+      final name = await _readProfileNameFromPage(controller);
+      if (name.isNotEmpty) {
+        await _rememberProfileName(session, name);
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+
+    // Only fall back when the visible QLĐT name never became available.
     final sessionName = _cleanProfileName(session.displayName);
     if (sessionName.isNotEmpty) {
       await _rememberProfileName(session, sessionName);
@@ -762,19 +789,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
     final cached = await _cachedProfileNameFor(session.userId);
     if (cached.isNotEmpty) {
       _resolvedDisplayName = cached;
-      return;
-    }
-
-    // edu.system becomes usable before the account/header DOM on QLĐT.
-    // Probe independently from schedule sync so name discovery never delays it.
-    for (var attempt = 0; attempt < 24; attempt++) {
-      if (!mounted || generation != _profileProbeGeneration) return;
-      final name = await _readProfileNameFromPage(controller);
-      if (name.isNotEmpty) {
-        await _rememberProfileName(session, name);
-        return;
-      }
-      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
   }
 
@@ -1205,7 +1219,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       verificationStage = 'semester_build';
       final session = _nativeSession;
       var displayName = '';
-      if (session != null) {
+      final controller = _controller;
+      if (controller != null) {
+        displayName = await _readProfileNameFromPage(controller);
+      }
+      if (displayName.isEmpty && session != null) {
         try {
           displayName = _cleanProfileName(
             await (_studentDisplayNameFuture ??
@@ -1231,12 +1249,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen> {
       }
       if (displayName.isEmpty && session != null) {
         displayName = await _cachedProfileNameFor(session.userId);
-      }
-      if (displayName.isEmpty) {
-        final controller = _controller;
-        if (controller != null) {
-          displayName = await _readProfileNameFromPage(controller);
-        }
       }
       if (displayName.isEmpty) {
         try {
