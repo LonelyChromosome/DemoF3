@@ -85,7 +85,7 @@ internal object ExamReminderScheduler {
             7 -> notify(context, listOf("Môn thử nghiệm"), setOf(3))
             8 -> notify(context, listOf("Môn thử nghiệm"), setOf(1))
             9 -> notify(context, listOf("Môn thử nghiệm"), setOf(5))
-            11 -> notify(context, listOf("Môn A", "Môn B"), setOf(5, 3))
+            11 -> notify(context, listOf("Môn A", "Môn B"), setOf(5, 6))
         }
     }
 
