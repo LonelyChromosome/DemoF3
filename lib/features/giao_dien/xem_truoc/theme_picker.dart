@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_source.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_choice.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_manager.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/custom_theme_editor.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
@@ -147,33 +149,55 @@ class _ThemePickerSheet extends StatelessWidget {
                       ),
                     ),
                   ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: OutlinedButton.icon(
-                        onPressed: () => _showTienMonFontColors(context),
-                        icon: const Icon(Icons.format_color_text_rounded),
-                        label: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: <Widget>[
-                            const Text('Màu chữ Tiên Môn  '),
-                            _FontColorChip(
-                              label: 'A',
-                              color: controller.tienMonTextPrimary,
+                  if (controller.theme == AppThemeId.tienMonPremium) ...<Widget>[
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _showTienMonFontPicker(context),
+                            icon: const Icon(Icons.font_download_outlined),
+                            label: Text(
+                              'Font Tiên Môn · ${controller.tienMonFont.label}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 4),
-                              child: Text('|'),
-                            ),
-                            _FontColorChip(
-                              label: 'B',
-                              color: controller.tienMonTextSecondary,
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 14),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _showTienMonFontColors(context),
+                            icon: const Icon(Icons.format_color_text_rounded),
+                            label: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                const Text('Màu chữ Tiên Môn  '),
+                                _FontColorChip(
+                                  label: 'A',
+                                  color: controller.tienMonTextPrimary,
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 4),
+                                  child: Text('|'),
+                                ),
+                                _FontColorChip(
+                                  label: 'B',
+                                  color: controller.tienMonTextSecondary,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   SliverToBoxAdapter(
                     child: _heading(
                       'Theme đã lưu (${controller.customThemes.length})',
@@ -219,6 +243,202 @@ class _ThemePickerSheet extends StatelessWidget {
     );
   }
 
+  Future<void> _showTienMonFontPicker(BuildContext context) async {
+    const presets = <AppFontChoice>[
+      AppThemeController.tienMonDefaultFont,
+      AppFontChoice.system,
+      AppFontChoice(
+        id: 'serif',
+        label: 'Serif cổ điển',
+        kind: AppFontKind.builtIn,
+        family: 'serif',
+      ),
+      AppFontChoice(
+        id: 'monospace',
+        label: 'Monospace',
+        kind: AppFontKind.builtIn,
+        family: 'monospace',
+      ),
+      AppFontChoice(
+        id: 'minecraft',
+        label: 'Minecraft',
+        kind: AppFontKind.builtIn,
+        family: 'MinecraftCustom',
+      ),
+    ];
+
+    var selected = controller.tienMonFont;
+    String? error;
+    var busy = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (sheetContext, setSheetState) {
+          Future<void> apply(AppFontChoice choice) async {
+            if (busy) return;
+            setSheetState(() {
+              busy = true;
+              error = null;
+            });
+            try {
+              await controller.setTienMonFont(choice);
+              if (!sheetContext.mounted) return;
+              setSheetState(() => selected = controller.tienMonFont);
+            } on Object catch (e) {
+              if (sheetContext.mounted) {
+                setSheetState(() => error = 'Không áp dụng được font: $e');
+              }
+            } finally {
+              if (sheetContext.mounted) setSheetState(() => busy = false);
+            }
+          }
+
+          Future<void> importFont() async {
+            if (busy) return;
+            setSheetState(() {
+              busy = true;
+              error = null;
+            });
+            try {
+              final imported = await ThemeFontManager.instance.importFont();
+              if (imported == null || !sheetContext.mounted) return;
+              await controller.setTienMonFont(imported);
+              if (!sheetContext.mounted) return;
+              setSheetState(() => selected = controller.tienMonFont);
+            } on Object catch (e) {
+              if (sheetContext.mounted) {
+                setSheetState(() => error = 'Font không hợp lệ: $e');
+              }
+            } finally {
+              if (sheetContext.mounted) setSheetState(() => busy = false);
+            }
+          }
+
+          final importedSelected = selected.kind == AppFontKind.imported;
+          return SafeArea(
+            top: false,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+              decoration: const BoxDecoration(
+                color: Color(0xFF102820),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border(top: BorderSide(color: Color(0x99FFD66B))),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'Font Tiên Môn',
+                      style: TextStyle(
+                        color: Color(0xFFFFD66B),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Chỉ áp dụng khi đang dùng Tiên Môn Premium.',
+                      style: TextStyle(color: Color(0xFFD5E9DF)),
+                    ),
+                    const SizedBox(height: 14),
+                    for (final choice in presets)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 2,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: BorderSide(
+                              color: selected.id == choice.id
+                                  ? const Color(0xFFFFD66B)
+                                  : Colors.white24,
+                            ),
+                          ),
+                          tileColor: Colors.white.withValues(alpha: .035),
+                          title: Text(
+                            choice.label,
+                            style: TextStyle(
+                              fontFamily: choice.family,
+                              color: const Color(0xFFFFE7A6),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          trailing: selected.id == choice.id
+                              ? const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: Color(0xFFFFD66B),
+                                )
+                              : null,
+                          onTap: busy ? null : () => apply(choice),
+                        ),
+                      ),
+                    if (importedSelected)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 2,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: const BorderSide(color: Color(0xFFFFD66B)),
+                          ),
+                          tileColor: Colors.white.withValues(alpha: .035),
+                          title: Text(
+                            selected.label,
+                            style: TextStyle(
+                              fontFamily: controller.tienMonFontFamily,
+                              color: const Color(0xFFFFE7A6),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          subtitle: const Text(
+                            'Font đã nhập từ máy',
+                            style: TextStyle(color: Color(0xFFB8CFC4)),
+                          ),
+                          trailing: const Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFFFFD66B),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: busy ? null : importFont,
+                        icon: const Icon(Icons.upload_file_rounded),
+                        label: Text(
+                          busy ? 'Đang xử lý…' : 'Nhập TTF / OTF từ máy',
+                        ),
+                      ),
+                    ),
+                    if (error != null) ...<Widget>[
+                      const SizedBox(height: 10),
+                      Text(
+                        error!,
+                        style: const TextStyle(color: Color(0xFFFF9A9A)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _showTienMonFontColors(BuildContext context) async {
     var primary = controller.tienMonTextPrimary;
     var secondary = controller.tienMonTextSecondary;
@@ -232,7 +452,6 @@ class _ThemePickerSheet extends StatelessWidget {
       Color(0xFF74D8B1),
       Color(0xFFBFE8FF),
       Color(0xFFFFC9D8),
-      Color(0xFFD7C8FF),
     ];
 
     await showModalBottomSheet<void>(
@@ -266,33 +485,62 @@ class _ThemePickerSheet extends StatelessWidget {
                 Wrap(
                   spacing: 9,
                   runSpacing: 9,
-                  children: choices
-                      .map(
-                        (color) => InkWell(
-                          onTap: () {
-                            onChanged(color);
-                            hexController.text = _colorHex(color);
-                          },
-                          borderRadius: BorderRadius.circular(99),
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: color.toARGB32() == selected.toARGB32()
-                                    ? Colors.white
-                                    : Colors.white24,
-                                width: color.toARGB32() == selected.toARGB32()
-                                    ? 3
-                                    : 1,
-                              ),
+                  children: <Widget>[
+                    ...choices.map(
+                      (color) => InkWell(
+                        onTap: () {
+                          onChanged(color);
+                          hexController.text = _colorHex(color);
+                        },
+                        borderRadius: BorderRadius.circular(99),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: color.toARGB32() == selected.toARGB32()
+                                  ? Colors.white
+                                  : Colors.white24,
+                              width: color.toARGB32() == selected.toARGB32()
+                                  ? 3
+                                  : 1,
                             ),
                           ),
                         ),
-                      )
-                      .toList(),
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () async {
+                        final color = await showModalBottomSheet<Color>(
+                          context: sheetContext,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => _RgbColorPicker(initial: selected),
+                        );
+                        if (color == null) return;
+                        onChanged(color);
+                        hexController.text = _colorHex(color);
+                      },
+                      borderRadius: BorderRadius.circular(99),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(
+                          Icons.add_rounded,
+                          color: Colors.black,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 TextField(
@@ -495,6 +743,338 @@ Color? _parseHexColor(String raw) {
   if (value.length != 8) return null;
   final parsed = int.tryParse(value, radix: 16);
   return parsed == null ? null : Color(parsed);
+}
+
+class _RgbColorPicker extends StatefulWidget {
+  const _RgbColorPicker({required this.initial});
+
+  final Color initial;
+
+  @override
+  State<_RgbColorPicker> createState() => _RgbColorPickerState();
+}
+
+class _RgbColorPickerState extends State<_RgbColorPicker> {
+  late HSVColor _hsv = HSVColor.fromColor(widget.initial);
+
+  Color get _color => _hsv.toColor();
+
+  void _setHsv(HSVColor value) => setState(() => _hsv = value);
+
+  void _setRgb({int? red, int? green, int? blue}) {
+    final current = _color;
+    final next = Color.fromARGB(
+      255,
+      red ?? current.r.round(),
+      green ?? current.g.round(),
+      blue ?? current.b.round(),
+    );
+    setState(() => _hsv = HSVColor.fromColor(next));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hueColor = HSVColor.fromAHSV(1, _hsv.hue, 1, 1).toColor();
+    final rgb = _color;
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+        decoration: const BoxDecoration(
+          color: Color(0xFF102820),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(top: BorderSide(color: Color(0x99FFD66B))),
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text(
+                'Chọn màu RGB',
+                style: TextStyle(
+                  color: Color(0xFFFFD66B),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                height: 190,
+                width: double.infinity,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final size = Size(constraints.maxWidth, 190);
+                    return GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (details) => _setFromOffset(
+                        details.localPosition,
+                        size,
+                      ),
+                      onPanDown: (details) => _setFromOffset(
+                        details.localPosition,
+                        size,
+                      ),
+                      onPanUpdate: (details) => _setFromOffset(
+                        details.localPosition,
+                        size,
+                      ),
+                      child: CustomPaint(
+                        painter: _RgbSpectrumPainter(hueColor),
+                        foregroundPainter: _RgbSelectionPainter(
+                          _hsv.saturation,
+                          _hsv.value,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              _HueBar(
+                hue: _hsv.hue,
+                onChanged: (value) => _setHsv(_hsv.withHue(value)),
+              ),
+              const SizedBox(height: 10),
+              _RgbSlider(
+                label: 'R',
+                value: rgb.r.round(),
+                color: const Color(0xFFFF5A5A),
+                onChanged: (value) => _setRgb(red: value),
+              ),
+              _RgbSlider(
+                label: 'G',
+                value: rgb.g.round(),
+                color: const Color(0xFF5DDB7A),
+                onChanged: (value) => _setRgb(green: value),
+              ),
+              _RgbSlider(
+                label: 'B',
+                value: rgb.b.round(),
+                color: const Color(0xFF6DA9FF),
+                onChanged: (value) => _setRgb(blue: value),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                height: 48,
+                width: double.infinity,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: rgb,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white38),
+                ),
+                child: Text(
+                  _colorHex(rgb),
+                  style: TextStyle(
+                    color: ThemeData.estimateBrightnessForColor(rgb) ==
+                            Brightness.dark
+                        ? Colors.white
+                        : Colors.black,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Hủy'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(context).pop(rgb),
+                      child: const Text('Chọn'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _setFromOffset(Offset offset, Size size) {
+    _setHsv(
+      _hsv
+          .withSaturation((offset.dx / size.width).clamp(0.0, 1.0))
+          .withValue((1 - offset.dy / size.height).clamp(0.0, 1.0)),
+    );
+  }
+}
+
+class _RgbSpectrumPainter extends CustomPainter {
+  const _RgbSpectrumPainter(this.hue);
+
+  final Color hue;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          colors: <Color>[Colors.white, hue],
+        ).createShader(rect),
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: <Color>[Colors.transparent, Colors.black],
+        ).createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RgbSpectrumPainter oldDelegate) =>
+      oldDelegate.hue != hue;
+}
+
+class _RgbSelectionPainter extends CustomPainter {
+  const _RgbSelectionPainter(this.saturation, this.value);
+
+  final double saturation;
+  final double value;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width * saturation, size.height * (1 - value));
+    canvas.drawCircle(
+      center,
+      8,
+      Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5,
+    );
+    canvas.drawCircle(
+      center,
+      5.5,
+      Paint()
+        ..color = Colors.black
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RgbSelectionPainter oldDelegate) =>
+      oldDelegate.saturation != saturation || oldDelegate.value != value;
+}
+
+class _HueBar extends StatelessWidget {
+  const _HueBar({required this.hue, required this.onChanged});
+
+  final double hue;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: 34,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        return Stack(
+          alignment: Alignment.center,
+          children: <Widget>[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: <Color>[
+                      Color(0xFFFF0000),
+                      Color(0xFFFFFF00),
+                      Color(0xFF00FF00),
+                      Color(0xFF00FFFF),
+                      Color(0xFF0000FF),
+                      Color(0xFFFF00FF),
+                      Color(0xFFFF0000),
+                    ],
+                  ),
+                ),
+                child: SizedBox.expand(),
+              ),
+            ),
+            SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 0,
+                activeTrackColor: Colors.transparent,
+                inactiveTrackColor: Colors.transparent,
+                overlayColor: Colors.white24,
+                thumbColor: Colors.white,
+                thumbShape: const RoundSliderThumbShape(
+                  enabledThumbRadius: 8,
+                ),
+              ),
+              child: Slider(
+                value: hue,
+                max: 360,
+                onChanged: onChanged,
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _RgbSlider extends StatelessWidget {
+  const _RgbSlider({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.onChanged,
+  });
+
+  final String label;
+  final int value;
+  final Color color;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: <Widget>[
+      SizedBox(
+        width: 22,
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFFFFE7A6),
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+      Expanded(
+        child: Slider(
+          value: value.toDouble(),
+          min: 0,
+          max: 255,
+          divisions: 255,
+          activeColor: color,
+          onChanged: (next) => onChanged(next.round()),
+        ),
+      ),
+      SizedBox(
+        width: 38,
+        child: Text(
+          '$value',
+          textAlign: TextAlign.right,
+          style: const TextStyle(color: Color(0xFFD5E9DF)),
+        ),
+      ),
+    ],
+  );
 }
 
 class _FontColorChip extends StatelessWidget {
