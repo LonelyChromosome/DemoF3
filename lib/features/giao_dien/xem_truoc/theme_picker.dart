@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_source.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/custom_theme_editor.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -391,21 +392,63 @@ class _ThemePickerSheet extends StatelessWidget {
       return;
     }
 
-    // Tiên Môn owns a deliberate loading/entry moment, but it is never the
-    // fresh-install default. Show it only after the user explicitly chooses
-    // Premium, while the theme + native widget transition is being committed.
+    // Keep the loading cover fully opaque while Premium warms up. The previous
+    // flow started changing the theme as soon as the dialog route was pushed,
+    // so a slow first background decode could briefly expose the intermediate
+    // Theme Engine layer. Precache the first scene, wait for the final Premium
+    // frame, then reverse-fade the loading cover away.
+    final presented = Completer<void>();
     unawaited(
       showGeneralDialog<void>(
         context: context,
         useRootNavigator: true,
         barrierDismissible: false,
-        barrierColor: Colors.black.withValues(alpha: .72),
-        transitionDuration: const Duration(milliseconds: 180),
-        pageBuilder: (_, _, _) => const _TienMonThemeLoading(),
+        barrierColor: Colors.black,
+        transitionDuration: const Duration(milliseconds: 240),
+        transitionBuilder: (context, animation, secondaryAnimation, child) {
+          final opacity = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return FadeTransition(opacity: opacity, child: child);
+        },
+        pageBuilder: (_, _, _) => _TienMonThemeLoading(
+          onPresented: () {
+            if (!presented.isCompleted) presented.complete();
+          },
+        ),
       ),
     );
+
     try {
+      await presented.future;
+      // Do not let the old theme show through while the dialog itself is still
+      // fading in.
+      await Future<void>.delayed(const Duration(milliseconds: 240));
+
+      final scene = TienMonPremiumContract.appSceneFor(DateTime.now());
+      final currentAsset =
+          TienMonPremiumContract.appSceneAssets[scene - 1];
+      final nextScene = scene == 8 ? 1 : scene + 1;
+      final nextAsset =
+          TienMonPremiumContract.appSceneAssets[nextScene - 1];
+
+      // The active scene is the important one; the adjacent scene is warmed so
+      // the normal Premium scene handoff also stays smooth.
+      await Future.wait<void>(<Future<void>>[
+        precacheImage(AssetImage(currentAsset), context),
+        precacheImage(AssetImage(nextAsset), context),
+      ]);
+
       await controller.select(id);
+
+      // controller.select() commits theme/widget state, but the first Premium
+      // render still needs a frame to mount the background + ambient layers.
+      // Hold the cover through two rendered frames before revealing it.
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+      await Future<void>.delayed(const Duration(milliseconds: 80));
     } finally {
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop();
@@ -484,8 +527,23 @@ class _FontColorChip extends StatelessWidget {
   );
 }
 
-class _TienMonThemeLoading extends StatelessWidget {
-  const _TienMonThemeLoading();
+class _TienMonThemeLoading extends StatefulWidget {
+  const _TienMonThemeLoading({required this.onPresented});
+
+  final VoidCallback onPresented;
+
+  @override
+  State<_TienMonThemeLoading> createState() => _TienMonThemeLoadingState();
+}
+
+class _TienMonThemeLoadingState extends State<_TienMonThemeLoading> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onPresented();
+    });
+  }
 
   @override
   Widget build(BuildContext context) => Material(
