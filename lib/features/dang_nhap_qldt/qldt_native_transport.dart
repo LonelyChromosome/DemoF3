@@ -152,6 +152,22 @@ final class QldtNativeTransport {
         extra: const <String, dynamic>{},
       );
       for (final row in _rows(response)) {
+        final family = _cleanName(
+          row['QLSV_NGUOIHOC_HODEM'] ?? row['HODEM'] ?? row['HO'],
+        );
+        final given = _cleanName(
+          row['QLSV_NGUOIHOC_TEN'] ?? row['TEN'],
+        );
+
+        // Prefer the structured Vietnamese name fields. QLĐT can expose
+        // full-name fields in display order, which may move the given name
+        // to the front (for example "Minh Nguyễn Đạo"). Building from
+        // HỌ ĐỆM + TÊN preserves the canonical student-name order.
+        if (family.isNotEmpty && given.isNotEmpty) {
+          final combined = _cleanName('$family $given');
+          if (combined.isNotEmpty) return combined;
+        }
+
         final full = _cleanName(
           row['QLSV_NGUOIHOC_HOTEN'] ??
               row['HOTEN'] ??
@@ -160,14 +176,10 @@ final class QldtNativeTransport {
         );
         if (full.isNotEmpty) return full;
 
-        final family = _cleanName(
-          row['QLSV_NGUOIHOC_HODEM'] ?? row['HODEM'] ?? row['HO'],
-        );
-        final given = _cleanName(
-          row['QLSV_NGUOIHOC_TEN'] ?? row['TEN'],
-        );
-        final combined = _cleanName('$family $given');
-        if (combined.isNotEmpty) return combined;
+        // If QLĐT only supplied one structured component, keep it as the
+        // final fallback rather than attempting to reorder an unknown name.
+        if (family.isNotEmpty) return family;
+        if (given.isNotEmpty) return given;
       }
       return '';
     } finally {
