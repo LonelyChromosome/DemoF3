@@ -1078,7 +1078,6 @@ class _MainShell extends StatelessWidget {
     // settled. This mirrors the proven day/week strategy without changing that
     // internal animation.
     final timetable = _TimetableScreen(
-      key: const ValueKey<String>('persistent-timetable'),
       data: data,
       assistantPack: assistantPack,
       selectedDate: selectedDate,
