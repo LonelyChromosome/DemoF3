@@ -579,7 +579,8 @@ class AppThemeController extends ChangeNotifier {
     _tienMonFontFamily = await ThemeFontManager.instance.resolveFamily(
       _tienMonFont,
     );
-    if (_tienMonFontFamily == null) {
+    if (_tienMonFont.kind == AppFontKind.imported &&
+        _tienMonFontFamily == null) {
       _tienMonFont = tienMonDefaultFont;
       _tienMonFontFamily = tienMonDefaultFont.family;
       await prefs.remove(_tienMonFontKey);
