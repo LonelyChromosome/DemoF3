@@ -381,7 +381,8 @@ class _FullBleedSceneArtwork extends StatelessWidget {
     final media = MediaQuery.of(context);
     final targetHeight = (media.size.height * media.devicePixelRatio)
         .round()
-        .clamp(1280, 2560);
+        .clamp(1280, 2560)
+        .toInt();
     return SizedBox.expand(
       child: Image.asset(
         asset,

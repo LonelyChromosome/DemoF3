@@ -44,7 +44,7 @@ jobs:
           test -f assets/tien_mon_premium/widget_overview/wid_sang.png
           test -f android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/NativeQldtWidgetSync.kt
           grep -F 'ValueNotifier<bool> _weeklyMode' lib/app/app.dart
-          grep -F 'opacity: weekly ? .996 : .004' lib/app/app.dart
+          grep -F 'builder: (context, weekly, _) => IndexedStack(' lib/app/app.dart
           grep -F 'applyPendingSelection' android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt
           ! grep -F 'pinSelectedFirst()' android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/WidgetSnapshotStore.kt
           test -x android/gradlew
