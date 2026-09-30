@@ -222,7 +222,7 @@ class _ThemePickerSheet extends StatelessWidget {
                           theme: theme,
                           selected:
                               controller.activeCustomTheme?.id == theme.id,
-                          onApply: () => controller.applyCustomTheme(theme),
+                          onApply: () => _applyCustomTheme(context, theme),
                           onEdit: () => Navigator.of(context).push<void>(
                             MaterialPageRoute<void>(
                               builder: (_) =>
@@ -635,6 +635,16 @@ class _ThemePickerSheet extends StatelessWidget {
 
   Future<void> _selectPreset(BuildContext context, AppThemeId id) async {
     if (controller.theme == id) return;
+
+    if (controller.theme == AppThemeId.tienMonPremium &&
+        id != AppThemeId.tienMonPremium) {
+      await _leaveTienMon(
+        context,
+        () => controller.select(id),
+      );
+      return;
+    }
+
     if (id != AppThemeId.tienMonPremium) {
       await controller.select(id);
       return;
@@ -671,8 +681,6 @@ class _ThemePickerSheet extends StatelessWidget {
 
     try {
       await presented.future;
-      // Do not let the old theme show through while the dialog itself is still
-      // fading in.
       await Future<void>.delayed(const Duration(milliseconds: 240));
 
       final scene = TienMonPremiumContract.appSceneFor(DateTime.now());
@@ -682,24 +690,85 @@ class _ThemePickerSheet extends StatelessWidget {
       final nextAsset =
           TienMonPremiumContract.appSceneAssets[nextScene - 1];
 
-      // The active scene is the important one; the adjacent scene is warmed so
-      // the normal Premium scene handoff also stays smooth.
       await Future.wait<void>(<Future<void>>[
         precacheImage(AssetImage(currentAsset), context),
         precacheImage(AssetImage(nextAsset), context),
       ]);
 
       await controller.select(id);
-
-      // controller.select() commits theme/widget state, but the first Premium
-      // render still needs a frame to mount the background + ambient layers.
-      // Hold the cover through two rendered frames before revealing it.
       await WidgetsBinding.instance.endOfFrame;
       await WidgetsBinding.instance.endOfFrame;
       await Future<void>.delayed(const Duration(milliseconds: 80));
     } finally {
       if (context.mounted) {
         Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+  }
+
+  Future<void> _applyCustomTheme(
+    BuildContext context,
+    CustomThemeDefinition theme,
+  ) async {
+    if (controller.theme == AppThemeId.tienMonPremium) {
+      await _leaveTienMon(
+        context,
+        () => controller.applyCustomTheme(theme),
+      );
+      return;
+    }
+    await controller.applyCustomTheme(theme);
+  }
+
+  Future<void> _leaveTienMon(
+    BuildContext context,
+    Future<void> Function() applyTarget,
+  ) async {
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final rootContext = rootNavigator.context;
+
+    // Close the theme picker first so the loading screen fades back into the
+    // actual app, not back into the picker sheet.
+    Navigator.of(context).pop();
+    await WidgetsBinding.instance.endOfFrame;
+
+    final presented = Completer<void>();
+    unawaited(
+      showGeneralDialog<void>(
+        context: rootContext,
+        useRootNavigator: true,
+        barrierDismissible: false,
+        barrierColor: Colors.white,
+        transitionDuration: const Duration(milliseconds: 240),
+        transitionBuilder: (context, animation, secondaryAnimation, child) {
+          final opacity = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return FadeTransition(opacity: opacity, child: child);
+        },
+        pageBuilder: (_, _, _) => _DefaultThemeLoading(
+          onPresented: () {
+            if (!presented.isCompleted) presented.complete();
+          },
+        ),
+      ),
+    );
+
+    try {
+      await presented.future;
+      await Future<void>.delayed(const Duration(milliseconds: 240));
+      await applyTarget();
+
+      // Hold the default loading cover until the Theme Engine target has
+      // mounted and painted, then fade cleanly into the app.
+      await WidgetsBinding.instance.endOfFrame;
+      await WidgetsBinding.instance.endOfFrame;
+      await Future<void>.delayed(const Duration(milliseconds: 90));
+    } finally {
+      if (rootNavigator.mounted && rootNavigator.canPop()) {
+        rootNavigator.pop();
       }
     }
   }
@@ -1102,6 +1171,94 @@ class _FontColorChip extends StatelessWidget {
         color: Colors.black87,
         fontWeight: FontWeight.w900,
         fontSize: 12,
+      ),
+    ),
+  );
+}
+
+class _DefaultThemeLoading extends StatefulWidget {
+  const _DefaultThemeLoading({required this.onPresented});
+
+  final VoidCallback onPresented;
+
+  @override
+  State<_DefaultThemeLoading> createState() => _DefaultThemeLoadingState();
+}
+
+class _DefaultThemeLoadingState extends State<_DefaultThemeLoading> {
+  static final AppThemePalette _palette =
+      appThemePalettes[AppThemeId.classic]!;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onPresented();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: _palette.surface,
+    child: SafeArea(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Container(
+              width: 76,
+              height: 76,
+              decoration: BoxDecoration(
+                color: _palette.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _palette.primary,
+                  width: 6,
+                ),
+              ),
+              child: Icon(
+                AppThemeId.classic.icon,
+                size: 44,
+                color: _palette.primary,
+              ),
+            ),
+            const SizedBox(height: 26),
+            Text(
+              'Better Phenikaa App',
+              style: TextStyle(
+                color: _palette.textPrimary,
+                fontSize: 30,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              '2.1.2 • Lịch học & Lịch thi',
+              style: TextStyle(
+                color: _palette.textSecondary,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 120),
+            SizedBox(
+              width: 88,
+              child: LinearProgressIndicator(
+                minHeight: 4,
+                borderRadius: BorderRadius.circular(10),
+                backgroundColor: _palette.cardAlt,
+                color: _palette.primary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Đang khởi động...',
+              style: TextStyle(
+                color: _palette.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     ),
   );
