@@ -419,6 +419,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     if (result.semester == null && !kIsWeb) {
       throw const FormatException('Không xác minh được dữ liệu học kỳ QLĐT.');
     }
+    if (!kIsWeb && result.schedule.displayName.isEmpty) {
+      throw const FormatException('QLDT_CANONICAL_NAME_MISSING');
+    }
+    if (!kIsWeb &&
+        result.semester != null &&
+        result.semester!.displayName.isEmpty) {
+      throw const FormatException('QLDT_CANONICAL_NAME_MISSING');
+    }
     try {
       SemesterDifference? difference;
       var publishedData = result.schedule;
@@ -825,7 +833,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                             current ?? const SizedBox.shrink(),
                         child: _booting
                             ? const _SplashScreen()
-                            : _data == null
+                            : _data == null || _data!.displayName.isEmpty
                             ? _LoginScreen(
                                 onLogin: _loginOrSync,
                                 supportsLive: supportsLiveQldtLogin,
@@ -2112,9 +2120,7 @@ class _AccountScreen extends StatelessWidget {
                       const SizedBox(width: 18),
                       Expanded(
                         child: Text(
-                          data.displayName.isEmpty
-                              ? 'Người dùng QLĐT'
-                              : data.displayName,
+                          data.displayName,
                           style: TextStyle(
                             color: palette.textPrimary,
                             fontSize: 18,
