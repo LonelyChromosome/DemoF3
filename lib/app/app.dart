@@ -1260,6 +1260,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
   int _modeSwitchSerial = 0;
   final ValueNotifier<bool> _weeklySelection = ValueNotifier<bool>(false);
   final ValueNotifier<bool> _weeklyMode = ValueNotifier<bool>(false);
+  final ValueNotifier<double> _modeOpacity = ValueNotifier<double>(1);
   DateTime _week = weekMonday(DateTime.now());
 
   @override
@@ -1273,6 +1274,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
     WidgetsBinding.instance.removeObserver(this);
     _weeklySelection.dispose();
     _weeklyMode.dispose();
+    _modeOpacity.dispose();
     super.dispose();
   }
 
@@ -1283,70 +1285,115 @@ class _TimetableScreenState extends State<_TimetableScreen>
     }
   }
 
+  Future<void> _changeTimetableMode(bool nextWeekly) async {
+    if (_weekly == nextWeekly) return;
+    _weekly = nextWeekly;
+    final serial = ++_modeSwitchSerial;
+
+    // Highlight responds immediately. The content itself fades out/in so the
+    // heavy week/day raster never blocks the button feedback.
+    _weeklySelection.value = nextWeekly;
+    _modeOpacity.value = 0;
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    if (!mounted || serial != _modeSwitchSerial || _weekly != nextWeekly) {
+      return;
+    }
+
+    if (!nextWeekly) {
+      _week = weekMonday(DateTime.now());
+      _weeklyMode.value = false;
+      widget.onDateChanged(DateTime.now());
+    } else {
+      _weeklyMode.value = true;
+    }
+
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || serial != _modeSwitchSerial || _weekly != nextWeekly) {
+      return;
+    }
+    _modeOpacity.value = 1;
+  }
+
   Future<void> _pickWeek() async {
     final palette = appThemePalette;
-    final picked = await showModalBottomSheet<DateTime>(
+    final picked = await showGeneralDialog<DateTime>(
       context: context,
-      isScrollControlled: true,
-      showDragHandle: false,
-      backgroundColor: Colors.transparent,
+      barrierDismissible: true,
+      barrierLabel: 'Đóng lịch chọn tuần',
       barrierColor: Colors.black.withValues(alpha: .48),
-      builder: (sheetContext) {
-        final screenHeight = MediaQuery.sizeOf(sheetContext).height;
-        final bottomReserve = _calendarBottomReserve(sheetContext);
+      transitionDuration: const Duration(milliseconds: 190),
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            ),
+            child: child,
+          ),
+      pageBuilder: (dialogContext, animation, secondaryAnimation) {
+        final screenHeight = MediaQuery.sizeOf(dialogContext).height;
+        final bottomReserve = _calendarBottomReserve(dialogContext);
         final sheetHeight = screenHeight * .62 < 440
             ? screenHeight * .62
             : 440.0;
-        return Padding(
-          padding: EdgeInsets.only(bottom: bottomReserve),
-          child: Container(
-            height: sheetHeight,
-            decoration: BoxDecoration(
-              color: palette.surface,
-              border: Border(top: BorderSide(color: palette.border)),
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(
-                  palette.geometry == AppThemeGeometry.rounded ? 30 : 0,
-                ),
-              ),
-            ),
-            child: Column(
-              children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
-                  child: Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: Text(
-                          'Chọn tuần',
-                          style: TextStyle(
-                            color: palette.textPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () =>
-                            Navigator.pop(sheetContext, DateTime.now()),
-                        child: const Text('Tuần hiện tại'),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Theme(
-                    data: buildBetterTheme(palette),
-                    child: CalendarDatePicker(
-                      initialDate: _week,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2100),
-                      onDateChanged: (date) =>
-                          Navigator.pop(sheetContext, date),
+        return Material(
+          color: Colors.transparent,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: bottomReserve),
+              child: Container(
+                height: sheetHeight,
+                decoration: BoxDecoration(
+                  color: palette.surface,
+                  border: Border(top: BorderSide(color: palette.border)),
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(
+                      palette.geometry == AppThemeGeometry.rounded ? 30 : 0,
                     ),
                   ),
                 ),
-              ],
+                child: Column(
+                  children: <Widget>[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 10, 18, 0),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              'Chọn tuần',
+                              style: TextStyle(
+                                color: palette.textPrimary,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () =>
+                                Navigator.pop(dialogContext, DateTime.now()),
+                            child: const Text('Tuần hiện tại'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Theme(
+                        data: buildBetterTheme(palette),
+                        child: CalendarDatePicker(
+                          initialDate: _week,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2100),
+                          onDateChanged: (date) =>
+                              Navigator.pop(dialogContext, date),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         );
@@ -1400,40 +1447,24 @@ class _TimetableScreenState extends State<_TimetableScreen>
               valueListenable: _weeklySelection,
               builder: (context, weekly, _) => _TimetableModeSelector(
                 weekly: weekly,
-                onChanged: (nextWeekly) {
-                  if (_weekly == nextWeekly) return;
-                  _weekly = nextWeekly;
-                  final serial = ++_modeSwitchSerial;
-
-                  // Paint the button response first. Week/day content can be
-                  // expensive on its first raster; moving it one frame later
-                  // prevents the selector from feeling stuck.
-                  _weeklySelection.value = nextWeekly;
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!mounted ||
-                        serial != _modeSwitchSerial ||
-                        _weekly != nextWeekly) {
-                      return;
-                    }
-                    if (!nextWeekly) {
-                      _week = weekMonday(DateTime.now());
-                      _weeklyMode.value = false;
-                      widget.onDateChanged(DateTime.now());
-                    } else {
-                      _weeklyMode.value = true;
-                    }
-                  });
-                },
+                onChanged: (nextWeekly) =>
+                    unawaited(_changeTimetableMode(nextWeekly)),
               ),
             ),
             const SizedBox(height: 12),
             Expanded(
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _weeklyMode,
-                builder: (context, weekly, _) => IndexedStack(
-                  index: weekly ? 1 : 0,
-                  sizing: StackFit.expand,
-                  children: <Widget>[
+              child: ValueListenableBuilder<double>(
+                valueListenable: _modeOpacity,
+                builder: (context, opacity, _) => AnimatedOpacity(
+                  opacity: opacity,
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeInOutCubic,
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: _weeklyMode,
+                    builder: (context, weekly, _) => IndexedStack(
+                      index: weekly ? 1 : 0,
+                      sizing: StackFit.expand,
+                      children: <Widget>[
                     TickerMode(
                       enabled: !weekly,
                       child: RepaintBoundary(
@@ -1460,16 +1491,21 @@ class _TimetableScreenState extends State<_TimetableScreen>
                             const SizedBox(height: 18),
                             Expanded(
                               child: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 140),
-                                switchInCurve: Curves.easeOut,
-                                switchOutCurve: Curves.easeOut,
+                                duration: const Duration(milliseconds: 210),
+                                switchInCurve: Curves.easeOutCubic,
+                                switchOutCurve: Curves.easeOutCubic,
                                 layoutBuilder: (current, previous) =>
                                     current ?? const SizedBox.shrink(),
-                                transitionBuilder: (child, animation) =>
-                                    FadeTransition(
-                                      opacity: animation,
-                                      child: child,
-                                    ),
+                                transitionBuilder: (child, animation) {
+                                  final slide = Tween<Offset>(
+                                    begin: const Offset(.10, 0),
+                                    end: Offset.zero,
+                                  ).animate(animation);
+                                  return SlideTransition(
+                                    position: slide,
+                                    child: child,
+                                  );
+                                },
                                 child: KeyedSubtree(
                                   key: ValueKey<String>(
                                     '${widget.selectedDate.year}-${widget.selectedDate.month}-${widget.selectedDate.day}',
@@ -1523,7 +1559,9 @@ class _TimetableScreenState extends State<_TimetableScreen>
                         ),
                       ),
                     ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -2464,34 +2502,38 @@ Future<void> _showCalendarPicker(
 ) async {
   var draft = _dateOnly(selectedDate);
   final palette = appThemePalette;
-  final picked = await showModalBottomSheet<DateTime>(
+  final picked = await showGeneralDialog<DateTime>(
     context: context,
-    isScrollControlled: true,
-    showDragHandle: false,
-    backgroundColor: Colors.transparent,
+    barrierDismissible: true,
+    barrierLabel: 'Đóng lịch chọn ngày',
     barrierColor: Colors.black.withValues(alpha: .48),
-    builder: (sheetContext) {
-      final screenHeight = MediaQuery.sizeOf(sheetContext).height;
-      final bottomReserve = _calendarBottomReserve(sheetContext);
+    transitionDuration: const Duration(milliseconds: 190),
+    transitionBuilder: (context, animation, secondaryAnimation, child) =>
+        FadeTransition(
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          ),
+          child: child,
+        ),
+    pageBuilder: (dialogContext, animation, secondaryAnimation) {
+      final screenHeight = MediaQuery.sizeOf(dialogContext).height;
+      final bottomReserve = _calendarBottomReserve(dialogContext);
       final maxSheetHeight = screenHeight - bottomReserve - 24;
       final wantedHeight = screenHeight * .68;
       final sheetHeight = wantedHeight < maxSheetHeight
           ? wantedHeight
           : maxSheetHeight;
-      return Padding(
-        padding: EdgeInsets.only(bottom: bottomReserve),
-        child: StatefulBuilder(
-          builder: (sheetContext, setModalState) {
-            return TweenAnimationBuilder<double>(
-              tween: Tween<double>(begin: .94, end: 1),
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              builder: (context, value, child) => Transform.scale(
-                alignment: Alignment.bottomCenter,
-                scale: value,
-                child: child,
-              ),
-              child: Container(
+
+      return Material(
+        color: Colors.transparent,
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Padding(
+            padding: EdgeInsets.only(bottom: bottomReserve),
+            child: StatefulBuilder(
+              builder: (dialogContext, setModalState) => Container(
                 height: sheetHeight,
                 padding: const EdgeInsets.fromLTRB(18, 10, 18, 14),
                 decoration: BoxDecoration(
@@ -2564,7 +2606,7 @@ Future<void> _showCalendarPicker(
                       height: 48,
                       child: FilledButton.icon(
                         onPressed: () =>
-                            Navigator.of(sheetContext).pop(draft),
+                            Navigator.of(dialogContext).pop(draft),
                         icon: const Icon(Icons.check_rounded),
                         label: Text('Xem ${_dateLabel(draft)}'),
                       ),
@@ -2572,8 +2614,8 @@ Future<void> _showCalendarPicker(
                   ],
                 ),
               ),
-            );
-          },
+            ),
+          ),
         ),
       );
     },
