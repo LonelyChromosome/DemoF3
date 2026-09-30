@@ -50,23 +50,35 @@ jobs:
           test -x android/gradlew
           test -f android/gradle/wrapper/gradle-wrapper.jar
 
-      - name: Build release APK
+      - name: Build public APK
         run: flutter build apk --release
 
-      - name: Package APK
+      - name: Package public APK
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-main.apk
-          sha256sum dist/Better-Phenikaa-main.apk > dist/Better-Phenikaa-main.sha256
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.0-Public.apk
 
-      - name: Upload APK
+      - name: Build assistant-panel APK
+        run: flutter build apk --release --dart-define=ASSISTANT_TEST_PANEL=true
+
+      - name: Package assistant-panel APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.0-Panel.apk
+          sha256sum dist/Better-Phenikaa-cooc.1.0-Public.apk > dist/Better-Phenikaa-cooc.1.0-Public.sha256
+          sha256sum dist/Better-Phenikaa-cooc.1.0-Panel.apk > dist/Better-Phenikaa-cooc.1.0-Panel.sha256
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: better-phenikaa-main-apk
+          name: better-phenikaa-cooc-1-0
           path: |
-            dist/Better-Phenikaa-main.apk
-            dist/Better-Phenikaa-main.sha256
+            dist/Better-Phenikaa-cooc.1.0-Public.apk
+            dist/Better-Phenikaa-cooc.1.0-Public.sha256
+            dist/Better-Phenikaa-cooc.1.0-Panel.apk
+            dist/Better-Phenikaa-cooc.1.0-Panel.sha256
           retention-days: 14
           if-no-files-found: error
