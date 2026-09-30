@@ -41,7 +41,6 @@ void main() {
     });
   });
 
-
   group('Tiên Môn Premium next scene boundary', () {
     test('uses the next exact boundary on the same day', () {
       expect(

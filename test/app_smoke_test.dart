@@ -62,10 +62,9 @@ void main() {
       await tester.scrollUntilVisible(
         weekSubject,
         100,
-        scrollable: find.descendant(
-          of: week,
-          matching: find.byType(Scrollable),
-        ).first,
+        scrollable: find
+            .descendant(of: week, matching: find.byType(Scrollable))
+            .first,
       );
       expect(weekSubject, findsOneWidget);
       await tester.tap(find.byTooltip('Tuần sau'));

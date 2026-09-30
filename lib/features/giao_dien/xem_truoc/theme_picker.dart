@@ -124,7 +124,8 @@ class _ThemePickerSheet extends StatelessWidget {
                         (context, index) => _PresetCard(
                           id: _presetIds[index],
                           selected: controller.theme == _presetIds[index],
-                          onTap: () => _selectPreset(context, _presetIds[index]),
+                          onTap: () =>
+                              _selectPreset(context, _presetIds[index]),
                         ),
                         childCount: _presetIds.length,
                       ),
@@ -216,7 +217,6 @@ class _ThemePickerSheet extends StatelessWidget {
       ),
     );
   }
-
 
   Future<void> _showTienMonFontColors(BuildContext context) async {
     var primary = controller.tienMonTextPrimary;
@@ -323,9 +323,7 @@ class _ThemePickerSheet extends StatelessWidget {
               decoration: const BoxDecoration(
                 color: Color(0xFF102820),
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                border: Border(
-                  top: BorderSide(color: Color(0x99FFD66B)),
-                ),
+                border: Border(top: BorderSide(color: Color(0x99FFD66B))),
               ),
               child: SingleChildScrollView(
                 child: Column(
@@ -444,7 +442,6 @@ class _ThemePickerSheet extends StatelessWidget {
     if (confirmed == true) await controller.deleteCustomTheme(theme.id);
   }
 }
-
 
 String _colorHex(Color color) =>
     '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';

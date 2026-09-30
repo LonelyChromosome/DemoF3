@@ -64,8 +64,7 @@ class WeekTimetable extends StatelessWidget {
         ),
         IconButton(
           tooltip: 'Tuần sau',
-          onPressed: () =>
-              onWeekChanged(monday.add(const Duration(days: 7))),
+          onPressed: () => onWeekChanged(monday.add(const Duration(days: 7))),
           icon: Icon(
             Icons.chevron_right_rounded,
             color: premium ? const Color(0xFFFFD66B) : null,
@@ -77,11 +76,7 @@ class WeekTimetable extends StatelessWidget {
     return Column(
       children: <Widget>[
         if (premium)
-          TienMonEdgeSurface(
-            compact: true,
-            scene: scene,
-            child: header,
-          )
+          TienMonEdgeSurface(compact: true, scene: scene, child: header)
         else
           header,
         Expanded(
@@ -119,7 +114,9 @@ class WeekTimetable extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
                             Text(
-                              dayIndex == 6 ? 'Chủ nhật' : 'Thứ ${dayIndex + 2}',
+                              dayIndex == 6
+                                  ? 'Chủ nhật'
+                                  : 'Thứ ${dayIndex + 2}',
                               style: TextStyle(
                                 color: palette.textPrimary,
                                 fontSize: 12,
@@ -173,9 +170,15 @@ class WeekTimetable extends StatelessWidget {
                               itemBuilder: (context, index) {
                                 final row = records[index];
                                 final content = Padding(
-                                  padding: const EdgeInsets.fromLTRB(10, 5, 6, 5),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    10,
+                                    5,
+                                    6,
+                                    5,
+                                  ),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: <Widget>[
                                       Text(
                                         row.subjectName,

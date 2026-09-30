@@ -41,10 +41,7 @@ final class QldtNativeSession {
 }
 
 final class QldtNativeRegistration {
-  const QldtNativeRegistration({
-    required this.raw,
-    required this.semesterName,
-  });
+  const QldtNativeRegistration({required this.raw, required this.semesterName});
 
   final String raw;
   final String semesterName;
@@ -58,8 +55,7 @@ final class QldtNativeTransport {
   Future<QldtNativeRegistration> fetchRegistration(
     QldtNativeSession session,
   ) async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 4);
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
     try {
       final semesters = await _post(
         client: client,
@@ -95,9 +91,7 @@ final class QldtNativeTransport {
         session: session,
         action: 'DKH_ThongTin_MH/DSA4BRIKJAkuICIpBSAvJgo4AiAPKSAv',
         func: 'pkg_dangkyhoc_thongtin.LayDSKeHoachDangKyCaNhan',
-        extra: <String, dynamic>{
-          'strDaoTao_ThoiGianDaoTao_Id': latest.id,
-        },
+        extra: <String, dynamic>{'strDaoTao_ThoiGianDaoTao_Id': latest.id},
       );
 
       final matching = _rows(plans).where((row) {
@@ -109,7 +103,9 @@ final class QldtNativeTransport {
           .where((id) => id.isNotEmpty)
           .toSet();
       final planSemesterIds = matching
-          .map((row) => (row['DAOTAO_THOIGIANDAOTAO_ID'] ?? '').toString().trim())
+          .map(
+            (row) => (row['DAOTAO_THOIGIANDAOTAO_ID'] ?? '').toString().trim(),
+          )
           .where((id) => id.isNotEmpty)
           .toSet();
       if (planIds.length != 1 || planSemesterIds.length != 1) {
@@ -148,8 +144,7 @@ final class QldtNativeTransport {
     required DateTime start,
     required DateTime end,
   }) async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 4);
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
     try {
       final response = await _post(
         client: client,
@@ -199,9 +194,9 @@ final class QldtNativeTransport {
     };
 
     final uri = Uri.parse('$_root$apiPath/$action');
-    final request = await client.postUrl(uri).timeout(
-      const Duration(seconds: 5),
-    );
+    final request = await client
+        .postUrl(uri)
+        .timeout(const Duration(seconds: 5));
     request.headers.set(
       HttpHeaders.authorizationHeader,
       'Bearer ${session.tokenJwt}',
@@ -225,12 +220,11 @@ final class QldtNativeTransport {
     ).query;
     request.write(body);
 
-    final response = await request.close().timeout(
-      const Duration(seconds: 5),
-    );
-    final text = await utf8.decoder.bind(response).join().timeout(
-      const Duration(seconds: 5),
-    );
+    final response = await request.close().timeout(const Duration(seconds: 5));
+    final text = await utf8.decoder
+        .bind(response)
+        .join()
+        .timeout(const Duration(seconds: 5));
     if (response.statusCode != HttpStatus.ok) {
       throw HttpException('HTTP ${response.statusCode}', uri: uri);
     }
