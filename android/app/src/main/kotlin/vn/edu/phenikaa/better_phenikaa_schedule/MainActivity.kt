@@ -202,16 +202,12 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             ASSISTANT_TEST_CHANNEL,
         ).setMethodCallHandler { call, result ->
-            val useCase = (call.arguments as? Number)?.toInt() ?: run {
-                result.error("invalid_use_case", "Thiếu use case.", null)
-                return@setMethodCallHandler
-            }
-            if (call.method == "triggerPopup") {
-                result.success(AssistantPanelNotifier.publish(applicationContext, useCase))
-                return@setMethodCallHandler
-            }
             if (call.method != "trigger") {
                 result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val useCase = (call.arguments as? Number)?.toInt() ?: run {
+                result.error("invalid_use_case", "Thiếu use case.", null)
                 return@setMethodCallHandler
             }
             val notificationCases = setOf(1, 3, 4, 5, 6, 7, 8, 9, 11)
