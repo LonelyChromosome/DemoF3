@@ -2055,6 +2055,9 @@ class _AccountScreen extends StatelessWidget {
   final AssistantPack assistantPack;
   final ValueChanged<AssistantPack> onAssistantPackChanged;
   static const _widgetPinChannel = MethodChannel('better_phenikaa/widget_pin');
+  static const _assistantTestChannel = MethodChannel(
+    'better_phenikaa/assistant_test',
+  );
 
   Future<void> _showWidgetOptions(BuildContext context, String type) async {
     final name = type == 'overview' ? 'Widget 4×2' : 'Widget 1×4';
@@ -2147,51 +2150,114 @@ class _AccountScreen extends StatelessWidget {
         _ => throw RangeError.range(useCase, 1, 18, 'useCase'),
       };
 
-  Future<void> _showAssistantUseCasePreview(
+  Future<void> _triggerAssistantUseCase(
     BuildContext context,
     int useCase,
   ) async {
     final (event, days, examCount) = _assistantPreviewSpec(useCase);
-    final title = AssistantText.titleOf(event, assistantPack);
+
+    // These are real Android notification paths used by production schedulers.
+    if (<int>{1, 3, 4, 5, 6, 7, 8, 9, 11}.contains(useCase)) {
+      try {
+        final delivered = await _assistantTestChannel.invokeMethod<bool>(
+          'trigger',
+          useCase,
+        );
+        if (delivered == true || !context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Không thể đẩy thông báo. Kiểm tra quyền thông báo của ứng dụng.',
+            ),
+          ),
+        );
+      } on PlatformException catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không gọi được notification: ${error.code}')),
+        );
+      }
+      return;
+    }
+
     final message = AssistantText.of(
       event,
       assistantPack,
       days: days,
       examCount: examCount,
     );
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text(
-          'U$useCase · ${_assistantUseCaseLabels[useCase - 1]}',
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              title,
-              style: const TextStyle(fontWeight: FontWeight.w800),
+
+    // Real foreground sync surfaces are SnackBars.
+    if (<int>{2, 12, 13}.contains(useCase)) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
+      return;
+    }
+
+    if (!context.mounted) return;
+    final palette = appThemePalette;
+    Widget surface;
+    switch (useCase) {
+      case 10:
+        surface = _NotificationExamCard(
+          text: message,
+          palette: palette,
+          onOpenExam: () => Navigator.of(context).pop(),
+        );
+      case 14:
+        surface = _NotificationChangeCard(
+          icon: Icons.notifications_active_rounded,
+          title: 'Thay đổi lịch',
+          description: message,
+          count: 1,
+          palette: palette,
+        );
+      case 15:
+        surface = _EmptyState(
+          icon: Icons.assignment_turned_in_outlined,
+          title: message,
+          message:
+              'Dữ liệu sẽ được cập nhật sau lần đồng bộ QLĐT tiếp theo.',
+        );
+      case 16:
+        surface = _EmptyState(
+          icon: Icons.event_available_outlined,
+          title: message,
+          message:
+              'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
+        );
+      case 17:
+      case 18:
+        surface = _ErrorBanner(
+          message: message,
+          onDismiss: () => Navigator.of(context).pop(),
+        );
+      default:
+        return;
+    }
+
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (routeContext) => Scaffold(
+          appBar: AppBar(
+            title: Text(
+              'U$useCase · ${_assistantUseCaseLabels[useCase - 1]}',
             ),
-            const SizedBox(height: 10),
-            Text(message),
-            if (useCase == 9 || useCase == 11) ...<Widget>[
-              const SizedBox(height: 12),
-              Text(
-                useCase == 11
-                    ? 'Dữ liệu mẫu: X = 5 ngày, N = 2 môn'
-                    : 'Dữ liệu mẫu: X = 5 ngày',
-                style: Theme.of(dialogContext).textTheme.bodySmall,
-              ),
-            ],
-          ],
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Đóng'),
           ),
-        ],
+          body: _PhoneSurface(
+            child: Padding(
+              padding: const EdgeInsets.all(22),
+              child: Align(
+                alignment: useCase == 17 || useCase == 18
+                    ? Alignment.topCenter
+                    : Alignment.center,
+                child: surface,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -2324,7 +2390,7 @@ class _AccountScreen extends StatelessWidget {
                           ),
                         ),
                         subtitle: Text(
-                          'Preview đúng nội dung đang dùng • U9: X=5 • U11: X=5, N=2',
+                          'Bấm U để gọi đúng surface thật • U9: X=5 • U11: X=5, N=2',
                           style: TextStyle(
                             color: palette.textSecondary,
                             fontSize: 11.5,
