@@ -1499,15 +1499,10 @@ class _TimetableScreenState extends State<_TimetableScreen>
                       ignoring: weekly,
                       child: TickerMode(
                         enabled: !weekly,
-                        child: appThemePalette.id == AppThemeId.tienMonPremium
-                            ? Offstage(
-                                offstage: weekly,
-                                child: RepaintBoundary(child: child),
-                              )
-                            : Opacity(
-                                opacity: weekly ? .004 : .996,
-                                child: RepaintBoundary(child: child),
-                              ),
+                        child: Opacity(
+                          opacity: weekly ? .004 : .996,
+                          child: RepaintBoundary(child: child),
+                        ),
                       ),
                     ),
                   ),
@@ -1524,15 +1519,10 @@ class _TimetableScreenState extends State<_TimetableScreen>
                       ignoring: !weekly,
                       child: TickerMode(
                         enabled: weekly,
-                        child: appThemePalette.id == AppThemeId.tienMonPremium
-                            ? Offstage(
-                                offstage: !weekly,
-                                child: RepaintBoundary(child: child),
-                              )
-                            : Opacity(
-                                opacity: weekly ? .996 : .004,
-                                child: RepaintBoundary(child: child),
-                              ),
+                        child: Opacity(
+                          opacity: weekly ? .996 : .004,
+                          child: RepaintBoundary(child: child),
+                        ),
                       ),
                     ),
                   ),

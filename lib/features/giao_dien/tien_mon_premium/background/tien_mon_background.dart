@@ -18,6 +18,14 @@ const List<(Color, Color)> _sceneEdgeColors = <(Color, Color)>[
 
 enum _AmbientParticleKind { petal, leaf, none }
 
+final ValueNotifier<bool> tienMonAmbientPaused = ValueNotifier<bool>(false);
+
+void setTienMonAmbientPaused(bool paused) {
+  if (tienMonAmbientPaused.value == paused) return;
+  tienMonAmbientPaused.value = paused;
+}
+
+
 // Runtime test feedback: the previous 1.50x pass still read as almost static.
 // Keep the motion slow, but make its displacement/density unmistakable and
 // separately boost alpha so mist/light/shimmer do not disappear into the art.
@@ -444,60 +452,84 @@ class _AmbientMotion extends StatefulWidget {
 }
 
 class _AmbientMotionState extends State<_AmbientMotion>
-    with WidgetsBindingObserver {
-  Timer? _frameTimer;
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 72),
+  );
   late final DateTime _startedAt = DateTime.now();
-  double _elapsedSeconds = 0;
+  Duration _pausedDuration = Duration.zero;
+  DateTime? _pauseStarted;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _startAmbientFrames();
+    tienMonAmbientPaused.addListener(_syncAmbientState);
+    _syncAmbientState();
   }
 
-  void _startAmbientFrames() {
-    _frameTimer?.cancel();
-    _frameTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-      if (!mounted) return;
-      final next = DateTime.now().difference(_startedAt).inMicroseconds /
-          Duration.microsecondsPerSecond;
-      setState(() => _elapsedSeconds = next);
-    });
-  }
+  void _syncAmbientState() {
+    if (!mounted) return;
+    final paused = tienMonAmbientPaused.value;
+    if (paused) {
+      _pauseStarted ??= DateTime.now();
+      if (_controller.isAnimating) {
+        _controller.stop(canceled: false);
+      }
+      return;
+    }
 
-  void _stopAmbientFrames() {
-    _frameTimer?.cancel();
-    _frameTimer = null;
+    final pauseStarted = _pauseStarted;
+    if (pauseStarted != null) {
+      _pausedDuration += DateTime.now().difference(pauseStarted);
+      _pauseStarted = null;
+    }
+    if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      if (_frameTimer == null) _startAmbientFrames();
+      _syncAmbientState();
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      _stopAmbientFrames();
+      if (_controller.isAnimating) {
+        _controller.stop(canceled: false);
+      }
     }
   }
 
   @override
   void dispose() {
+    tienMonAmbientPaused.removeListener(_syncAmbientState);
     WidgetsBinding.instance.removeObserver(this);
-    _stopAmbientFrames();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => IgnorePointer(
     child: RepaintBoundary(
-      child: CustomPaint(
-        painter: _AmbientPainter(
-          elapsedSeconds: _elapsedSeconds,
-          profile: _ambientProfiles[widget.scene - 1],
-          scene: widget.scene,
-        ),
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final pauseStarted = _pauseStarted;
+          final now = pauseStarted ?? DateTime.now();
+          final elapsedSeconds =
+              (now.difference(_startedAt) - _pausedDuration).inMicroseconds /
+              Duration.microsecondsPerSecond;
+          return CustomPaint(
+            painter: _AmbientPainter(
+              elapsedSeconds: elapsedSeconds,
+              profile: _ambientProfiles[widget.scene - 1],
+              scene: widget.scene,
+            ),
+          );
+        },
       ),
     ),
   );

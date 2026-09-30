@@ -730,11 +730,41 @@ class AppThemeController extends ChangeNotifier {
     if (interrupted != null && !interrupted.isCompleted) {
       interrupted.complete();
     }
+
+    final completion = Completer<void>();
+    _transitionCompletion = completion;
+    final premiumHandoff =
+        from.id == AppThemeId.tienMonPremium ||
+        themeId == AppThemeId.tienMonPremium;
+
+    if (premiumHandoff) {
+      ++_transitionSerial;
+      _transitionTimer = null;
+      _theme = themeId;
+      _activeCustomTheme = customTheme;
+      _activeCustomFontFamily = resolvedFontFamily;
+      _transitionPalette = null;
+      notifyListeners();
+      unawaited(() async {
+        try {
+          await _commitSelection(target);
+          if (!completion.isCompleted) completion.complete();
+        } on Object catch (error, stackTrace) {
+          if (!completion.isCompleted) {
+            completion.completeError(error, stackTrace);
+          }
+        } finally {
+          if (_transitionCompletion == completion) {
+            _transitionCompletion = null;
+          }
+        }
+      }());
+      return completion.future;
+    }
+
     final serial = ++_transitionSerial;
     const frames = 15;
     var frame = 0;
-    final completion = Completer<void>();
-    _transitionCompletion = completion;
     _transitionTimer = Timer.periodic(const Duration(milliseconds: 33), (
       timer,
     ) {
@@ -1053,6 +1083,8 @@ class AppThemeBackdrop extends StatefulWidget {
 
 class _AppThemeBackdropState extends State<AppThemeBackdrop>
     with WidgetsBindingObserver {
+  Timer? _ambientResumeTimer;
+
   late final TienMonSceneController _tienMonScenes = TienMonSceneController();
 
   @override
@@ -1072,9 +1104,27 @@ class _AppThemeBackdropState extends State<AppThemeBackdrop>
 
   @override
   void dispose() {
+    _ambientResumeTimer?.cancel();
+    setTienMonAmbientPaused(false);
     WidgetsBinding.instance.removeObserver(this);
     _tienMonScenes.dispose();
     super.dispose();
+  }
+
+  bool _handleScrollNotification(ScrollNotification notification) {
+    if (appThemePalette.id != AppThemeId.tienMonPremium) return false;
+    if (notification is ScrollStartNotification ||
+        notification is ScrollUpdateNotification ||
+        notification is OverscrollNotification) {
+      _ambientResumeTimer?.cancel();
+      setTienMonAmbientPaused(true);
+    } else if (notification is ScrollEndNotification) {
+      _ambientResumeTimer?.cancel();
+      _ambientResumeTimer = Timer(const Duration(milliseconds: 120), () {
+        setTienMonAmbientPaused(false);
+      });
+    }
+    return false;
   }
 
   @override
@@ -1085,7 +1135,10 @@ class _AppThemeBackdropState extends State<AppThemeBackdrop>
         children: <Widget>[
           TienMonPersistentBackground(controller: _tienMonScenes),
           TienMonPersistentAmbient(controller: _tienMonScenes),
-          widget.child,
+          NotificationListener<ScrollNotification>(
+            onNotification: _handleScrollNotification,
+            child: widget.child,
+          ),
         ],
       );
     }
