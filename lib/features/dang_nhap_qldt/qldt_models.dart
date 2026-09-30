@@ -131,13 +131,17 @@ final class QldtParser {
     bool strict = false,
   }) {
     final envelope = jsonDecode(envelopeJson) as Map<String, dynamic>;
-    final displayName = (envelope['name'] as String? ?? '').trim();
+    var displayName = (envelope['name'] as String? ?? '').trim();
     final response = envelope['response'];
     if (response is! Map) {
       throw const FormatException('QLĐT response is not an object.');
     }
+    final mappedResponse = Map<String, dynamic>.from(response);
+    if (displayName.isEmpty) {
+      displayName = _displayNameFromResponse(mappedResponse);
+    }
     return parseApiResponse(
-      Map<String, dynamic>.from(response),
+      mappedResponse,
       displayName: displayName,
       strict: strict,
     );
@@ -285,6 +289,34 @@ final class QldtParser {
       return null;
     }
     return parsed;
+  }
+
+  static String _displayNameFromResponse(
+    Map<String, dynamic> response,
+  ) {
+    final rawData = response['Data'];
+    if (rawData is! List) return '';
+
+    const candidateKeys = <String>[
+      'HOTEN',
+      'HO_TEN',
+      'HOVATEN',
+      'TENNGUOIHOC',
+      'NGUOIHOC_TEN',
+      'QLSV_NGUOIHOC_TEN',
+      'SINHVIEN_TEN',
+      'FULLNAME',
+    ];
+
+    for (final rawItem in rawData) {
+      if (rawItem is! Map) continue;
+      final item = Map<String, dynamic>.from(rawItem);
+      for (final key in candidateKeys) {
+        final value = _string(item[key]);
+        if (value.isNotEmpty) return value;
+      }
+    }
+    return '';
   }
 
   static String _firstNonEmpty(List<Object?> values) {
