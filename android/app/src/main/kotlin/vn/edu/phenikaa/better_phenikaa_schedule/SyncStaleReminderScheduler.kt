@@ -88,28 +88,40 @@ internal object SyncStaleReminderScheduler {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         if (SyncStaleReminderPolicy.due(now, success, prefs.getLong(LAST_NOTIFIED, 0L)) &&
-            (Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
-                context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)) {
-            val manager = context.getSystemService(NotificationManager::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                manager.createNotificationChannel(NotificationChannel(
-                    CHANNEL, "Nhắc đồng bộ", NotificationManager.IMPORTANCE_DEFAULT))
-            }
-            val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
-            val pending = launch?.let {
-                PendingIntent.getActivity(context, NOTIFICATION, it,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            }
-            manager.notify(NOTIFICATION, NotificationCompat.Builder(context, CHANNEL)
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle(AssistantText.titleOf(
-                    AssistantEvent.sync_stale, AssistantText.selected(context)))
-                .setContentText(AssistantText.of(AssistantEvent.sync_stale, AssistantText.selected(context)))
-                .setContentIntent(pending).setAutoCancel(true).build())
+            canNotify(context)) {
+            publishNotification(context)
             prefs.edit().putLong(LAST_NOTIFIED, now).commit()
         }
         val next = SyncStaleReminderPolicy.next(now, success)
         if (success > 0) schedule(context, next)
+    }
+
+    internal fun publishForAssistantTest(context: Context) {
+        if (canNotify(context)) publishNotification(context)
+    }
+
+    private fun canNotify(context: Context): Boolean =
+        Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
+            context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    private fun publishNotification(context: Context) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(NotificationChannel(
+                CHANNEL, "Nhắc đồng bộ", NotificationManager.IMPORTANCE_DEFAULT))
+        }
+        val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
+        val pending = launch?.let {
+            PendingIntent.getActivity(context, NOTIFICATION, it,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        }
+        manager.notify(NOTIFICATION, NotificationCompat.Builder(context, CHANNEL)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(AssistantText.titleOf(
+                AssistantEvent.sync_stale, AssistantText.selected(context)))
+            .setContentText(AssistantText.of(
+                AssistantEvent.sync_stale, AssistantText.selected(context)))
+            .setContentIntent(pending).setAutoCancel(true).build())
     }
 
     private fun schedule(context: Context, at: Long) {
