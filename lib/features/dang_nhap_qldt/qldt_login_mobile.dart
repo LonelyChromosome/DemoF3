@@ -304,9 +304,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   @override
   Widget build(BuildContext context) {
     return PopScope<QldtLoginResult>(
-      canPop: _allowRoutePop || !_webCanGoBack,
+      canPop: !_portalInputLocked && (_allowRoutePop || !_webCanGoBack),
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) {
+        if (!didPop && !_portalInputLocked) {
           unawaited(_handleBack());
         }
       },
@@ -1797,7 +1797,7 @@ class _QldtNameArrangeScreenState extends State<_QldtNameArrangeScreen> {
 
     return Theme(
       data: fixedTheme,
-      child: PopScope<void>(
+      child: PopScope<String>(
         canPop: false,
         child: Scaffold(
           backgroundColor: Colors.white,
