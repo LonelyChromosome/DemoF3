@@ -1,3 +1,4 @@
+import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
 import '../glass/tien_mon_glass.dart';
@@ -316,10 +317,7 @@ class _TienMonScheduleCardState extends State<TienMonScheduleCard>
                   style: TextStyle(
                     color: _primaryText,
                     fontWeight: FontWeight.w900,
-                    shadows: const <Shadow>[
-                      Shadow(color: Colors.black87, blurRadius: 4),
-                      Shadow(color: Colors.black54, blurRadius: 8),
-                    ],
+                    shadows: tienMonTextShadows,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -331,9 +329,7 @@ class _TienMonScheduleCardState extends State<TienMonScheduleCard>
                     fontSize: widget.compact ? 10 : 12,
                     color: _secondaryText,
                     fontWeight: FontWeight.w800,
-                    shadows: const <Shadow>[
-                      Shadow(color: Colors.black87, blurRadius: 4),
-                    ],
+                    shadows: tienMonTextShadows,
                   ),
                 ),
                 if (!widget.compact)
@@ -343,9 +339,7 @@ class _TienMonScheduleCardState extends State<TienMonScheduleCard>
                       fontSize: 11,
                       color: _secondaryText,
                       fontWeight: FontWeight.w700,
-                      shadows: const <Shadow>[
-                        Shadow(color: Colors.black87, blurRadius: 4),
-                      ],
+                      shadows: tienMonTextShadows,
                     ),
                   ),
               ],
