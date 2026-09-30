@@ -2413,6 +2413,8 @@ Future<void> _showCalendarPicker(
             ),
             child: SafeArea(
               top: false,
+              maintainBottomViewPadding: true,
+              minimum: const EdgeInsets.only(bottom: 8),
               child: Container(
                 padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
                 decoration: BoxDecoration(
