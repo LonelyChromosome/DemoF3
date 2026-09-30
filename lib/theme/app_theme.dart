@@ -5,6 +5,7 @@ import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_tokens.
 import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/custom_theme_repository.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_manager.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/background/tien_mon_background.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,13 +23,16 @@ enum AppThemeId {
   ben10,
   youtube,
   steam,
+  tienMonPremium,
   custom,
 }
 
 enum AppThemeGeometry { rounded, square, valorant, lol, pixel }
 
 extension AppThemeIdUi on AppThemeId {
-  String get storageKey => name;
+  String get storageKey => this == AppThemeId.tienMonPremium
+      ? 'tien_mon_premium'
+      : name;
 
   String get label => switch (this) {
     AppThemeId.classic => 'Better mặc định',
@@ -41,6 +45,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.ben10 => 'Ben 10',
     AppThemeId.youtube => 'YouTube',
     AppThemeId.steam => 'Steam',
+    AppThemeId.tienMonPremium => 'Tiên Môn Premium',
     AppThemeId.custom => 'Tùy chỉnh',
   };
 
@@ -55,6 +60,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.ben10 => 'Omnitrix • đen • xanh neon',
     AppThemeId.youtube => 'Dark feed • đỏ video',
     AppThemeId.steam => 'Store dark • xanh Steam',
+    AppThemeId.tienMonPremium => 'Cổ trang • live wallpaper • kim ngọc',
     AppThemeId.custom => 'Màu và font do bạn tạo',
   };
 
@@ -69,6 +75,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.ben10 => Icons.watch_rounded,
     AppThemeId.youtube => Icons.play_circle_fill_rounded,
     AppThemeId.steam => Icons.sports_esports_rounded,
+    AppThemeId.tienMonPremium => Icons.auto_awesome_rounded,
     AppThemeId.custom => Icons.tune_rounded,
   };
 }
@@ -146,6 +153,30 @@ class AppThemePalette {
   final AppThemeGeometry geometry;
   final bool dark;
   final String? fontFamily;
+
+  AppThemePalette withTextColors(Color primaryText, Color secondaryText) =>
+      AppThemePalette(
+        id: id,
+        pageStart: pageStart,
+        pageEnd: pageEnd,
+        surface: surface,
+        card: card,
+        cardAlt: cardAlt,
+        primary: primary,
+        accent: accent,
+        textPrimary: primaryText,
+        textSecondary: secondaryText,
+        border: border,
+        shadow: shadow,
+        widgetStart: widgetStart,
+        widgetEnd: widgetEnd,
+        widgetText: widgetText,
+        widgetSubtext: widgetSubtext,
+        radius: radius,
+        geometry: geometry,
+        dark: dark,
+        fontFamily: fontFamily,
+      );
 
   ThemeTokens toTokens() => ThemeTokens(
     background: pageStart,
@@ -390,6 +421,28 @@ const Map<AppThemeId, AppThemePalette> appThemePalettes =
         geometry: AppThemeGeometry.square,
         dark: true,
       ),
+      AppThemeId.tienMonPremium: AppThemePalette(
+        id: AppThemeId.tienMonPremium,
+        pageStart: Color(0xFF071713),
+        pageEnd: Color(0xFF102820),
+        surface: Color(0xCC071713),
+        card: Color(0x14000000),
+        cardAlt: Color(0x18000000),
+        primary: Color(0xFFFFD66B),
+        accent: Color(0xFF74D8B1),
+        textPrimary: Color(0xFFFFD66B),
+        textSecondary: Color(0xFFFFE7A6),
+        border: Color(0xCCFFD66B),
+        shadow: Color(0x99000000),
+        widgetStart: Color(0xFF12372E),
+        widgetEnd: Color(0xFF477B68),
+        widgetText: Color(0xFFFFD66B),
+        widgetSubtext: Color(0xFFFFE7A6),
+        radius: 18,
+        geometry: AppThemeGeometry.rounded,
+        dark: true,
+        fontFamily: 'FzCoTrang',
+      ),
     };
 
 AppThemePalette get appThemePalette => AppThemeController.instance.palette;
@@ -403,6 +456,8 @@ class AppThemeController extends ChangeNotifier {
   static const _appliedCustomThemeKey =
       'better_phenikaa_applied_custom_theme_v1';
   static const _widgetPreferenceKey = 'appTheme';
+  static const _tienMonTextPrimaryKey = 'tien_mon_text_primary_v1';
+  static const _tienMonTextSecondaryKey = 'tien_mon_text_secondary_v1';
   static const MethodChannel _widgetThemeChannel = MethodChannel(
     'better_phenikaa/widget_theme',
   );
@@ -416,14 +471,33 @@ class AppThemeController extends ChangeNotifier {
   Completer<void>? _transitionCompletion;
   int _transitionSerial = 0;
   bool _loaded = false;
+  Color _tienMonTextPrimary = const Color(0xFFFFD66B);
+  Color _tienMonTextSecondary = const Color(0xFFFFE7A6);
 
   AppThemeId get theme => _theme;
+  Color get tienMonTextPrimary => _tienMonTextPrimary;
+  Color get tienMonTextSecondary => _tienMonTextSecondary;
   AppThemePalette get palette =>
       _transitionPalette ?? _resolvedPalette(_theme, _activeCustomTheme);
   List<CustomThemeDefinition> get customThemes =>
       List<CustomThemeDefinition>.unmodifiable(_customThemes);
   CustomThemeDefinition? get activeCustomTheme => _activeCustomTheme;
   bool get isTransitioning => _transitionPalette != null;
+
+  void resetAfterLogout() {
+    _transitionTimer?.cancel();
+    _transitionTimer = null;
+    final pending = _transitionCompletion;
+    if (pending != null && !pending.isCompleted) pending.complete();
+    _transitionCompletion = null;
+    _transitionSerial++;
+    _transitionPalette = null;
+    _theme = AppThemeId.classic;
+    _activeCustomTheme = null;
+    _activeCustomFontFamily = null;
+    _customThemes = <CustomThemeDefinition>[];
+    notifyListeners();
+  }
 
   AppThemePalette _resolvedPalette(
     AppThemeId id,
@@ -436,13 +510,23 @@ class AppThemeController extends ChangeNotifier {
         fontFamily: _activeCustomFontFamily,
       );
     }
-    return appThemePalettes[id] ?? appThemePalettes[AppThemeId.classic]!;
+    final base = appThemePalettes[id] ?? appThemePalettes[AppThemeId.classic]!;
+    if (id == AppThemeId.tienMonPremium) {
+      return base.withTextColors(_tienMonTextPrimary, _tienMonTextSecondary);
+    }
+    return base;
   }
 
   Future<void> load() async {
     if (_loaded) return;
     _loaded = true;
     final prefs = await SharedPreferences.getInstance();
+    _tienMonTextPrimary = Color(
+      prefs.getInt(_tienMonTextPrimaryKey) ?? 0xFFFFD66B,
+    );
+    _tienMonTextSecondary = Color(
+      prefs.getInt(_tienMonTextSecondaryKey) ?? 0xFFFFE7A6,
+    );
     _customThemes = await const CustomThemeRepository().readAll();
     final saved =
         prefs.getString(_preferenceKey) ??
@@ -487,13 +571,20 @@ class AppThemeController extends ChangeNotifier {
     }
     notifyListeners();
     final widgetTheme = prefs.getString(_widgetPreferenceKey);
-    if (widgetTheme != widgetKey) {
-      final nativeApplied = await _applyWidgetTheme(widgetKey, palette);
-      if (!nativeApplied) {
-        await prefs.setString(_widgetPreferenceKey, widgetKey);
-        await _syncWidgetTheme();
-      }
+    final nativeApplied = await _applyWidgetTheme(widgetKey, palette);
+    if (widgetTheme != widgetKey && !nativeApplied) {
+      await prefs.setString(_widgetPreferenceKey, widgetKey);
+      await _syncWidgetTheme();
     }
+  }
+
+  Future<void> setTienMonTextColors(Color primary, Color secondary) async {
+    _tienMonTextPrimary = primary;
+    _tienMonTextSecondary = secondary;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_tienMonTextPrimaryKey, primary.toARGB32());
+    await prefs.setInt(_tienMonTextSecondaryKey, secondary.toARGB32());
+    notifyListeners();
   }
 
   Future<void> select(AppThemeId value) async {
@@ -664,6 +755,10 @@ class AppThemeController extends ChangeNotifier {
           'widgetText': target.widgetText.toARGB32(),
           'widgetSubtext': target.widgetSubtext.toARGB32(),
           'widgetIcon': target.widgetText.toARGB32(),
+          'fontFamily': target.fontFamily ?? '',
+          'fontPath': _theme == AppThemeId.custom
+              ? _activeCustomTheme?.font.path ?? ''
+              : '',
         },
       );
       return true;
@@ -678,13 +773,15 @@ class AppThemeController extends ChangeNotifier {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     await HomeWidget.updateWidget(
       name: 'ScheduleWidgetProvider',
-      androidName: 'ScheduleWidgetProvider',
+      qualifiedAndroidName:
+          'vn.edu.phenikaa.better_phenikaa_schedule.ScheduleWidgetProvider',
     );
   }
 }
 
 ThemeData buildBetterTheme(AppThemePalette palette) {
   final brightness = palette.dark ? Brightness.dark : Brightness.light;
+  final fontScale = themeFontSizeFactor(palette.fontFamily);
   final base = ThemeData(
     useMaterial3: true,
     brightness: brightness,
@@ -705,8 +802,13 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
         ),
     textTheme: base.textTheme.apply(
       fontFamily: palette.fontFamily ?? 'Roboto',
+      fontSizeFactor: fontScale,
       bodyColor: palette.textPrimary,
       displayColor: palette.textPrimary,
+    ),
+    primaryTextTheme: base.primaryTextTheme.apply(
+      fontFamily: palette.fontFamily ?? 'Roboto',
+      fontSizeFactor: fontScale,
     ),
     iconTheme: IconThemeData(color: palette.textPrimary),
     cardTheme: CardThemeData(
@@ -728,6 +830,8 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
             : Colors.white,
         shape: shape,
         textStyle: TextStyle(
+          fontFamily: palette.fontFamily ?? 'Roboto',
+          fontSize: 14 * fontScale,
           fontWeight: FontWeight.w800,
           letterSpacing: themeLetterSpacing(palette),
         ),
@@ -738,6 +842,10 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
         foregroundColor: palette.primary,
         side: BorderSide(color: palette.border),
         shape: shape,
+        textStyle: TextStyle(
+          fontFamily: palette.fontFamily ?? 'Roboto',
+          fontSize: 14 * fontScale,
+        ),
       ),
     ),
     dividerColor: palette.border,
@@ -746,6 +854,31 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
       modalBackgroundColor: palette.surface,
     ),
   );
+}
+
+/// Match a selected font's actual glyph footprint to the system font at the
+/// same nominal size. Imported fonts can have very different advances/ascents.
+double themeFontSizeFactor(String? family) {
+  if (family == null || family.isEmpty || family == 'Roboto') return 1;
+  const sample = 'Ngày 25/09 • Lịch học';
+  Size measure(String font) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: sample,
+        style: TextStyle(fontFamily: font, fontSize: 20),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    return painter.size;
+  }
+
+  final standard = measure('Roboto');
+  final selected = measure(family);
+  if (selected.width <= 0 || selected.height <= 0) return 1;
+  final widthRatio = standard.width / selected.width;
+  final heightRatio = standard.height / selected.height;
+  return (widthRatio < heightRatio ? widthRatio : heightRatio).clamp(0.5, 1.1);
 }
 
 OutlinedBorder themeButtonShape(AppThemePalette palette) {
@@ -771,22 +904,63 @@ double themeLetterSpacing(AppThemePalette palette) => switch (palette.id) {
   AppThemeId.valorant => .85,
   AppThemeId.lol => .65,
   AppThemeId.minecraft => .15,
+  AppThemeId.tienMonPremium => .2,
   _ => 0,
 };
 
 String themedHeading(String value, AppThemePalette palette) =>
     palette.id == AppThemeId.valorant ? value.toUpperCase() : value;
 
-class AppThemeBackdrop extends StatelessWidget {
+class AppThemeBackdrop extends StatefulWidget {
   const new({required this.child, super.key});
 
   final Widget child;
 
   @override
+  State<AppThemeBackdrop> createState() => _AppThemeBackdropState();
+}
+
+class _AppThemeBackdropState extends State<AppThemeBackdrop>
+    with WidgetsBindingObserver {
+  late final TienMonSceneController _tienMonScenes = TienMonSceneController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        appThemePalette.id == AppThemeId.tienMonPremium) {
+      _tienMonScenes.useAutomatic();
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _tienMonScenes.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (appThemePalette.id == AppThemeId.tienMonPremium) {
+      return Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          TienMonPersistentBackground(controller: _tienMonScenes),
+          TienMonPersistentAmbient(controller: _tienMonScenes),
+          widget.child,
+        ],
+      );
+    }
     return CustomPaint(
       painter: _ThemeBackdropPainter(appThemePalette),
-      child: SizedBox.expand(child: child),
+      child: SizedBox.expand(child: widget.child),
     );
   }
 }
@@ -906,6 +1080,7 @@ class _ThemeBackdropPainter extends CustomPainter {
         );
       case AppThemeId.facebook:
       case AppThemeId.classic:
+      case AppThemeId.tienMonPremium:
       case AppThemeId.custom:
         break;
     }
