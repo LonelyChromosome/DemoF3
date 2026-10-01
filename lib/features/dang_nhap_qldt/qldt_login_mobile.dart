@@ -247,6 +247,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   int _registrationCompletionEpoch = -1;
   bool _registrationCompletionRunning = false;
   bool _registrationCompletionSucceeded = false;
+  bool _finalizingVerifiedResult = false;
   Future<void>? _accountNameSetupFuture;
   bool _accountNameSetupFinished = false;
   bool _pageReady = false;
@@ -465,6 +466,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                                 }
                               },
                               onRenderProcessGone: (_, detail) {
+                                if (_finalizingVerifiedResult) {
+                                  return;
+                                }
                                 _readinessTimer?.cancel();
                                 _controller = null;
                                 if (_syncing) {
@@ -1116,6 +1120,15 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       }
       _submittedPassword = null;
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
+
+      // From here the semester has already been fully verified. WebView/renderer
+      // state is no longer authoritative: the welcome mini-game may cover the
+      // WebView long enough for Android to suspend its renderer. Do not let that
+      // invalidate a verified result and strand the parent route in loading.
+      _finalizingVerifiedResult = true;
+      _readinessTimer?.cancel();
+      _sessionTimer?.cancel();
+      _legacyFallbackTimer?.cancel();
       _phaseTimer?.cancel();
       _syncWatchdog?.cancel();
       _diagnostics?.finish('OK');
@@ -1126,28 +1139,49 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
           // Diagnostic persistence cannot block a verified schedule.
         }
       }
-      if (!mounted || !_syncing || epoch != _syncEpoch) return;
-      await _ensureAccountDisplayName(displayName);
-      if (!mounted || !_syncing || epoch != _syncEpoch) return;
+      if (!mounted || epoch != _syncEpoch) return;
+
+      await _ensureAccountDisplayName(
+        displayName,
+      ).timeout(const Duration(seconds: 12));
+      if (!mounted || epoch != _syncEpoch) return;
+
       try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool(_sessionKey, true);
+        final prefs = await SharedPreferences.getInstance().timeout(
+          const Duration(seconds: 3),
+        );
+        await prefs
+            .setBool(_sessionKey, true)
+            .timeout(const Duration(seconds: 3));
       } on Object {
         // The verified result can still be returned; the next launch may
         // simply require QLĐT verification again.
       }
+
+      final result = QldtLoginResult(
+        schedule: semester.toImportedScheduleData(),
+        semester: semester,
+        registrationRoute: const TracuuApi().routeForVerifiedResult(raw),
+        termStartedAt: SemesterScheduleRange.fromRegistration(registration)
+            ?.start,
+      );
+
       _registrationCompletionSucceeded = true;
       _registrationCompletionRunning = false;
-      Navigator.of(context).pop(
-        QldtLoginResult(
-          schedule: semester.toImportedScheduleData(),
-          semester: semester,
-          registrationRoute: const TracuuApi().routeForVerifiedResult(raw),
-          termStartedAt: SemesterScheduleRange.fromRegistration(registration)
-              ?.start,
-        ),
-      );
+      _finalizingVerifiedResult = false;
+      if (!mounted) return;
+
+      // Unlock only for this successful programmatic pop. This also avoids any
+      // PopScope/back-state race after the mini-game route has just closed.
+      setState(() {
+        _syncing = false;
+        _portalInputLocked = false;
+        _allowRoutePop = true;
+        _status = 'Đồng bộ hoàn tất.';
+      });
+      Navigator.of(context).pop<QldtLoginResult>(result);
     } on Object catch (error) {
+      _finalizingVerifiedResult = false;
       _registrationCompletionRunning = false;
       _registrationCompletionEpoch = -1;
       final currentSchedule = _pendingSchedule;
@@ -1239,8 +1273,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
     // Persist before returning from the only welcome route. Every later sync
     // reads this value and must never launch the mini game again.
-    await _saveQldtAccountDisplayName(arranged);
-    final persisted = await readQldtAccountDisplayName();
+    await _saveQldtAccountDisplayName(
+      arranged,
+    ).timeout(const Duration(seconds: 5));
+    final persisted = await readQldtAccountDisplayName().timeout(
+      const Duration(seconds: 5),
+    );
     if (persisted.isEmpty) {
       throw const FormatException('ACCOUNT_DISPLAY_NAME_NOT_PERSISTED');
     }
