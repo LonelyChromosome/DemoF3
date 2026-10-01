@@ -587,6 +587,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         SemesterDifference? difference;
         try {
           difference = await _save(imported);
+          // The first-login mini-game is considered complete only after the
+          // verified semester has been committed by the app. A chosen name
+          // left by an interrupted login must not skip this mandatory step.
+          await markQldtFirstLoginSetupComplete();
           await _repairStoredDisplayName();
           try {
             if (qldtDiagnosticsEnabled) {
