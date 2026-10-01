@@ -22,6 +22,7 @@ const _portalPathKey = 'qldt_verified_portal_path';
 const _nativeSessionKey = 'better_phenikaa_qldt_native_session_v1';
 const _profileKey = 'better_phenikaa_qldt_profile_v1';
 const _accountDisplayNameKey = 'better_phenikaa_account_display_name_v1';
+const _accountSetupCompleteKey = 'better_phenikaa_account_setup_complete_v1';
 const _syncModeKey = 'better_phenikaa_qldt_sync_mode_v1';
 const _legacyMode = 'legacy';
 const _nativeMode = 'native';
@@ -165,6 +166,22 @@ Future<String> readQldtAccountDisplayName() async {
   }
 }
 
+Future<bool> isQldtFirstLoginSetupComplete() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_accountSetupCompleteKey) ?? false;
+  } on Object {
+    return false;
+  }
+}
+
+Future<void> markQldtFirstLoginSetupComplete() async {
+  final prefs = await SharedPreferences.getInstance();
+  if (!await prefs.setBool(_accountSetupCompleteKey, true)) {
+    throw StateError('ACCOUNT_SETUP_COMPLETE_NOT_PERSISTED');
+  }
+}
+
 Future<void> _saveQldtAccountDisplayName(String name) async {
   final value = _sanitizeQldtProfileName(name);
   if (value.isEmpty) {
@@ -183,6 +200,7 @@ Future<void> clearQldtSession() async {
   await prefs.remove(_nativeSessionKey);
   await prefs.remove(_profileKey);
   await prefs.remove(_accountDisplayNameKey);
+  await prefs.remove(_accountSetupCompleteKey);
   await prefs.remove(_syncModeKey);
 }
 
@@ -1141,18 +1159,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       }
       if (!mounted || epoch != _syncEpoch) return;
 
-      await _ensureAccountDisplayName(
-        displayName,
-      ).timeout(const Duration(seconds: 12));
+      // Mandatory first-login mini-game: deliberately no timeout here.
+      // If the user has not completed it, first-login is not complete.
+      await _ensureAccountDisplayName(displayName);
       if (!mounted || epoch != _syncEpoch) return;
 
       try {
-        final prefs = await SharedPreferences.getInstance().timeout(
-          const Duration(seconds: 3),
-        );
-        await prefs
-            .setBool(_sessionKey, true)
-            .timeout(const Duration(seconds: 3));
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_sessionKey, true);
       } on Object {
         // The verified result can still be returned; the next launch may
         // simply require QLĐT verification again.
@@ -1168,17 +1182,21 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
       _registrationCompletionSucceeded = true;
       _registrationCompletionRunning = false;
-      _finalizingVerifiedResult = false;
       if (!mounted) return;
 
-      // Unlock only for this successful programmatic pop. This also avoids any
-      // PopScope/back-state race after the mini-game route has just closed.
+      // Critical: PopScope currently blocks the login route while the portal is
+      // locked. setState only schedules that PopScope update. Popping in the
+      // same frame can therefore be rejected and leave the white spinner up
+      // forever. Unlock, wait for the rebuild, THEN return the verified result.
       setState(() {
         _syncing = false;
         _portalInputLocked = false;
         _allowRoutePop = true;
         _status = 'Đồng bộ hoàn tất.';
       });
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || epoch != _syncEpoch) return;
+      _finalizingVerifiedResult = false;
       Navigator.of(context).pop<QldtLoginResult>(result);
     } on Object catch (error) {
       _finalizingVerifiedResult = false;
@@ -1246,8 +1264,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   }
 
   Future<void> _runAccountDisplayNameSetup(String fullName) async {
-    final existing = await readQldtAccountDisplayName();
-    if (existing.isNotEmpty) {
+    if (await isQldtFirstLoginSetupComplete()) {
       _accountNameSetupFinished = true;
       return;
     }
@@ -1273,12 +1290,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
     // Persist before returning from the only welcome route. Every later sync
     // reads this value and must never launch the mini game again.
-    await _saveQldtAccountDisplayName(
-      arranged,
-    ).timeout(const Duration(seconds: 5));
-    final persisted = await readQldtAccountDisplayName().timeout(
-      const Duration(seconds: 5),
-    );
+    await _saveQldtAccountDisplayName(arranged);
+    final persisted = await readQldtAccountDisplayName();
     if (persisted.isEmpty) {
       throw const FormatException('ACCOUNT_DISPLAY_NAME_NOT_PERSISTED');
     }
