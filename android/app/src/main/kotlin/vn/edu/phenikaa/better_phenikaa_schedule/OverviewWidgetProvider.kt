@@ -159,7 +159,10 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: SharedPreferences,
     ) {
-        if (appWidgetIds.isNotEmpty()) WidgetDayChangeReceiver.scheduleNext(context)
+        if (appWidgetIds.isNotEmpty()) {
+            WidgetDayChangeReceiver.scheduleNext(context)
+            WidgetTimeThemeReceiver.scheduleNext(context)
+        }
         appWidgetIds.forEach { id ->
             val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
             val selected = selectedDate(context, id)
@@ -191,6 +194,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 .remove(navigationKey(id)).remove(modeKey(id)).remove(transitionKey(id))
         }
         state.apply()
+        WidgetTimeThemeReceiver.scheduleNext(context)
     }
 
     private fun selectedDate(context: Context, id: Int): String {
