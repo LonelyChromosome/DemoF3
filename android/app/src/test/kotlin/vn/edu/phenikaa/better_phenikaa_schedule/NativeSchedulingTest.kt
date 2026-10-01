@@ -20,6 +20,47 @@ class NativeSchedulingTest {
     }
 
     @Test
+    fun overviewRefreshFollowsTienMonWallClockBoundaries() {
+        val zone = TimeZone.getTimeZone("Asia/Ho_Chi_Minh")
+        fun at(hour: Int, minute: Int, second: Int = 0) =
+            Calendar.getInstance(zone).apply {
+                set(2026, Calendar.OCTOBER, 1, hour, minute, second)
+                set(Calendar.MILLISECOND, 0)
+            }
+
+        assertEquals(
+            60_000L,
+            WidgetDayChangeReceiver.nextRefreshBoundary(at(4, 59)) -
+                at(4, 59).timeInMillis,
+        )
+        assertEquals(
+            11L * 60L * 60L * 1000L + 30L * 60L * 1000L,
+            WidgetDayChangeReceiver.nextRefreshBoundary(at(5, 0)) -
+                at(5, 0).timeInMillis,
+        )
+        assertEquals(
+            30_000L,
+            WidgetDayChangeReceiver.nextRefreshBoundary(at(16, 29, 30)) -
+                at(16, 29, 30).timeInMillis,
+        )
+        assertEquals(
+            2L * 60L * 60L * 1000L,
+            WidgetDayChangeReceiver.nextRefreshBoundary(at(16, 30)) -
+                at(16, 30).timeInMillis,
+        )
+        assertEquals(
+            5L * 60L * 60L * 1000L + 30L * 60L * 1000L + 5_000L,
+            WidgetDayChangeReceiver.nextRefreshBoundary(at(18, 30)) -
+                at(18, 30).timeInMillis,
+        )
+        assertEquals(
+            6_000L,
+            WidgetDayChangeReceiver.nextRefreshBoundary(at(23, 59, 59)) -
+                at(23, 59, 59).timeInMillis,
+        )
+    }
+
+    @Test
     fun widgetTimelineAnchorsToNextUnfinishedClassWithoutReordering() {
         val items = listOf(
             widgetClass("past", "2026-09-22T07:00:00", "2026-09-22T09:00:00"),
