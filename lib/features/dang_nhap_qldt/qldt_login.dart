@@ -17,3 +17,9 @@ Future<String> readCachedQldtDisplayName() =>
 
 Future<String> readQldtAccountDisplayName() =>
     implementation.readQldtAccountDisplayName();
+
+Future<bool> isQldtFirstLoginSetupComplete() =>
+    implementation.isQldtFirstLoginSetupComplete();
+
+Future<void> markQldtFirstLoginSetupComplete() =>
+    implementation.markQldtFirstLoginSetupComplete();
