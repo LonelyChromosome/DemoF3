@@ -15,6 +15,12 @@ Future<void> clearQldtSession() async {}
 
 Future<String> readCachedQldtDisplayName() async => '';
 
+Future<String> readQldtAccountDisplayName() async => '';
+
+Future<bool> isQldtFirstLoginSetupComplete() async => true;
+
+Future<void> markQldtFirstLoginSetupComplete() async {}
+
 Future<QldtLoginResult?> openQldtLogin(BuildContext context) {
   return showDialog<QldtLoginResult>(
     context: context,
