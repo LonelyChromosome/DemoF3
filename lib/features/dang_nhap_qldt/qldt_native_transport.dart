@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -51,11 +52,15 @@ final class QldtNativeTransport {
   const QldtNativeTransport();
 
   static const _root = 'https://qldtbeta.phenikaa-uni.edu.vn';
+  static const _connectionTimeout = Duration(seconds: 20);
+  static const _requestTimeout = Duration(seconds: 20);
+  static const _retryDelay = Duration(milliseconds: 600);
+  static const _maxRetries = 1;
 
   Future<QldtNativeRegistration> fetchRegistration(
     QldtNativeSession session,
   ) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+    final client = HttpClient()..connectionTimeout = _connectionTimeout;
     try {
       final semesters = await _post(
         client: client,
@@ -142,7 +147,7 @@ final class QldtNativeTransport {
   Future<String> fetchStudentDisplayName(
     QldtNativeSession session,
   ) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+    final client = HttpClient()..connectionTimeout = _connectionTimeout;
     try {
       final response = await _post(
         client: client,
@@ -192,7 +197,7 @@ final class QldtNativeTransport {
     required DateTime start,
     required DateTime end,
   }) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 4);
+    final client = HttpClient()..connectionTimeout = _connectionTimeout;
     try {
       final response = await _post(
         client: client,
@@ -214,6 +219,33 @@ final class QldtNativeTransport {
   }
 
   Future<Map<String, dynamic>> _post({
+    required HttpClient client,
+    required QldtNativeSession session,
+    required String action,
+    required String func,
+    required Map<String, dynamic> extra,
+  }) async {
+    for (var attempt = 0; attempt <= _maxRetries; attempt++) {
+      try {
+        return await _postOnce(
+          client: client,
+          session: session,
+          action: action,
+          func: func,
+          extra: extra,
+        );
+      } on TimeoutException {
+        if (attempt >= _maxRetries) rethrow;
+      } on HttpException catch (error) {
+        final retryable = error.message.contains('HTTP 503');
+        if (!retryable || attempt >= _maxRetries) rethrow;
+      }
+      await Future<void>.delayed(_retryDelay);
+    }
+    throw StateError('QLĐT request retry exhausted.');
+  }
+
+  Future<Map<String, dynamic>> _postOnce({
     required HttpClient client,
     required QldtNativeSession session,
     required String action,
@@ -244,7 +276,7 @@ final class QldtNativeTransport {
     final uri = Uri.parse('$_root$apiPath/$action');
     final request = await client
         .postUrl(uri)
-        .timeout(const Duration(seconds: 5));
+        .timeout(_requestTimeout);
     request.headers.set(
       HttpHeaders.authorizationHeader,
       'Bearer ${session.tokenJwt}',
@@ -268,11 +300,11 @@ final class QldtNativeTransport {
     ).query;
     request.write(body);
 
-    final response = await request.close().timeout(const Duration(seconds: 5));
+    final response = await request.close().timeout(_requestTimeout);
     final text = await utf8.decoder
         .bind(response)
         .join()
-        .timeout(const Duration(seconds: 5));
+        .timeout(_requestTimeout);
     if (response.statusCode != HttpStatus.ok) {
       throw HttpException('HTTP ${response.statusCode}', uri: uri);
     }
