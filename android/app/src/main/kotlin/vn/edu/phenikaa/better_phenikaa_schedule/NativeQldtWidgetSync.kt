@@ -4,6 +4,7 @@ import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -216,6 +217,27 @@ internal class NativeQldtWidgetSync(sessionJson: String) {
     }
 
     private fun post(action: String, func: String, extra: JSONObject): JSONObject {
+        for (attempt in 0..MAX_RETRIES) {
+            try {
+                return postOnce(action, func, extra)
+            } catch (error: SocketTimeoutException) {
+                if (attempt >= MAX_RETRIES || cancelled.get()) throw error
+            } catch (error: NativeSyncException) {
+                val retryable = error.message.orEmpty().startsWith("HTTP_503:")
+                if (!retryable || attempt >= MAX_RETRIES || cancelled.get()) throw error
+            }
+
+            try {
+                Thread.sleep(RETRY_DELAY_MS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                throw NativeSyncException("SYNC_STOPPED: Tác vụ đồng bộ đã dừng.")
+            }
+        }
+        throw NativeSyncException("NATIVE_RETRY_EXHAUSTED: QLĐT không phản hồi.")
+    }
+
+    private fun postOnce(action: String, func: String, extra: JSONObject): JSONObject {
         if (cancelled.get()) {
             throw NativeSyncException("SYNC_STOPPED: Tác vụ đồng bộ đã dừng.")
         }
@@ -246,8 +268,8 @@ internal class NativeQldtWidgetSync(sessionJson: String) {
         val connection = URL(ROOT + apiRoot + "/" + action).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "POST"
-            connection.connectTimeout = 5_000
-            connection.readTimeout = 5_000
+            connection.connectTimeout = REQUEST_TIMEOUT_MS
+            connection.readTimeout = REQUEST_TIMEOUT_MS
             connection.doOutput = true
             connection.setRequestProperty("Authorization", "Bearer ${session.tokenJwt}")
             connection.setRequestProperty(
@@ -403,6 +425,9 @@ internal class NativeQldtWidgetSync(sessionJson: String) {
 
     private companion object {
         const val ROOT = "https://qldtbeta.phenikaa-uni.edu.vn"
+        const val REQUEST_TIMEOUT_MS = 20_000
+        const val RETRY_DELAY_MS = 600L
+        const val MAX_RETRIES = 1
         const val ACTION_SEMESTERS = "DKH_ThongTin_MH/DSA4FSkuKAYoIC8FIC8mCjgCIA8pIC8P"
         const val FUNC_SEMESTERS = "pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan"
         const val ACTION_PLANS = "DKH_ThongTin_MH/DSA4BRIKJAkuICIpBSAvJgo4AiAPKSAv"
