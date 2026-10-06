@@ -514,9 +514,11 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
         checkSessionReady(webView)
     }
 
-    private fun isMicrosoftLogin(url: String?): Boolean {
+    private fun isIdentityProvider(url: String?): Boolean {
         val host = url?.let { Uri.parse(it).host?.lowercase(Locale.ROOT) } ?: return false
-        return host == "login.microsoftonline.com" || host == "login.live.com" ||
+        return host == "login.microsoftonline.com" ||
+            host == "login.live.com" ||
+            host == "sso.phenikaa-uni.edu.vn" ||
             host.endsWith(".microsoftonline.com")
     }
 
