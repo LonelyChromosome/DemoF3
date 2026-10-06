@@ -1164,8 +1164,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       if (!mounted || epoch != _syncEpoch) return;
 
       try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool(_sessionKey, true);
+        final prefs = await SharedPreferences.getInstance().timeout(
+          const Duration(seconds: 3),
+        );
+        await prefs
+            .setBool(_sessionKey, true)
+            .timeout(const Duration(seconds: 3));
       } on Object {
         // The verified result can still be returned; the next launch may
         // simply require QLĐT verification again.
@@ -1289,8 +1293,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
     // Persist before returning from the only welcome route. Every later sync
     // reads this value and must never launch the mini game again.
-    await _saveQldtAccountDisplayName(arranged);
-    final persisted = await readQldtAccountDisplayName();
+    await _saveQldtAccountDisplayName(
+      arranged,
+    ).timeout(const Duration(seconds: 5));
+    final persisted = await readQldtAccountDisplayName().timeout(
+      const Duration(seconds: 5),
+    );
     if (persisted.isEmpty) {
       throw const FormatException('ACCOUNT_DISPLAY_NAME_NOT_PERSISTED');
     }
