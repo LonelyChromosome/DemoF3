@@ -483,15 +483,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           !await prefs.setString(_routeKey, result.registrationRoute!)) {
         throw StateError('Không thể lưu đường dẫn đăng ký trên thiết bị.');
       }
-      await WidgetPublisher.publish(publishedData, resetToToday: true);
-      await DailySync.disable();
-      try {
-        await DailySync.recordAppSyncSuccess();
-        await _refreshSyncStatus();
-        _examNotice = await DailySync.examNotice();
-      } on Object {
-        // The successful semester snapshot is already stored.
-      }
+      unawaited(_afterSuccessfulSaveMaintenance(publishedData));
       return difference;
     } on Object {
       if (previousSemester == null) {
@@ -560,6 +552,33 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _afterSuccessfulSaveMaintenance(
+    ImportedScheduleData publishedData,
+  ) async {
+    try {
+      await WidgetPublisher.publish(publishedData, resetToToday: true);
+    } on Object {
+      // The app snapshot is authoritative; the widget can repair on refresh.
+    }
+    try {
+      await DailySync.disable();
+    } on Object {
+      // Daily sync state must not delay entry to the app.
+    }
+    try {
+      await DailySync.recordAppSyncSuccess();
+      await _refreshSyncStatus();
+      _examNotice = await DailySync.examNotice();
+    } on Object {
+      // The successful semester snapshot is already stored.
+    }
+    try {
+      await DailySync.syncReminders();
+    } on Object {
+      // Reminder scheduling is best-effort after a successful sync.
+    }
+  }
+
   Future<void> _loginOrSync() async {
     if (!supportsLiveQldtLogin) {
       if (!mounted) {
@@ -591,7 +610,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           // verified semester has been committed by the app. A chosen name
           // left by an interrupted login must not skip this mandatory step.
           await markQldtFirstLoginSetupComplete();
-          await _repairStoredDisplayName();
+          unawaited(_repairStoredDisplayName());
           try {
             if (qldtDiagnosticsEnabled) {
               await QldtSyncDiagnostics.appendSave(saveStarted, 'OK');
@@ -627,8 +646,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           _syncStaleTimer?.cancel();
           _scheduleExamClock();
           if (difference != null) {
-            await _refreshDifference();
-            if (!mounted) return;
+            unawaited(_refreshDifference());
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
@@ -648,19 +666,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                 ),
               ),
             );
-          }
-          try {
-            await DailySync.syncReminders();
-          } on Object {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'Đã lưu lịch, nhưng chưa lên lịch nhắc thi. Hãy thử đồng bộ lại.',
-                  ),
-                ),
-              );
-            }
           }
         }
       }
