@@ -541,6 +541,25 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
               var timer = setInterval(function () {
                 if (++attempts > 80 || (emailDone && passwordDone)) { clearInterval(timer); return; }
                 var field = document.querySelector('input[type="password"]');
+                var ssoUser = document.querySelector('input[name="UserName"], input[name="username"]');
+                if (location.hostname === 'sso.phenikaa-uni.edu.vn' &&
+                    ssoUser && field && !passwordDone) {
+                  var setterSsoUser = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                  setterSsoUser.call(ssoUser, $username);
+                  ssoUser.dispatchEvent(new Event('input', { bubbles: true }));
+                  ssoUser.dispatchEvent(new Event('change', { bubbles: true }));
+                  var setterSsoPass = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                  setterSsoPass.call(field, $password);
+                  field.dispatchEvent(new Event('input', { bubbles: true }));
+                  field.dispatchEvent(new Event('change', { bubbles: true }));
+                  emailDone = true;
+                  passwordDone = true;
+                  BetterPhenikaaNative.onAuthStep('email');
+                  BetterPhenikaaNative.onAuthStep('password');
+                  setTimeout(function () { document.querySelector('button[type="submit"], input[type="submit"], #submitButton')?.click(); }, 100);
+                  clearInterval(timer);
+                  return;
+                }
                 if (field && !passwordDone) {
                   passwordDone = true;
                   var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
@@ -551,7 +570,7 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
                   setTimeout(function () { document.querySelector('#idSIButton9, button[type="submit"], input[type="submit"]')?.click(); }, 100);
                   clearInterval(timer);
                 } else if (!emailDone) {
-                  field = document.querySelector('input[type="email"], input[name="loginfmt"], #i0116');
+                  field = document.querySelector('input[type="email"], input[name="loginfmt"], #i0116, input[name="UserName"], input[name="username"]');
                   if (!field) return;
                   emailDone = true;
                   var setter2 = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
