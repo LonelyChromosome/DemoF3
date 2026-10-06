@@ -24,8 +24,6 @@ const _profileKey = 'better_phenikaa_qldt_profile_v1';
 const _accountDisplayNameKey = 'better_phenikaa_account_display_name_v1';
 const _accountSetupCompleteKey = 'better_phenikaa_account_setup_complete_v1';
 const _syncModeKey = 'better_phenikaa_qldt_sync_mode_v1';
-const _legacyMode = 'legacy';
-const _nativeMode = 'native';
 const _credentialChannel = MethodChannel('better_phenikaa/qldt_credentials');
 
 String _sanitizeQldtProfileName(Object? raw) {
@@ -250,7 +248,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   Timer? _syncWatchdog;
   Timer? _phaseTimer;
   Timer? _sessionTimer;
-  Timer? _legacyFallbackTimer;
   final QldtSyncDiagnostics? _diagnostics = qldtDiagnosticsEnabled
       ? QldtSyncDiagnostics()
       : null;
@@ -271,14 +268,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   bool _pageReady = false;
   bool _syncing = false;
   bool _autoSyncStarted = false;
-  bool _usingNativeTransport = false;
-  bool _switchingToNative = false;
   bool _rendererGone = false;
   bool _webCanGoBack = false;
   bool _allowRoutePop = false;
   bool _showWebPage = false;
   bool _portalInputLocked = false;
   bool _sawMicrosoftAuth = false;
+  bool _portalSyncStarted = false;
   late final AnimationController _reloadSpinController;
   String? _submittedUsername;
   String? _submittedPassword;
@@ -319,7 +315,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
     _sessionTimer?.cancel();
-    _legacyFallbackTimer?.cancel();
     _reloadSpinController.dispose();
     _controller = null;
     super.dispose();
@@ -437,10 +432,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                                 unawaited(
                                   _handleLoginPage(controller, url?.toString()),
                                 );
-                                if (_pendingSchedule == null &&
-                                    !_autoSyncStarted) {
-                                  _beginReadinessChecks();
-                                }
                               },
                               onUpdateVisitedHistory: (controller, url, _) {
                                 _trackAuthNavigation(url?.toString());
@@ -717,11 +708,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     _phaseTimer?.cancel();
     _syncWatchdog?.cancel();
     _sessionTimer?.cancel();
-    _legacyFallbackTimer?.cancel();
     ++_syncEpoch;
     _registrationCompletionEpoch = -1;
     _registrationCompletionRunning = false;
     _autoSyncStarted = false;
+    _portalSyncStarted = false;
     _pendingSchedule = null;
     _nativeSession = null;
     _pendingRegistrationRaw = null;
@@ -744,27 +735,41 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     await _controller?.reload();
   }
 
-  bool _isMicrosoftLogin(String? url) {
+  bool _isIdentityProvider(String? url) {
     final host = Uri.tryParse(url ?? '')?.host.toLowerCase();
     return host == 'login.microsoftonline.com' ||
         host == 'login.live.com' ||
+        host == 'sso.phenikaa-uni.edu.vn' ||
         (host?.endsWith('.microsoftonline.com') ?? false);
   }
 
   void _trackAuthNavigation(String? url) {
     if (widget.testHtml != null) return;
-    if (_isMicrosoftLogin(url)) {
+    if (_isIdentityProvider(url)) {
       _sawMicrosoftAuth = true;
       return;
     }
-    final host = Uri.tryParse(url ?? '')?.host.toLowerCase();
-    if (!_sawMicrosoftAuth || host != _qldtUri.host.toLowerCase()) return;
-    if (_portalInputLocked || !mounted) return;
-    setState(() {
-      _portalInputLocked = true;
-      _showWebPage = false;
-      _status = 'Đang tải dữ liệu QLĐT...';
-    });
+
+    final uri = Uri.tryParse(url ?? '');
+    if (uri == null || uri.host.toLowerCase() != _qldtUri.host.toLowerCase()) {
+      return;
+    }
+
+    final isPortalIndex =
+        uri.path.toLowerCase().endsWith('/conggiangvien/index.aspx');
+    if (!isPortalIndex) return;
+
+    if (_sawMicrosoftAuth && !_portalInputLocked && mounted) {
+      setState(() {
+        _portalInputLocked = true;
+        _showWebPage = false;
+        _status = 'Đang xác nhận phiên QLĐT...';
+      });
+    }
+
+    if (!_portalSyncStarted && !_syncing && !_autoSyncStarted) {
+      _beginReadinessChecks();
+    }
   }
 
   Future<void> _loadSavedCredentials() async {
@@ -789,14 +794,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     InAppWebViewController controller,
     String? url,
   ) async {
-    if (!_isMicrosoftLogin(url) || widget.testHtml != null) return;
+    if (!_isIdentityProvider(url) || widget.testHtml != null) return;
     // Capture only the values in the existing Microsoft form at submit time.
     // No input or keystroke listeners, and no credential data in diagnostics.
     try {
       await controller.evaluateJavascript(
         source: '''
         (function () {
-          if (!['login.microsoftonline.com', 'login.live.com'].includes(location.hostname) &&
+          if (!['login.microsoftonline.com', 'login.live.com', 'sso.phenikaa-uni.edu.vn'].includes(location.hostname) &&
               !location.hostname.endsWith('.microsoftonline.com')) return;
           if (window.__betterPhenikaaSubmittedCapture) return;
           window.__betterPhenikaaSubmittedCapture = true;
@@ -824,7 +829,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         source:
             '''
         (function () {
-          if (!['login.microsoftonline.com', 'login.live.com'].includes(location.hostname) &&
+          if (!['login.microsoftonline.com', 'login.live.com', 'sso.phenikaa-uni.edu.vn'].includes(location.hostname) &&
               !location.hostname.endsWith('.microsoftonline.com')) return;
           if (window.__betterPhenikaaAutoLogin) return;
           window.__betterPhenikaaAutoLogin = true;
@@ -895,16 +900,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     );
     if (!_syncing) {
       _diagnostics?.start(QldtSyncPhase.session);
-    }
-    if (widget.cachedSession && !_syncing) {
-      _sessionTimer = Timer(const Duration(seconds: 35), () {
-        if (!mounted || _pageReady || _syncing) return;
-        _diagnostics?.finish('SESSION_TIMEOUT');
-        setState(() {
-          _showWebPage = true;
-          _status = 'Phiên QLĐT đã hết hạn hoặc cổng sinh viên không phản hồi. Hãy đăng nhập lại.';
-        });
-      });
     }
     controller.addJavaScriptHandler(
       handlerName: 'betterPhenikaaScheduleStage',
@@ -1340,6 +1335,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   }
 
   void _beginReadinessChecks() {
+    if (_portalSyncStarted || _syncing || _autoSyncStarted) return;
     _readinessTimer?.cancel();
     _readinessAttempt = 0;
     unawaited(_checkReady());
@@ -1347,7 +1343,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
   Future<void> _checkReady() async {
     final controller = _controller;
-    if (controller == null) return;
+    if (controller == null ||
+        _portalSyncStarted ||
+        _syncing ||
+        _autoSyncStarted) {
+      return;
+    }
 
     try {
       final raw = await controller.evaluateJavascript(
@@ -1356,15 +1357,15 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
             try {
               var s = window.edu && edu.system;
               if (!s || !s.userId || s.iM == null || !s.tokenJWT ||
-                  !s.appId || !s.strChucNang_Id) {
+                  typeof s.makeRequest !== 'function') {
                 return null;
               }
               return JSON.stringify({
                 tokenJWT: String(s.tokenJWT),
                 userId: String(s.userId),
                 iM: String(s.iM),
-                appId: String(s.appId),
-                strChucNangId: String(s.strChucNang_Id),
+                appId: String(s.appId || ''),
+                strChucNangId: String(s.strChucNang_Id || ''),
                 cookie: String(document.cookie || ''),
                 name: ''
               });
@@ -1379,64 +1380,73 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       final text = raw?.toString();
       if (text != null && text.isNotEmpty && text != 'null') {
         final candidate = QldtNativeSession.fromJson(
-          jsonDecode(text) as Map<String, dynamic>,
+          Map<String, dynamic>.from(
+            jsonDecode(text) as Map<dynamic, dynamic>,
+          ),
         );
-        if (candidate.isValid) session = candidate;
-      }
-
-      if (!mounted || (_autoSyncStarted && !_syncing)) return;
-
-      final ready = session != null;
-      if (session != null) {
-        _nativeSession = session;
-        final cachedName = await _cachedProfileNameFor(session.userId);
-        if (cachedName.isNotEmpty) {
-          _resolvedDisplayName = cachedName;
+        if (candidate.tokenJwt.isNotEmpty &&
+            candidate.userId.isNotEmpty &&
+            candidate.iM.isNotEmpty) {
+          session = candidate;
         }
       }
 
-      setState(() {
-        _pageReady = ready;
-        _status = ready
-            ? 'Đã xác nhận phiên QLĐT. Đang đồng bộ...'
-            : 'Đang lấy session QLĐT sau đăng nhập...';
-      });
-
-      if (ready && !_autoSyncStarted && !_syncing) {
-        _readinessTimer?.cancel();
-        _sessionTimer?.cancel();
-        _diagnostics?.finish('OK');
-        _autoSyncStarted = true;
-        await _cacheNativeSession(session!);
-        unawaited(_rememberPortal(controller));
-        await _sync();
-      } else if (!ready) {
-        _scheduleReadinessRetry();
+      if (!mounted || _portalSyncStarted || _syncing || _autoSyncStarted) {
+        return;
       }
-    } on Object {
+
+      if (session == null) {
+        _scheduleReadinessRetry();
+        return;
+      }
+
+      _readinessTimer?.cancel();
+      _sessionTimer?.cancel();
+      _nativeSession = session;
+      final cachedName = await _cachedProfileNameFor(session.userId);
+      if (cachedName.isNotEmpty) {
+        _resolvedDisplayName = cachedName;
+      }
+      await _cacheNativeSession(session);
+      unawaited(_rememberPortal(controller));
+
       if (!mounted) return;
-      setState(() => _pageReady = false);
+      _portalSyncStarted = true;
+      _autoSyncStarted = true;
+      setState(() {
+        _pageReady = true;
+        _portalInputLocked = true;
+        _showWebPage = false;
+        _status = 'Đang đồng bộ dữ liệu QLĐT...';
+      });
+      await _sync();
+    } on Object {
+      if (!mounted || _portalSyncStarted) return;
       _scheduleReadinessRetry();
     }
   }
 
   void _scheduleReadinessRetry() {
+    if (_portalSyncStarted || _syncing || _autoSyncStarted) return;
     _readinessAttempt += 1;
-    if (_readinessAttempt >= 60) {
+    if (_readinessAttempt >= 50) {
+      _readinessTimer?.cancel();
       if (mounted) {
-        _sessionTimer?.cancel();
-        _diagnostics?.finish('SESSION_TIMEOUT');
         setState(() {
+          _pageReady = false;
+          _portalInputLocked = false;
           _showWebPage = true;
-          _autoSyncStarted = false;
-          _status = 'Phiên QLĐT chưa sẵn sàng hoặc đã hết hạn. Hãy đăng nhập lại nếu cần.';
+          _status = 'QLĐT chưa cấp session. Hãy đăng nhập lại hoặc tải lại.';
         });
       }
       return;
     }
     _readinessTimer?.cancel();
-    _readinessTimer = Timer(const Duration(milliseconds: 300), () {
-      if (mounted) {
+    _readinessTimer = Timer(const Duration(milliseconds: 100), () {
+      if (mounted &&
+          !_portalSyncStarted &&
+          !_syncing &&
+          !_autoSyncStarted) {
         unawaited(_checkReady());
       }
     });
@@ -1446,147 +1456,27 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     final controller = _controller;
     if (controller == null || _syncing) return;
 
-    final prefs = await SharedPreferences.getInstance();
-    if (!mounted || _syncing) return;
-    final mode = prefs.getString(_syncModeKey) ?? _legacyMode;
-
     final epoch = ++_syncEpoch;
     _currentPhase = null;
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
-    _legacyFallbackTimer?.cancel();
-    _switchingToNative = false;
-    _usingNativeTransport = mode == _nativeMode;
 
     setState(() {
       _syncing = true;
       _showWebPage = false;
-      _status = _usingNativeTransport
-          ? 'Đang đồng bộ bằng native HTTP...'
-          : 'Đang đồng bộ bằng luồng QLĐT chính...';
+      _status = 'Đang lấy học kỳ và môn đăng ký từ QLĐT...';
     });
     _pendingSchedule = null;
     _pendingRegistrationRaw = null;
     _failureDiagnosticsJson = null;
     _scheduleStages.clear();
 
-    if (_usingNativeTransport) {
-      try {
-        await _syncNative(epoch);
-      } on Object catch (error) {
-        if (!mounted || !_syncing || epoch != _syncEpoch) return;
-        _stopSync(
-          epoch,
-          'Native HTTP lỗi: ${error.runtimeType}: $error',
-          code: 'NATIVE_SYNC_FAILED',
-        );
-      }
-      return;
-    }
-
-    _startPhase(QldtSyncPhase.semesterPlan, const Duration(seconds: 20), epoch);
-    _legacyFallbackTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted &&
-          _syncing &&
-          !_usingNativeTransport &&
-          epoch == _syncEpoch) {
-        unawaited(_switchToNative('LEGACY_5S_TIMEOUT'));
-      }
-    });
+    _startPhase(
+      QldtSyncPhase.semesterPlan,
+      const Duration(seconds: 10),
+      epoch,
+    );
     await _syncLegacyDispatch(controller, epoch);
-  }
-
-  bool _shouldFallbackFromLegacy(String code) {
-    return <String>{
-      'NETWORK_ERROR',
-      'REQUEST_ERROR',
-      'SESSION_EXPIRED',
-      'HTTP_ERROR',
-      'RENDERER_GONE',
-      'LEGACY_DISPATCH_ERROR',
-      'LEGACY_SCHEDULE_DISPATCH_ERROR',
-    }.contains(code);
-  }
-
-  Future<void> _switchToNative(String reason) async {
-    if (!mounted || !_syncing || _usingNativeTransport || _switchingToNative) {
-      return;
-    }
-    _switchingToNative = true;
-    _legacyFallbackTimer?.cancel();
-    _syncWatchdog?.cancel();
-    _phaseTimer?.cancel();
-
-    final nativeEpoch = ++_syncEpoch;
-    _usingNativeTransport = true;
-    _currentPhase = null;
-    _pendingSchedule = null;
-    _pendingRegistrationRaw = null;
-    _scheduleStages.clear();
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_syncModeKey, _nativeMode);
-    } on Object {
-      // The current fallback can still run even if mode persistence fails.
-    }
-
-    if (!mounted || !_syncing || nativeEpoch != _syncEpoch) return;
-    setState(() {
-      _status = 'Luồng chính lỗi ($reason). Đang chuyển sang native HTTP...';
-    });
-
-    try {
-      await _syncNative(nativeEpoch);
-    } on Object catch (error) {
-      if (!mounted || !_syncing || nativeEpoch != _syncEpoch) return;
-      _stopSync(
-        nativeEpoch,
-        'Native HTTP lỗi: ${error.runtimeType}: $error',
-        code: 'NATIVE_SYNC_FAILED',
-      );
-    } finally {
-      _switchingToNative = false;
-    }
-  }
-
-  Future<void> _syncNative(int epoch) async {
-    final session = _nativeSession;
-    if (session == null || !session.isValid) {
-      throw const FormatException('NATIVE_SESSION_UNAVAILABLE');
-    }
-
-    final transport = const QldtNativeTransport();
-    final registration = await transport.fetchRegistration(session);
-    if (!mounted || !_syncing || epoch != _syncEpoch) return;
-
-    _startPhase(QldtSyncPhase.subjects, const Duration(seconds: 20), epoch);
-    final parsedRegistration = const TracuuApi().parse(registration.raw);
-    final range = SemesterScheduleRange.fromRegistration(parsedRegistration);
-    if (range == null) {
-      throw const FormatException('NO_SUBJECTS');
-    }
-    if (DateTime.now().isAfter(range.end.add(const Duration(days: 1)))) {
-      throw const FormatException('SEMESTER_EXPIRED');
-    }
-
-    _startPhase(QldtSyncPhase.schedule, const Duration(seconds: 45), epoch);
-    if (mounted) {
-      setState(() => _status = 'Đang lấy lịch cá nhân bằng native HTTP...');
-    }
-
-    final scheduleRaw = await transport.fetchScheduleEnvelope(
-      session: session,
-      start: range.start,
-      end: range.end,
-    );
-    if (!mounted || !_syncing || epoch != _syncEpoch) return;
-
-    _pendingSchedule = const QldtParser().parseLiveEnvelope(
-      scheduleRaw,
-      strict: true,
-    );
-    await _completeRegistration(epoch, registration.raw);
   }
 
   Future<void> _syncLegacyDispatch(
@@ -1771,10 +1661,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
   void _stopSync(int epoch, String status, {String code = 'FAILED'}) {
     if (!mounted || epoch != _syncEpoch) return;
-    if (!_usingNativeTransport && _shouldFallbackFromLegacy(code)) {
-      unawaited(_switchToNative(code));
-      return;
-    }
     _legacyFallbackTimer?.cancel();
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
@@ -1795,6 +1681,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     _pendingRegistrationRaw = null;
     setState(() {
       _syncing = false;
+      _portalSyncStarted = false;
+      _autoSyncStarted = false;
+      _portalInputLocked = false;
+      _showWebPage = true;
       _status = code.endsWith('_TIMEOUT')
           ? AssistantText.of(AssistantEvent.syncTimeout, _assistantPack)
           : code == 'FAILED'
