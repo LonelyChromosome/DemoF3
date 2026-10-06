@@ -747,6 +747,16 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     if (widget.testHtml != null) return;
     if (_isIdentityProvider(url)) {
       _sawMicrosoftAuth = true;
+      if (mounted && _portalInputLocked) {
+        setState(() {
+          _portalInputLocked = false;
+          _showWebPage = true;
+          _pageReady = false;
+          _portalSyncStarted = false;
+          _autoSyncStarted = false;
+          _status = 'Phiên QLĐT đã hết hạn. Hãy đăng nhập lại.';
+        });
+      }
       return;
     }
 
@@ -1141,17 +1151,8 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       _finalizingVerifiedResult = true;
       _readinessTimer?.cancel();
       _sessionTimer?.cancel();
-      _legacyFallbackTimer?.cancel();
       _phaseTimer?.cancel();
       _syncWatchdog?.cancel();
-      _diagnostics?.finish('OK');
-      if (_diagnostics case final diagnostics?) {
-        try {
-          await diagnostics.flushed.timeout(const Duration(seconds: 2));
-        } on Object {
-          // Diagnostic persistence cannot block a verified schedule.
-        }
-      }
       if (!mounted || epoch != _syncEpoch) return;
 
       // Mandatory first-login mini-game: deliberately no timeout here.
@@ -1476,10 +1477,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       const Duration(seconds: 10),
       epoch,
     );
-    await _syncLegacyDispatch(controller, epoch);
+    await _dispatchRegistrationSync(controller, epoch);
   }
 
-  Future<void> _syncLegacyDispatch(
+  Future<void> _dispatchRegistrationSync(
     InAppWebViewController controller,
     int epoch,
   ) async {
@@ -1493,9 +1494,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         _phaseTimer?.cancel();
         setState(() {
           _syncing = false;
+          _portalSyncStarted = false;
           _autoSyncStarted = false;
           _pageReady = false;
-          _status = 'Đang đợi trang QLĐT sẵn sàng để đồng bộ...';
+          _portalInputLocked = false;
+          _showWebPage = true;
+          _status = 'Đang đợi phiên QLĐT sẵn sàng...';
         });
         _beginReadinessChecks();
       }
@@ -1503,7 +1507,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       _stopSync(
         epoch,
         'Không thể yêu cầu môn đăng ký từ QLĐT. Hãy thử lại.',
-        code: 'LEGACY_DISPATCH_ERROR',
+        code: 'REGISTRATION_DISPATCH_ERROR',
       );
     }
   }
@@ -1544,13 +1548,28 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     SemesterScheduleRange range,
   ) async {
     if (!mounted || !_syncing || epoch != _syncEpoch) return;
-    _startPhase(QldtSyncPhase.schedule, const Duration(seconds: 45), epoch);
-    setState(() => _status = 'Đang lấy lịch cá nhân trong học kỳ...');
+
+    _startPhase(QldtSyncPhase.schedule, const Duration(seconds: 12), epoch);
+    setState(() => _status = 'Đang lấy lịch cá nhân...');
     _scheduleStages
       ..clear()
       ..add('dispatch');
-    final startText = _formatDate(range.start);
-    final endText = _formatDate(range.end);
+
+    final chunks = <Map<String, String>>[];
+    var cursor = DateTime(range.start.year, range.start.month, range.start.day);
+    final finalDay = DateTime(range.end.year, range.end.month, range.end.day);
+    while (!cursor.isAfter(finalDay)) {
+      var chunkEnd = cursor.add(const Duration(days: 6));
+      if (chunkEnd.isAfter(finalDay)) chunkEnd = finalDay;
+      chunks.add(<String, String>{
+        'start': _formatDate(cursor),
+        'end': _formatDate(chunkEnd),
+      });
+      cursor = chunkEnd.add(const Duration(days: 1));
+    }
+
+    final chunksJson = jsonEncode(chunks);
+    const concurrency = 8;
     final script =
         '''
       (function () {
@@ -1561,48 +1580,110 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
             );
           } catch (_) {}
         }
+
         try {
           if (!(window.flutter_inappwebview &&
                 typeof window.flutter_inappwebview.callHandler === 'function')) {
             return 'bridge_unavailable';
           }
           if (!(window.edu && edu.system && edu.system.userId &&
-                edu.system.iM != null && typeof edu.system.makeRequest === 'function')) {
+                edu.system.iM != null &&
+                typeof edu.system.makeRequest === 'function')) {
             return 'portal_unavailable';
           }
 
-          var requestData = {
-            action: 'SV_ThongTin_MH/DSA4BRINKCIpAiAPKSAv',
-            func: 'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan',
-            iM: edu.system.iM,
-            strQLSV_NguoiHoc_Id: edu.system.userId,
-            strNgayBatDau: '$startText',
-            strNgayKetThuc: '$endText'
-          };
+          var chunks = $chunksJson;
+          var concurrency = $concurrency;
+          var nextIndex = 0;
+          var active = 0;
+          var completed = 0;
+          var failed = false;
+          var merged = [];
+
+          function finishIfDone() {
+            if (failed || completed !== chunks.length) return;
+            scheduleStage('success');
+            window.flutter_inappwebview.callHandler(
+              'betterPhenikaaSyncResult',
+              $epoch,
+              JSON.stringify({
+                name: '',
+                response: {
+                  Success: true,
+                  Data: merged,
+                  Message: '',
+                  Pager: null,
+                  Id: null
+                }
+              })
+            );
+          }
+
+          function launchMore() {
+            if (failed) return;
+            while (active < concurrency && nextIndex < chunks.length) {
+              (function (index) {
+                var chunk = chunks[index];
+                nextIndex += 1;
+                active += 1;
+
+                var requestData = {
+                  action: 'SV_ThongTin_MH/DSA4BRINKCIpAiAPKSAv',
+                  func: 'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan',
+                  iM: edu.system.iM,
+                  strQLSV_NguoiHoc_Id: edu.system.userId,
+                  strNgayBatDau: chunk.start,
+                  strNgayKetThuc: chunk.end
+                };
+
+                edu.system.makeRequest({
+                  success: function (response) {
+                    if (failed) return;
+                    active -= 1;
+                    completed += 1;
+
+                    if (!response || response.Success !== true ||
+                        !Array.isArray(response.Data)) {
+                      failed = true;
+                      scheduleStage('error');
+                      window.flutter_inappwebview.callHandler(
+                        'betterPhenikaaSyncError',
+                        $epoch,
+                        'QLĐT trả dữ liệu lịch không hợp lệ.'
+                      );
+                      return;
+                    }
+
+                    for (var i = 0; i < response.Data.length; i++) {
+                      merged.push(response.Data[i]);
+                    }
+                    launchMore();
+                    finishIfDone();
+                  },
+                  error: function () {
+                    if (failed) return;
+                    failed = true;
+                    active -= 1;
+                    scheduleStage('error');
+                    window.flutter_inappwebview.callHandler(
+                      'betterPhenikaaSyncError',
+                      $epoch,
+                      'QLĐT báo lỗi khi tải lịch cá nhân.'
+                    );
+                  },
+                  type: 'POST',
+                  action: requestData.action,
+                  contentType: true,
+                  data: requestData,
+                  fakedb: []
+                }, false, false, false, null);
+              })(nextIndex);
+            }
+            finishIfDone();
+          }
 
           scheduleStage('request');
-          edu.system.makeRequest({
-            success: function (response) {
-              scheduleStage('success');
-              window.flutter_inappwebview.callHandler(
-                'betterPhenikaaSyncResult',
-                $epoch,
-                JSON.stringify({name: '', response: response})
-              );            },
-            error: function () {
-              scheduleStage('error');
-              window.flutter_inappwebview.callHandler(
-                'betterPhenikaaSyncError',
-                $epoch,
-                'QLĐT báo lỗi khi tải lịch cá nhân.'
-              );
-            },
-            type: 'POST',
-            action: requestData.action,
-            contentType: true,
-            data: requestData,
-            fakedb: []
-          }, false, false, false, null);
+          launchMore();
           return 'request_dispatched';
         } catch (error) {
           scheduleStage('exception');
@@ -1625,9 +1706,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         _phaseTimer?.cancel();
         setState(() {
           _syncing = false;
+          _portalSyncStarted = false;
           _autoSyncStarted = false;
           _pageReady = false;
-          _status = 'Đang đợi trang QLĐT sẵn sàng để đồng bộ...';
+          _portalInputLocked = false;
+          _showWebPage = true;
+          _status = 'Đang đợi phiên QLĐT sẵn sàng...';
         });
         _beginReadinessChecks();
       } else if (dispatch == 'request_dispatched' &&
@@ -1638,7 +1722,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       _stopSync(
         epoch,
         'Không thể yêu cầu lịch QLĐT. Hãy thử lại.',
-        code: 'LEGACY_SCHEDULE_DISPATCH_ERROR',
+        code: 'SCHEDULE_DISPATCH_ERROR',
       );
     }
   }
@@ -1661,7 +1745,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
   void _stopSync(int epoch, String status, {String code = 'FAILED'}) {
     if (!mounted || epoch != _syncEpoch) return;
-    _legacyFallbackTimer?.cancel();
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
     _diagnostics?.finish(code);
