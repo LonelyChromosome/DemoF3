@@ -40,8 +40,6 @@ class QldtDailySyncWorker(
     @Volatile
     private var activeLegacySync: HeadlessQldtSync? = null
 
-    @Volatile
-    private var activeNativeSync: NativeQldtWidgetSync? = null
     private val syncToken: Long get() = inputData.getLong("sync_token", 0L)
 
     override fun doWork(): Result {
@@ -56,7 +54,7 @@ class QldtDailySyncWorker(
         var reminderSemester: String? = null
         try {
             // Keep the user-initiated widget sync alive when the app goes to the background.
-            // Data transport is native HTTP; no hidden WebView is started.
+            // Use the same authenticated WebView + edu.system.makeRequest transport as the app.
             setForegroundAsync(syncForegroundInfo()).get()
             if (isStopped) return Result.success()
             val preferences = applicationContext.getSharedPreferences(
@@ -69,73 +67,25 @@ class QldtDailySyncWorker(
                 return Result.success()
             }
 
-            val nativeSession = preferences.getString(NATIVE_SESSION_KEY, null)
-            if (nativeSession.isNullOrBlank()) {
-                syncError = "SESSION_EXPIRED: Hãy mở app và đồng bộ lại để làm mới phiên QLĐT."
-                return Result.success()
+            val cachedRoute = preferences.getString(REGISTRATION_ROUTE_KEY, null)
+            val synchronizer = HeadlessQldtSync(applicationContext, cachedRoute)
+            activeLegacySync = synchronizer
+            val webViewResult = try {
+                synchronizer.run(WEBVIEW_SYNC_TIMEOUT_SECONDS)
+            } finally {
+                activeLegacySync = null
             }
 
-            val mode = preferences.getString(SYNC_MODE_KEY, LEGACY_MODE) ?: LEGACY_MODE
-            var envelope: String? = null
-            var registration: String? = null
-
-            if (mode == NATIVE_MODE) {
-                val synchronizer = NativeQldtWidgetSync(nativeSession)
-                activeNativeSync = synchronizer
-                val nativeResult = try {
-                    synchronizer.run()
-                } finally {
-                    activeNativeSync = null
+            val envelope: String
+            val registration: String
+            when (webViewResult) {
+                is HeadlessQldtSync.Result.Success -> {
+                    envelope = webViewResult.envelope
+                    registration = webViewResult.registration
                 }
-                when (nativeResult) {
-                    is NativeQldtWidgetSync.Result.Success -> {
-                        envelope = nativeResult.envelope
-                        registration = nativeResult.registration
-                    }
-                    is NativeQldtWidgetSync.Result.Failure -> {
-                        syncError = nativeResult.message
-                        return Result.success()
-                    }
-                }
-            } else {
-                val cachedRoute = preferences.getString(REGISTRATION_ROUTE_KEY, null)
-                val synchronizer = HeadlessQldtSync(applicationContext, cachedRoute)
-                activeLegacySync = synchronizer
-                val legacyResult = try {
-                    synchronizer.run(LEGACY_TIMEOUT_SECONDS)
-                } finally {
-                    activeLegacySync = null
-                }
-
-                when (legacyResult) {
-                    is HeadlessQldtSync.Result.Success -> {
-                        envelope = legacyResult.envelope
-                        registration = legacyResult.registration
-                    }
-                    is HeadlessQldtSync.Result.Failure -> {
-                        if (!shouldFallbackLegacy(legacyResult.message)) {
-                            syncError = legacyResult.message
-                            return Result.success()
-                        }
-                        preferences.edit().putString(SYNC_MODE_KEY, NATIVE_MODE).commit()
-                        val nativeSync = NativeQldtWidgetSync(nativeSession)
-                        activeNativeSync = nativeSync
-                        val nativeResult = try {
-                            nativeSync.run()
-                        } finally {
-                            activeNativeSync = null
-                        }
-                        when (nativeResult) {
-                            is NativeQldtWidgetSync.Result.Success -> {
-                                envelope = nativeResult.envelope
-                                registration = nativeResult.registration
-                            }
-                            is NativeQldtWidgetSync.Result.Failure -> {
-                                syncError = nativeResult.message
-                                return Result.success()
-                            }
-                        }
-                    }
+                is HeadlessQldtSync.Result.Failure -> {
+                    syncError = webViewResult.message
+                    return Result.success()
                 }
             }
 
@@ -224,7 +174,6 @@ class QldtDailySyncWorker(
 
     override fun onStopped() {
         activeLegacySync?.cancel()
-        activeNativeSync?.cancel()
         if (WidgetSyncIndicator.finish(applicationContext, syncToken, false)) {
             DailySyncScheduler.recordFailure(applicationContext,
                 "SYNC_STOPPED: Android đã dừng tác vụ. Hãy thử lại.")
@@ -233,18 +182,6 @@ class QldtDailySyncWorker(
         super.onStopped()
     }
 
-    private fun shouldFallbackLegacy(message: String): Boolean {
-        val code = message.substringBefore(':').trim()
-        return code !in setOf(
-            "NO_SUBJECTS",
-            "NO_SEMESTER",
-            "PLAN_AMBIGUOUS",
-            "INVALID_REGISTRATION",
-            "INVALID_DATE",
-            "INVALID_SUBJECT",
-            "INVALID_RESPONSE",
-        )
-    }
 
     private fun syncForegroundInfo(): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
@@ -344,11 +281,7 @@ class QldtDailySyncWorker(
         const val PREVIOUS_SEMESTER_KEY = "flutter.better_phenikaa_previous_semester_v1"
         const val DIFFERENCE_KEY = "flutter.better_phenikaa_semester_difference_v1"
         const val REGISTRATION_ROUTE_KEY = "flutter.better_phenikaa_qldt_registration_route_v1"
-        const val NATIVE_SESSION_KEY = "flutter.better_phenikaa_qldt_native_session_v1"
-        const val SYNC_MODE_KEY = "flutter.better_phenikaa_qldt_sync_mode_v1"
-        const val LEGACY_MODE = "legacy"
-        const val NATIVE_MODE = "native"
-        const val LEGACY_TIMEOUT_SECONDS = 5L
+        const val WEBVIEW_SYNC_TIMEOUT_SECONDS = 20L
         const val SYNC_CHANNEL = "widget_sync_progress"
         const val SYNC_NOTIFICATION_ID = 2819
     }
@@ -473,7 +406,7 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
             webView.webViewClient = object : WebViewClient() {
                 override fun onPageCommitVisible(view: WebView, url: String?) {
                     super.onPageCommitVisible(view, url)
-                    if (isMicrosoftLogin(url)) {
+                    if (isIdentityProvider(url)) {
                         sessionProbeStarted.set(false)
                         stage.set("AUTH")
                     }
@@ -482,7 +415,7 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
 
                 override fun onPageFinished(view: WebView, url: String?) {
                     super.onPageFinished(view, url)
-                    if (isMicrosoftLogin(url)) attemptAutoLogin(view)
+                    if (isIdentityProvider(url)) attemptAutoLogin(view)
                     beginReadinessProbe(view, url)
                 }
 
@@ -600,7 +533,7 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
         val passwordDone = authPasswordSubmitted
         webView.evaluateJavascript("""
             (function () {
-              if (!['login.microsoftonline.com', 'login.live.com'].includes(location.hostname) &&
+              if (!['login.microsoftonline.com', 'login.live.com', 'sso.phenikaa-uni.edu.vn'].includes(location.hostname) &&
                   !location.hostname.endsWith('.microsoftonline.com')) return;
               if (window.__betterPhenikaaAutoLogin) return;
               window.__betterPhenikaaAutoLogin = true;
@@ -665,9 +598,30 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
     }
 
     private fun requestSchedule(webView: WebView, range: Pair<String, String>) {
-        val (startDate, endDate) = range
-        val startJson = JSONObject.quote(startDate)
-        val endJson = JSONObject.quote(endDate)
+        val input = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply { isLenient = false }
+        val output = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+        val start = input.parse(range.first)
+            ?: return complete(Result.Failure("INVALID_DATE: Ngày bắt đầu không hợp lệ."))
+        val end = input.parse(range.second)
+            ?: return complete(Result.Failure("INVALID_DATE: Ngày kết thúc không hợp lệ."))
+
+        val chunks = JSONArray()
+        val cursor = Calendar.getInstance().apply { time = start }
+        val finalDay = Calendar.getInstance().apply { time = end }
+        while (!cursor.after(finalDay)) {
+            val chunkStart = cursor.clone() as Calendar
+            val chunkEnd = cursor.clone() as Calendar
+            chunkEnd.add(Calendar.DAY_OF_MONTH, 6)
+            if (chunkEnd.after(finalDay)) chunkEnd.time = finalDay.time
+            chunks.put(
+                JSONObject()
+                    .put("start", output.format(chunkStart.time))
+                    .put("end", output.format(chunkEnd.time)),
+            )
+            cursor.time = chunkEnd.time
+            cursor.add(Calendar.DAY_OF_MONTH, 1)
+        }
+
         val script = """
             (function () {
               try {
@@ -676,43 +630,90 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
                   window.$JAVASCRIPT_BRIDGE.onError('SESSION_EXPIRED');
                   return;
                 }
-                var requestData = {
-                  action: 'SV_ThongTin_MH/DSA4BRINKCIpAiAPKSAv',
-                  func: 'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan',
-                  iM: edu.system.iM,
-                  strQLSV_NguoiHoc_Id: edu.system.userId,
-                  strNgayBatDau: $startJson,
-                  strNgayKetThuc: $endJson
-                };
-                edu.system.makeRequest({
-                  success: function (response) {
-                    var nameNode = document.querySelector('#lblHoTenNguoiDangNhap');
-                    var name = nameNode ? (nameNode.textContent || '').trim() : '';
-                    if (!name) {
-                      var spans = document.querySelectorAll('.nav-account button > span');
-                      for (var i = 0; i < spans.length; i++) {
-                        var candidate = (spans[i].textContent || '').trim();
-                        if (candidate) {
-                          name = candidate;
-                          break;
-                        }
-                      }
+
+                var chunks = $chunks;
+                var concurrency = 8;
+                var nextIndex = 0;
+                var active = 0;
+                var completed = 0;
+                var failed = false;
+                var merged = [];
+
+                function finishIfDone() {
+                  if (failed || completed !== chunks.length) return;
+                  var nameNode = document.querySelector('#lblHoTenNguoiDangNhap');
+                  var name = nameNode ? (nameNode.textContent || '').trim() : '';
+                  if (!name) {
+                    var spans = document.querySelectorAll('.nav-account button > span');
+                    for (var i = 0; i < spans.length; i++) {
+                      var candidate = (spans[i].textContent || '').trim();
+                      if (candidate) { name = candidate; break; }
                     }
-                    window.$JAVASCRIPT_BRIDGE.onSchedule(
-                      JSON.stringify({name: name, response: response})
-                    );
-                  },
-                  error: function () {
-                    window.$JAVASCRIPT_BRIDGE.onError(
-                      'NETWORK_ERROR'
-                    );
-                  },
-                  type: 'POST',
-                  action: requestData.action,
-                  contentType: true,
-                  data: requestData,
-                  fakedb: []
-                }, false, false, false, null);
+                  }
+                  window.$JAVASCRIPT_BRIDGE.onSchedule(
+                    JSON.stringify({
+                      name: name,
+                      response: {
+                        Success: true,
+                        Data: merged,
+                        Message: '',
+                        Pager: null,
+                        Id: null
+                      }
+                    })
+                  );
+                }
+
+                function launchMore() {
+                  if (failed) return;
+                  while (active < concurrency && nextIndex < chunks.length) {
+                    (function (index) {
+                      var chunk = chunks[index];
+                      nextIndex += 1;
+                      active += 1;
+                      var requestData = {
+                        action: 'SV_ThongTin_MH/DSA4BRINKCIpAiAPKSAv',
+                        func: 'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan',
+                        iM: edu.system.iM,
+                        strQLSV_NguoiHoc_Id: edu.system.userId,
+                        strNgayBatDau: chunk.start,
+                        strNgayKetThuc: chunk.end
+                      };
+                      edu.system.makeRequest({
+                        success: function (response) {
+                          if (failed) return;
+                          active -= 1;
+                          completed += 1;
+                          if (!response || response.Success !== true ||
+                              !Array.isArray(response.Data)) {
+                            failed = true;
+                            window.$JAVASCRIPT_BRIDGE.onError('INVALID_RESPONSE');
+                            return;
+                          }
+                          for (var i = 0; i < response.Data.length; i++) {
+                            merged.push(response.Data[i]);
+                          }
+                          launchMore();
+                          finishIfDone();
+                        },
+                        error: function () {
+                          if (failed) return;
+                          failed = true;
+                          active -= 1;
+                          window.$JAVASCRIPT_BRIDGE.onError('NETWORK_ERROR');
+                        },
+                        type: 'POST',
+                        action: requestData.action,
+                        contentType: true,
+                        data: requestData,
+                        fakedb: []
+                      }, false, false, false, null);
+                    })(nextIndex);
+                  }
+                  finishIfDone();
+                }
+
+                launchMore();
               } catch (error) {
                 window.$JAVASCRIPT_BRIDGE.onError('REQUEST_ERROR');
               }
@@ -821,8 +822,8 @@ private class HeadlessQldtSync(private val context: Context, cachedRoute: String
         const val QLDT_HOST = "qldtbeta.phenikaa-uni.edu.vn"
         const val JAVASCRIPT_BRIDGE = "BetterPhenikaaNative"
         const val SYNC_TIMEOUT_SECONDS = 50L
-        const val MAX_READINESS_ATTEMPTS = 35
-        const val READINESS_RETRY_MILLIS = 1_000L
+        const val MAX_READINESS_ATTEMPTS = 50
+        const val READINESS_RETRY_MILLIS = 100L
         const val SESSION_READY_SCRIPT = """
             Boolean(
               window.edu && edu.system && edu.system.userId &&
