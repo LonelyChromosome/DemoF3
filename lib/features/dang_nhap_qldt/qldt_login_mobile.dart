@@ -275,6 +275,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   bool _portalInputLocked = false;
   bool _sawMicrosoftAuth = false;
   bool _portalSyncStarted = false;
+  bool _sessionBootstrapRunning = false;
   late final AnimationController _reloadSpinController;
   String? _submittedUsername;
   String? _submittedPassword;
@@ -713,6 +714,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     _registrationCompletionRunning = false;
     _autoSyncStarted = false;
     _portalSyncStarted = false;
+    _sessionBootstrapRunning = false;
     _pendingSchedule = null;
     _nativeSession = null;
     _pendingRegistrationRaw = null;
@@ -753,6 +755,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
           _showWebPage = true;
           _pageReady = false;
           _portalSyncStarted = false;
+          _sessionBootstrapRunning = false;
           _autoSyncStarted = false;
           _status = 'Phiên QLĐT đã hết hạn. Hãy đăng nhập lại.';
         });
@@ -1336,7 +1339,13 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   }
 
   void _beginReadinessChecks() {
-    if (_portalSyncStarted || _syncing || _autoSyncStarted) return;
+    if (_sessionBootstrapRunning ||
+        _portalSyncStarted ||
+        _syncing ||
+        _autoSyncStarted) {
+      return;
+    }
+    _sessionBootstrapRunning = true;
     _readinessTimer?.cancel();
     _readinessAttempt = 0;
     unawaited(_checkReady());
@@ -1401,6 +1410,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         return;
       }
 
+      _portalSyncStarted = true;
+      _autoSyncStarted = true;
+      _sessionBootstrapRunning = false;
       _readinessTimer?.cancel();
       _sessionTimer?.cancel();
       _nativeSession = session;
@@ -1412,8 +1424,6 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       unawaited(_rememberPortal(controller));
 
       if (!mounted) return;
-      _portalSyncStarted = true;
-      _autoSyncStarted = true;
       setState(() {
         _pageReady = true;
         _portalInputLocked = true;
@@ -1422,7 +1432,12 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       });
       await _sync();
     } on Object {
-      if (!mounted || _portalSyncStarted) return;
+      if (!mounted) return;
+      if (_portalSyncStarted) {
+        _portalSyncStarted = false;
+        _autoSyncStarted = false;
+        _sessionBootstrapRunning = false;
+      }
       _scheduleReadinessRetry();
     }
   }
@@ -1432,6 +1447,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     _readinessAttempt += 1;
     if (_readinessAttempt >= 50) {
       _readinessTimer?.cancel();
+      _sessionBootstrapRunning = false;
       if (mounted) {
         setState(() {
           _pageReady = false;
@@ -1765,6 +1781,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     setState(() {
       _syncing = false;
       _portalSyncStarted = false;
+      _sessionBootstrapRunning = false;
       _autoSyncStarted = false;
       _portalInputLocked = false;
       _showWebPage = true;
