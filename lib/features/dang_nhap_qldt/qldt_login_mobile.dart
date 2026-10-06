@@ -1106,7 +1106,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       }
       final session = _nativeSession;
       if (session != null) {
-        await _rememberProfileName(session, apiDisplayName);
+        unawaited(_rememberProfileName(session, apiDisplayName));
       } else {
         _resolvedDisplayName = _cleanProfileName(apiDisplayName);
       }
@@ -1134,15 +1134,16 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         const Duration(seconds: 10),
         epoch,
       );
+      Future<void>? credentialSave;
       if (_submittedUsername != null && _submittedPassword != null) {
-        try {
-          await _credentialChannel.invokeMethod<void>('save', <String, String>{
-            'username': _submittedUsername!,
-            'password': _submittedPassword!,
-          });
-        } on Object {
-          // A credential-store failure must not discard a verified schedule.
-        }
+        credentialSave = _credentialChannel
+            .invokeMethod<void>('save', <String, String>{
+              'username': _submittedUsername!,
+              'password': _submittedPassword!,
+            })
+            .catchError((_) {
+              // A credential-store failure must not discard a verified schedule.
+            });
       }
       _submittedPassword = null;
       if (!mounted || !_syncing || epoch != _syncEpoch) return;
@@ -1162,6 +1163,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       // If the user has not completed it, first-login is not complete.
       await _ensureAccountDisplayName(displayName);
       if (!mounted || epoch != _syncEpoch) return;
+
+      if (credentialSave != null) {
+        try {
+          await credentialSave.timeout(const Duration(milliseconds: 800));
+        } on Object {
+          // Credential persistence continues independently of verified data.
+        }
+      }
 
       try {
         final prefs = await SharedPreferences.getInstance().timeout(
@@ -1424,11 +1433,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       _readinessTimer?.cancel();
       _sessionTimer?.cancel();
       _nativeSession = session;
-      final cachedName = await _cachedProfileNameFor(session.userId);
-      if (cachedName.isNotEmpty) {
-        _resolvedDisplayName = cachedName;
-      }
-      await _cacheNativeSession(session);
+      unawaited(_cacheNativeSession(session));
       unawaited(_rememberPortal(controller));
 
       if (!mounted) return;
