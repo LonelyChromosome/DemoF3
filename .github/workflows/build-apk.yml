@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - feature/date-schedule-markers
 
 permissions:
   contents: read
