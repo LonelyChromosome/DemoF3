@@ -130,9 +130,10 @@ final class UpdateController extends ChangeNotifier {
   }
 
   Future<void> stopBindingCard() async {
-    if (!bindingCard) return;
     bindingCard = false;
     notifyListeners();
+    // The sheet also closes after a successful binding. Keep reader mode until
+    // then so a card still touching the phone does not open another app.
     await _channel.invokeMethod<void>('stopCard');
   }
 
