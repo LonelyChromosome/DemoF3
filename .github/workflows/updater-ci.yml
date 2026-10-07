@@ -23,6 +23,6 @@ jobs:
           cache: true
       - run: bash tool/bootstrap.sh
       - run: flutter analyze --no-fatal-infos --no-fatal-warnings
-      - run: flutter test test/app_update_manifest_test.dart test/app_update_controller_test.dart test/app_smoke_test.dart
+      - run: flutter test test/app_update_manifest_test.dart test/app_update_controller_test.dart test/app_update_ui_test.dart test/app_smoke_test.dart
       - run: (cd android && ./gradlew :app:testDebugUnitTest)
       - run: flutter build apk --debug
