@@ -73,6 +73,8 @@ class _AppRoot extends StatefulWidget {
 class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   static const _storageKey = 'better_phenikaa_snapshot_v1';
   final UpdateController _update = UpdateController();
+  static const _updateInfoChannel = MethodChannel('better_phenikaa/update');
+  String _appVersionName = '';
   static const _routeKey = 'better_phenikaa_qldt_registration_route_v1';
   static const _widgetSessionChannel = MethodChannel(
     'better_phenikaa/widget_session',
@@ -107,7 +109,17 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     AppThemeController.instance.addListener(_handleThemeChanged);
     _update.addListener(_handleThemeChanged);
     unawaited(_update.restore());
+    unawaited(_loadAppVersionName());
     unawaited(_restore());
+  }
+
+  Future<void> _loadAppVersionName() async {
+    try {
+      final name = await _updateInfoChannel.invokeMethod<String>('versionName');
+      if (mounted && name != null) setState(() => _appVersionName = name);
+    } on Object {
+      // Display metadata cannot affect login or schedule synchronization.
+    }
   }
 
   void _handleThemeChanged() {
@@ -266,11 +278,24 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => UpdateFlowSheet(controller: _update),
+      builder: (_) => UpdateFlowSheet(
+        controller: _update,
+        displayName: _accountDisplayName.isEmpty
+            ? (_data?.displayName ?? '')
+            : _accountDisplayName,
+      ),
     );
     if (_update.phase != UpdatePhase.installerLaunched) {
       await _update.cancel();
     }
+  }
+
+  Future<void> _openCardBinding() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => CardBindingSheet(controller: _update),
+    );
   }
 
   Future<void> _refreshDifference() async {
@@ -911,6 +936,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 latestDifference: _latestDifference,
                                 updateNotice: _update.notice,
                                 onOpenUpdate: _openUpdate,
+                                onOpenCardBinding: _openCardBinding,
+                                appVersionName: _appVersionName,
                                 onTogglePanel: () =>
                                     setState(() => _panelOpen = !_panelOpen),
                                 onOpenPage: _openPage,
@@ -967,7 +994,7 @@ class _SplashScreen extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            'cooc.1.1 • Lịch học & Lịch thi',
+            '${_appVersionName.isEmpty ? "Better Phenikaa" : _appVersionName} • Lịch học & Lịch thi',
             style: TextStyle(color: palette.textSecondary, fontSize: 15),
           ),
           const SizedBox(height: 120),
@@ -1123,6 +1150,8 @@ class _MainShell extends StatefulWidget {
     required this.latestDifference,
     required this.updateNotice,
     required this.onOpenUpdate,
+    required this.onOpenCardBinding,
+    required this.appVersionName,
     required this.onTogglePanel,
     required this.onOpenPage,
     required this.onSync,
@@ -1154,6 +1183,8 @@ class _MainShell extends StatefulWidget {
   final SemesterDifference? latestDifference;
   final UpdateNotice? updateNotice;
   final VoidCallback onOpenUpdate;
+  final VoidCallback onOpenCardBinding;
+  final String appVersionName;
   final VoidCallback onTogglePanel;
   final ValueChanged<_AppPage> onOpenPage;
   final VoidCallback onSync;
@@ -1229,6 +1260,8 @@ class _MainShellState extends State<_MainShell>
     final latestDifference = widget.latestDifference;
     final updateNotice = widget.updateNotice;
     final onOpenUpdate = widget.onOpenUpdate;
+    final onOpenCardBinding = widget.onOpenCardBinding;
+    final appVersionName = widget.appVersionName;
     final onTogglePanel = widget.onTogglePanel;
     final onOpenPage = widget.onOpenPage;
     final onSync = widget.onSync;
@@ -1292,7 +1325,9 @@ class _MainShellState extends State<_MainShell>
                       accountDisplayName: accountDisplayName,
                       onLogout: onLogout,
                       onSync: onSync,
-                      assistantPack: assistantPack,
+                      onOpenCardBinding: onOpenCardBinding,
+                      appVersionName: appVersionName,
+                      assistantPack: assistantPack;
                       onAssistantPackChanged: onAssistantPackChanged,
                     ),
                   ),
@@ -2118,6 +2153,8 @@ class _AccountScreen extends StatelessWidget {
     required this.accountDisplayName,
     required this.onLogout,
     required this.onSync,
+    required this.onOpenCardBinding,
+    required this.appVersionName,
     required this.assistantPack,
     required this.onAssistantPackChanged,
   });
@@ -2126,6 +2163,8 @@ class _AccountScreen extends StatelessWidget {
   final String accountDisplayName;
   final VoidCallback onLogout;
   final VoidCallback onSync;
+  final VoidCallback onOpenCardBinding;
+  final String appVersionName;
   final AssistantPack assistantPack;
   final ValueChanged<AssistantPack> onAssistantPackChanged;
   static const _widgetPinChannel = MethodChannel('better_phenikaa/widget_pin');
@@ -2375,6 +2414,15 @@ class _AccountScreen extends StatelessWidget {
                   RepaintBoundary(child: _InfoPanel(data: data)), 
                   const SizedBox(height: 12),
                   const RepaintBoundary(child: AppThemeSettingButton()),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: onOpenCardBinding,
+                    icon: const Icon(Icons.nfc_rounded),
+                    label: const Text('Thẻ cập nhật'),
+                  ),
+                  if (appVersionName.isNotEmpty)
+                    Text('Phiên bản $appVersionName',
+                        style: TextStyle(color: palette.textSecondary)),
                   const SizedBox(height: 12),
                   Text(
                     'Model Trợ Lí',
