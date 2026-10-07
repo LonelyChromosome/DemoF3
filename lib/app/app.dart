@@ -2947,17 +2947,14 @@ Future<void> _showCalendarPicker(
                     ),
                     const SizedBox(height: 4),
                     Expanded(
-                      child: SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        child: _ScheduleCalendarPicker(
-                          initialDate: draft,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2035, 12, 31),
-                          studyDays: studyDays,
-                          examDays: examDays,
-                          onDateChanged: (value) => setModalState(
-                            () => draft = _dateOnly(value),
-                          ),
+                      child: _ScheduleCalendarPicker(
+                        initialDate: draft,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2035, 12, 31),
+                        studyDays: studyDays,
+                        examDays: examDays,
+                        onDateChanged: (value) => setModalState(
+                          () => draft = _dateOnly(value),
                         ),
                       ),
                     ),
@@ -3163,66 +3160,30 @@ class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
                       border: Border.all(
                         color: hasExam
                             ? examMarkerColor
-                            : selected
-                            ? palette.primary
                             : hasStudy
                             ? studyMarkerColor
-                            : isToday
-                            ? palette.primary.withValues(alpha: .65)
                             : Colors.transparent,
-                        width: hasExam
-                            ? 2.2
-                            : hasStudy && !selected
-                            ? 1.6
-                            : 1,
+                        width: hasExam ? 2.2 : hasStudy ? 1.6 : 1,
                       ),
                     ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: <Widget>[
-                        Text(
-                          '$day',
-                          style: TextStyle(
-                            color: selected
-                                ? Colors.white
-                                : hasExam
-                                ? examMarkerColor
-                                : sunday
-                                ? const Color(0xFFE55656)
-                                : palette.textPrimary,
-                            fontWeight:
-                                selected || isToday || hasStudy || hasExam
-                                ? FontWeight.w800
-                                : FontWeight.w500,
-                            shadows: premium ? tienMonTextShadows : null,
-                          ),
+                    child: Center(
+                      child: Text(
+                        '$day',
+                        style: TextStyle(
+                          color: selected
+                              ? Colors.white
+                              : hasExam
+                              ? examMarkerColor
+                              : sunday
+                              ? const Color(0xFFE55656)
+                              : palette.textPrimary,
+                          fontWeight:
+                              selected || isToday || hasStudy || hasExam
+                              ? FontWeight.w800
+                              : FontWeight.w500,
+                          shadows: premium ? tienMonTextShadows : null,
                         ),
-                        if (hasStudy && !selected)
-                          Positioned(
-                            bottom: 4,
-                            child: Container(
-                              width: 4,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: studyMarkerColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                        if (hasExam)
-                          Positioned(
-                            right: 4,
-                            top: 4,
-                            child: Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: examMarkerColor,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
