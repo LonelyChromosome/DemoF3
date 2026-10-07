@@ -6,11 +6,11 @@ cooc.1.1 hiện tại (`versionCode 27`) chưa có updater. APK Public đã ki�
 (`SHA-256 50117bf7507a339bfdd9789171701aedf3c335e7214bcd7b7a6f0f759016f517`)
 được ký bằng chứng chỉ **Android Debug** (`SHA-256 ad3b3b92c1376f2a2026b7fcdd6da41a7319d334c9dbf5a5378c58408382ab58`).
 Vì vậy bản này **không thể** được cập nhật tại chỗ bằng APK ký bằng khóa release.
-Người đang cài đúng APK này cần sao lưu dữ liệu theo khả năng của ứng dụng rồi
-gỡ/cài bản release mới; không được hứa giữ nguyên dữ liệu qua bước chuyển signer.
-Sau khi có một APK cooc.1.1 release-signed có thể xác minh được cùng signer,
-**bootstrap cooc.1.1 (`versionCode 28`)** mới có thể cập nhật tại chỗ từ bản đó.
-Từ bootstrap,
+Nếu chưa có khóa release trước đây, tạo khóa release mới với alias
+`cooc-release-v1`. Người đang cài APK debug code 27 cần gỡ/cài bản mới một lần;
+việc này xóa dữ liệu cục bộ, bao gồm bind thẻ NFC. Không được hứa giữ nguyên dữ
+liệu qua bước chuyển signer. **Bootstrap cooc.1.1 (`versionCode 28`)** là mốc
+đầu của dòng ký release mới. Từ bootstrap,
 Sync chỉ kiểm tra metadata; quét thẻ hoặc giữ nút thủ công 2 giây mới tải APK.
 **cooc.1.2 (`versionCode 29`)** là APK riêng, ký cùng chứng chỉ Android.
 
@@ -50,24 +50,26 @@ app kế tiếp không nhắc. Lần chủ động cập nhật sau có thể m�
 
 ## Phát hành
 
-1. Tìm APK cooc.1.1 **release-signed** đáng tin cậy và xác minh signer bằng
-   `apksigner verify --print-certs`. Chỉ đặt fingerprint release đó vào
-   `EXPECTED_APK_CERT_SHA256`. APK Public code 27 nêu trên mang chứng chỉ debug,
-   **không được** dùng làm fingerprint tham chiếu hoặc làm release bootstrap.
-   Nếu không có APK release-signed/keystore tương ứng, dừng phát hành và giải
-   quyết việc phân phối chuyển signer; không tuyên bố cập nhật trực tiếp từ bản
-   debug code 27. Không đưa keystore hoặc mật khẩu lên repo.
-2. Tạo **cặp khóa Ed25519 riêng** ở môi trường phát hành tin cậy. Lưu PEM khóa
-   riêng dưới dạng base64 vào secret `UPDATE_MANIFEST_PRIVATE_KEY_BASE64` của
-   GitHub Environment `cooc-release`. Lưu base64 của 32 byte khóa công khai vào
-   variable `UPDATE_PUBLIC_KEY_BASE64`. Công việc build đối chiếu hai giá trị.
+1. Trên máy tin cậy, chạy `bash tool/create_release_keys.sh /đường/dẫn/riêng`
+   với thư mục **ngoài repo**. Script tạo keystore Android alias
+   `cooc-release-v1` và cặp Ed25519 độc lập, in ra fingerprint chứng chỉ và
+   khóa công khai. Chọn mật khẩu ngẫu nhiên dài trong trình quản lý mật khẩu;
+   không dùng alias làm mật khẩu. Sao lưu hai khóa riêng an toàn ở hai nơi.
+   Đặt fingerprint release **mới** vào `EXPECTED_APK_CERT_SHA256`. Không dùng
+   fingerprint debug của APK code 27.
+2. Lưu PEM Ed25519 riêng dưới dạng base64 vào secret
+   `UPDATE_MANIFEST_PRIVATE_KEY_BASE64` của GitHub Environment `cooc-release`.
+   Lưu base64 của 32 byte khóa công khai vào variable `UPDATE_PUBLIC_KEY_BASE64`.
+   Công việc build đối chiếu hai giá trị. Không gửi khóa riêng qua chat, không
+   in giá trị secret vào log và không đưa khóa vào repo/artifact.
 3. Đặt `COOC_KEYSTORE_BASE64`, `COOC_KEYSTORE_PASSWORD` trong Environment đó.
    Bật required reviewers và chỉ cho nhánh/tag phát hành được truy cập. Workflow
    chỉ chạy thủ công; push thông thường không nhận khóa. Không bật environment
    secrets trước khi cấu hình bảo vệ này.
 4. Chạy workflow từ nhánh phát hành đã kiểm. Nó chạy test, build hai APK public
-   tên riêng và code 28/29, xác minh hai fingerprint bằng nhau và bằng bản 1.1
-   cũ, tạo `dist/update-host/updates/latest.json`, `.sig` và APK 1.2. Không
+   tên riêng và code 28/29, xác minh hai fingerprint bằng nhau và bằng
+   fingerprint release mới ở bước 1, tạo `dist/update-host/updates/latest.json`,
+   `.sig` và APK 1.2. Không
    upload keystore hay private key làm artifact.
 5. Công bố ba file trong `updates/` dưới
    `https://lonelychromosome.github.io/DemoF3/updates/` **sau** khi kiểm thử trên
@@ -76,4 +78,6 @@ app kế tiếp không nhắc. Lần chủ động cập nhật sau có thể m�
    sửa byte manifest và thay APK trên host. Xác nhận `versionCode 29`, fingerprint
    signer giữ nguyên, `cacheDir/app_update` được dọn sau khi cài.
 
-Release phải thất bại nếu thiếu khóa hoặc fingerprint tham chiếu bản 1.1 cũ.
+Release phải thất bại nếu thiếu khóa, fingerprint release mới hoặc dùng chứng
+chỉ debug. Mốc code 27 ký debug không thể cập nhật trực tiếp sang code 28 ký
+release; hãy thông báo rõ bước cài mới trước khi phân phối.

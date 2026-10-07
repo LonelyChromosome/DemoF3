@@ -42,7 +42,7 @@ jobs:
           test -n "$EXPECTED_APK_CERT_SHA256"
           echo "$COOC_KEYSTORE_BASE64" | base64 --decode > android/cooc-release.jks
           echo "$UPDATE_MANIFEST_PRIVATE_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/update-manifest-private.pem"
-          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=cooc\nstoreFile=cooc-release.jks\n' \
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=cooc-release-v1\nstoreFile=cooc-release.jks\n' \
             "$COOC_KEYSTORE_PASSWORD" "$COOC_KEYSTORE_PASSWORD" > android/key.properties
           chmod 600 android/key.properties android/cooc-release.jks "$RUNNER_TEMP/update-manifest-private.pem"
           derived_public="$(openssl pkey -in "$RUNNER_TEMP/update-manifest-private.pem" -pubout -outform DER | tail -c 32 | base64 -w 0)"
