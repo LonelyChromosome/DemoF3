@@ -1,0 +1,24 @@
+{
+  "folders": [
+    {
+      "name": "DemoF3",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.dart_tool": true,
+      "**/build": true
+    },
+    "search.exclude": {
+      "**/.dart_tool": true,
+      "**/build": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "Dart-Code.dart-code",
+      "Dart-Code.flutter"
+    ]
+  }
+}
