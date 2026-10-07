@@ -945,7 +945,7 @@ class _SplashScreen extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            'cooc.1.0 • Lịch học & Lịch thi',
+            'cooc.1.1 • Lịch học & Lịch thi',
             style: TextStyle(color: palette.textSecondary, fontSize: 15),
           ),
           const SizedBox(height: 120),
