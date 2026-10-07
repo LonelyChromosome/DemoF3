@@ -1,63 +1,115 @@
-name: Build APK
+name: Build cooc releases
 
 on:
   workflow_dispatch:
 
 jobs:
-  apk:
+  release:
+    # Configure required reviewers and restrict deployment branches in GitHub.
+    environment: cooc-release
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Java 17
-        uses: actions/setup-java@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Flutter 3.47.2
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
           channel: stable
           cache: true
-
-      - name: Bootstrap
-        run: bash tool/bootstrap.sh
-
-      - name: Prepare cooc release signing
+      - name: Bootstrap and test
+        run: |
+          bash tool/bootstrap.sh
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+          flutter test test/app_update_manifest_test.dart test/app_update_controller_test.dart test/app_smoke_test.dart
+          (cd android && ./gradlew :app:testDebugUnitTest)
+      - name: Prepare protected signing material
         env:
           COOC_KEYSTORE_BASE64: ${{ secrets.COOC_KEYSTORE_BASE64 }}
           COOC_KEYSTORE_PASSWORD: ${{ secrets.COOC_KEYSTORE_PASSWORD }}
+          UPDATE_MANIFEST_PRIVATE_KEY_BASE64: ${{ secrets.UPDATE_MANIFEST_PRIVATE_KEY_BASE64 }}
+          UPDATE_PUBLIC_KEY_BASE64: ${{ vars.UPDATE_PUBLIC_KEY_BASE64 }}
+          EXPECTED_APK_CERT_SHA256: ${{ vars.EXPECTED_APK_CERT_SHA256 }}
         run: |
           test -n "$COOC_KEYSTORE_BASE64"
           test -n "$COOC_KEYSTORE_PASSWORD"
+          test -n "$UPDATE_MANIFEST_PRIVATE_KEY_BASE64"
+          test -n "$UPDATE_PUBLIC_KEY_BASE64"
+          test -n "$EXPECTED_APK_CERT_SHA256"
           echo "$COOC_KEYSTORE_BASE64" | base64 --decode > android/cooc-release.jks
-          cat > android/key.properties <<EOF
-          storePassword=$COOC_KEYSTORE_PASSWORD
-          keyPassword=$COOC_KEYSTORE_PASSWORD
-          keyAlias=cooc
-          storeFile=cooc-release.jks
-          EOF
-
-      - name: Build Public
+          echo "$UPDATE_MANIFEST_PRIVATE_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/update-manifest-private.pem"
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=cooc\nstoreFile=cooc-release.jks\n' \
+            "$COOC_KEYSTORE_PASSWORD" "$COOC_KEYSTORE_PASSWORD" > android/key.properties
+          chmod 600 android/key.properties android/cooc-release.jks "$RUNNER_TEMP/update-manifest-private.pem"
+          derived_public="$(openssl pkey -in "$RUNNER_TEMP/update-manifest-private.pem" -pubout -outform DER | tail -c 32 | base64 -w 0)"
+          test "$derived_public" = "$UPDATE_PUBLIC_KEY_BASE64"
+      - name: Build signed 1.1 bootstrap and 1.2 target
+        env:
+          UPDATE_PUBLIC_KEY_BASE64: ${{ vars.UPDATE_PUBLIC_KEY_BASE64 }}
+          UPDATE_MANIFEST_URL: https://lonelychromosome.github.io/DemoF3/updates/latest.json
         run: |
-          flutter build apk --release
-          mkdir -p dist
+          mkdir -p dist/update-host/updates
+          COOC_VERSION_NAME=cooc.1.1 flutter build apk --release --build-number=28 \
+            --dart-define="UPDATE_PUBLIC_KEY_BASE64=$UPDATE_PUBLIC_KEY_BASE64" \
+            --dart-define="UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL"
           cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Public.apk
-
-      - name: Build Dev
+          flutter clean
+          flutter pub get
+          COOC_VERSION_NAME=cooc.1.2 flutter build apk --release --build-number=29 \
+            --dart-define="UPDATE_PUBLIC_KEY_BASE64=$UPDATE_PUBLIC_KEY_BASE64" \
+            --dart-define="UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL"
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.2-Public.apk
+          cp dist/Better-Phenikaa-cooc.1.2-Public.apk dist/update-host/updates/
+      - name: Verify identity and sign exact manifest bytes
+        env:
+          UPDATE_MANIFEST_URL: https://lonelychromosome.github.io/DemoF3/updates
+          EXPECTED_APK_CERT_SHA256: ${{ vars.EXPECTED_APK_CERT_SHA256 }}
         run: |
-          flutter build apk --release --dart-define=ASSISTANT_TEST_PANEL=true
-          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Dev.apk
-
-      - name: Upload APKs
-        uses: actions/upload-artifact@v4
+          apksigner_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
+          aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
+          test -x "$apksigner_bin" && test -x "$aapt_bin"
+          for version in 1.1 1.2; do
+            apk="dist/Better-Phenikaa-cooc.$version-Public.apk"
+            "$apksigner_bin" verify --print-certs "$apk" > "dist/cooc.$version-signing.txt"
+            code=28
+            if test "$version" = 1.2; then code=29; fi
+            badging="$("$aapt_bin" dump badging "$apk")"
+            [[ "$badging" == *"package: name='vn.edu.phenikaa.better_phenikaa_schedule' versionCode='$code' versionName='cooc.$version'"* ]]
+            sha256sum "$apk" >> dist/SHA256SUMS
+          done
+          fingerprint11="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' dist/cooc.1.1-signing.txt)"
+          fingerprint12="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' dist/cooc.1.2-signing.txt)"
+          test -n "$fingerprint11" && test "$fingerprint11" = "$fingerprint12"
+          test "${fingerprint11,,}" = "${EXPECTED_APK_CERT_SHA256,,}"
+          echo "APK certificate SHA-256: $fingerprint11"
+          python3 tool/release_update_manifest.py \
+            dist/update-host/updates/Better-Phenikaa-cooc.1.2-Public.apk \
+            "$UPDATE_MANIFEST_URL/Better-Phenikaa-cooc.1.2-Public.apk" \
+            dist/update-host/updates/latest.json
+          openssl pkeyutl -sign -rawin -inkey "$RUNNER_TEMP/update-manifest-private.pem" \
+            -in dist/update-host/updates/latest.json -out "$RUNNER_TEMP/latest.sig.bin"
+          base64 -w 0 "$RUNNER_TEMP/latest.sig.bin" > dist/update-host/updates/latest.json.sig
+          sha256sum dist/update-host/updates/latest.json dist/update-host/updates/latest.json.sig >> dist/SHA256SUMS
+      - name: Delete signing material
+        if: always()
+        run: |
+          rm -f android/key.properties android/cooc-release.jks
+          rm -f "$RUNNER_TEMP/update-manifest-private.pem" "$RUNNER_TEMP/latest.sig.bin"
+      - uses: actions/upload-artifact@v4
         with:
-          name: better-phenikaa-cooc-1-1
+          name: better-phenikaa-cooc-1-1-bootstrap
+          path: dist/Better-Phenikaa-cooc.1.1-Public.apk
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: better-phenikaa-cooc-1-2-and-update-host
           path: |
-            dist/Better-Phenikaa-cooc.1.1-Public.apk
-            dist/Better-Phenikaa-cooc.1.1-Dev.apk
+            dist/Better-Phenikaa-cooc.1.2-Public.apk
+            dist/update-host/updates/latest.json
+            dist/update-host/updates/latest.json.sig
+            dist/SHA256SUMS
           retention-days: 14

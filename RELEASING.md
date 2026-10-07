@@ -5,9 +5,11 @@
 
 ## Trạng thái hiện tại
 
-Cấu hình Android hiện tại dùng debug signing cho tác vụ build release trong CI.
-Vì vậy artifact CI chỉ dành cho kiểm thử. Nó chưa tạo được danh tính phát hành
-độc quyền cho Better Phenikaa.
+Cấu hình Gradle hiện tại yêu cầu `android/key.properties` và khóa cooc cố định
+cho mọi build release; thiếu khóa thì build phải thất bại. Workflow cooc.1.2
+được chạy thủ công trong GitHub Environment `cooc-release`, cần cấu hình
+reviewer/giới hạn nhánh và đưa khóa vào Environment trước khi dùng. CI thường
+không nhận khóa release. Xem [quy trình nâng cấp 1.1 → 1.2](docs/COOC_1_2_UPDATE.md).
 
 ## Trước bản public đầu tiên
 
