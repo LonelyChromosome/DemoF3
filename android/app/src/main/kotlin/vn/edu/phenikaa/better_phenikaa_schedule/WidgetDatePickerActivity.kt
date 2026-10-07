@@ -29,6 +29,7 @@ class WidgetDatePickerActivity : Activity() {
     private lateinit var dayGrid: GridLayout
     private lateinit var confirmButton: TextView
     private var studyDates: Set<String> = emptySet()
+    private var examDates: Set<String> = emptySet()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +62,7 @@ class WidgetDatePickerActivity : Activity() {
         displayedMonth = selectedDate.clone() as Calendar
         displayedMonth.set(Calendar.DAY_OF_MONTH, 1)
         studyDates = WidgetSnapshotStore.readClassDateKeys(this)
+        examDates = WidgetSnapshotStore.readExamDateKeys(this)
 
         setContentView(buildContent())
         renderCalendar()
@@ -300,7 +302,9 @@ class WidgetDatePickerActivity : Activity() {
             clearTime(date)
             val isSelected = sameDay(date, selectedDate)
             val isToday = sameDay(date, today)
-            val hasStudy = studyDates.contains(isoDate(date))
+            val dateKey = isoDate(date)
+            val hasStudy = studyDates.contains(dateKey)
+            val hasExam = examDates.contains(dateKey)
 
             val dayView = TextView(this).apply {
                 text = day.toString()
@@ -308,16 +312,21 @@ class WidgetDatePickerActivity : Activity() {
                 textSize = 14f
                 typeface = Typeface.create(
                     Typeface.DEFAULT,
-                    if (isSelected || isToday) Typeface.BOLD else Typeface.NORMAL,
+                    if (isSelected || isToday || hasStudy || hasExam) {
+                        Typeface.BOLD
+                    } else {
+                        Typeface.NORMAL
+                    },
                 )
                 setTextColor(
                     when {
                         isSelected -> Color.WHITE
+                        hasExam -> APP_DANGER
                         column == 6 -> APP_DANGER
                         else -> APP_TEXT
                     },
                 )
-                background = dayBackground(isSelected, isToday, hasStudy)
+                background = dayBackground(isSelected, isToday, hasStudy, hasExam)
                 isClickable = true
                 setOnClickListener {
                     selectedDate = date.clone() as Calendar
@@ -384,11 +393,19 @@ class WidgetDatePickerActivity : Activity() {
         selected: Boolean,
         today: Boolean,
         hasStudy: Boolean,
+        hasExam: Boolean,
     ): GradientDrawable =
         GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             when {
-                selected -> setColor(APP_PRIMARY)
+                selected -> {
+                    setColor(APP_PRIMARY)
+                    if (hasExam) setStroke(dp(2), APP_DANGER)
+                }
+                hasExam -> {
+                    setColor(EXAM_TONAL)
+                    setStroke(dp(2), APP_DANGER)
+                }
                 today -> {
                     setColor(APP_TONAL)
                     setStroke(dp(if (hasStudy) 2 else 1), APP_PRIMARY)
@@ -482,3 +499,4 @@ private val APP_MUTED = 0xFF7583A4.toInt()
 private val APP_TONAL = 0xFFEEF4FF.toInt()
 private val APP_HANDLE = 0xFFD7DFEE.toInt()
 private val APP_DANGER = 0xFFE55656.toInt()
+private val EXAM_TONAL = 0xFFFFECEC.toInt()
