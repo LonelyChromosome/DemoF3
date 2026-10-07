@@ -36,6 +36,29 @@ internal object WidgetSnapshotStore {
         }.getOrElse { emptyList() }
     }
 
+    fun readClassDateKeys(context: Context): Set<String> {
+        val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
+        val normalized = preferences.getString(WIDGET_SNAPSHOT_KEY, null)
+        val legacy = preferences.getString(APP_SNAPSHOT_KEY, null)
+        val raw = normalized ?: legacy ?: return emptySet()
+        val usesLegacyContract = normalized == null
+        return runCatching {
+            val records = JSONObject(raw).optJSONArray(
+                if (usesLegacyContract) "records" else "classes"
+            ) ?: JSONArray()
+            buildSet {
+                for (index in 0 until records.length()) {
+                    val record = records.optJSONObject(index) ?: continue
+                    if (usesLegacyContract && record.optBoolean("isExam", false)) continue
+                    val startAt = record.optString("startAt")
+                    if (startAt.length < 10) continue
+                    val dateKey = startAt.take(10)
+                    if (isIsoDate(dateKey)) add(dateKey)
+                }
+            }
+        }.getOrElse { emptySet() }
+    }
+
     fun read(context: Context, widgetId: Int): WidgetCollection {
         if (SmallWidgetMode.isExam(context, widgetId)) {
             val exams = readOverview(context, widgetId, true)
