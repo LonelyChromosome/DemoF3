@@ -299,6 +299,11 @@ final class UpdateController extends ChangeNotifier {
       notifyListeners();
     } finally {
       _job = false;
+      try {
+        await _channel.invokeMethod<void>('stopCard');
+      } on Object {
+        // NFC cleanup must not mask an update result.
+      }
     }
   }
 
