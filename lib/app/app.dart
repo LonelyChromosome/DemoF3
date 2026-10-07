@@ -1526,6 +1526,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
                         firstDate: DateTime(2020),
                         lastDate: DateTime(2100),
                         studyDays: _studyDayKeys(widget.data.classes),
+                        examDays: _studyDayKeys(widget.data.exams),
                         onDateChanged: (date) =>
                             Navigator.pop(dialogContext, date),
                       ),
@@ -1580,6 +1581,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
                       widget.selectedDate,
                       widget.onDateChanged,
                       studyDays: _studyDayKeys(widget.data.classes),
+                      examDays: _studyDayKeys(widget.data.exams),
                     ),
             ),
             const SizedBox(height: 12),
@@ -1617,6 +1619,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
                                 widget.selectedDate,
                                 widget.onDateChanged,
                                 studyDays: _studyDayKeys(widget.data.classes),
+                                examDays: _studyDayKeys(widget.data.exams),
                               ),
                               onPrevious: () => widget.onDateChanged(
                                 widget.selectedDate.subtract(
@@ -2857,6 +2860,7 @@ Future<void> _showCalendarPicker(
   DateTime selectedDate,
   ValueChanged<DateTime> onDateChanged, {
   required Set<String> studyDays,
+  required Set<String> examDays,
 }) async {
   var draft = _dateOnly(selectedDate);
   final palette = appThemePalette;
@@ -2950,6 +2954,7 @@ Future<void> _showCalendarPicker(
                           firstDate: DateTime(2020),
                           lastDate: DateTime(2035, 12, 31),
                           studyDays: studyDays,
+                          examDays: examDays,
                           onDateChanged: (value) => setModalState(
                             () => draft = _dateOnly(value),
                           ),
@@ -2995,6 +3000,7 @@ class _ScheduleCalendarPicker extends StatefulWidget {
     required this.firstDate,
     required this.lastDate,
     required this.studyDays,
+    required this.examDays,
     required this.onDateChanged,
   });
 
@@ -3002,6 +3008,7 @@ class _ScheduleCalendarPicker extends StatefulWidget {
   final DateTime firstDate;
   final DateTime lastDate;
   final Set<String> studyDays;
+  final Set<String> examDays;
   final ValueChanged<DateTime> onDateChanged;
 
   @override
@@ -3125,10 +3132,12 @@ class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
               final selected = _sameDay(date, _selected);
               final isToday = _sameDay(date, today);
               final hasStudy = widget.studyDays.contains(_dateKey(date));
+              final hasExam = widget.examDays.contains(_dateKey(date));
               final sunday = date.weekday == DateTime.sunday;
-              final markerColor = premium
+              final studyMarkerColor = premium
                   ? const Color(0xFFFFD66B)
                   : palette.primary;
+              const examMarkerColor = Color(0xFFE55656);
 
               return Padding(
                 padding: const EdgeInsets.all(3),
@@ -3152,14 +3161,20 @@ class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
                           ? BoxShape.circle
                           : BoxShape.rectangle,
                       border: Border.all(
-                        color: selected
+                        color: hasExam
+                            ? examMarkerColor
+                            : selected
                             ? palette.primary
                             : hasStudy
-                            ? markerColor
+                            ? studyMarkerColor
                             : isToday
                             ? palette.primary.withValues(alpha: .65)
                             : Colors.transparent,
-                        width: hasStudy && !selected ? 1.6 : 1,
+                        width: hasExam
+                            ? 2.2
+                            : hasStudy && !selected
+                            ? 1.6
+                            : 1,
                       ),
                     ),
                     child: Stack(
@@ -3170,11 +3185,13 @@ class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
                           style: TextStyle(
                             color: selected
                                 ? Colors.white
+                                : hasExam
+                                ? examMarkerColor
                                 : sunday
                                 ? const Color(0xFFE55656)
                                 : palette.textPrimary,
                             fontWeight:
-                                selected || isToday || hasStudy
+                                selected || isToday || hasStudy || hasExam
                                 ? FontWeight.w800
                                 : FontWeight.w500,
                             shadows: premium ? tienMonTextShadows : null,
@@ -3187,7 +3204,20 @@ class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
                               width: 4,
                               height: 4,
                               decoration: BoxDecoration(
-                                color: markerColor,
+                                color: studyMarkerColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                        if (hasExam)
+                          Positioned(
+                            right: 4,
+                            top: 4,
+                            child: Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                color: examMarkerColor,
                                 shape: BoxShape.circle,
                               ),
                             ),
