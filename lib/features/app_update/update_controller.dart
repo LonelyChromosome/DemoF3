@@ -74,6 +74,8 @@ final class UpdateController extends ChangeNotifier {
   String? error;
   int downloaded = 0;
   int total = 0;
+  bool hasBoundCard = false;
+  bool bindingCard = false;
   bool _job = false;
   bool _awaitingPermission = false;
   int _generation = 0;
@@ -83,6 +85,7 @@ final class UpdateController extends ChangeNotifier {
 
   Future<void> restore() async {
     try {
+      await refreshCardBinding();
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_noticeKey);
       final cached = raw == null
@@ -101,9 +104,43 @@ final class UpdateController extends ChangeNotifier {
     }
   }
 
-  /// User-triggered Sync calls this without awaiting it on the QLĐT path.
+  Future<void> refreshCardBinding() async {
+    try {
+      hasBoundCard = await _channel.invokeMethod<bool>('hasBoundCard') ?? false;
+      notifyListeners();
+    } on Object {
+      // NFC status does not affect schedule or update metadata.
+    }
+  }
+
+  Future<void> startBindingCard() async {
+    if (_job || bindingCard || hasBoundCard) return;
+    bindingCard = true;
+    error = null;
+    notifyListeners();
+    try {
+      await _channel.invokeMethod<void>('startBindCard');
+    } on PlatformException catch (e) {
+      bindingCard = false;
+      if (e.code == 'already_bound') await refreshCardBinding();
+      error = e.code == 'nfc_unavailable'
+          ? 'Hãy bật NFC để quét thẻ.'
+          : 'Không bật được đầu đọc NFC. Hãy giữ màn hình này mở và thử lại.';
+      notifyListeners();
+    }
+  }
+
+  Future<void> stopBindingCard() async {
+    if (!bindingCard) return;
+    bindingCard = false;
+    notifyListeners();
+    await _channel.invokeMethod<void>('stopCard');
+  }
+
+  /// Opening the notification center checks version metadata separately from QLĐT.
   Future<void> checkQuietly() async {
     if (_job ||
+        bindingCard ||
         phase == UpdatePhase.checking ||
         phase == UpdatePhase.waitingForCard ||
         phase == UpdatePhase.wrongCard ||
@@ -159,6 +196,8 @@ final class UpdateController extends ChangeNotifier {
       phase = UpdatePhase.failed;
       error = e.code == 'nfc_unavailable'
           ? 'Hãy bật NFC để quét thẻ.'
+          : e.code == 'reader_unavailable'
+          ? 'Không bật được đầu đọc NFC. Hãy giữ màn hình cập nhật mở và thử lại.'
           : 'Không mở được đầu đọc NFC.';
       notifyListeners();
     }
@@ -177,6 +216,11 @@ final class UpdateController extends ChangeNotifier {
     if (call.method != 'event' || call.arguments is! Map) return;
     final event = Map<Object?, Object?>.from(call.arguments as Map);
     switch (event['type']) {
+      case 'cardBound':
+        bindingCard = false;
+        hasBoundCard = true;
+        notifyListeners();
+        break;
       case 'wrongCard':
         if (phase == UpdatePhase.waitingForCard ||
             phase == UpdatePhase.wrongCard) {
@@ -191,6 +235,7 @@ final class UpdateController extends ChangeNotifier {
         }
         break;
       case 'cardError':
+        bindingCard = false;
         phase = UpdatePhase.failed;
         error = 'Không lưu hoặc đọc được thẻ. Hãy thử lại.';
         notifyListeners();
@@ -302,6 +347,7 @@ final class UpdateController extends ChangeNotifier {
 
   Future<void> cancel() async {
     _generation++;
+    bindingCard = false;
     _awaitingPermission = false;
     await _channel.invokeMethod<void>('cancel');
     phase = UpdatePhase.cancelled;
