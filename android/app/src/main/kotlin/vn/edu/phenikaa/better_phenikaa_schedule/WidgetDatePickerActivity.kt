@@ -28,6 +28,7 @@ class WidgetDatePickerActivity : Activity() {
     private lateinit var monthTitle: TextView
     private lateinit var dayGrid: GridLayout
     private lateinit var confirmButton: TextView
+    private var studyDates: Set<String> = emptySet()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +60,7 @@ class WidgetDatePickerActivity : Activity() {
         selectedDate = calendarFromIso(initialIso)
         displayedMonth = selectedDate.clone() as Calendar
         displayedMonth.set(Calendar.DAY_OF_MONTH, 1)
+        studyDates = WidgetSnapshotStore.readClassDateKeys(this)
 
         setContentView(buildContent())
         renderCalendar()
@@ -298,6 +300,7 @@ class WidgetDatePickerActivity : Activity() {
             clearTime(date)
             val isSelected = sameDay(date, selectedDate)
             val isToday = sameDay(date, today)
+            val hasStudy = studyDates.contains(isoDate(date))
 
             val dayView = TextView(this).apply {
                 text = day.toString()
@@ -314,7 +317,7 @@ class WidgetDatePickerActivity : Activity() {
                         else -> APP_TEXT
                     },
                 )
-                background = dayBackground(isSelected, isToday)
+                background = dayBackground(isSelected, isToday, hasStudy)
                 isClickable = true
                 setOnClickListener {
                     selectedDate = date.clone() as Calendar
@@ -377,14 +380,22 @@ class WidgetDatePickerActivity : Activity() {
             cornerRadius = dp(radiusDp).toFloat()
         }
 
-    private fun dayBackground(selected: Boolean, today: Boolean): GradientDrawable =
+    private fun dayBackground(
+        selected: Boolean,
+        today: Boolean,
+        hasStudy: Boolean,
+    ): GradientDrawable =
         GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             when {
                 selected -> setColor(APP_PRIMARY)
                 today -> {
                     setColor(APP_TONAL)
-                    setStroke(dp(1), APP_PRIMARY)
+                    setStroke(dp(if (hasStudy) 2 else 1), APP_PRIMARY)
+                }
+                hasStudy -> {
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(2), APP_PRIMARY)
                 }
                 else -> setColor(Color.TRANSPARENT)
             }
