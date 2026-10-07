@@ -93,3 +93,19 @@ code 29. Muốn phát hành tiếp, phải dựng lại bootstrap và target v�
 Release phải thất bại nếu thiếu khóa, fingerprint release mới hoặc dùng chứng
 chỉ debug. Mốc code 27 ký debug không thể cập nhật trực tiếp sang code 28 ký
 release; hãy thông báo rõ bước cài mới trước khi phân phối.
+
+## Bản thử thay thế sau phản hồi trên thiết bị
+
+APK bootstrap code 28 và target code 29 đã phát hành trước đó có lỗi UI NFC và
+nhãn phiên bản, không dùng chúng để xác nhận luồng cập nhật. Bản thay thế giữ
+tên hiển thị `cooc.1.1` và `cooc.1.2`, dùng versionCode 30 → 31 và cùng
+chứng chỉ ký release **mới**. Vì khóa riêng của cặp 28/29 không còn, thiết bị
+đã cài bản đó phải gỡ và cài bootstrap 30 trước khi thử lại; Android không
+chấp nhận cập nhật khác signer. Không đưa APK mới lên host trước khi đã xác
+minh hai signer bằng nhau và manifest mới chỉ đến đúng asset 31.
+
+Bản thay thế không gọi kiểm tra cập nhật trong Đăng nhập/Sync. Mở chuông sẽ
+kiểm tra metadata riêng. Tài khoản có mục liên kết thẻ: quét một lần, UID
+được lưu mã hóa cục bộ, không cho đổi thẻ trong app. Đường thủ công yêu cầu
+nhập đúng họ tên đang hiển thị trong Tài khoản rồi giữ nút 2 giây. Nhãn
+phiên bản đọc từ package đang cài thay vì chuỗi ghi cứng.
