@@ -1521,15 +1521,13 @@ class _TimetableScreenState extends State<_TimetableScreen>
                       ),
                     ),
                     Expanded(
-                      child: Theme(
-                        data: buildBetterTheme(palette),
-                        child: CalendarDatePicker(
-                          initialDate: _week,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2100),
-                          onDateChanged: (date) =>
-                              Navigator.pop(dialogContext, date),
-                        ),
+                      child: _ScheduleCalendarPicker(
+                        initialDate: _week,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2100),
+                        studyDays: _studyDayKeys(widget.data.classes),
+                        onDateChanged: (date) =>
+                            Navigator.pop(dialogContext, date),
                       ),
                     ),
                   ],
@@ -1581,6 +1579,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
                       context,
                       widget.selectedDate,
                       widget.onDateChanged,
+                      studyDays: _studyDayKeys(widget.data.classes),
                     ),
             ),
             const SizedBox(height: 12),
@@ -1617,6 +1616,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
                                 context,
                                 widget.selectedDate,
                                 widget.onDateChanged,
+                                studyDays: _studyDayKeys(widget.data.classes),
                               ),
                               onPrevious: () => widget.onDateChanged(
                                 widget.selectedDate.subtract(
@@ -2855,8 +2855,9 @@ double _calendarBottomReserve(BuildContext context) {
 Future<void> _showCalendarPicker(
   BuildContext context,
   DateTime selectedDate,
-  ValueChanged<DateTime> onDateChanged,
-) async {
+  ValueChanged<DateTime> onDateChanged, {
+  required Set<String> studyDays,
+}) async {
   var draft = _dateOnly(selectedDate);
   final palette = appThemePalette;
   final picked = await showGeneralDialog<DateTime>(
@@ -2944,15 +2945,13 @@ Future<void> _showCalendarPicker(
                     Expanded(
                       child: SingleChildScrollView(
                         physics: const ClampingScrollPhysics(),
-                        child: Theme(
-                          data: buildBetterTheme(palette),
-                          child: CalendarDatePicker(
-                            initialDate: draft,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime(2035, 12, 31),
-                            onDateChanged: (value) => setModalState(
-                              () => draft = _dateOnly(value),
-                            ),
+                        child: _ScheduleCalendarPicker(
+                          initialDate: draft,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2035, 12, 31),
+                          studyDays: studyDays,
+                          onDateChanged: (value) => setModalState(
+                            () => draft = _dateOnly(value),
                           ),
                         ),
                       ),
@@ -2978,6 +2977,232 @@ Future<void> _showCalendarPicker(
     },
   );
   if (picked != null) onDateChanged(_dateOnly(picked));
+}
+
+
+Set<String> _studyDayKeys(Iterable<ScheduleRecord> records) => records
+    .map((record) => _dateKey(record.startAt))
+    .toSet();
+
+String _dateKey(DateTime value) =>
+    '${value.year.toString().padLeft(4, '0')}-'
+    '${value.month.toString().padLeft(2, '0')}-'
+    '${value.day.toString().padLeft(2, '0')}';
+
+class _ScheduleCalendarPicker extends StatefulWidget {
+  const _ScheduleCalendarPicker({
+    required this.initialDate,
+    required this.firstDate,
+    required this.lastDate,
+    required this.studyDays,
+    required this.onDateChanged,
+  });
+
+  final DateTime initialDate;
+  final DateTime firstDate;
+  final DateTime lastDate;
+  final Set<String> studyDays;
+  final ValueChanged<DateTime> onDateChanged;
+
+  @override
+  State<_ScheduleCalendarPicker> createState() =>
+      _ScheduleCalendarPickerState();
+}
+
+class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
+  late DateTime _selected;
+  late DateTime _month;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = _dateOnly(widget.initialDate);
+    _month = DateTime(_selected.year, _selected.month);
+  }
+
+  @override
+  void didUpdateWidget(covariant _ScheduleCalendarPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = _dateOnly(widget.initialDate);
+    if (!_sameDay(next, _selected)) {
+      _selected = next;
+      _month = DateTime(next.year, next.month);
+    }
+  }
+
+  bool _canMove(int offset) {
+    final candidate = DateTime(_month.year, _month.month + offset);
+    final firstMonth = DateTime(widget.firstDate.year, widget.firstDate.month);
+    final lastMonth = DateTime(widget.lastDate.year, widget.lastDate.month);
+    return !candidate.isBefore(firstMonth) && !candidate.isAfter(lastMonth);
+  }
+
+  void _moveMonth(int offset) {
+    if (!_canMove(offset)) return;
+    setState(() {
+      _month = DateTime(_month.year, _month.month + offset);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = appThemePalette;
+    final premium = palette.id == AppThemeId.tienMonPremium;
+    final first = DateTime(_month.year, _month.month, 1);
+    final firstWeekday = first.weekday - 1;
+    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
+    final today = _dateOnly(DateTime.now());
+    const weekdayLabels = <String>['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+
+    return Column(
+      children: <Widget>[
+        SizedBox(
+          height: 48,
+          child: Row(
+            children: <Widget>[
+              IconButton(
+                tooltip: 'Tháng trước',
+                onPressed: _canMove(-1) ? () => _moveMonth(-1) : null,
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              Expanded(
+                child: Text(
+                  'Tháng ${_month.month}, ${_month.year}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: palette.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    shadows: premium ? tienMonTextShadows : null,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Tháng sau',
+                onPressed: _canMove(1) ? () => _moveMonth(1) : null,
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 30,
+          child: Row(
+            children: <Widget>[
+              for (var index = 0; index < weekdayLabels.length; index++)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      weekdayLabels[index],
+                      style: TextStyle(
+                        color: index == 6
+                            ? const Color(0xFFE55656)
+                            : palette.textSecondary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              childAspectRatio: 1.02,
+            ),
+            itemCount: 42,
+            itemBuilder: (context, index) {
+              final day = index - firstWeekday + 1;
+              if (day < 1 || day > daysInMonth) {
+                return const SizedBox.shrink();
+              }
+              final date = DateTime(_month.year, _month.month, day);
+              final selected = _sameDay(date, _selected);
+              final isToday = _sameDay(date, today);
+              final hasStudy = widget.studyDays.contains(_dateKey(date));
+              final sunday = date.weekday == DateTime.sunday;
+              final markerColor = premium
+                  ? const Color(0xFFFFD66B)
+                  : palette.primary;
+
+              return Padding(
+                padding: const EdgeInsets.all(3),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(
+                    palette.geometry == AppThemeGeometry.rounded ? 999 : 0,
+                  ),
+                  onTap: () {
+                    setState(() => _selected = date);
+                    widget.onDateChanged(date);
+                  },
+                  child: Container(
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? palette.primary
+                          : isToday
+                          ? palette.cardAlt
+                          : Colors.transparent,
+                      shape: palette.geometry == AppThemeGeometry.rounded
+                          ? BoxShape.circle
+                          : BoxShape.rectangle,
+                      border: Border.all(
+                        color: selected
+                            ? palette.primary
+                            : hasStudy
+                            ? markerColor
+                            : isToday
+                            ? palette.primary.withValues(alpha: .65)
+                            : Colors.transparent,
+                        width: hasStudy && !selected ? 1.6 : 1,
+                      ),
+                    ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: <Widget>[
+                        Text(
+                          '$day',
+                          style: TextStyle(
+                            color: selected
+                                ? Colors.white
+                                : sunday
+                                ? const Color(0xFFE55656)
+                                : palette.textPrimary,
+                            fontWeight:
+                                selected || isToday || hasStudy
+                                ? FontWeight.w800
+                                : FontWeight.w500,
+                            shadows: premium ? tienMonTextShadows : null,
+                          ),
+                        ),
+                        if (hasStudy && !selected)
+                          Positioned(
+                            bottom: 4,
+                            child: Container(
+                              width: 4,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: markerColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _ScheduleCard extends StatelessWidget {
