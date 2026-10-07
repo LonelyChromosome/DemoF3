@@ -37,6 +37,8 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
     private val cancelled = AtomicBoolean(false)
     private val nfc = NfcAdapter.getDefaultAdapter(activity)
     @Volatile private var reading = false
+    @Volatile private var bindingOnly = false
+    private var resumed = false
     private val uidStore = BoundCardStore(activity)
 
     init {
@@ -44,13 +46,34 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "versionCode" -> result.success(installedVersionCode())
+                "versionName" -> result.success(activity.packageManager.getPackageInfo(activity.packageName, 0).versionName)
+                "hasBoundCard" -> result.success(uidStore.hasBinding())
+                "startBindCard" -> {
+                    if (uidStore.hasBinding()) result.error("already_bound", "Thẻ đã được liên kết.", null)
+                    else if (busy.get()) result.error("busy", "Đang cập nhật.", null)
+                    else if (nfc == null || !nfc.isEnabled) result.error("nfc_unavailable", "Hãy bật NFC.", null)
+                    else {
+                        bindingOnly = true
+                        reading = true
+                        if (enableReader()) result.success(null)
+                        else {
+                            reading = false
+                            bindingOnly = false
+                            result.error("reader_unavailable", "Không bật được đầu đọc NFC.", null)
+                        }
+                    }
+                }
                 "startCard" -> {
                     if (busy.get()) result.error("busy", "Đang cập nhật.", null)
                     else if (nfc == null || !nfc.isEnabled) result.error("nfc_unavailable", "Hãy bật NFC để đọc thẻ.", null)
                     else {
+                        bindingOnly = false
                         reading = true
-                        enableReader()
-                        result.success(null)
+                        if (enableReader()) result.success(null)
+                        else {
+                            reading = false
+                            result.error("reader_unavailable", "Không bật được đầu đọc NFC.", null)
+                        }
                     }
                 }
                 "stopCard" -> { stopReader(); result.success(null) }
@@ -109,32 +132,57 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
         }
     }
 
-    fun onResume() { if (reading) enableReader() }
-    fun onPause() { if (reading) nfc?.disableReaderMode(activity) }
+    fun onResume() {
+        resumed = true
+        if (reading && !enableReader()) {
+            reading = false
+            bindingOnly = false
+            event("cardError")
+        }
+    }
+    fun onPause() {
+        resumed = false
+        if (reading) runCatching { nfc?.disableReaderMode(activity) }
+    }
     fun close() { stopReader(); cancelled.set(true); executor.shutdownNow(); channel.setMethodCallHandler(null) }
 
-    private fun enableReader() {
-        nfc?.enableReaderMode(activity, { tag: Tag ->
+    private fun enableReader(): Boolean {
+        val adapter = nfc ?: return false
+        if (!resumed || !adapter.isEnabled) return false
+        return try {
+          adapter.enableReaderMode(activity, { tag: Tag ->
             if (!reading) return@enableReaderMode
             val normalized = BoundCardStore.normalize(tag.id)
             if (normalized.isEmpty()) return@enableReaderMode
             // Reader callbacks can run more than once. The first readable tag wins on a fresh install.
             try {
                 val accepted = uidStore.matchesOrBind(normalized)
-                if (accepted) stopReader()
-                event(if (accepted) "cardAccepted" else "wrongCard")
+                if (accepted) {
+                    val wasBinding = bindingOnly
+                    stopReader()
+                    event(if (wasBinding) "cardBound" else "cardAccepted")
+                } else {
+                    event("wrongCard")
+                }
             } catch (_: Exception) {
                 stopReader()
                 event("cardError")
             }
-        }, NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or
+          }, NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or
             NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V or
             NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK, null)
+          true
+        } catch (_: IllegalStateException) {
+          false
+        } catch (_: SecurityException) {
+          false
+        }
     }
 
     private fun stopReader() {
         if (reading) {
             reading = false
+            bindingOnly = false
             main.post { nfc?.disableReaderMode(activity) }
         }
     }
@@ -221,6 +269,8 @@ internal object DigestRules {
 /** Private AES-GCM ciphertext; Keystore key is non-exportable and app data is not backed up. */
 internal class BoundCardStore(context: Context) {
     private val prefs = context.getSharedPreferences("update_bound_card", Context.MODE_PRIVATE)
+
+    fun hasBinding(): Boolean = prefs.contains("encrypted_uid")
 
     @Synchronized fun matchesOrBind(uid: String): Boolean {
         val saved = prefs.getString("encrypted_uid", null)
