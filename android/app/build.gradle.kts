@@ -33,7 +33,7 @@ android {
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
         // flag during build.
         versionCode = flutter.versionCode
-        versionName = "cooc.1.0"
+        versionName = "cooc.1.1"
     }
 
     buildTypes {
