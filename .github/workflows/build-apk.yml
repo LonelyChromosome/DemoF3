@@ -42,7 +42,7 @@ jobs:
           test -n "$EXPECTED_APK_CERT_SHA256"
           echo "$COOC_KEYSTORE_BASE64" | base64 --decode > android/cooc-release.jks
           echo "$UPDATE_MANIFEST_PRIVATE_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/update-manifest-private.pem"
-          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=cooc-release-v1\nstoreFile=cooc-release.jks\n' \
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=cooc-release-v2\nstoreFile=cooc-release.jks\n' \
             "$COOC_KEYSTORE_PASSWORD" "$COOC_KEYSTORE_PASSWORD" > android/key.properties
           chmod 600 android/key.properties android/cooc-release.jks "$RUNNER_TEMP/update-manifest-private.pem"
           derived_public="$(openssl pkey -in "$RUNNER_TEMP/update-manifest-private.pem" -pubout -outform DER | tail -c 32 | base64 -w 0)"
@@ -64,20 +64,20 @@ jobs:
           PY
           flutter pub get
           mkdir -p dist/update-host/updates
-          COOC_VERSION_NAME=cooc.1.1 flutter build apk --release --build-number=28 \
+          COOC_VERSION_NAME=cooc.1.1 flutter build apk --release --build-number=30 \
             --dart-define="UPDATE_PUBLIC_KEY_BASE64=$UPDATE_PUBLIC_KEY_BASE64" \
             --dart-define="UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL"
           cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Public.apk
           flutter clean
           flutter pub get
-          COOC_VERSION_NAME=cooc.1.2 flutter build apk --release --build-number=29 \
+          COOC_VERSION_NAME=cooc.1.2 flutter build apk --release --build-number=31 \
             --dart-define="UPDATE_PUBLIC_KEY_BASE64=$UPDATE_PUBLIC_KEY_BASE64" \
             --dart-define="UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL"
           cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.2-Public.apk
           cp dist/Better-Phenikaa-cooc.1.2-Public.apk dist/update-host/updates/
       - name: Verify identity and sign exact manifest bytes
         env:
-          UPDATE_APK_URL: https://github.com/LonelyChromosome/DemoF3/releases/download/cooc.1.2/Better-Phenikaa-cooc.1.2-Public.apk
+          UPDATE_APK_URL: https://github.com/LonelyChromosome/DemoF3/releases/download/cooc.1.2-card-test-2/Better-Phenikaa-cooc.1.2-Public.apk
           EXPECTED_APK_CERT_SHA256: ${{ vars.EXPECTED_APK_CERT_SHA256 }}
         run: |
           apksigner_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
@@ -86,8 +86,8 @@ jobs:
           for version in 1.1 1.2; do
             apk="dist/Better-Phenikaa-cooc.$version-Public.apk"
             "$apksigner_bin" verify --print-certs "$apk" > "dist/cooc.$version-signing.txt"
-            code=28
-            if test "$version" = 1.2; then code=29; fi
+            code=30
+            if test "$version" = 1.2; then code=31; fi
             badging="$("$aapt_bin" dump badging "$apk")"
             [[ "$badging" == *"package: name='vn.edu.phenikaa.better_phenikaa_schedule' versionCode='$code' versionName='cooc.$version'"* ]]
             sha256sum "$apk" >> dist/SHA256SUMS
