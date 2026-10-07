@@ -1,7 +1,7 @@
 name: better_phenikaa_schedule
 description: Better Phenikaa App - lịch học và lịch thi cho sinh viên Phenikaa University.
 publish_to: none
-version: 1.1.0+27
+version: 1.1.0+28
 environment:
   sdk: '>=3.13.0 <4.0.0'
 
@@ -12,6 +12,7 @@ dependencies:
   home_widget: 0.9.4
   html: 0.15.7
   shared_preferences: 2.5.5
+  cryptography: 2.9.0
 
 dev_dependencies:
   flutter_test:

@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    private var updateBridge: UpdateBridge? = null
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray,
     ) {
@@ -48,6 +49,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        updateBridge = UpdateBridge(this, flutterEngine)
         ExamChangeNotifier.recoverExisting(applicationContext)
         SyncStaleReminderScheduler.reconcile(applicationContext)
         configureDailySyncChannel(flutterEngine)
@@ -151,6 +153,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        updateBridge?.onResume()
         pendingWidgetApply?.let(widgetHandler::removeCallbacks)
         pendingWidgetApply = null
     }
@@ -160,7 +163,14 @@ class MainActivity : FlutterActivity() {
         schedulePendingWidgetThemeForHome()
     }
 
+    override fun onPause() {
+        updateBridge?.onPause()
+        super.onPause()
+    }
+
     override fun onDestroy() {
+        updateBridge?.close()
+        updateBridge = null
         pendingWidgetApply?.let(widgetHandler::removeCallbacks)
         fileExecutor.shutdownNow()
         super.onDestroy()
