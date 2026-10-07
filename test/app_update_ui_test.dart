@@ -2,9 +2,15 @@ import 'package:better_phenikaa_schedule/features/app_update/update_controller.d
 import 'package:better_phenikaa_schedule/features/app_update/update_ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 
 void main() {
   testWidgets('manual update requires displayed name before hold', (tester) async {
+    const channel = MethodChannel('better_phenikaa/update');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (_) async => null);
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
     final controller = UpdateController()
       ..notice = UpdateNotice(31, 'cooc.1.2', 'Bản thử', DateTime.utc(2026))
       ..phase = UpdatePhase.available;
