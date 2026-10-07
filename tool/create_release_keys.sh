@@ -22,21 +22,34 @@ fi
 command -v keytool >/dev/null
 command -v openssl >/dev/null
 command -v base64 >/dev/null
+
+read -r -s -p 'New private keystore password (16+ characters): ' release_password
+echo
+read -r -s -p 'Repeat password: ' repeat_password
+echo
+if [[ ${#release_password} -lt 16 || "$release_password" != "$repeat_password" ]]; then
+  echo 'Password is too short or does not match.' >&2
+  exit 2
+fi
+unset repeat_password
+export COOC_KEYTOOL_PASSWORD="$release_password"
+unset release_password
 mkdir -m 700 "$destination"
 
-echo 'Keytool will prompt for a new, random keystore password. Save it privately.'
 keytool -genkeypair -alias cooc-release-v1 -keyalg RSA -keysize 4096 \
   -sigalg SHA256withRSA -validity 10000 -storetype PKCS12 \
+  -storepass:env COOC_KEYTOOL_PASSWORD -keypass:env COOC_KEYTOOL_PASSWORD \
   -keystore "$destination/cooc-release-v1.jks" \
   -dname 'CN=Better Phenikaa cooc Release, O=Better Phenikaa'
 
 openssl genpkey -algorithm Ed25519 -out "$destination/update-manifest-ed25519-private.pem"
 chmod 600 "$destination/cooc-release-v1.jks" "$destination/update-manifest-ed25519-private.pem"
 
-echo 'Keytool will prompt once more to print the PUBLIC certificate fingerprint.'
 fingerprint="$(keytool -list -v -alias cooc-release-v1 \
+  -storepass:env COOC_KEYTOOL_PASSWORD \
   -keystore "$destination/cooc-release-v1.jks" | \
   awk -F 'SHA256: ' '/SHA256: / {print $2; exit}' | tr -d ':' | tr 'A-F' 'a-f')"
+unset COOC_KEYTOOL_PASSWORD
 if [[ ! "$fingerprint" =~ ^[0-9a-f]{64}$ ]]; then
   echo 'Could not read the certificate fingerprint.' >&2
   exit 1
