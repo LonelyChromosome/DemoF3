@@ -39,6 +39,8 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
     @Volatile private var reading = false
     @Volatile private var bindingOnly = false
     private var resumed = false
+    private val cardAccepted = AtomicBoolean(false)
+    @Volatile private var lastTag: Tag? = null
     private val uidStore = BoundCardStore(activity)
 
     init {
@@ -54,6 +56,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
                     else if (nfc == null || !nfc.isEnabled) result.error("nfc_unavailable", "Hãy bật NFC.", null)
                     else {
                         bindingOnly = true
+                        cardAccepted.set(false)
                         reading = true
                         if (enableReader()) result.success(null)
                         else {
@@ -68,6 +71,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
                     else if (nfc == null || !nfc.isEnabled) result.error("nfc_unavailable", "Hãy bật NFC để đọc thẻ.", null)
                     else {
                         bindingOnly = false
+                        cardAccepted.set(false)
                         reading = true
                         if (enableReader()) result.success(null)
                         else {
@@ -142,7 +146,10 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
     }
     fun onPause() {
         resumed = false
-        if (reading) runCatching { nfc?.disableReaderMode(activity) }
+        if (reading) {
+            ignoreLastTag()
+            runCatching { nfc?.disableReaderMode(activity) }
+        }
     }
     fun close() { stopReader(); cancelled.set(true); executor.shutdownNow(); channel.setMethodCallHandler(null) }
 
@@ -151,16 +158,23 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
         if (!resumed || !adapter.isEnabled) return false
         return try {
           adapter.enableReaderMode(activity, { tag: Tag ->
-            if (!reading) return@enableReaderMode
+            if (!reading || cardAccepted.get()) return@enableReaderMode
+            lastTag = tag
             val normalized = BoundCardStore.normalize(tag.id)
             if (normalized.isEmpty()) return@enableReaderMode
             // Reader callbacks can run more than once. The first readable tag wins on a fresh install.
             try {
                 val accepted = uidStore.matchesOrBind(normalized)
-                if (accepted) {
-                    val wasBinding = bindingOnly
-                    stopReader()
-                    event(if (wasBinding) "cardBound" else "cardAccepted")
+                if (accepted && cardAccepted.compareAndSet(false, true)) {
+                    if (bindingOnly) {
+                        stopReader()
+                        event("cardBound")
+                    } else {
+                        // Keep reader mode until the verified download takes over.
+                        // Disabling it while the card is still in range can dispatch
+                        // the same tag to unrelated Android apps.
+                        event("cardAccepted")
+                    }
                 } else {
                     event("wrongCard")
                 }
@@ -183,7 +197,18 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
         if (reading) {
             reading = false
             bindingOnly = false
-            main.post { nfc?.disableReaderMode(activity) }
+            main.post {
+                ignoreLastTag()
+                runCatching { nfc?.disableReaderMode(activity) }
+            }
+        }
+    }
+
+    private fun ignoreLastTag() {
+        val tag = lastTag ?: return
+        lastTag = null
+        if (Build.VERSION.SDK_INT >= 24) {
+            runCatching { nfc?.ignore(tag, 1000, null, null) }
         }
     }
 
