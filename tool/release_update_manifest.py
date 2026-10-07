@@ -11,9 +11,9 @@ destination = Path(sys.argv[3])
 data = {
     "schema": 1,
     "packageName": "vn.edu.phenikaa.better_phenikaa_schedule",
-    "versionCode": 29,
+    "versionCode": 31,
     "versionName": "cooc.1.2",
-    "minimumVersionCode": 28,
+    "minimumVersionCode": 30,
     "apkUrl": url,
     "apkSha256": hashlib.sha256(apk.read_bytes()).hexdigest(),
     "apkSize": apk.stat().st_size,
