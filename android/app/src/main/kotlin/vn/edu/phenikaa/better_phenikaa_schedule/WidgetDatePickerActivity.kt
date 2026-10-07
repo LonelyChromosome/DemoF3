@@ -400,20 +400,21 @@ class WidgetDatePickerActivity : Activity() {
             when {
                 selected -> {
                     setColor(APP_PRIMARY)
-                    if (hasExam) setStroke(dp(2), APP_DANGER)
+                    if (hasExam) {
+                        setStroke(dp(2), APP_DANGER)
+                    } else if (hasStudy) {
+                        setStroke(dp(2), APP_PRIMARY)
+                    }
                 }
                 hasExam -> {
-                    setColor(EXAM_TONAL)
+                    setColor(Color.TRANSPARENT)
                     setStroke(dp(2), APP_DANGER)
-                }
-                today -> {
-                    setColor(APP_TONAL)
-                    setStroke(dp(if (hasStudy) 2 else 1), APP_PRIMARY)
                 }
                 hasStudy -> {
                     setColor(Color.TRANSPARENT)
                     setStroke(dp(2), APP_PRIMARY)
                 }
+                today -> setColor(APP_TONAL)
                 else -> setColor(Color.TRANSPARENT)
             }
         }
@@ -499,4 +500,3 @@ private val APP_MUTED = 0xFF7583A4.toInt()
 private val APP_TONAL = 0xFFEEF4FF.toInt()
 private val APP_HANDLE = 0xFFD7DFEE.toInt()
 private val APP_DANGER = 0xFFE55656.toInt()
-private val EXAM_TONAL = 0xFFFFECEC.toInt()
