@@ -167,7 +167,9 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
                 val accepted = uidStore.matchesOrBind(normalized)
                 if (accepted && cardAccepted.compareAndSet(false, true)) {
                     if (bindingOnly) {
-                        stopReader()
+                        // Keep reader mode while this sheet is visible. Turning it off
+                        // with a tag still touching the phone lets Android dispatch
+                        // the same tag to an unrelated app.
                         event("cardBound")
                     } else {
                         // Keep reader mode until the verified download takes over.
