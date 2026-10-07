@@ -1,0 +1,4 @@
+storePassword=YOUR_PASSWORD
+keyPassword=YOUR_PASSWORD
+keyAlias=cooc
+storeFile=cooc-release.jks
