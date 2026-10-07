@@ -31,7 +31,7 @@ Sync chỉ kiểm tra metadata; quét thẻ hoặc giữ nút thủ công 2 giâ
   commit PackageInstaller session. Android tự đưa ra xác nhận cài đặt. URL APK
   đã ký có thể chuyển hướng HTTPS (tối đa 5 lần) để tải asset GitHub Release;
   chuyển sang HTTP bị từ chối, và byte tải về vẫn phải khớp hash cùng signer.
-- Sửa trang GitHub Pages hoặc thay APK khi không có **cả** khóa riêng Ed25519 và
+- Sửa update host hoặc thay APK khi không có **cả** khóa riêng Ed25519 và
   khóa ký APK chỉ có thể làm cập nhật lỗi/bị chặn. Không chấp nhận hash từ một
   trang chưa ký. Khóa riêng manifest và keystore Android có vai trò tách biệt.
 
@@ -75,13 +75,20 @@ app kế tiếp không nhắc. Lần chủ động cập nhật sau có thể m�
    upload keystore hay private key làm artifact.
 5. Tạo GitHub Release với tag `cooc.1.2`, upload APK 1.2 làm release asset đúng
    tên đã ký trong manifest. Công bố `latest.json` và `latest.json.sig` tại
-   `https://lonelychromosome.github.io/DemoF3/updates/` **sau** khi kiểm thử
-   trên thiết bị thật. Gói `update-host/updates/` vẫn chứa đủ ba file để bàn
+   `https://raw.githubusercontent.com/LonelyChromosome/DemoF3/feature/1.2-card-update/updates/`
+   cho đợt thử nghiệm. APK bootstrap đã nhúng địa chỉ này. Chỉ công bố hai byte
+   file đã ký sau khi Release asset có sẵn. Gói `update-host/updates/` vẫn chứa đủ ba file để bàn
    giao; APK lớn hơn giới hạn một file Git, nên đặt ở Release asset. Giữ nguyên
    byte JSON đã ký. Không ghi đè APK 1.1 bằng 1.2.
 6. Kiểm thử signed bootstrap 1.1 → 1.2, NFC đúng/sai, thủ công, từ chối quyền,
    sửa byte manifest và thay APK trên host. Xác nhận `versionCode 29`, fingerprint
    signer giữ nguyên, `cacheDir/app_update` được dọn sau khi cài.
+
+Khóa riêng của cặp APK thử nghiệm đã tạo trong môi trường tạm trước khi thiết lập
+sao lưu bền vững; không dùng cặp này cho phát hành lâu dài nếu không khôi phục
+được cả hai khóa riêng. Cặp APK hiện có chỉ phục vụ phép thử 1.1 code 28 → 1.2
+code 29. Muốn phát hành tiếp, phải dựng lại bootstrap và target với cặp khóa
+được bảo quản an toàn, tăng versionCode, rồi ký lại manifest tương ứng.
 
 Release phải thất bại nếu thiếu khóa, fingerprint release mới hoặc dùng chứng
 chỉ debug. Mốc code 27 ký debug không thể cập nhật trực tiếp sang code 28 ký
