@@ -27,6 +27,21 @@ jobs:
       - name: Bootstrap
         run: bash tool/bootstrap.sh
 
+      - name: Prepare cooc release signing
+        env:
+          COOC_KEYSTORE_BASE64: ${{ secrets.COOC_KEYSTORE_BASE64 }}
+          COOC_KEYSTORE_PASSWORD: ${{ secrets.COOC_KEYSTORE_PASSWORD }}
+        run: |
+          test -n "$COOC_KEYSTORE_BASE64"
+          test -n "$COOC_KEYSTORE_PASSWORD"
+          echo "$COOC_KEYSTORE_BASE64" | base64 --decode > android/cooc-release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$COOC_KEYSTORE_PASSWORD
+          keyPassword=$COOC_KEYSTORE_PASSWORD
+          keyAlias=cooc
+          storeFile=cooc-release.jks
+          EOF
+
       - name: Build Public
         run: |
           flutter build apk --release
