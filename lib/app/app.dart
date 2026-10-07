@@ -1328,7 +1328,7 @@ class _MainShellState extends State<_MainShell>
                       onSync: onSync,
                       onOpenCardBinding: onOpenCardBinding,
                       appVersionName: appVersionName,
-                      assistantPack: assistantPack;
+                      assistantPack: assistantPack,
                       onAssistantPackChanged: onAssistantPackChanged,
                     ),
                   ),
