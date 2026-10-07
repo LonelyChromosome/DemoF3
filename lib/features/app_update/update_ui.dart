@@ -5,8 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 
 class UpdateFlowSheet extends StatefulWidget {
-  const UpdateFlowSheet({required this.controller, super.key});
+  const UpdateFlowSheet({required this.controller, required this.displayName, super.key});
   final UpdateController controller;
+  final String displayName;
 
   @override
   State<UpdateFlowSheet> createState() => _UpdateFlowSheetState();
@@ -15,19 +16,27 @@ class UpdateFlowSheet extends StatefulWidget {
 class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
   Timer? _hold;
   bool _holding = false;
+  final TextEditingController _manualName = TextEditingController();
+  bool get _nameMatches => widget.displayName.trim().isNotEmpty &&
+      _manualName.text.trim() == widget.displayName.trim();
 
   @override
   void dispose() {
     _hold?.cancel();
+    _manualName.dispose();
+    if (widget.controller.phase == UpdatePhase.waitingForCard ||
+        widget.controller.phase == UpdatePhase.wrongCard) {
+      unawaited(widget.controller.cancel());
+    }
     super.dispose();
   }
 
   void _beginHold(PointerDownEvent _) {
-    if (_holding) return;
+    if (_holding || !_nameMatches) return;
     setState(() => _holding = true);
     _hold = Timer(const Duration(seconds: 2), () {
       _holding = false;
-      unawaited(widget.controller.startManualAfterHold());
+      if (_nameMatches) unawaited(widget.controller.startManualAfterHold());
       if (mounted) setState(() {});
     });
   }
@@ -84,7 +93,14 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
                 if (_manualSummary) ...[
                   const SizedBox(height: 12),
                   Text(
-                    'Giữ 2 giây để tải và cài ${notice?.versionName ?? "bản mới"}.',
+                    'Nhập đúng họ tên trong Tài khoản rồi giữ 2 giây để cập nhật ${notice?.versionName ?? "bản mới"}.',
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _manualName,
+                    onChanged: (_) => setState(() {}),
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(labelText: 'Họ và tên'),
                   ),
                   const SizedBox(height: 8),
                   Listener(
@@ -92,7 +108,7 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
                     onPointerUp: _endHold,
                     onPointerCancel: _endHold,
                     child: FilledButton.tonal(
-                      onPressed: () {},
+                      onPressed: _nameMatches ? () {} : null,
                       child: Text(_holding ? 'Đang giữ…' : 'Giữ để tiếp tục'),
                     ),
                   ),
@@ -158,4 +174,70 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
   );
 
   bool _manualSummary = false;
+}
+
+class CardBindingSheet extends StatefulWidget {
+  const CardBindingSheet({required this.controller, super.key});
+  final UpdateController controller;
+
+  @override
+  State<CardBindingSheet> createState() => _CardBindingSheetState();
+}
+
+class _CardBindingSheetState extends State<CardBindingSheet> {
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.controller.refreshCardBinding());
+  }
+
+  @override
+  void dispose() {
+    unawaited(widget.controller.stopBindingCard());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: widget.controller,
+    builder: (context, _) {
+      final controller = widget.controller;
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text('Thẻ cập nhật', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 12),
+              Text(controller.hasBoundCard
+                  ? 'Đã liên kết một thẻ với thiết bị này.'
+                  : controller.bindingCard
+                      ? 'Đưa thẻ NFC lại gần điện thoại.'
+                      : 'Quét thẻ để liên kết với thiết bị này.'),
+              if (!controller.hasBoundCard && !controller.bindingCard) ...[
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: controller.startBindingCard,
+                  icon: const Icon(Icons.nfc_rounded),
+                  label: const Text('Liên kết thẻ'),
+                ),
+              ],
+              if (controller.error != null) ...[
+                const SizedBox(height: 12),
+                Text(controller.error!,
+                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              ],
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Đóng'),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
