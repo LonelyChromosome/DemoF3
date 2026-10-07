@@ -1,7 +1,7 @@
 name: better_phenikaa_schedule
 description: Better Phenikaa App - lịch học và lịch thi cho sinh viên Phenikaa University.
 publish_to: none
-version: 1.0.0+26
+version: 1.1.0+27
 environment:
   sdk: '>=3.13.0 <4.0.0'
 
