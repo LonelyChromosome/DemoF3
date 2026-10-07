@@ -259,6 +259,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         ? _AppPage.timetable
         : _page;
     _openPage(_AppPage.notifications);
+    unawaited(_update.checkQuietly());
   }
 
   Future<void> _openUpdate() async {
@@ -599,8 +600,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   Future<void> _loginOrSync() async {
-    // Metadata check is independent; neither result changes the QLĐT path.
-    unawaited(_update.checkQuietly());
     if (!supportsLiveQldtLogin) {
       if (!mounted) {
         return;
