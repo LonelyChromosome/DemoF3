@@ -85,7 +85,6 @@ final class UpdateController extends ChangeNotifier {
 
   Future<void> restore() async {
     try {
-      await refreshCardBinding();
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_noticeKey);
       final cached = raw == null
