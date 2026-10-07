@@ -891,7 +891,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                         layoutBuilder: (current, previous) =>
                             current ?? const SizedBox.shrink(),
                         child: _booting
-                            ? const _SplashScreen()
+                            ? _SplashScreen(versionName: _appVersionName)
                             : _data == null || _data!.displayName.isEmpty
                             ? _LoginScreen(
                                 onLogin: _loginOrSync,
@@ -965,7 +965,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 }
 
 class _SplashScreen extends StatelessWidget {
-  const new();
+  const new({required this.versionName});
+  final String versionName;
 
   @override
   Widget build(BuildContext context) {
@@ -994,7 +995,7 @@ class _SplashScreen extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            '${_appVersionName.isEmpty ? "Better Phenikaa" : _appVersionName} • Lịch học & Lịch thi',
+            '${versionName.isEmpty ? "Better Phenikaa" : versionName} • Lịch học & Lịch thi',
             style: TextStyle(color: palette.textSecondary, fontSize: 15),
           ),
           const SizedBox(height: 120),
