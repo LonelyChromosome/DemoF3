@@ -89,6 +89,10 @@ jobs:
             code=30
             if test "$version" = 1.2; then code=31; fi
             badging="$("$aapt_bin" dump badging "$apk")"
+            echo "cooc.$version APK package metadata:"
+            printf '%s\\n' "$badging" | grep '^package:'
+            echo "cooc.$version signing fingerprint:"
+            grep 'certificate SHA-256 digest' "dist/cooc.$version-signing.txt"
             [[ "$badging" == *"package: name='vn.edu.phenikaa.better_phenikaa_schedule' versionCode='$code' versionName='cooc.$version'"* ]]
             sha256sum "$apk" >> dist/SHA256SUMS
           done
