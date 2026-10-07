@@ -153,10 +153,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
         root.mkdirs()
         val file = File(root, "candidate.apk")
         file.delete()
-        val connection = URL(url).openConnection() as HttpsURLConnection
-        connection.connectTimeout = 10000
-        connection.readTimeout = 20000
-        connection.instanceFollowRedirects = false
+        val connection = openHttpsDownload(url)
         try {
             if (connection.responseCode != 200 || connection.contentLengthLong > expectedSize) {
                 throw IllegalStateException("Unexpected download response")
@@ -185,6 +182,29 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
             return file
         } catch (e: Exception) { file.delete(); throw e }
         finally { connection.disconnect() }
+    }
+
+    private fun openHttpsDownload(url: String): HttpsURLConnection {
+        var current = URL(url)
+        for (redirect in 0..5) {
+            require(current.protocol == "https")
+            val connection = current.openConnection() as HttpsURLConnection
+            connection.connectTimeout = 10000
+            connection.readTimeout = 20000
+            connection.instanceFollowRedirects = false
+            val status = try { connection.responseCode } catch (e: Exception) {
+                connection.disconnect()
+                throw e
+            }
+            if (status == 200) return connection
+            val location = connection.getHeaderField("Location")
+            connection.disconnect()
+            if (status !in listOf(301, 302, 303, 307, 308) || location.isNullOrBlank() || redirect == 5) {
+                throw IllegalStateException("Unexpected APK response")
+            }
+            current = URL(current, location)
+        }
+        throw IllegalStateException("Too many APK redirects")
     }
 
     private class UpdateCancelled : Exception()

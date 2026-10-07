@@ -28,7 +28,9 @@ Sync chỉ kiểm tra metadata; quét thẻ hoặc giữ nút thủ công 2 giâ
   Giới hạn kích thước từ manifest, kiểm SHA-256 của toàn bộ file. Android đọc
   archive package: phải đúng package ID, đúng versionCode đã ký và cao hơn bản
   đang cài, cùng tập chứng chỉ signer hiện tại với bản đang chạy. Sau đó mới
-  commit PackageInstaller session. Android tự đưa ra xác nhận cài đặt.
+  commit PackageInstaller session. Android tự đưa ra xác nhận cài đặt. URL APK
+  đã ký có thể chuyển hướng HTTPS (tối đa 5 lần) để tải asset GitHub Release;
+  chuyển sang HTTP bị từ chối, và byte tải về vẫn phải khớp hash cùng signer.
 - Sửa trang GitHub Pages hoặc thay APK khi không có **cả** khóa riêng Ed25519 và
   khóa ký APK chỉ có thể làm cập nhật lỗi/bị chặn. Không chấp nhận hash từ một
   trang chưa ký. Khóa riêng manifest và keystore Android có vai trò tách biệt.
@@ -71,9 +73,12 @@ app kế tiếp không nhắc. Lần chủ động cập nhật sau có thể m�
    fingerprint release mới ở bước 1, tạo `dist/update-host/updates/latest.json`,
    `.sig` và APK 1.2. Không
    upload keystore hay private key làm artifact.
-5. Công bố ba file trong `updates/` dưới
-   `https://lonelychromosome.github.io/DemoF3/updates/` **sau** khi kiểm thử trên
-   thiết bị thật. Giữ nguyên byte JSON đã ký. Không ghi đè APK 1.1 bằng 1.2.
+5. Tạo GitHub Release với tag `cooc.1.2`, upload APK 1.2 làm release asset đúng
+   tên đã ký trong manifest. Công bố `latest.json` và `latest.json.sig` tại
+   `https://lonelychromosome.github.io/DemoF3/updates/` **sau** khi kiểm thử
+   trên thiết bị thật. Gói `update-host/updates/` vẫn chứa đủ ba file để bàn
+   giao; APK lớn hơn giới hạn một file Git, nên đặt ở Release asset. Giữ nguyên
+   byte JSON đã ký. Không ghi đè APK 1.1 bằng 1.2.
 6. Kiểm thử signed bootstrap 1.1 → 1.2, NFC đúng/sai, thủ công, từ chối quyền,
    sửa byte manifest và thay APK trên host. Xác nhận `versionCode 29`, fingerprint
    signer giữ nguyên, `cacheDir/app_update` được dọn sau khi cài.
