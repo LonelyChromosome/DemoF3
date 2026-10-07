@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.0-Public.apk
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Public.apk
 
       - name: Build assistant-panel APK
         run: flutter build apk --release --dart-define=ASSISTANT_TEST_PANEL=true
@@ -68,18 +68,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.0-Panel.apk
-          sha256sum dist/Better-Phenikaa-cooc.1.0-Public.apk > dist/Better-Phenikaa-cooc.1.0-Public.sha256
-          sha256sum dist/Better-Phenikaa-cooc.1.0-Panel.apk > dist/Better-Phenikaa-cooc.1.0-Panel.sha256
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Panel.apk
+          sha256sum dist/Better-Phenikaa-cooc.1.1-Public.apk > dist/Better-Phenikaa-cooc.1.1-Public.sha256
+          sha256sum dist/Better-Phenikaa-cooc.1.1-Panel.apk > dist/Better-Phenikaa-cooc.1.1-Panel.sha256
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: better-phenikaa-cooc-1-0
+          name: better-phenikaa-cooc-1-1
           path: |
-            dist/Better-Phenikaa-cooc.1.0-Public.apk
-            dist/Better-Phenikaa-cooc.1.0-Public.sha256
-            dist/Better-Phenikaa-cooc.1.0-Panel.apk
-            dist/Better-Phenikaa-cooc.1.0-Panel.sha256
+            dist/Better-Phenikaa-cooc.1.1-Public.apk
+            dist/Better-Phenikaa-cooc.1.1-Public.sha256
+            dist/Better-Phenikaa-cooc.1.1-Panel.apk
+            dist/Better-Phenikaa-cooc.1.1-Panel.sha256
           retention-days: 14
           if-no-files-found: error
