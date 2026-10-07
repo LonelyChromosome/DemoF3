@@ -50,7 +50,7 @@ jobs:
       - name: Build signed 1.1 bootstrap and 1.2 target
         env:
           UPDATE_PUBLIC_KEY_BASE64: ${{ vars.UPDATE_PUBLIC_KEY_BASE64 }}
-          UPDATE_MANIFEST_URL: https://lonelychromosome.github.io/DemoF3/updates/latest.json
+          UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/LonelyChromosome/DemoF3/feature/1.2-card-update/updates/latest.json
         run: |
           # Flutter's generated registrant includes this dev-only plugin, but
           # Gradle does not package its class in a release APK.
