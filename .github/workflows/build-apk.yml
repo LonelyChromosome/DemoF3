@@ -81,9 +81,12 @@ jobs:
             [[ "$badging" == *"package: name='vn.edu.phenikaa.better_phenikaa_schedule' versionCode='$code' versionName='cooc.$version'"* ]]
             sha256sum "$apk" >> dist/SHA256SUMS
           done
-          fingerprint11="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' dist/cooc.1.1-signing.txt)"
-          fingerprint12="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' dist/cooc.1.2-signing.txt)"
+          fingerprint11="$(sed -nE 's/^(Signer #[0-9]+|V[0-9]+ Signer): certificate SHA-256 digest: ([0-9a-fA-F]+)$/\2/p' dist/cooc.1.1-signing.txt | sort -u)"
+          fingerprint12="$(sed -nE 's/^(Signer #[0-9]+|V[0-9]+ Signer): certificate SHA-256 digest: ([0-9a-fA-F]+)$/\2/p' dist/cooc.1.2-signing.txt | sort -u)"
           test -n "$fingerprint11" && test "$fingerprint11" = "$fingerprint12"
+          test "$fingerprint11" != ad3b3b92c1376f2a2026b7fcdd6da41a7319d334c9dbf5a5378c58408382ab58
+          ! grep -q 'CN=Android Debug' dist/cooc.1.1-signing.txt
+          ! grep -q 'CN=Android Debug' dist/cooc.1.2-signing.txt
           test "${fingerprint11,,}" = "${EXPECTED_APK_CERT_SHA256,,}"
           echo "APK certificate SHA-256: $fingerprint11"
           python3 tool/release_update_manifest.py \

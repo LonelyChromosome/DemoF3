@@ -2,8 +2,15 @@
 
 ## Phạm vi
 
-cooc.1.1 hiện tại (`versionCode 27`) chưa có updater. Người đã cài bản đó phải
-cài **bootstrap cooc.1.1 (`versionCode 28`)** một lần bằng Android. Từ bootstrap,
+cooc.1.1 hiện tại (`versionCode 27`) chưa có updater. APK Public đã kiểm tra
+(`SHA-256 50117bf7507a339bfdd9789171701aedf3c335e7214bcd7b7a6f0f759016f517`)
+được ký bằng chứng chỉ **Android Debug** (`SHA-256 ad3b3b92c1376f2a2026b7fcdd6da41a7319d334c9dbf5a5378c58408382ab58`).
+Vì vậy bản này **không thể** được cập nhật tại chỗ bằng APK ký bằng khóa release.
+Người đang cài đúng APK này cần sao lưu dữ liệu theo khả năng của ứng dụng rồi
+gỡ/cài bản release mới; không được hứa giữ nguyên dữ liệu qua bước chuyển signer.
+Sau khi có một APK cooc.1.1 release-signed có thể xác minh được cùng signer,
+**bootstrap cooc.1.1 (`versionCode 28`)** mới có thể cập nhật tại chỗ từ bản đó.
+Từ bootstrap,
 Sync chỉ kiểm tra metadata; quét thẻ hoặc giữ nút thủ công 2 giây mới tải APK.
 **cooc.1.2 (`versionCode 29`)** là APK riêng, ký cùng chứng chỉ Android.
 
@@ -43,9 +50,13 @@ app kế tiếp không nhắc. Lần chủ động cập nhật sau có thể m�
 
 ## Phát hành
 
-1. Dùng APK cooc.1.1 đang phân phối để ghi SHA-256 chứng chỉ qua `apksigner
-   verify --print-certs`; đặt fingerprint vào biến môi trường phát hành
-   `EXPECTED_APK_CERT_SHA256`. Không đưa keystore hoặc mật khẩu lên repo.
+1. Tìm APK cooc.1.1 **release-signed** đáng tin cậy và xác minh signer bằng
+   `apksigner verify --print-certs`. Chỉ đặt fingerprint release đó vào
+   `EXPECTED_APK_CERT_SHA256`. APK Public code 27 nêu trên mang chứng chỉ debug,
+   **không được** dùng làm fingerprint tham chiếu hoặc làm release bootstrap.
+   Nếu không có APK release-signed/keystore tương ứng, dừng phát hành và giải
+   quyết việc phân phối chuyển signer; không tuyên bố cập nhật trực tiếp từ bản
+   debug code 27. Không đưa keystore hoặc mật khẩu lên repo.
 2. Tạo **cặp khóa Ed25519 riêng** ở môi trường phát hành tin cậy. Lưu PEM khóa
    riêng dưới dạng base64 vào secret `UPDATE_MANIFEST_PRIVATE_KEY_BASE64` của
    GitHub Environment `cooc-release`. Lưu base64 của 32 byte khóa công khai vào
