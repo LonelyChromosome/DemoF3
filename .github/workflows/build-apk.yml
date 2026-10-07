@@ -1,31 +1,48 @@
 name: Build APK
 
 on:
-  push:
-    branches:
-      - main
-
-permissions:
-  actions: write
-  contents: read
+  workflow_dispatch:
 
 jobs:
-  cleanup:
+  apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Final Actions cleanup
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -u
-          gh api --method POST "repos/$REPO/actions/runs/37612712502/cancel" >/dev/null 2>&1 || true
 
-          gh api "repos/$REPO/actions/workflows?per_page=100"             --jq '.workflows[] | select(.path != ".github/workflows/build-apk.yml") | .id'           | while read -r workflow_id; do
-              [ -n "$workflow_id" ] || continue
-              gh api "repos/$REPO/actions/workflows/$workflow_id/runs?per_page=100"                 --jq '.workflow_runs[].id' 2>/dev/null               | while read -r run_id; do
-                  [ -n "$run_id" ] || continue
-                  gh api --method DELETE "repos/$REPO/actions/runs/$run_id" >/dev/null 2>&1 || true
-                done
-            done
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter 3.47.2
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+
+      - name: Bootstrap
+        run: bash tool/bootstrap.sh
+
+      - name: Build Public
+        run: |
+          flutter build apk --release
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Public.apk
+
+      - name: Build Dev
+        run: |
+          flutter build apk --release --dart-define=ASSISTANT_TEST_PANEL=true
+          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Dev.apk
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: better-phenikaa-cooc-1-1
+          path: |
+            dist/Better-Phenikaa-cooc.1.1-Public.apk
+            dist/Better-Phenikaa-cooc.1.1-Dev.apk
+          retention-days: 14
