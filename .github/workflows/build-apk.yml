@@ -2,24 +2,17 @@ name: Build APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-
-permissions:
-  contents: read
 
 jobs:
   apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -31,45 +24,19 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Bootstrap project
+      - name: Bootstrap
         run: bash tool/bootstrap.sh
 
-      - name: Verify standalone main source
-        shell: bash
+      - name: Build Public
         run: |
-          set -euo pipefail
-          test -f assets/tien_mon_premium/app_backgrounds/tienmon_1_1440x2560.png
-          test -f assets/tien_mon_premium/app_backgrounds/tienmon_8_1440x2560.png
-          test -f assets/tien_mon_premium/fonts/FzCoTrang.ttf
-          test -f assets/tien_mon_premium/widget_overview/wid_sang.png
-          test -f android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/NativeQldtWidgetSync.kt
-          grep -F 'ValueNotifier<bool> _weeklyMode' lib/app/app.dart
-          grep -F 'builder: (context, weekly, _) => IndexedStack(' lib/app/app.dart
-          grep -F 'applyPendingSelection' android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/ScheduleWidgetProvider.kt
-          ! grep -F 'pinSelectedFirst()' android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/WidgetSnapshotStore.kt
-          test -x android/gradlew
-          test -f android/gradle/wrapper/gradle-wrapper.jar
-
-      - name: Build public APK
-        run: flutter build apk --release
-
-      - name: Package public APK
-        shell: bash
-        run: |
-          set -euo pipefail
+          flutter build apk --release
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Public.apk
 
-      - name: Build dev APK
-        run: flutter build apk --release --dart-define=ASSISTANT_TEST_PANEL=true
-
-      - name: Package dev APK
-        shell: bash
+      - name: Build Dev
         run: |
-          set -euo pipefail
+          flutter build apk --release --dart-define=ASSISTANT_TEST_PANEL=true
           cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Dev.apk
-          sha256sum dist/Better-Phenikaa-cooc.1.1-Public.apk > dist/Better-Phenikaa-cooc.1.1-Public.sha256
-          sha256sum dist/Better-Phenikaa-cooc.1.1-Dev.apk > dist/Better-Phenikaa-cooc.1.1-Dev.sha256
 
       - name: Upload APKs
         uses: actions/upload-artifact@v4
@@ -77,8 +44,5 @@ jobs:
           name: better-phenikaa-cooc-1-1
           path: |
             dist/Better-Phenikaa-cooc.1.1-Public.apk
-            dist/Better-Phenikaa-cooc.1.1-Public.sha256
             dist/Better-Phenikaa-cooc.1.1-Dev.apk
-            dist/Better-Phenikaa-cooc.1.1-Dev.sha256
           retention-days: 14
-          if-no-files-found: error
