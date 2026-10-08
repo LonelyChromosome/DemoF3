@@ -1854,6 +1854,8 @@ class _TimetableScreenState extends State<_TimetableScreen>
                       child: RepaintBoundary(
                         child: WeekTimetable(
                           data: widget.data,
+                          attendance: widget.attendance,
+                          onOpenAttendance: widget.onOpenAttendance,
                           week: _week,
                           onWeekChanged: (value) =>
                               setState(() => _week = weekMonday(value)),
