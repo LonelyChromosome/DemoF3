@@ -271,7 +271,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         ? _AppPage.timetable
         : _page;
     _openPage(_AppPage.notifications);
-    unawaited(_update.checkQuietly());
   }
 
   Future<void> _openUpdate() async {
@@ -281,12 +280,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       isScrollControlled: true,
       builder: (_) => UpdateFlowSheet(
         controller: _update,
+        // The exact same value shown at the top of the Account page.
         displayName: _accountDisplayName.isEmpty
             ? (_data?.displayName ?? '')
             : _accountDisplayName,
       ),
     );
-    if (_update.phase != UpdatePhase.installerLaunched) {
+    if (!_update.isRunningInBackground &&
+        _update.phase != UpdatePhase.installerLaunched) {
       await _update.cancel();
     }
   }
@@ -625,14 +626,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
-  void _syncAndCheck() {
-    unawaited(_loginOrSync());
-    if (_data != null) {
-      // Metadata starts in a separate event, outside the QLĐT path.
-      Timer.run(() => unawaited(_update.checkQuietly()));
-    }
-  }
-
   Future<void> _loginOrSync() async {
     if (!supportsLiveQldtLogin) {
       if (!mounted) {
@@ -943,14 +936,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                     _openPage(_AppPage.exam),
                                 onShowDifferences: _showDifferences,
                                 latestDifference: _latestDifference,
-                                updateNotice: _update.notice,
                                 onOpenUpdate: _openUpdate,
                                 onOpenCardBinding: _openCardBinding,
                                 appVersionName: _appVersionName,
                                 onTogglePanel: () =>
                                     setState(() => _panelOpen = !_panelOpen),
                                 onOpenPage: _openPage,
-                                onSync: _syncAndCheck,
+                                onSync: () => unawaited(_loginOrSync()),
                                 onLogout: _logout,
                                 onDateChanged: (date) => setState(
                                   () => _selectedDate = _dateOnly(date),
@@ -1158,7 +1150,6 @@ class _MainShell extends StatefulWidget {
     required this.onOpenExamFromNotification,
     required this.onShowDifferences,
     required this.latestDifference,
-    required this.updateNotice,
     required this.onOpenUpdate,
     required this.onOpenCardBinding,
     required this.appVersionName,
@@ -1191,7 +1182,6 @@ class _MainShell extends StatefulWidget {
   final VoidCallback onOpenExamFromNotification;
   final Future<void> Function() onShowDifferences;
   final SemesterDifference? latestDifference;
-  final UpdateNotice? updateNotice;
   final VoidCallback onOpenUpdate;
   final VoidCallback onOpenCardBinding;
   final String appVersionName;
@@ -1268,7 +1258,6 @@ class _MainShellState extends State<_MainShell>
     final onOpenExamFromNotification = widget.onOpenExamFromNotification;
     final onShowDifferences = widget.onShowDifferences;
     final latestDifference = widget.latestDifference;
-    final updateNotice = widget.updateNotice;
     final onOpenUpdate = widget.onOpenUpdate;
     final onOpenCardBinding = widget.onOpenCardBinding;
     final appVersionName = widget.appVersionName;
@@ -1308,7 +1297,6 @@ class _MainShellState extends State<_MainShell>
                       unreadDifference: unreadDifference,
                       hasActiveExamPeriod: hasActiveExamPeriod,
                       onOpenDifferences: onOpenDifferences,
-                      updateAvailable: updateNotice != null,
                     ),
                   ),
                 ),
@@ -1323,7 +1311,6 @@ class _MainShellState extends State<_MainShell>
                       unreadDifference: unreadDifference,
                       hasActiveExamPeriod: hasActiveExamPeriod,
                       onOpenDifferences: onOpenDifferences,
-                      updateAvailable: updateNotice != null,
                     ),
                   ),
                 ),
@@ -1353,8 +1340,6 @@ class _MainShellState extends State<_MainShell>
                       onDetails: onShowDifferences,
                       assistantPack: assistantPack,
                       difference: latestDifference,
-                      updateNotice: updateNotice,
-                      onOpenUpdate: onOpenUpdate,
                     ),
                   ),
                 ),
@@ -1459,7 +1444,6 @@ class _TimetableScreen extends StatefulWidget {
     required this.unreadDifference,
     required this.hasActiveExamPeriod,
     required this.onOpenDifferences,
-    required this.updateAvailable,
   });
 
   final ImportedScheduleData data;
@@ -1469,7 +1453,6 @@ class _TimetableScreen extends StatefulWidget {
   final bool unreadDifference;
   final bool hasActiveExamPeriod;
   final VoidCallback onOpenDifferences;
-  final bool updateAvailable;
 
   @override
   State<_TimetableScreen> createState() => _TimetableScreenState();
@@ -1654,7 +1637,6 @@ class _TimetableScreenState extends State<_TimetableScreen>
               unreadDifference: widget.unreadDifference,
               hasActiveExamPeriod: widget.hasActiveExamPeriod,
               onNotificationTap: widget.onOpenDifferences,
-              updateAvailable: widget.updateAvailable,
               onCalendarTap: () => _weekly
                   ? _pickWeek()
                   : _showCalendarPicker(
@@ -1806,7 +1788,6 @@ class _ExamScreen extends StatelessWidget {
     required this.unreadDifference,
     required this.hasActiveExamPeriod,
     required this.onOpenDifferences,
-    required this.updateAvailable,
   });
 
   final ImportedScheduleData data;
@@ -1816,7 +1797,6 @@ class _ExamScreen extends StatelessWidget {
   final bool unreadDifference;
   final bool hasActiveExamPeriod;
   final VoidCallback onOpenDifferences;
-  final bool updateAvailable;
 
   @override
   Widget build(BuildContext context) {
@@ -1840,7 +1820,6 @@ class _ExamScreen extends StatelessWidget {
             unreadDifference: unreadDifference,
             hasActiveExamPeriod: hasActiveExamPeriod,
             onNotificationTap: onOpenDifferences,
-            updateAvailable: updateAvailable,
           ),
           const SizedBox(height: 20),
           _SegmentTabs(showPast: showPast, onChanged: onTabChanged),
@@ -1879,8 +1858,6 @@ class _NotificationCenterScreen extends StatelessWidget {
     required this.onDetails,
     required this.assistantPack,
     required this.difference,
-    required this.updateNotice,
-    required this.onOpenUpdate,
   });
 
   final bool hasActiveExamPeriod;
@@ -1889,8 +1866,6 @@ class _NotificationCenterScreen extends StatelessWidget {
   final Future<void> Function() onDetails;
   final AssistantPack assistantPack;
   final SemesterDifference? difference;
-  final UpdateNotice? updateNotice;
-  final VoidCallback onOpenUpdate;
 
   @override
   Widget build(BuildContext context) {
@@ -1935,26 +1910,6 @@ class _NotificationCenterScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.only(bottom: 20),
               children: <Widget>[
-                if (updateNotice != null) ...[
-                  Card(
-                    color: palette.cardAlt,
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Text('Có bản cập nhật mới · ${updateNotice!.versionName}',
-                            style: TextStyle(color: palette.textPrimary, fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 6),
-                          Text(updateNotice!.notes, style: TextStyle(color: palette.textPrimary)),
-                          const SizedBox(height: 8),
-                          FilledButton(onPressed: onOpenUpdate, child: const Text('Cập nhật')),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
                 if (hasActiveExamPeriod)
                   _NotificationExamCard(
                     text: AssistantText.of(
@@ -2021,7 +1976,7 @@ class _NotificationCenterScreen extends StatelessWidget {
                     ),
                   ),
                 ],
-                if (!hasActiveExamPeriod && !hasAnyChange && updateNotice == null)
+                if (!hasActiveExamPeriod && !hasAnyChange)
                   Padding(
                     padding: const EdgeInsets.only(top: 90),
                     child: _EmptyState(
@@ -2647,7 +2602,6 @@ class _TopTitle extends StatelessWidget {
     this.onNotificationTap,
     this.unreadDifference = false,
     this.hasActiveExamPeriod = false,
-    this.updateAvailable = false,
   });
 
   final String title;
@@ -2656,7 +2610,6 @@ class _TopTitle extends StatelessWidget {
   final VoidCallback? onNotificationTap;
   final bool unreadDifference;
   final bool hasActiveExamPeriod;
-  final bool updateAvailable;
 
   @override
   Widget build(BuildContext context) {
@@ -2723,14 +2676,6 @@ class _TopTitle extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            if (updateAvailable)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                decoration: BoxDecoration(color: palette.cardAlt,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: palette.primary)),
-                child: Text('Có bản mới', style: TextStyle(color: palette.primary, fontSize: 10)),
-              ),
             if (onNotificationTap != null)
               IconButton(
                 tooltip: hasActiveExamPeriod
@@ -2742,7 +2687,7 @@ class _TopTitle extends StatelessWidget {
                 icon: Stack(
                   clipBehavior: Clip.none,
                   children: <Widget>[
-                    _UpdateBell(active: updateAvailable, color: palette.primary),
+                    Icon(Icons.notifications_none_rounded, color: palette.primary),
                     if (unreadDifference || hasActiveExamPeriod)
                       Positioned(
                         right: -2,
@@ -2783,70 +2728,6 @@ class _TopTitle extends StatelessWidget {
       ],
     );
   }
-}
-
-class _UpdateBell extends StatefulWidget {
-  const _UpdateBell({required this.active, required this.color});
-  final bool active;
-  final Color color;
-
-  @override
-  State<_UpdateBell> createState() => _UpdateBellState();
-}
-
-class _UpdateBellState extends State<_UpdateBell> {
-  Timer? _reminder;
-  Timer? _settle;
-  double _turns = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.active) _start();
-  }
-
-  @override
-  void didUpdateWidget(covariant _UpdateBell oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.active && !oldWidget.active) _start();
-    if (!widget.active && oldWidget.active) {
-      _reminder?.cancel();
-      _settle?.cancel();
-      _turns = 0;
-    }
-  }
-
-  void _start() {
-    _ring();
-    _reminder?.cancel();
-    _reminder = Timer.periodic(const Duration(seconds: 25), (_) => _ring());
-  }
-
-  void _ring() {
-    if (!mounted) return;
-    setState(() => _turns = -.08);
-    _settle?.cancel();
-    _settle = Timer(const Duration(milliseconds: 180), () {
-      if (mounted) setState(() => _turns = .06);
-      _settle = Timer(const Duration(milliseconds: 180), () {
-        if (mounted) setState(() => _turns = 0);
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _reminder?.cancel();
-    _settle?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedRotation(
-    turns: _turns,
-    duration: const Duration(milliseconds: 160),
-    child: Icon(Icons.notifications_none_rounded, color: widget.color),
-  );
 }
 
 class _TimetableModeSelector extends StatelessWidget {
