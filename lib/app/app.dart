@@ -769,10 +769,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       context: context,
       lesson: lesson,
       current: _attendance[lesson.id],
-      onSubmit: (code) async {
-        await submitAttendanceCode(lesson, code);
+      onResolve: () => resolveAttendanceLesson(lesson),
+      onSubmit: (resolvedLesson, code) async {
+        await submitAttendanceCode(resolvedLesson, code);
         final next = await AttendanceStore().recordSent(
-          _attendance, lesson, code,
+          _attendance, resolvedLesson, code,
         );
         if (mounted) setState(() => _attendance = next);
       },
