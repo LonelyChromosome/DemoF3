@@ -43,6 +43,7 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
   int _manualSuccessToken = 0;
   Timer? _vfxVisibilityTimer;
   Timer? _manualResetTimer;
+  Timer? _manualAuthorizeTimer;
   late UpdatePhase _lastPhase;
 
   bool get _nameMatches =>
@@ -165,8 +166,14 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
     _manualSuccessToken++;
     unawaited(HapticFeedback.lightImpact());
     if (!_previewManual) {
-      // Only the pre-existing 2-second/verified-display-name path may authorize.
-      unawaited(widget.controller.startManualAfterHold());
+      // Let the gold activation burst finish before continuing the existing
+      // verified-name update path. Leaving the sheet cancels this timer.
+      _manualAuthorizeTimer?.cancel();
+      _manualAuthorizeTimer = Timer(const Duration(milliseconds: 1100), () {
+        if (mounted && _nameMatches && _holdCharge.isCompleted) {
+          unawaited(widget.controller.startManualAfterHold());
+        }
+      });
     }
     if (mounted) setState(() {});
     _manualResetTimer?.cancel();
@@ -181,6 +188,7 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
   void dispose() {
     _vfxVisibilityTimer?.cancel();
     _manualResetTimer?.cancel();
+    _manualAuthorizeTimer?.cancel();
     widget.controller.removeListener(_onUpdateState);
     _holdCharge.removeStatusListener(_onHoldStatus);
     _holdCharge.dispose();
