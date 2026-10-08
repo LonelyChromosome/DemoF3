@@ -1,4 +1,5 @@
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/diem_danh/attendance.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/schedule/tien_mon_schedule_views.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
@@ -12,6 +13,8 @@ const _premiumGoldShadows = tienMonTextShadows;
 class WeekTimetable extends StatelessWidget {
   const new({
     required this.data,
+    required this.attendance,
+    required this.onOpenAttendance,
     required this.week,
     required this.onWeekChanged,
     required this.onPickWeek,
@@ -19,6 +22,8 @@ class WeekTimetable extends StatelessWidget {
   });
 
   final ImportedScheduleData data;
+  final Map<String, AttendanceEntry> attendance;
+  final ValueChanged<ScheduleRecord> onOpenAttendance;
   final DateTime week;
   final ValueChanged<DateTime> onWeekChanged;
   final VoidCallback onPickWeek;
@@ -166,6 +171,7 @@ class WeekTimetable extends StatelessWidget {
                                   const SizedBox(width: 6),
                               itemBuilder: (context, index) {
                                 final row = records[index];
+                                final status = attendance[row.id]?.status;
                                 final content = Padding(
                                   padding: const EdgeInsets.fromLTRB(
                                     10,
@@ -200,6 +206,15 @@ class WeekTimetable extends StatelessWidget {
                                               : null,
                                         ),
                                       ),
+                                      if (status != null)
+                                        Text(switch (status) {
+                                          AttendanceStatus.pending => 'Chờ xác thực',
+                                          AttendanceStatus.present => 'Có mặt',
+                                          AttendanceStatus.absent => 'Vắng mặt',
+                                        }, style: TextStyle(
+                                          fontSize: 10,
+                                          color: palette.primary,
+                                        )),
                                       Text(
                                         row.room,
                                         maxLines: 1,
@@ -216,16 +231,21 @@ class WeekTimetable extends StatelessWidget {
                                   ),
                                 );
                                 if (premium) {
-                                  return SizedBox(
+                                  return InkWell(
+                                    onTap: () => onOpenAttendance(row),
+                                    child: SizedBox(
                                     width: 135,
                                     child: TienMonEdgeSurface(
                                       compact: true,
                                       scene: scene,
                                       child: content,
                                     ),
+                                    ),
                                   );
                                 }
-                                return Container(
+                                return InkWell(
+                                  onTap: () => onOpenAttendance(row),
+                                  child: Container(
                                   width: 135,
                                   decoration: BoxDecoration(
                                     color: palette.surface,
@@ -237,6 +257,7 @@ class WeekTimetable extends StatelessWidget {
                                     ),
                                   ),
                                   child: content,
+                                  ),
                                 );
                               },
                             ),
