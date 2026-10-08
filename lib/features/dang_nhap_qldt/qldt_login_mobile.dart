@@ -222,16 +222,68 @@ Future<QldtLoginResult?> openQldtLogin(
   );
 }
 
+/// The same verified QLDT WebView sync can run behind the current app page.
+/// This does not create a Navigator route or a second authentication transport.
+class QldtInlineSync extends StatefulWidget {
+  const QldtInlineSync({super.key, required this.onComplete, required this.onFailed});
+
+  final ValueChanged<QldtLoginResult> onComplete;
+  final ValueChanged<String> onFailed;
+
+  @override
+  State<QldtInlineSync> createState() => _QldtInlineSyncState();
+}
+
+class _QldtInlineSyncState extends State<QldtInlineSync> {
+  bool _loaded = false;
+  bool _cached = false;
+  String? _portalPath;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _cached = prefs.getBool(_sessionKey) ?? false;
+        _portalPath = prefs.getString(_portalPathKey);
+        _loaded = true;
+      });
+    } on Object {
+      if (mounted) widget.onFailed('SESSION_STORAGE_ERROR');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => !_loaded
+      ? const SizedBox.expand()
+      : _QldtWebLoginScreen(
+          cachedSession: _cached,
+          portalPath: _portalPath,
+          inlineOnCompleted: widget.onComplete,
+          inlineOnFailed: widget.onFailed,
+        );
+}
+
 class _QldtWebLoginScreen extends StatefulWidget {
   const new({
     required this.cachedSession,
     required this.portalPath,
     this.testHtml,
+    this.inlineOnCompleted,
+    this.inlineOnFailed,
   });
 
   final bool cachedSession;
   final String? portalPath;
   final String? testHtml;
+  final ValueChanged<QldtLoginResult>? inlineOnCompleted;
+  final ValueChanged<String>? inlineOnFailed;
 
   @override
   State<_QldtWebLoginScreen> createState() => _QldtWebLoginScreenState();
@@ -323,14 +375,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
   @override
   Widget build(BuildContext context) {
-    return PopScope<QldtLoginResult>(
-      canPop: !_portalInputLocked && (_allowRoutePop || !_webCanGoBack),
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !_portalInputLocked) {
-          unawaited(_handleBack());
-        }
-      },
-      child: Stack(
+    final content = Stack(
         fit: StackFit.expand,
         children: <Widget>[
           Scaffold(
@@ -594,7 +639,14 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
               ),
             ),
         ],
-      ),
+      );
+    if (widget.inlineOnCompleted != null) return content;
+    return PopScope<QldtLoginResult>(
+      canPop: !_portalInputLocked && (_allowRoutePop || !_webCanGoBack),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_portalInputLocked) unawaited(_handleBack());
+      },
+      child: content,
     );
   }
 
@@ -1228,7 +1280,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted || epoch != _syncEpoch) return;
       _finalizingVerifiedResult = false;
-      Navigator.of(context).pop<QldtLoginResult>(result);
+      if (widget.inlineOnCompleted != null) {
+        widget.inlineOnCompleted!(result);
+      } else {
+        Navigator.of(context).pop<QldtLoginResult>(result);
+      }
     } on Object catch (error) {
       _finalizingVerifiedResult = false;
       _registrationCompletionRunning = false;
@@ -1298,6 +1354,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     if (await isQldtFirstLoginSetupComplete()) {
       _accountNameSetupFinished = true;
       return;
+    }
+    // Never open first-login setup/dialogs behind an in-place refresh.
+    if (widget.inlineOnCompleted != null) {
+      throw const FormatException('ACCOUNT_SETUP_REQUIRED');
     }
 
     final words = fullName
@@ -1793,6 +1853,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
   void _stopSync(int epoch, String status, {String code = 'FAILED'}) {
     if (!mounted || epoch != _syncEpoch) return;
+    if (widget.inlineOnFailed != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) widget.inlineOnFailed!('$code: $status');
+      });
+    }
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
     _diagnostics?.finish(code);
