@@ -1,45 +1,32 @@
-# Phát hành
+# Phát hành Better Phenikaa — Feature Updater
 
-> Build được APK chưa có nghĩa là đã có một bản phát hành. Zip đổi tên đẹp vẫn
-> chỉ là zip đổi tên đẹp.
+## Hiện tại
 
-## Trạng thái hiện tại
+- APK **cooc.1.1 / versionCode 30** đã giao là bản nền.
+- Bản đích nâng cấp thử nghiệm là **cooc.1.2 / versionCode 32**, kể cả khi không đổi tính năng.
+- Các APK này chỉ cập nhật tại chỗ nếu **package ID** và **chứng chỉ ký APK** trùng nhau, versionCode tăng.
+- Bản debug cũ không cùng khóa release sẽ **không thể** cập nhật tại chỗ; phải xử lý riêng, không hứa giữ dữ liệu.
 
-Cấu hình Gradle hiện tại yêu cầu `android/key.properties` và khóa cooc cố định
-cho mọi build release; thiếu khóa thì build phải thất bại. Workflow cooc.1.2
-được chạy thủ công trong GitHub Environment `cooc-release`, cần cấu hình
-reviewer/giới hạn nhánh và đưa khóa vào Environment trước khi dùng. CI thường
-không nhận khóa release. Xem [quy trình nâng cấp 1.1 → 1.2](docs/COOC_1_2_UPDATE.md).
+## Cách phát hành từ nay
 
-## Trước bản public đầu tiên
+Workflow `.github/workflows/build-apk.yml` (**Feature Updater - signed APK release**) chỉ chạy **thủ công**:
 
-1. Tạo một Android upload/release keystore riêng trên máy tin cậy.
-2. Giữ keystore và mật khẩu ngoài Git; sao lưu ngoại tuyến ít nhất hai bản.
-3. Đưa credential ký vào secret của môi trường phát hành.
-4. Cấu hình Gradle chỉ dùng khóa đó trong luồng phát hành chính thức.
-5. Công bố SHA-256 certificate fingerprint tại trang release.
-6. Gắn tag bất biến cho commit phát hành.
-7. Phát hành APK cùng checksum SHA-256 và changelog.
-8. Cài thử bản nâng cấp được ký bằng đúng khóa trước khi công bố.
+1. Chọn commit phát hành trên `main`, nhập `cooc.X.Y` và versionCode mới.
+2. Giữ `publish=false` để build **một APK ký release** và metadata ký Ed25519, chỉ lưu Actions artifact. Không có bước publish ngầm.
+3. Sau khi kiểm tra trên máy, chạy lại cùng commit, bật `publish=true` và nhập `PUBLISH`. Job mới được phép đưa APK lên GitHub Releases và cập nhật signed manifest.
+4. Duy trì `minimumVersionCode=30` và versionCode tăng để các máy cooc.1.1 có đường nâng cấp.
 
-## Quy tắc
+**Không đổi URL kênh** `feature/1.2-card-update/updates/latest.json`: đường dẫn này đã nhúng trong APK 1.1. Mã nguồn thuộc `main` và `feature/updater`, còn nhánh trên giữ vai trò update feed tương thích ngược.
 
-- Không upload keystore vào artifact CI, issue, release hoặc Library công khai.
-- Không dùng debug key để tự nhận một APK là bản chính thức.
-- Không thay khóa giữa các bản nếu vẫn muốn Android chấp nhận cập nhật.
-- Mất khóa có thể đồng nghĩa mất khả năng cập nhật cùng application ID.
-- Fork công khai phải đổi package ID và nhận diện theo `TRADEMARK.md`.
+Không tự cập nhật khi login/sync. Người dùng tự mở trang cập nhật bằng NFC hoặc tên hiển thị; cài đặt cuối vẫn do Android xác nhận.
 
-## Cài đặt repository
+Quy trình cụ thể và ghi chú về 1.2 đang được host: [docs/COOC_1_2_UPDATE.md](docs/COOC_1_2_UPDATE.md).
 
-Nên bật trên nhánh ổn định:
+## Bảo mật và an toàn
 
-- Require pull request trước khi merge.
-- Require CI status checks.
-- Chặn force push và xóa nhánh.
-- Require review từ CODEOWNERS cho phần nhạy cảm.
-- Bật secret scanning, push protection và private vulnerability reporting nếu
-  gói GitHub của repository hỗ trợ.
-
-Mấy khóa này không làm code thông minh hơn. Chúng chỉ ngăn một cú bấm lúc buồn
-ngủ biến nhánh ổn định thành hiện trường.
+- Không bao giờ commit/upload keystore, private Ed25519 key hoặc mật khẩu vào source/artifact/log.
+- GitHub Environment `cooc-release` giữ các secrets ký. Thiếu khóa phải lỗi chứ không fallback debug.
+- Kiểm SHA-256 APK, certificate fingerprint, package ID, versionCode và manifest signature trước khi publish.
+- Không ghi đè GitHub Release tag đã phát hành, không hạ versionCode, không force push `main`.
+- Đặt branch protection và manual approval cho phát hành nếu có thể.
+- Mốc `backup/main-pre-feature-updater-20261008` là bản bảo toàn trước khi merge.
