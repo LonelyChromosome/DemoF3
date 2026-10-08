@@ -100,6 +100,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   DateTime? _lastSuccessfulSync;
   AssistantPack _assistantPack = AssistantPack.normal;
   String _accountDisplayName = '';
+  bool _shownInstallSuccess = false;
   static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
 
   @override
@@ -123,8 +124,16 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _handleThemeChanged() {
-    if (mounted) {
-      setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    if (_update.phase == UpdatePhase.installed && !_shownInstallSuccess) {
+      _shownInstallSuccess = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Cập nhật Better Phenikaa thành công'),
+        ));
+      });
     }
   }
 
