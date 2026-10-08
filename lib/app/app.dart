@@ -1527,6 +1527,8 @@ class _MainShellState extends State<_MainShell>
 class _TimetableScreen extends StatefulWidget {
   const new({
     required this.data,
+    required this.attendance,
+    required this.onOpenAttendance,
     required this.assistantPack,
     required this.selectedDate,
     required this.onDateChanged,
@@ -1536,6 +1538,8 @@ class _TimetableScreen extends StatefulWidget {
   });
 
   final ImportedScheduleData data;
+  final Map<String, AttendanceEntry> attendance;
+  final ValueChanged<ScheduleRecord> onOpenAttendance;
   final AssistantPack assistantPack;
   final DateTime selectedDate;
   final ValueChanged<DateTime> onDateChanged;
@@ -1834,6 +1838,8 @@ class _TimetableScreenState extends State<_TimetableScreen>
                                               _ScheduleCard(
                                                 item: items[index],
                                                 accent: _accentFor(index),
+                                                attendance: widget.attendance[items[index].id],
+                                                onOpenAttendance: widget.onOpenAttendance,
                                               ),
                                         ),
                                 ),
@@ -3367,10 +3373,13 @@ class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
 }
 
 class _ScheduleCard extends StatelessWidget {
-  const new({required this.item, required this.accent});
+  const new({required this.item, required this.accent,
+    required this.attendance, required this.onOpenAttendance});
 
   final ScheduleRecord item;
   final Color accent;
+  final AttendanceEntry? attendance;
+  final ValueChanged<ScheduleRecord> onOpenAttendance;
 
   @override
   Widget build(BuildContext context) {
@@ -3426,6 +3435,25 @@ class _ScheduleCard extends StatelessWidget {
                   icon: Icons.access_time_rounded,
                   text: '${_time(item.startAt)} - ${_time(item.endAt)}',
                 ),
+                const SizedBox(height: 6),
+                if (attendance == null)
+                  Text('Nhấn để nhập code điểm danh',
+                    style: TextStyle(color: palette.primary, fontSize: 11)),
+                if (attendance != null)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: palette.cardAlt,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      child: Text(switch (attendance!.status) {
+                        AttendanceStatus.pending => 'Chờ xác thực',
+                        AttendanceStatus.present => 'Có mặt',
+                        AttendanceStatus.absent => 'Vắng mặt',
+                      }, style: TextStyle(color: palette.textPrimary, fontSize: 12)),
+                    ),
+                  ),
                 if (item.periodStart != null &&
                     item.periodEnd != null) ...<Widget>[
                   const SizedBox(height: 5),
@@ -3441,18 +3469,26 @@ class _ScheduleCard extends StatelessWidget {
       ],
     );
     if (premium) {
-      return ConstrainedBox(
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onOpenAttendance(item),
+        child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 106),
         child: TienMonEdgeSurface(
           active: active,
           scene: TienMonPremiumContract.appSceneFor(now),
           child: content,
         ),
+      ),
       );
     }
-    return AppThemePanel(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onOpenAttendance(item),
+      child: AppThemePanel(
       constraints: const BoxConstraints(minHeight: 106),
       child: content,
+      ),
     );
   }
 }
