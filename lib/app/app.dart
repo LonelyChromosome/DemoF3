@@ -275,6 +275,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   Future<void> _openUpdate() async {
+    unawaited(_update.checkQuietly());
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -624,6 +625,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
+  void _syncAndCheck() {
+    unawaited(_loginOrSync());
+    if (_data != null) {
+      // Metadata starts in a separate event, outside the QLĐT path.
+      Timer.run(() => unawaited(_update.checkQuietly()));
+    }
+  }
+
   Future<void> _loginOrSync() async {
     if (!supportsLiveQldtLogin) {
       if (!mounted) {
@@ -941,7 +950,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 onTogglePanel: () =>
                                     setState(() => _panelOpen = !_panelOpen),
                                 onOpenPage: _openPage,
-                                onSync: _loginOrSync,
+                                onSync: _syncAndCheck,
                                 onLogout: _logout,
                                 onDateChanged: (date) => setState(
                                   () => _selectedDate = _dateOnly(date),
@@ -1327,6 +1336,7 @@ class _MainShellState extends State<_MainShell>
                       onLogout: onLogout,
                       onSync: onSync,
                       onOpenCardBinding: onOpenCardBinding,
+                      onOpenUpdate: onOpenUpdate,
                       appVersionName: appVersionName,
                       assistantPack: assistantPack,
                       onAssistantPackChanged: onAssistantPackChanged,
@@ -2155,6 +2165,7 @@ class _AccountScreen extends StatelessWidget {
     required this.onLogout,
     required this.onSync,
     required this.onOpenCardBinding,
+    required this.onOpenUpdate,
     required this.appVersionName,
     required this.assistantPack,
     required this.onAssistantPackChanged,
@@ -2165,6 +2176,7 @@ class _AccountScreen extends StatelessWidget {
   final VoidCallback onLogout;
   final VoidCallback onSync;
   final VoidCallback onOpenCardBinding;
+  final VoidCallback onOpenUpdate;
   final String appVersionName;
   final AssistantPack assistantPack;
   final ValueChanged<AssistantPack> onAssistantPackChanged;
@@ -2416,10 +2428,16 @@ class _AccountScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   const RepaintBoundary(child: AppThemeSettingButton()),
                   const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: onOpenUpdate,
+                    icon: const Icon(Icons.system_update_rounded),
+                    label: const Text('Cập nhật ứng dụng'),
+                  ),
+                  const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: onOpenCardBinding,
                     icon: const Icon(Icons.nfc_rounded),
-                    label: const Text('Thẻ cập nhật'),
+                    label: const Text('Liên kết thẻ cập nhật'),
                   ),
                   if (appVersionName.isNotEmpty)
                     Text('Phiên bản $appVersionName',
