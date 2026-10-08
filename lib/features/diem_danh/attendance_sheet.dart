@@ -38,7 +38,6 @@ class _AttendanceSheetState extends State<_AttendanceSheet> {
       TextEditingController(text: widget.current?.code ?? '');
   bool _sending = false;
   String? _error;
-  bool _sent = false;
 
   @override
   void dispose() {
@@ -55,7 +54,6 @@ class _AttendanceSheetState extends State<_AttendanceSheet> {
     try {
       await widget.onSubmit(_code.text.trim());
       if (!mounted) return;
-      setState(() => _sent = true);
       Navigator.of(context).pop();
     } on Object catch (error) {
       if (mounted) setState(() => _error = error.toString());

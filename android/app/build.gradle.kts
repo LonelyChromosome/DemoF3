@@ -57,6 +57,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Private cooc.1.3 preview installs beside signed 1.1.
+            applicationIdSuffix = ".preview13"
+            manifestPlaceholders["appLabel"] = "Better Phenikaa 1.3 Test"
+        }
         release {
             signingConfig = signingConfigs.findByName("coocRelease")
         }
