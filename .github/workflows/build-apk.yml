@@ -218,12 +218,31 @@ jobs:
           fingerprint="$(sed -nE 's/^(Signer #[0-9]+|V[0-9]+ Signer): certificate SHA-256 digest: ([0-9a-fA-F]+)$/\2/p' dist/cooc.1.1-signing.txt | sort -u)"
           test -n "$fingerprint" && test "${fingerprint,,}" = "${EXPECTED_APK_CERT_SHA256,,}"
           echo "cooc.1.1 signer SHA-256: $fingerprint"
+      - name: Save verified bootstrap for release publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: verified-cooc-1-1-direct
+          path: dist/Better-Phenikaa-cooc.1.1-Public.apk
+          retention-days: 1
+
+  bootstrap_publish:
+    if: ${{ inputs.publish_bootstrap_only }}
+    needs: bootstrap
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-cooc-1-1-direct
+          path: dist
       - name: Publish direct cooc.1.1 APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag=cooc.1.1-bootstrap-v30
           apk=dist/Better-Phenikaa-cooc.1.1-Public.apk
+          test -s "$apk"
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" "$apk" --clobber
           else
