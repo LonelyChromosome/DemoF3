@@ -78,6 +78,12 @@ final class UpdateController extends ChangeNotifier {
   bool bindingCard = false;
   bool _job = false;
   bool _awaitingPermission = false;
+  bool get isRunningInBackground =>
+      phase == UpdatePhase.authorized ||
+      phase == UpdatePhase.downloading ||
+      phase == UpdatePhase.verifying ||
+      phase == UpdatePhase.readyForInstaller ||
+      phase == UpdatePhase.installerLaunched;
   int _generation = 0;
 
   Future<int> _installedVersion() async =>
@@ -137,9 +143,10 @@ final class UpdateController extends ChangeNotifier {
     await _channel.invokeMethod<void>('stopCard');
   }
 
-  /// Opening the notification center checks version metadata separately from QLĐT.
+  /// Version metadata is checked only from the Account update action.
   Future<void> checkQuietly() async {
     if (_job ||
+        isRunningInBackground ||
         bindingCard ||
         phase == UpdatePhase.checking ||
         phase == UpdatePhase.waitingForCard ||
@@ -182,6 +189,7 @@ final class UpdateController extends ChangeNotifier {
 
   Future<void> startCard() async {
     if (_job ||
+        isRunningInBackground ||
         notice == null ||
         phase == UpdatePhase.waitingForCard ||
         phase == UpdatePhase.wrongCard ||
@@ -254,6 +262,19 @@ final class UpdateController extends ChangeNotifier {
         phase = UpdatePhase.readyForInstaller;
         notifyListeners();
         break;
+      case 'installerLaunched':
+        phase = UpdatePhase.installerLaunched;
+        notifyListeners();
+        break;
+      case 'updateFailed':
+        phase = UpdatePhase.failed;
+        error = 'Không thể tải hoặc xác minh bản cập nhật. Hãy thử lại.';
+        notifyListeners();
+        break;
+      case 'cancelled':
+        phase = UpdatePhase.cancelled;
+        notifyListeners();
+        break;
     }
   }
 
@@ -318,8 +339,8 @@ final class UpdateController extends ChangeNotifier {
       'size': manifest.apkSize,
       'versionCode': manifest.versionCode,
     });
-    phase = UpdatePhase.installerLaunched;
-    notifyListeners();
+    // The Android foreground service continues after this sheet closes.
+    // It emits installerLaunched only when the verified package is committed.
   }
 
   Future<void> openInstallSettings() async {
