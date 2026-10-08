@@ -40,6 +40,18 @@ class _HenshinVfxState extends State<HenshinVfx>
   );
 
   @override
+  void initState() {
+    super.initState();
+    // Native NFC acceptance can advance to downloading before Flutter draws
+    // the waiting frame. Do not miss the one-shot burst on first paint.
+    if (widget.successToken > 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _burst.forward(from: 0);
+      });
+    }
+  }
+
+  @override
   void didUpdateWidget(covariant HenshinVfx oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.successToken != oldWidget.successToken) {
