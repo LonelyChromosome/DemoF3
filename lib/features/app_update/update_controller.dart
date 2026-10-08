@@ -103,6 +103,9 @@ final class UpdateController extends ChangeNotifier {
       } else {
         await prefs.remove(_noticeKey);
       }
+      if (await _channel.invokeMethod<String>('installStatus') == 'installed') {
+        phase = UpdatePhase.installed;
+      }
       notifyListeners();
     } on Object {
       // A bad cache or unavailable native bridge cannot affect schedule data.
