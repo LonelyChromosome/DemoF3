@@ -127,3 +127,50 @@ jobs:
             dist/update-host/updates/latest.json.sig
             dist/SHA256SUMS
           retention-days: 14
+
+  publish:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: better-phenikaa-cooc-1-2-and-update-host
+          path: dist
+      - name: Verify hosted package before publishing
+        run: |
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          apk = Path('dist/Better-Phenikaa-cooc.1.2-Public.apk')
+          manifest = json.loads(Path('dist/update-host/updates/latest.json').read_bytes())
+          assert manifest['packageName'] == 'vn.edu.phenikaa.better_phenikaa_schedule'
+          assert manifest['versionName'] == 'cooc.1.2'
+          assert manifest['versionCode'] == 31
+          assert manifest['minimumVersionCode'] == 30
+          assert manifest['apkSha256'] == hashlib.sha256(apk.read_bytes()).hexdigest()
+          assert manifest['apkSize'] == apk.stat().st_size
+          assert Path('dist/update-host/updates/latest.json.sig').stat().st_size > 0
+          PY
+      - name: Publish signed APK and update metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=cooc.1.2-card-test-2
+          apk=dist/Better-Phenikaa-cooc.1.2-Public.apk
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$apk" --clobber
+          else
+            gh release create "$tag" "$apk" --target "$GITHUB_SHA" \
+              --title "Better Phenikaa cooc.1.2 (versionCode 31)" \
+              --notes "Signed update candidate for cooc.1.1 versionCode 30." --prerelease
+          fi
+          mkdir -p updates
+          cp dist/update-host/updates/latest.json dist/update-host/updates/latest.json.sig updates/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates/latest.json updates/latest.json.sig
+          git commit -m "Publish signed cooc.1.2 update metadata"
+          git push origin HEAD:refs/heads/feature/1.2-card-update
