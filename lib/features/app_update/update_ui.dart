@@ -7,10 +7,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-// Only enabled in private side-by-side APKs to inspect both effects while the
-// public update server still advertises cooc.1.2. Never grants update access.
-const _vfxPrivatePreview = bool.fromEnvironment('COOC_13_VFX_PREVIEW');
-
 class UpdateFlowSheet extends StatefulWidget {
   const UpdateFlowSheet({
     required this.controller,
@@ -35,7 +31,6 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
 
   bool _holding = false;
   bool _manualSummary = false;
-  bool _previewManual = false;
   bool _nfcVisible = false;
   bool _acceptedNfc = false;
   int _nfcSuccessToken = 0;
@@ -51,8 +46,7 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
       normalizeUpdateAccountName(_manualName.text) ==
           normalizeUpdateAccountName(widget.displayName);
 
-  bool get _canHold =>
-      _previewManual || (widget.controller.notice != null && _nameMatches);
+  bool get _canHold => widget.controller.notice != null && _nameMatches;
 
   bool get _realManualAvailable {
     final phase = widget.controller.phase;
@@ -104,40 +98,11 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
     });
   }
 
-  void _demoNfc() {
-    _vfxVisibilityTimer?.cancel();
-    setState(() {
-      _nfcVisible = true;
-      _acceptedNfc = true;
-      _previewManual = false;
-      _manualSummary = false;
-    });
-    // Make sure the painter exists before changing the success token.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _nfcSuccessToken++);
-      unawaited(HapticFeedback.lightImpact());
-      _hideNfcAfterBurst();
-    });
-  }
-
-  void _demoManual() {
-    _vfxVisibilityTimer?.cancel();
-    setState(() {
-      _nfcVisible = false;
-      _manualSummary = true;
-      _previewManual = true;
-      _holding = false;
-    });
-    _holdCharge.reset();
-  }
-
   void _startNfc() {
     _vfxVisibilityTimer?.cancel();
     setState(() {
       _nfcVisible = true;
       _acceptedNfc = false;
-      _previewManual = false;
     });
     unawaited(widget.controller.startCard());
   }
@@ -165,16 +130,15 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
     _holding = false;
     _manualSuccessToken++;
     unawaited(HapticFeedback.lightImpact());
-    if (!_previewManual) {
-      // Let the gold activation burst finish before continuing the existing
-      // verified-name update path. Leaving the sheet cancels this timer.
-      _manualAuthorizeTimer?.cancel();
-      _manualAuthorizeTimer = Timer(const Duration(milliseconds: 1100), () {
-        if (mounted && _nameMatches && _holdCharge.isCompleted) {
-          unawaited(widget.controller.startManualAfterHold());
-        }
-      });
-    }
+    // The normal updater remains the only authorization path; VFX completes
+    // before the existing verified-name action, cancellation on dispose.
+    _manualAuthorizeTimer?.cancel();
+    _manualAuthorizeTimer = Timer(const Duration(milliseconds: 1100), () {
+      if (mounted && _nameMatches && _holdCharge.isCompleted &&
+          _realManualAvailable && widget.controller.notice != null) {
+        unawaited(widget.controller.startManualAfterHold());
+      }
+    });
     if (mounted) setState(() {});
     _manualResetTimer?.cancel();
     _manualResetTimer = Timer(const Duration(milliseconds: 1500), () {
@@ -258,15 +222,11 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
                           ),
                           Center(
                             child: Text(
-                              _vfxPrivatePreview && _acceptedNfc &&
-                                      !realNfcActive &&
-                                      phase != UpdatePhase.authorized
-                                  ? 'Xem thử hiệu ứng NFC'
-                                  : _acceptedNfc
-                                      ? 'Đã nhận thẻ'
-                                      : phase == UpdatePhase.wrongCard
-                                          ? 'Không đúng thẻ'
-                                          : 'Đưa thẻ NFC lại gần điện thoại',
+                              _acceptedNfc
+                                  ? 'Đã nhận thẻ'
+                                  : phase == UpdatePhase.wrongCard
+                                      ? 'Không đúng thẻ'
+                                      : 'Đưa thẻ NFC lại gần điện thoại',
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -283,20 +243,16 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
                                 ? null
                                 : () => setState(() {
                                       _manualSummary = true;
-                                      _previewManual = false;
                                     }),
                             child: const Text('Cập nhật thủ công'),
                           ),
                           if (_manualSummary) ...[
                             const SizedBox(height: 12),
                             Text(
-                              _previewManual
-                                  ? 'Xem thử hiệu ứng giữ 2 giây. Không tải hay cài ứng dụng.'
-                                  : 'Nhập đúng họ tên trong Tài khoản rồi giữ 2 giây để cập nhật ${notice?.versionName ?? "bản mới"}.',
+                              'Nhập đúng họ tên trong Tài khoản rồi giữ 2 giây để cập nhật ${notice?.versionName ?? "bản mới"}.',
                             ),
                             const SizedBox(height: 8),
-                            if (!_previewManual)
-                              TextField(
+                            TextField(
                                 controller: _manualName,
                                 onChanged: (_) => setState(() {}),
                                 decoration: const InputDecoration(
@@ -316,9 +272,7 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
                                   ),
                                   Text(
                                     _holdCharge.isCompleted
-                                        ? _previewManual
-                                            ? 'Đã xem thử VFX'
-                                            : 'Đã xác nhận thao tác'
+                                        ? 'Đã xác nhận thao tác'
                                         : 'Giữ đủ 2 giây · ${(_holdCharge.value * 100).floor()}%',
                                     style: Theme.of(context).textTheme.bodySmall,
                                   ),
@@ -326,27 +280,6 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
                               ),
                             ),
                           ],
-                        ],
-                        // The test build is side-by-side, and public latest is
-                        // intentionally still 1.2. These two controls display
-                        // VFX only, not fake NFC or a real updater authorization.
-                        if (_vfxPrivatePreview && notice == null &&
-                            phase == UpdatePhase.notAvailable) ...[
-                          const SizedBox(height: 12),
-                          const Divider(),
-                          const SizedBox(height: 8),
-                          const Text('Bản thử 1.3 · Chỉ xem VFX'),
-                          const SizedBox(height: 8),
-                          OutlinedButton.icon(
-                            onPressed: _demoNfc,
-                            icon: const Icon(Icons.nfc),
-                            label: const Text('Xem thử VFX quét NFC'),
-                          ),
-                          OutlinedButton.icon(
-                            onPressed: _demoManual,
-                            icon: const Icon(Icons.touch_app),
-                            label: const Text('Xem thử VFX giữ 2 giây'),
-                          ),
                         ],
                         if (notice == null && phase == UpdatePhase.notAvailable)
                           TextButton(
