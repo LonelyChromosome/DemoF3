@@ -16,25 +16,18 @@ import android.security.keystore.KeyProperties
 import android.util.Base64
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import java.io.File
-import java.net.URL
 import java.security.KeyStore
 import java.security.MessageDigest
-import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import javax.net.ssl.HttpsURLConnection
 
 /** The UID never crosses the Flutter bridge; only accepted/wrong is reported. */
 internal class UpdateBridge(private val activity: Activity, engine: FlutterEngine) {
     private val channel = MethodChannel(engine.dartExecutor.binaryMessenger, "better_phenikaa/update")
     private val main = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor()
-    private val busy = AtomicBoolean(false)
-    private val cancelled = AtomicBoolean(false)
     private val nfc = NfcAdapter.getDefaultAdapter(activity)
     @Volatile private var reading = false
     @Volatile private var bindingOnly = false
@@ -44,7 +37,8 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
     private val uidStore = BoundCardStore(activity)
 
     init {
-        UpdateInstaller.cleanupStale(activity)
+        if (!UpdateDownloadService.running.get()) UpdateInstaller.cleanupStale(activity)
+        UpdateDownloadService.events = { type, bytes, total -> event(type, bytes, total) }
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "versionCode" -> result.success(installedVersionCode())
@@ -52,7 +46,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
                 "hasBoundCard" -> result.success(uidStore.hasBinding())
                 "startBindCard" -> {
                     if (uidStore.hasBinding()) result.error("already_bound", "Thẻ đã được liên kết.", null)
-                    else if (busy.get()) result.error("busy", "Đang cập nhật.", null)
+                    else if (UpdateDownloadService.running.get()) result.error("busy", "Đang cập nhật.", null)
                     else if (nfc == null || !nfc.isEnabled) result.error("nfc_unavailable", "Hãy bật NFC.", null)
                     else {
                         bindingOnly = true
@@ -81,7 +75,15 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
                     }
                 }
                 "stopCard" -> { stopReader(); result.success(null) }
-                "cancel" -> { cancelled.set(true); stopReader(); result.success(null) }
+                "cancel" -> {
+                    stopReader()
+                    if (UpdateDownloadService.running.get()) {
+                        val stop = Intent(activity, UpdateDownloadService::class.java)
+                            .setAction(UpdateDownloadService.ACTION_CANCEL)
+                        activity.startService(stop)
+                    }
+                    result.success(null)
+                }
                 "canInstall" -> result.success(Build.VERSION.SDK_INT < 26 || activity.packageManager.canRequestPackageInstalls())
                 "installStatus" -> result.success(UpdateInstaller.takeStatus(activity))
                 "installSettings" -> {
@@ -92,12 +94,11 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
                     result.success(null)
                 }
                 "downloadAndInstall" -> {
-                    if (!busy.compareAndSet(false, true)) {
+                    if (!UpdateDownloadService.running.compareAndSet(false, true)) {
                         result.error("busy", "Đang cập nhật.", null)
                         return@setMethodCallHandler
                     }
                     stopReader()
-                    cancelled.set(false)
                     val url = call.argument<String>("url")
                     val sha = call.argument<String>("sha256")
                     val size = call.argument<Number>("size")?.toLong()
@@ -105,30 +106,26 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
                     if (url == null || sha == null || size == null || version == null ||
                         !sha.matches(Regex("[0-9a-fA-F]{64}")) || size !in 1..300_000_000L ||
                         version <= installedVersionCode() || !url.startsWith("https://")) {
-                        busy.set(false)
+                        UpdateDownloadService.running.set(false)
                         result.error("invalid_metadata", "Thông tin cập nhật không hợp lệ.", null)
                         return@setMethodCallHandler
                     }
                     if (Build.VERSION.SDK_INT >= 26 && !activity.packageManager.canRequestPackageInstalls()) {
-                        busy.set(false)
+                        UpdateDownloadService.running.set(false)
                         result.error("permission_required", "Android cần quyền cho phép cài đặt.", null)
                         return@setMethodCallHandler
                     }
-                    executor.execute {
-                        try {
-                            val apk = download(url, sha, size)
-                            if (cancelled.get()) throw UpdateCancelled()
-                            event("verifying")
-                            UpdateInstaller.verifyCandidate(activity, apk, version)
-                            if (cancelled.get()) throw UpdateCancelled()
-                            event("preparing")
-                            UpdateInstaller.install(activity, apk, version)
-                            main.post { result.success(null) }
-                        } catch (e: Exception) {
-                            UpdateInstaller.clearTemp(activity)
-                            main.post { result.error(if (e is UpdateCancelled) "cancelled" else "update_failed",
-                                if (e is UpdateCancelled) "Đã hủy cập nhật." else "Không thể tải hoặc xác minh bản cập nhật.", null) }
-                        } finally { busy.set(false) }
+                    try {
+                        val job = Intent(activity, UpdateDownloadService::class.java)
+                            .setAction(UpdateDownloadService.ACTION_START)
+                            .putExtra("url", url).putExtra("sha256", sha)
+                            .putExtra("size", size).putExtra("versionCode", version)
+                        if (Build.VERSION.SDK_INT >= 26) activity.startForegroundService(job)
+                        else activity.startService(job)
+                        result.success(null)
+                    } catch (_: Exception) {
+                        UpdateDownloadService.running.set(false)
+                        result.error("update_failed", "Không thể bắt đầu tải bản cập nhật.", null)
                     }
                 }
                 else -> result.notImplemented()
@@ -151,7 +148,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
             runCatching { nfc?.disableReaderMode(activity) }
         }
     }
-    fun close() { stopReader(); cancelled.set(true); executor.shutdownNow(); channel.setMethodCallHandler(null) }
+    fun close() { stopReader(); UpdateDownloadService.events = null; channel.setMethodCallHandler(null) }
 
     private fun enableReader(): Boolean {
         val adapter = nfc ?: return false
@@ -223,66 +220,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
         return if (Build.VERSION.SDK_INT >= 28) info.longVersionCode else @Suppress("DEPRECATION") info.versionCode.toLong()
     }
 
-    private fun download(url: String, expectedSha: String, expectedSize: Long): File {
-        val root = UpdateInstaller.tempDir(activity)
-        root.mkdirs()
-        val file = File(root, "candidate.apk")
-        file.delete()
-        val connection = openHttpsDownload(url)
-        try {
-            if (connection.responseCode != 200 || connection.contentLengthLong > expectedSize) {
-                throw IllegalStateException("Unexpected download response")
-            }
-            val digest = MessageDigest.getInstance("SHA-256")
-            var count = 0L
-            connection.inputStream.use { input ->
-                file.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        if (cancelled.get()) throw UpdateCancelled()
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        count += read
-                        if (count > expectedSize) throw IllegalStateException("Size exceeded")
-                        output.write(buffer, 0, read)
-                        digest.update(buffer, 0, read)
-                        event("downloading", count, expectedSize)
-                    }
-                    output.flush()
-                }
-            }
-            if (count != expectedSize || !DigestRules.matches(digest.digest(), expectedSha)) {
-                throw IllegalStateException("APK digest mismatch")
-            }
-            return file
-        } catch (e: Exception) { file.delete(); throw e }
-        finally { connection.disconnect() }
-    }
 
-    private fun openHttpsDownload(url: String): HttpsURLConnection {
-        var current = URL(url)
-        for (redirect in 0..5) {
-            require(current.protocol == "https")
-            val connection = current.openConnection() as HttpsURLConnection
-            connection.connectTimeout = 10000
-            connection.readTimeout = 20000
-            connection.instanceFollowRedirects = false
-            val status = try { connection.responseCode } catch (e: Exception) {
-                connection.disconnect()
-                throw e
-            }
-            if (status == 200) return connection
-            val location = connection.getHeaderField("Location")
-            connection.disconnect()
-            if (status !in listOf(301, 302, 303, 307, 308) || location.isNullOrBlank() || redirect == 5) {
-                throw IllegalStateException("Unexpected APK response")
-            }
-            current = URL(current, location)
-        }
-        throw IllegalStateException("Too many APK redirects")
-    }
-
-    private class UpdateCancelled : Exception()
 }
 
 internal object DigestRules {
