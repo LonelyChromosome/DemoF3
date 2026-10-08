@@ -2,13 +2,10 @@ name: Build cooc releases
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feature/1.2-card-update
 
 jobs:
   release:
-    # Configure required reviewers and restrict deployment branches in GitHub.
+    # Release secrets remain scoped to the cooc-release environment.
     environment: cooc-release
     runs-on: ubuntu-latest
     permissions:
@@ -32,7 +29,7 @@ jobs:
           COOC_KEYSTORE_PASSWORD: ${{ secrets.COOC_KEYSTORE_PASSWORD }}
           UPDATE_MANIFEST_PRIVATE_KEY_BASE64: ${{ secrets.UPDATE_MANIFEST_PRIVATE_KEY_BASE64 }}
           UPDATE_PUBLIC_KEY_BASE64: ${{ vars.UPDATE_PUBLIC_KEY_BASE64 }}
-          EXPECTED_APK_CERT_SHA256: 5f2813e1848bcf7afa555fac3a6f20c32c08f51182a375ed9a2449d2499aeb7e
+          EXPECTED_APK_CERT_SHA256: ${{ vars.EXPECTED_APK_CERT_SHA256 }}
         run: |
           test -n "$COOC_KEYSTORE_BASE64"
           test -n "$COOC_KEYSTORE_PASSWORD"
@@ -77,7 +74,7 @@ jobs:
       - name: Verify identity and sign exact manifest bytes
         env:
           UPDATE_APK_URL: https://github.com/LonelyChromosome/DemoF3/releases/download/cooc.1.2-card-test-2/Better-Phenikaa-cooc.1.2-Public.apk
-          EXPECTED_APK_CERT_SHA256: 5f2813e1848bcf7afa555fac3a6f20c32c08f51182a375ed9a2449d2499aeb7e
+          EXPECTED_APK_CERT_SHA256: ${{ vars.EXPECTED_APK_CERT_SHA256 }}
         run: |
           apksigner_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
           aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
