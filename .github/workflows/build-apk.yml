@@ -239,6 +239,7 @@ jobs:
       - name: Publish direct cooc.1.1 APK
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           tag=cooc.1.1-bootstrap-v30
           apk=dist/Better-Phenikaa-cooc.1.1-Public.apk
