@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/1.2-card-update
+    paths-ignore:
+      - .github/workflows/build-cooc-1-3-real-vfx-once.yml
+      - .github/workflows/updater-ci.yml
 
 jobs:
   verify:
