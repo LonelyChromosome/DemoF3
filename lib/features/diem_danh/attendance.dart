@@ -10,11 +10,15 @@ final class AttendanceEntry {
     required this.code,
     required this.status,
     required this.sentAt,
+    this.attendanceListId = '',
   });
 
   final String code;
   final AttendanceStatus status;
   final DateTime sentAt;
+  /// Captured for this exact lesson at code-submission time.
+  /// Never used to validate the timetable/semester database.
+  final String attendanceListId;
 
   factory AttendanceEntry.fromJson(Map<String, dynamic> json) {
     final rawStatus = (json['status'] ?? '').toString();
@@ -26,6 +30,7 @@ final class AttendanceEntry {
       ),
       sentAt: DateTime.tryParse((json['sentAt'] ?? '').toString()) ??
           DateTime.fromMillisecondsSinceEpoch(0),
+      attendanceListId: (json['attendanceListId'] ?? '').toString(),
     );
   }
 
@@ -33,12 +38,14 @@ final class AttendanceEntry {
     'code': code,
     'status': status.name,
     'sentAt': sentAt.toIso8601String(),
+    'attendanceListId': attendanceListId,
   };
 
   AttendanceEntry withStatus(AttendanceStatus next) => AttendanceEntry(
     code: code,
     status: next,
     sentAt: sentAt,
+    attendanceListId: attendanceListId,
   );
 }
 
@@ -81,6 +88,7 @@ final class AttendanceStore {
       code: code,
       status: AttendanceStatus.pending,
       sentAt: DateTime.now(),
+      attendanceListId: lesson.attendanceListId,
     ),
   });
 
@@ -94,6 +102,13 @@ final class AttendanceStore {
     for (final lesson in lessons) {
       final existing = updated[lesson.id];
       if (existing == null) continue;
+      // Keep QLDT status scoped to the exact course/session that submitted
+      // the code. Never take a review from another attendance-list ID.
+      if (existing.attendanceListId.isNotEmpty &&
+          lesson.attendanceListId.isNotEmpty &&
+          existing.attendanceListId != lesson.attendanceListId) {
+        continue;
+      }
       final status = switch (lesson.attendanceReview) {
         'present' => AttendanceStatus.present,
         'absent' => AttendanceStatus.absent,
