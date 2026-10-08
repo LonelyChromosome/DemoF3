@@ -1,111 +1,36 @@
-# cooc.1.1 → cooc.1.2
+# Feature Updater — Better Phenikaa
 
-## Phạm vi
+## Nền phiên bản được giữ nguyên
 
-cooc.1.1 hiện tại (`versionCode 27`) chưa có updater. APK Public đã kiểm tra
-(`SHA-256 50117bf7507a339bfdd9789171701aedf3c335e7214bcd7b7a6f0f759016f517`)
-được ký bằng chứng chỉ **Android Debug** (`SHA-256 ad3b3b92c1376f2a2026b7fcdd6da41a7319d334c9dbf5a5378c58408382ab58`).
-Vì vậy bản này **không thể** được cập nhật tại chỗ bằng APK ký bằng khóa release.
-Nếu chưa có khóa release trước đây, tạo khóa release mới với alias
-`cooc-release-v1`. Người đang cài APK debug code 27 cần gỡ/cài bản mới một lần;
-việc này xóa dữ liệu cục bộ, bao gồm bind thẻ NFC. Không được hứa giữ nguyên dữ
-liệu qua bước chuyển signer. **Bootstrap cooc.1.1 (`versionCode 28`)** là mốc
-đầu của dòng ký release mới. Từ bootstrap,
-Sync chỉ kiểm tra metadata; quét thẻ hoặc giữ nút thủ công 2 giây mới tải APK.
-**cooc.1.2 (`versionCode 29`)** là APK riêng, ký cùng chứng chỉ Android.
+- **cooc.1.1**, `versionCode=30`: APK đã gửi cho người dùng là bản nền.
+- **cooc.1.2**, `versionCode=32`: bản đích cập nhật để kiểm chứng luồng nâng cấp 1.1 → 1.2, có thể cùng chức năng với 1.1.
+- APK đã cài chỉ được cập nhật khi `versionCode` của bản đích **lớn hơn** bản trên thiết bị, package ID và APK signer phải trùng.
+- Dòng ký release hiện tại sử dụng alias `cooc-release-v2`. **Không thay keystore**. APK debug cũ khác signer không thể nâng cấp tại chỗ sang dòng release này.
 
-## Chuỗi tin cậy
+## Bất biến của kênh cập nhật
 
-- App chứa khóa **công khai Ed25519** 32 byte dưới dạng base64, được đưa vào lúc
-  build. `latest.json.sig` là base64 của chữ ký Ed25519 64 byte trên **chính xác
-  các byte UTF-8** của `latest.json`, bao gồm dấu xuống dòng cuối. Không ký lại
-  JSON sau khi đã thay đổi khoảng trắng, thứ tự khóa hoặc URL.
-- `latest.json` chỉ có các trường `schema`, `packageName`, `versionCode`,
-  `versionName`, `minimumVersionCode`, `apkUrl`, `apkSha256`, `apkSize`,
-  `publishedAt`, `notes`. Công cụ phát hành xuất JSON UTF-8, sort key, compact,
-  newline cuối. URL và notes chỉ được dùng sau xác minh chữ ký.
-- APK tải qua HTTPS vào `cacheDir/app_update/candidate.apk`, không vào Downloads.
-  Giới hạn kích thước từ manifest, kiểm SHA-256 của toàn bộ file. Android đọc
-  archive package: phải đúng package ID, đúng versionCode đã ký và cao hơn bản
-  đang cài, cùng tập chứng chỉ signer hiện tại với bản đang chạy. Sau đó mới
-  commit PackageInstaller session. Android tự đưa ra xác nhận cài đặt. URL APK
-  đã ký có thể chuyển hướng HTTPS (tối đa 5 lần) để tải asset GitHub Release;
-  chuyển sang HTTP bị từ chối, và byte tải về vẫn phải khớp hash cùng signer.
-- Sửa update host hoặc thay APK khi không có **cả** khóa riêng Ed25519 và
-  khóa ký APK chỉ có thể làm cập nhật lỗi/bị chặn. Không chấp nhận hash từ một
-  trang chưa ký. Khóa riêng manifest và keystore Android có vai trò tách biệt.
+- Các APK 1.1 hiện hữu đã nhúng URL manifest
+  `https://raw.githubusercontent.com/LonelyChromosome/DemoF3/feature/1.2-card-update/updates/latest.json`.
+- Nhánh `feature/1.2-card-update` vì vậy vẫn là **kênh cung cấp metadata**, dù mã nguồn được merge vào `main`. Không đổi URL hoặc xóa nhánh này; không trỏ máy đã cài sang `main` bằng cách sửa tài liệu.
+- `latest.json.sig` là chữ ký Ed25519 của **chính xác** bytes UTF-8 `latest.json`. App xác minh chữ ký trước khi đọc metadata, xác minh SHA-256 và package/signature của APK trước khi gọi trình cài đặt Android.
+- Không tự kiểm tra cập nhật khi đăng nhập/đồng bộ. Người dùng mở **Tài khoản → Cập nhật ứng dụng** để kiểm tra và chủ động cập nhật bằng thẻ NFC hoặc nhập tên rồi giữ 2 giây.
+- Sau khi bắt đầu tải, việc tải có thể tiếp tục ở nền; trình cài đặt Android vẫn yêu cầu người dùng xác nhận. Thành công thì thông báo.
+- Khi người dùng bỏ trình cài đặt và trở về app, ReaderMode NFC thụ động tránh dispatch thẻ sang ứng dụng khác; không tự bắt đầu lượt cập nhật.
 
-## Thẻ và đường thủ công
+## Phát hành các bản sau (không tự động khi merge)
 
-Reader mode chỉ bật sau khi chọn “Cập nhật bằng thẻ”. UID lấy từ `Tag.id` theo
-thứ tự byte Android trả về, viết hex in hoa không dấu phân cách. UID đầu tiên
-được mã hóa AES-GCM bằng khóa không xuất được của Android Keystore, lưu trong
-private SharedPreferences `update_bound_card`. UID không đi qua Flutter channel,
-không nằm trong HTTP, manifest, log hay export. Thẻ sai báo “Không đúng thẻ”,
-reader vẫn chờ thẻ đúng; không tải APK. Không có chức năng đổi/xóa UID trong app.
-Android Clear data tương đương cài mới. `allowBackup=false` giữ dữ liệu này ngoài
-backup. Đường thủ công yêu cầu giữ 2 giây rồi dùng nguyên luồng kiểm tra APK.
+Workflow **Feature Updater - signed APK release** tại `.github/workflows/build-apk.yml` là `workflow_dispatch` (chạy thủ công). Merge hoặc push `main` **không build hay publish APK**.
 
-Nếu thiếu quyền “Cho phép từ nguồn này”, chỉ một lần **người dùng chủ động cập
-nhật** mới mở màn hình cài đặt của Android. Từ chối quyền thì dừng; Sync/lần mở
-app kế tiếp không nhắc. Lần chủ động cập nhật sau có thể mở lại cài đặt.
+1. Chọn commit trên `main` đã xác nhận để phát hành. Nhập `version_name` và `version_code` lớn hơn bản đã cài. Với bước 1.1 → 1.2: `cooc.1.2`, code `32`; với bản sau dùng code **lớn hơn** bản cao nhất đã phát hành.
+2. Chạy với `publish=false`: build **một APK**, ký bằng đúng keystore cooc, kiểm signer/package/version, tạo metadata và chữ ký, chỉ đưa vào **Actions artifacts**, chưa công bố.
+3. Kiểm tra APK thực tế. Sau khi duyệt mới chạy lại với `publish=true`, gõ `PUBLISH`. Workflow tạo một GitHub Release có tag duy nhất và cập nhật **đúng** `updates/latest.json` + `.sig` trên nhánh kênh cũ. Không ghi đè phiên bản APK trước.
+4. Mỗi lần phát hành phải bảo đảm `versionCode` không giảm, signer không đổi, `minimumVersionCode=30` để máy 1.1 vẫn đủ điều kiện nâng cấp.
 
-## Phát hành
+### Lưu ý quan trọng về 1.2 đã thử nghiệm
 
-1. Trên máy tin cậy, chạy `bash tool/create_release_keys.sh /đường/dẫn/riêng`
-   với thư mục **ngoài repo**. Script tạo keystore Android alias
-   `cooc-release-v1` và cặp Ed25519 độc lập, in ra fingerprint chứng chỉ và
-   khóa công khai. Chọn mật khẩu ngẫu nhiên dài trong trình quản lý mật khẩu;
-   không dùng alias làm mật khẩu. Sao lưu hai khóa riêng an toàn ở hai nơi.
-   Đặt fingerprint release **mới** vào `EXPECTED_APK_CERT_SHA256`. Không dùng
-   fingerprint debug của APK code 27.
-2. Lưu PEM Ed25519 riêng dưới dạng base64 vào secret
-   `UPDATE_MANIFEST_PRIVATE_KEY_BASE64` của GitHub Environment `cooc-release`.
-   Lưu base64 của 32 byte khóa công khai vào variable `UPDATE_PUBLIC_KEY_BASE64`.
-   Công việc build đối chiếu hai giá trị. Không gửi khóa riêng qua chat, không
-   in giá trị secret vào log và không đưa khóa vào repo/artifact.
-3. Đặt `COOC_KEYSTORE_BASE64`, `COOC_KEYSTORE_PASSWORD` trong Environment đó.
-   Bật required reviewers và chỉ cho nhánh/tag phát hành được truy cập. Workflow
-   chỉ chạy thủ công; push thông thường không nhận khóa. Không bật environment
-   secrets trước khi cấu hình bảo vệ này.
-4. Chạy workflow từ nhánh phát hành đã kiểm. Nó chạy test, build hai APK public
-   tên riêng và code 28/29, xác minh hai fingerprint bằng nhau và bằng
-   fingerprint release mới ở bước 1, tạo `dist/update-host/updates/latest.json`,
-   `.sig` và APK 1.2. Không
-   upload keystore hay private key làm artifact.
-5. Tạo GitHub Release với tag `cooc.1.2`, upload APK 1.2 làm release asset đúng
-   tên đã ký trong manifest. Công bố `latest.json` và `latest.json.sig` tại
-   `https://raw.githubusercontent.com/LonelyChromosome/DemoF3/feature/1.2-card-update/updates/`
-   cho đợt thử nghiệm. APK bootstrap đã nhúng địa chỉ này. Chỉ công bố hai byte
-   file đã ký sau khi Release asset có sẵn. Gói `update-host/updates/` vẫn chứa đủ ba file để bàn
-   giao; APK lớn hơn giới hạn một file Git, nên đặt ở Release asset. Giữ nguyên
-   byte JSON đã ký. Không ghi đè APK 1.1 bằng 1.2.
-6. Kiểm thử signed bootstrap 1.1 → 1.2, NFC đúng/sai, thủ công, từ chối quyền,
-   sửa byte manifest và thay APK trên host. Xác nhận `versionCode 29`, fingerprint
-   signer giữ nguyên, `cacheDir/app_update` được dọn sau khi cài.
+Manifest hiện tại vẫn trỏ tới bản `cooc.1.2` (code 32) đã phát hành trước các sửa lỗi Unicode/UI/NFC cuối cùng cho APK 1.1. **Muốn 1.2 có cùng fix với bản 1.1 đã giao**, phải build **lại target 1.2 từ commit sau fix**, thử và phát hành manifest ký mới (tag không trùng bản cũ). Merge code vào `main` **không tự thay APK 1.2 đang tải về**.
 
-Khóa riêng của cặp APK thử nghiệm đã tạo trong môi trường tạm trước khi thiết lập
-sao lưu bền vững; không dùng cặp này cho phát hành lâu dài nếu không khôi phục
-được cả hai khóa riêng. Cặp APK hiện có chỉ phục vụ phép thử 1.1 code 28 → 1.2
-code 29. Muốn phát hành tiếp, phải dựng lại bootstrap và target với cặp khóa
-được bảo quản an toàn, tăng versionCode, rồi ký lại manifest tương ứng.
+## Mốc khôi phục
 
-Release phải thất bại nếu thiếu khóa, fingerprint release mới hoặc dùng chứng
-chỉ debug. Mốc code 27 ký debug không thể cập nhật trực tiếp sang code 28 ký
-release; hãy thông báo rõ bước cài mới trước khi phân phối.
-
-## Bản thử thay thế sau phản hồi trên thiết bị
-
-APK bootstrap code 28 và target code 29 đã phát hành trước đó có lỗi UI NFC và
-nhãn phiên bản, không dùng chúng để xác nhận luồng cập nhật. Bản thay thế giữ
-tên hiển thị `cooc.1.1` và `cooc.1.2`, dùng versionCode 30 → 31 và cùng
-chứng chỉ ký release **mới**. Vì khóa riêng của cặp 28/29 không còn, thiết bị
-đã cài bản đó phải gỡ và cài bootstrap 30 trước khi thử lại; Android không
-chấp nhận cập nhật khác signer. Không đưa APK mới lên host trước khi đã xác
-minh hai signer bằng nhau và manifest mới chỉ đến đúng asset 31.
-
-Bản thay thế không gọi kiểm tra cập nhật trong Đăng nhập/Sync. Mở chuông sẽ
-kiểm tra metadata riêng. Tài khoản có mục liên kết thẻ: quét một lần, UID
-được lưu mã hóa cục bộ, không cho đổi thẻ trong app. Đường thủ công yêu cầu
-nhập đúng họ tên đang hiển thị trong Tài khoản rồi giữ nút 2 giây. Nhãn
-phiên bản đọc từ package đang cài thay vì chuỗi ghi cứng.
+- `backup/main-pre-feature-updater-20261008` giữ nguyên `main` cũ tại `a9e8d1c2281b5906eea8f980bbf31f3345de8163`.
+- `feature/updater` là nhánh làm việc của tính năng; `main` là nguồn mã chính sau merge. Không force-push `main` hoặc rewrite history.
