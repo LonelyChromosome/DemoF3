@@ -3,7 +3,7 @@ name: Build cooc.1.3 isolated preview (NO PUBLISH)
 on:
   push:
     branches:
-      - fix/1.3-reload-bb7c802
+      - fix/1.3-shared-sync-352e5a0
   workflow_dispatch:
 
 permissions:
@@ -30,6 +30,12 @@ jobs:
         run: bash tool/bootstrap.sh
       - name: Attendance and feedback tests
         run: flutter test test/attendance_flow_test.dart test/attendance_feedback_test.dart
+      - name: Verify a single QLDT auth path
+        run: |
+          grep -q "buildQldtInlineSync" lib/app/app.dart
+          grep -q "buildQldtInlineSession" lib/app/app.dart
+          ! grep -q "reloadQldtInPlace" lib/app/app.dart
+          ! grep -q "_readAttendanceSession" lib/features/diem_danh/attendance_submit_io.dart
       - name: Build side-by-side debug APK, NOT an in-place upgrade
         run: |
           flutter build apk --debug --split-per-abi --build-number=34

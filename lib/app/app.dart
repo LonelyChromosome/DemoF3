@@ -89,6 +89,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _syncing = false;
   bool _pullSyncing = false;
   Completer<QldtLoginResult>? _inlineQldtSync;
+  Completer<Map<String, String>>? _inlineSessionRequest;
   Map<String, AttendanceEntry> _attendance = <String, AttendanceEntry>{};
   bool _panelOpen = false;
   ImportedScheduleData? _data;
@@ -645,6 +646,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   Future<void> _loginOrSync({bool updateAttendance = false}) async {
+    if (_pullSyncing || _inlineSessionRequest != null || _syncing) return;
     if (!supportsLiveQldtLogin) {
       if (!mounted) {
         return;
@@ -764,14 +766,51 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
+  Future<Map<String, String>> _liveQldtSession() async {
+    if (_inlineSessionRequest != null || _pullSyncing || _syncing) {
+      throw StateError('SYNC_BUSY');
+    }
+    final request = Completer<Map<String, String>>();
+    setState(() => _inlineSessionRequest = request);
+    try {
+      // Session comes from the very same WebView readiness check as Sync.
+      // Never trust or reject a potentially stale token in SharedPreferences.
+      return await request.future.timeout(const Duration(seconds: 70));
+    } finally {
+      if (mounted && identical(_inlineSessionRequest, request)) {
+        setState(() => _inlineSessionRequest = null);
+      }
+    }
+  }
+
+  void _inlineSessionReady(Map<String, String> session) {
+    final request = _inlineSessionRequest;
+    if (request != null && !request.isCompleted) request.complete(session);
+  }
+
+  void _inlineSessionFailed(String reason) {
+    final request = _inlineSessionRequest;
+    if (request != null && !request.isCompleted) {
+      request.completeError(StateError(reason));
+    }
+  }
+
   void _openAttendance(ScheduleRecord lesson) {
+    Map<String, String>? liveSession;
     unawaited(showAttendanceSheet(
       context: context,
       lesson: lesson,
       current: _attendance[lesson.id],
-      onResolve: () => resolveAttendanceLesson(lesson),
+      onResolve: () async {
+        liveSession = await _liveQldtSession();
+        return resolveAttendanceLesson(lesson, liveSession: liveSession!);
+      },
       onSubmit: (resolvedLesson, code) async {
-        await submitAttendanceCode(resolvedLesson, code);
+        // Resolve and submit are both bound to the active WebView session.
+        final session = liveSession ?? await _liveQldtSession();
+        await submitAttendanceCode(
+          resolvedLesson, code, liveSession: session,
+        );
         final next = await AttendanceStore().recordSent(
           _attendance, resolvedLesson, code,
         );
@@ -1080,15 +1119,20 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 onDismissError: () =>
                                     setState(() => _errorMessage = null),
                               ),
-                                  if (_pullSyncing)
+                                  if (_pullSyncing || _inlineSessionRequest != null)
                                     Positioned.fill(
                                       child: IgnorePointer(
                                         child: Opacity(
                                           opacity: .001,
-                                          child: buildQldtInlineSync(
-                                            onComplete: _inlineQldtSucceeded,
-                                            onFailed: _inlineQldtFailed,
-                                          ),
+                                          child: _pullSyncing
+                                              ? buildQldtInlineSync(
+                                                  onComplete: _inlineQldtSucceeded,
+                                                  onFailed: _inlineQldtFailed,
+                                                )
+                                              : buildQldtInlineSession(
+                                                  onSession: _inlineSessionReady,
+                                                  onFailed: _inlineSessionFailed,
+                                                ),
                                         ),
                                       ),
                                     ),

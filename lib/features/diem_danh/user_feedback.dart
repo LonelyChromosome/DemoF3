@@ -25,6 +25,12 @@ String attendanceFailureMessage(Object error) {
   ])) {
     return 'QLĐT chưa trả mã lớp điểm danh. Thử lại.';
   }
+  if (_matches(raw, <String>['sync_busy'])) {
+    return 'Đang đồng bộ QLĐT. Hãy thử sau.';
+  }
+  if (_matches(raw, <String>['session_not_ready'])) {
+    return 'QLĐT chưa sẵn sàng. Hãy thử lại.';
+  }
   if (_matches(raw, <String>[
     '401', '403', 'unauthorized', 'session_expired',
     'phiên qlđt', 'phiên qldt', 'tokenjwt', 'đăng nhập lại',
