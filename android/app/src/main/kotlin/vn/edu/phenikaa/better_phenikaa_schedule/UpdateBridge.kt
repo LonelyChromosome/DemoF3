@@ -31,6 +31,10 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
     private val nfc = NfcAdapter.getDefaultAdapter(activity)
     @Volatile private var reading = false
     @Volatile private var bindingOnly = false
+    // Keep Android's foreground tag dispatch away from other apps after the
+    // updater hands control to PackageInstaller, including if user declines.
+    // This is passive: only startCard/startBindCard may process a UID.
+    @Volatile private var passiveNfcGuard = false
     private var resumed = false
     private val cardAccepted = AtomicBoolean(false)
     @Volatile private var lastTag: Tag? = null
@@ -115,6 +119,11 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
                         result.error("permission_required", "Android cần quyền cho phép cài đặt.", null)
                         return@setMethodCallHandler
                     }
+                    // Once update flow reaches installation, scanning the same
+                    // card after dismissing Android's installer must not launch
+                    // an unrelated tag app. ReaderMode is foreground-only.
+                    passiveNfcGuard = true
+                    if (resumed) enableReader()
                     try {
                         val job = Intent(activity, UpdateDownloadService::class.java)
                             .setAction(UpdateDownloadService.ACTION_START)
@@ -135,7 +144,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
 
     fun onResume() {
         resumed = true
-        if (reading && !enableReader()) {
+        if ((reading || passiveNfcGuard) && !enableReader() && reading) {
             reading = false
             bindingOnly = false
             event("cardError")
@@ -143,12 +152,18 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
     }
     fun onPause() {
         resumed = false
-        if (reading) {
+        if (reading || passiveNfcGuard) {
             ignoreLastTag()
             runCatching { nfc?.disableReaderMode(activity) }
         }
     }
-    fun close() { stopReader(); UpdateDownloadService.events = null; channel.setMethodCallHandler(null) }
+    fun close() {
+        passiveNfcGuard = false
+        stopReader()
+        runCatching { nfc?.disableReaderMode(activity) }
+        UpdateDownloadService.events = null
+        channel.setMethodCallHandler(null)
+    }
 
     private fun enableReader(): Boolean {
         val adapter = nfc ?: return false
@@ -193,11 +208,16 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
     }
 
     private fun stopReader() {
-        if (reading) {
-            reading = false
-            bindingOnly = false
-            main.post {
-                ignoreLastTag()
+        val wasReading = reading
+        reading = false
+        bindingOnly = false
+        if (!wasReading) return
+        main.post {
+            ignoreLastTag()
+            if (passiveNfcGuard && resumed) {
+                // Continue consuming tags without authorizing an update.
+                if (!enableReader()) runCatching { nfc?.disableReaderMode(activity) }
+            } else {
                 runCatching { nfc?.disableReaderMode(activity) }
             }
         }

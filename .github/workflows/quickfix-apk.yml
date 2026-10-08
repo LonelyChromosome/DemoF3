@@ -5,6 +5,7 @@ on:
       - feature/1.2-card-update
     paths:
       - .github/workflows/quickfix-apk.yml
+      - android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/UpdateBridge.kt
 jobs:
   apk:
     environment: cooc-release
