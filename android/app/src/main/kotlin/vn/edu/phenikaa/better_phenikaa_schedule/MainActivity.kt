@@ -153,6 +153,8 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        UpdateConfirmation.visible = true
+        UpdateConfirmation.take()?.let { startActivity(it) }
         updateBridge?.onResume()
         pendingWidgetApply?.let(widgetHandler::removeCallbacks)
         pendingWidgetApply = null
@@ -164,6 +166,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onPause() {
+        UpdateConfirmation.visible = false
         updateBridge?.onPause()
         super.onPause()
     }
