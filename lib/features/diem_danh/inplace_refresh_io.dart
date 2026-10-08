@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_login_result.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
@@ -24,7 +26,9 @@ Future<QldtLoginResult> reloadQldtInPlace(ImportedScheduleData current) async {
   }
 
   const transport = QldtNativeTransport();
-  final registrationResponse = await transport.fetchRegistration(session);
+  final registrationResponse = await _retryTransient(
+    () => transport.fetchRegistration(session),
+  );
   final registration = const TracuuApi().parse(registrationResponse.raw);
   final range = SemesterScheduleRange.fromRegistration(registration);
   if (range == null) {
@@ -46,9 +50,9 @@ Future<QldtLoginResult> reloadQldtInPlace(ImportedScheduleData current) async {
   for (var offset = 0; offset < chunks.length; offset += 8) {
     final batch = chunks.skip(offset).take(8);
     final responses = await Future.wait(batch.map((chunk) =>
-        transport.fetchScheduleEnvelope(
+        _retryTransient(() => transport.fetchScheduleEnvelope(
           session: session, start: chunk.start, end: chunk.end,
-        )));
+        ))));
     for (final rawResponse in responses) {
       final envelope = jsonDecode(rawResponse) as Map<String, dynamic>;
       final response = Map<String, dynamic>.from(envelope['response'] as Map);
@@ -57,6 +61,10 @@ Future<QldtLoginResult> reloadQldtInPlace(ImportedScheduleData current) async {
       }
       allRows.addAll(response['Data'] as List);
     }
+  }
+
+  if (allRows.isEmpty && current.records.isNotEmpty) {
+    throw const FormatException('QLĐT trả lịch trống bất thường.');
   }
 
   final resultEnvelope = jsonEncode(<String, dynamic>{
@@ -86,4 +94,31 @@ Future<QldtLoginResult> reloadQldtInPlace(ImportedScheduleData current) async {
     ),
     termStartedAt: range.start,
   );
+}
+
+bool _transientQldtFailure(Object error) {
+  if (error is SocketException || error is TimeoutException) return true;
+  if (error is HttpException) {
+    final message = error.message;
+    return message.contains('429') ||
+        message.contains('502') ||
+        message.contains('503') ||
+        message.contains('504');
+  }
+  return false;
+}
+
+/// The working QLDT sync is asynchronous; retry only transient transport
+/// failures. Never retry an authorization or validation failure.
+Future<T> _retryTransient<T>(Future<T> Function() request) async {
+  for (var attempt = 0; ; attempt++) {
+    try {
+      return await request();
+    } on Object catch (error) {
+      if (!_transientQldtFailure(error) || attempt >= 2) rethrow;
+      await Future<void>.delayed(
+        Duration(milliseconds: 450 * (attempt + 1)),
+      );
+    }
+  }
 }

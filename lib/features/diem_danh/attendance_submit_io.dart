@@ -12,10 +12,7 @@ const _endpoint = 'https://qldtbeta.phenikaa-uni.edu.vn/chuyencanapi/api/'
 Future<void> submitAttendanceCode(ScheduleRecord lesson, String code) async {
   final listId = lesson.attendanceListId.trim();
   if (listId.isEmpty) {
-    throw StateError(
-      'Chưa có mã danh sách điểm danh của buổi học từ QLĐT. '
-      'Không thể gửi code cho sai môn.',
-    );
+    throw StateError('ATTENDANCE_LIST_ID_MISSING');
   }
   if (code.trim().isEmpty) {
     throw const FormatException('Hãy nhập code điểm danh.');
@@ -82,9 +79,8 @@ Future<void> submitAttendanceCode(ScheduleRecord lesson, String code) async {
     }
     final result = jsonDecode(content) as Map<String, dynamic>;
     if (result['Success'] != true) {
-      throw StateError(
-        (result['Message'] ?? 'QLĐT chưa tiếp nhận code').toString(),
-      );
+      final message = (result['Message'] ?? '').toString().trim();
+      throw StateError(message.isNotEmpty ? message : 'SUBMISSION_REJECTED');
     }
     // Success means submitted, NOT present/absent, and Id may be blank.
   } finally {

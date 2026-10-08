@@ -3,7 +3,7 @@ name: Build cooc.1.3 isolated preview (NO PUBLISH)
 on:
   push:
     branches:
-      - feature/1.3-attendance-refresh
+      - fix/1.3-reload-bb7c802
   workflow_dispatch:
 
 permissions:
@@ -28,16 +28,16 @@ jobs:
           cache: true
       - name: Bootstrap project
         run: bash tool/bootstrap.sh
-      - name: Attendance model tests
-        run: flutter test test/attendance_flow_test.dart
+      - name: Attendance and feedback tests
+        run: flutter test test/attendance_flow_test.dart test/attendance_feedback_test.dart
       - name: Build side-by-side debug APK, NOT an in-place upgrade
         run: |
-          flutter build apk --debug --build-number=33
+          flutter build apk --debug --split-per-abi --build-number=34
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-debug.apk dist/Better-Phenikaa-cooc.1.3-Preview.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk dist/Better-Phenikaa-cooc.1.3-Preview-arm64.apk
       - name: Verify APK identity
         run: |
-          apk=dist/Better-Phenikaa-cooc.1.3-Preview.apk
+          apk=dist/Better-Phenikaa-cooc.1.3-Preview-arm64.apk
           aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
           test -x "$aapt_bin"
           "$aapt_bin" dump badging "$apk" | grep "vn.edu.phenikaa.better_phenikaa_schedule.preview13"
@@ -47,6 +47,6 @@ jobs:
         with:
           name: cooc-1-3-preview-side-by-side
           path: |
-            dist/Better-Phenikaa-cooc.1.3-Preview.apk
+            dist/Better-Phenikaa-cooc.1.3-Preview-arm64.apk
             dist/SHA256SUMS
           retention-days: 7
