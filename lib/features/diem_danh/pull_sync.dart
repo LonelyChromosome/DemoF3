@@ -24,7 +24,8 @@ class PullSyncSurface extends StatefulWidget {
 
 class _PullSyncSurfaceState extends State<PullSyncSurface>
     with SingleTickerProviderStateMixin {
-  static const double _threshold = 92;
+  // v1.3: double the drag travel and the icon's visual path.
+  static const double _threshold = 184;
   late final AnimationController _spin = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),

@@ -17,6 +17,7 @@ import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.d
 import 'package:better_phenikaa_schedule/features/diem_danh/attendance.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/attendance_sheet.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/attendance_submit.dart';
+import 'package:better_phenikaa_schedule/features/diem_danh/user_feedback.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/inplace_refresh.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/pull_sync.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
@@ -767,17 +768,28 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   Future<void> _pullRefresh() async {
     if (_syncing || _pullSyncing || _data == null) return;
     setState(() => _pullSyncing = true);
+    var stage = 'download';
     try {
+      // Reload runs inside the current page using the cached QLDT session.
+      // Never call openQldtLogin or replace the displayed data while loading.
       final verified = await reloadQldtInPlace(_data!);
+      stage = 'save';
       await _save(verified);
       final prefs = await SharedPreferences.getInstance();
       final saved = prefs.getString(_storageKey);
       final updated = saved == null
           ? verified.schedule
           : ImportedScheduleData.decode(saved);
-      final attendance = await AttendanceStore().reconcile(
-        _attendance, updated.classes,
-      );
+      // Attendance is cosmetic until QLDT explicitly supplies a review value.
+      // Failure to persist a local badge must not invalidate a valid sync.
+      Map<String, AttendanceEntry> attendance = _attendance;
+      try {
+        attendance = await AttendanceStore().reconcile(
+          _attendance, updated.classes,
+        );
+      } on Object {
+        // Schedule is authoritative; an attendance badge can retry next time.
+      }
       if (!mounted) return;
       setState(() {
         _data = updated;
@@ -786,13 +798,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       });
       _scheduleExamClock();
       unawaited(_refreshDifference());
-    } on Object {
+    } on Object catch (error) {
       if (mounted) {
+        final message = refreshFailureMessage(error, stage: stage);
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(
-            content: Text('Không thể làm mới. Dữ liệu cũ vẫn được giữ.'),
-          ));
+          ..showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _pullSyncing = false);
@@ -3438,9 +3449,6 @@ class _ScheduleCard extends StatelessWidget {
                   text: '${_time(item.startAt)} - ${_time(item.endAt)}',
                 ),
                 const SizedBox(height: 6),
-                if (attendance == null)
-                  Text('Nhấn để nhập code điểm danh',
-                    style: TextStyle(color: palette.primary, fontSize: 11)),
                 if (attendance != null)
                   DecoratedBox(
                     decoration: BoxDecoration(

@@ -1,5 +1,6 @@
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/attendance.dart';
+import 'package:better_phenikaa_schedule/features/diem_danh/user_feedback.dart';
 import 'package:flutter/material.dart';
 
 Future<void> showAttendanceSheet({
@@ -56,7 +57,7 @@ class _AttendanceSheetState extends State<_AttendanceSheet> {
       if (!mounted) return;
       Navigator.of(context).pop();
     } on Object catch (error) {
-      if (mounted) setState(() => _error = error.toString());
+      if (mounted) setState(() => _error = attendanceFailureMessage(error));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
