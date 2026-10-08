@@ -32,12 +32,13 @@ final class QldtNativeSession {
   final String cookie;
   final String displayName;
 
+  // Match QLDT browser readiness used by the working sync:
+  // appId and functionId may be empty even while the token is usable.
+  // An HTTP 401/403 is authoritative; blank optional metadata is not.
   bool get isValid =>
       tokenJwt.isNotEmpty &&
       userId.isNotEmpty &&
-      iM.isNotEmpty &&
-      appId.isNotEmpty &&
-      functionId.isNotEmpty;
+      iM.isNotEmpty;
 }
 
 final class QldtNativeRegistration {

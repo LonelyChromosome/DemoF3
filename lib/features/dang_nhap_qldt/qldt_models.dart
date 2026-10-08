@@ -15,6 +15,8 @@ final class ScheduleRecord {
     this.examForm = '',
     this.periodStart,
     this.periodEnd,
+    this.attendanceListId = '',
+    this.attendanceReview,
   });
 
   factory fromJson(Map<String, Object?> json) {
@@ -29,6 +31,8 @@ final class ScheduleRecord {
       examForm: json['examForm'] as String? ?? '',
       periodStart: json['periodStart'] as int?,
       periodEnd: json['periodEnd'] as int?,
+      attendanceListId: json['attendanceListId'] as String? ?? '',
+      attendanceReview: json['attendanceReview'] as String?,
     );
   }
 
@@ -42,6 +46,8 @@ final class ScheduleRecord {
   final String examForm;
   final int? periodStart;
   final int? periodEnd;
+  final String attendanceListId;
+  final String? attendanceReview;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
@@ -54,6 +60,8 @@ final class ScheduleRecord {
     'examForm': examForm,
     'periodStart': periodStart,
     'periodEnd': periodEnd,
+    'attendanceListId': attendanceListId,
+    'attendanceReview': attendanceReview,
   };
 }
 
@@ -256,7 +264,35 @@ final class QldtParser {
       examForm: examForm,
       periodStart: _int(item['TIETBATDAU']),
       periodEnd: _int(item['TIETKETTHUC']),
+      attendanceListId: _firstNonEmpty(<Object?>[
+        item['DANGKY_LOPHOCPHAN_ID'],
+        item['IDLOPHOCPHAN'],
+        item['DIEM_DANHSACH_ID'],
+        item['DIEM_DANH_SACH_ID'],
+        item['strDiem_DanhSach_Id'],
+      ]),
+      attendanceReview: _attendanceReview(item),
     );
+  }
+
+  // A stored code is not proof of approved attendance.
+  static String? _attendanceReview(Map<String, dynamic> row) {
+    final raw = _firstNonEmpty(<Object?>[
+      row['THONGTINCHUYENCAN'],
+      row['KETQUADIEMDANH'],
+      row['TRANGTHAIDIEMDANH'],
+      row['DIEMDANH_KETQUA'],
+    ]).trim().toLowerCase();
+    // Parse exact QLDT labels, optionally followed by the count in brackets.
+    final label = raw.split('(').first.trim();
+    final suffix = raw.substring(label.length).trim();
+    final validSuffix = suffix.isEmpty ||
+        (suffix.startsWith('(') && suffix.endsWith(')') &&
+         int.tryParse(suffix.substring(1, suffix.length - 1)) != null);
+    if (!validSuffix) return null;
+    if (label == 'có mặt' || label == 'co mat') return 'present';
+    if (label == 'vắng mặt' || label == 'vang mat') return 'absent';
+    return null;
   }
 
   static DateTime? _parseVietnameseDate(String value) {
