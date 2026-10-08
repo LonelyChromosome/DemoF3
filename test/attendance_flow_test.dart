@@ -153,6 +153,38 @@ void main() {
     expect(difference.exams.modified, 0);
   });
 
+  test('real QLDT course-section ID and THONGTINCHUYENCAN are parsed', () {
+    final raw = <String, dynamic>{
+      'Success': true,
+      'Data': [
+        {
+          'PHANLOAI': 'LICHHOC',
+          'TENHOCPHAN': 'Phân tích và thiết kế phần mềm',
+          'TENLOPHOCPHAN': 'Phân tích và thiết kế phần mềm-1-1-26(N08)<br>Có mặt<br>',
+          'NGAYHOC': '08/10/2026',
+          'PHONGHOC_TEN': 'A6-105 (PC)',
+          'GIOBATDAU': 13, 'PHUTBATDAU': 0,
+          'GIOKETTHUC': 15, 'PHUTKETTHUC': 40,
+          'DANGKY_LOPHOCPHAN_ID': 'course-id-from-timetable',
+          'IDLOPHOCPHAN': 'course-id-from-timetable',
+          'THONGTINCHUYENCAN': 'Có mặt(3)',
+        },
+      ],
+    };
+    final result = const QldtParser()
+        .parseApiResponse(raw, displayName: 'Student');
+    expect(result.classes.single.attendanceListId,
+        'course-id-from-timetable');
+    expect(result.classes.single.attendanceReview, 'present');
+    raw['Data'] = [
+      {...(raw['Data'] as List).single as Map<String, dynamic>,
+        'THONGTINCHUYENCAN': 'Vắng mặt(3)'},
+    ];
+    final absent = const QldtParser()
+        .parseApiResponse(raw, displayName: 'Student');
+    expect(absent.classes.single.attendanceReview, 'absent');
+  });
+
   test('schedule parser keeps server attendance id and explicit label', () {
     final response = <String, dynamic>{
       'Success': true,

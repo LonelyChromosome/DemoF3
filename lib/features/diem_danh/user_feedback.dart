@@ -23,7 +23,7 @@ String attendanceFailureMessage(Object error) {
     'attendance_list_id_missing', 'chưa có mã danh sách',
     'chưa có mã điểm danh',
   ])) {
-    return 'Chưa có thông tin điểm danh của buổi này.';
+    return 'QLĐT chưa trả mã lớp điểm danh. Thử lại.';
   }
   if (_matches(raw, <String>[
     '401', '403', 'unauthorized', 'session_expired',

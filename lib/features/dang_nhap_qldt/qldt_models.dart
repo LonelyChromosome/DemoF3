@@ -264,7 +264,11 @@ final class QldtParser {
       examForm: examForm,
       periodStart: _int(item['TIETBATDAU']),
       periodEnd: _int(item['TIETKETTHUC']),
+      // QLDT's own personal-timetable rows use these course-section
+      // identifiers. Verified from the provided attendance request trace.
       attendanceListId: _firstNonEmpty(<Object?>[
+        item['DANGKY_LOPHOCPHAN_ID'],
+        item['IDLOPHOCPHAN'],
         item['DIEM_DANHSACH_ID'],
         item['DIEM_DANH_SACH_ID'],
         item['strDiem_DanhSach_Id'],
@@ -276,12 +280,207 @@ final class QldtParser {
   // A stored code is not proof of approved attendance.
   static String? _attendanceReview(Map<String, dynamic> row) {
     final raw = _firstNonEmpty(<Object?>[
+      row['THONGTINCHUYENCAN'],
       row['KETQUADIEMDANH'],
       row['TRANGTHAIDIEMDANH'],
       row['DIEMDANH_KETQUA'],
     ]).trim().toLowerCase();
-    if (raw == 'có mặt' || raw == 'co mat') return 'present';
-    if (raw == 'vắng mặt' || raw == 'vang mat') return 'absent';
+    // Strings such as "Có mặt(3)" / "Vắng mặt(3)" are supplied by
+    // QLDT. The number is not interpreted as an approval state.
+    if (RegExp(r'^(có mặt|co mat)(?:\\s*\\(\\d+\\))?
+  }
+
+  static DateTime? _parseVietnameseDate(String value) {
+    final parts = value.split('/');
+    if (parts.length != 3) {
+      return null;
+    }
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (day == null || month == null || year == null) {
+      return null;
+    }
+    final parsed = DateTime(year, month, day);
+    if (parsed.year != year || parsed.month != month || parsed.day != day) {
+      return null;
+    }
+    return parsed;
+  }
+
+  static String _displayNameFromResponse(
+    Map<String, dynamic> response,
+  ) {
+    const exactKeys = <String>{
+      'HOTEN',
+      'HO_TEN',
+      'HOVATEN',
+      'TENNGUOIHOC',
+      'NGUOIHOC_TEN',
+      'QLSV_NGUOIHOC_TEN',
+      'SINHVIEN_TEN',
+      'TEN_SINHVIEN',
+      'FULLNAME',
+      'FULL_NAME',
+    };
+
+    String? walk(Object? node, [int depth = 0]) {
+      if (node == null || depth > 6) return null;
+      if (node is Map) {
+        for (final entry in node.entries) {
+          final key = entry.key.toString().trim().toUpperCase();
+          final compact = key.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+          final looksLikeStudentName =
+              exactKeys.contains(key) ||
+              compact == 'HOTEN' ||
+              compact == 'HOVATEN' ||
+              compact == 'TENNGUOIHOC' ||
+              compact == 'NGUOIHOTEN' ||
+              compact == 'SINHVIENTEN' ||
+              compact == 'TENSINHVIEN' ||
+              (compact.contains('NGUOIHOC') && compact.endsWith('TEN'));
+          if (looksLikeStudentName) {
+            final value = _string(entry.value);
+            if (value.isNotEmpty && value.length <= 120) return value;
+          }
+        }
+        for (final value in node.values) {
+          final found = walk(value, depth + 1);
+          if (found != null && found.isNotEmpty) return found;
+        }
+      } else if (node is List) {
+        for (final value in node) {
+          final found = walk(value, depth + 1);
+          if (found != null && found.isNotEmpty) return found;
+        }
+      }
+      return null;
+    }
+
+    return walk(response)?.trim() ?? '';
+  }
+
+  static String _firstNonEmpty(List<Object?> values) {
+    for (final value in values) {
+      final text = _string(value);
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
+  }
+
+  static String _string(Object? value) => value?.toString().trim() ?? '';
+
+  static int? _int(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString() ?? '');
+  }
+}
+)
+        .hasMatch(raw)) return 'present';
+    if (RegExp(r'^(vắng mặt|vang mat)(?:\\s*\\(\\d+\\))?
+  }
+
+  static DateTime? _parseVietnameseDate(String value) {
+    final parts = value.split('/');
+    if (parts.length != 3) {
+      return null;
+    }
+    final day = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (day == null || month == null || year == null) {
+      return null;
+    }
+    final parsed = DateTime(year, month, day);
+    if (parsed.year != year || parsed.month != month || parsed.day != day) {
+      return null;
+    }
+    return parsed;
+  }
+
+  static String _displayNameFromResponse(
+    Map<String, dynamic> response,
+  ) {
+    const exactKeys = <String>{
+      'HOTEN',
+      'HO_TEN',
+      'HOVATEN',
+      'TENNGUOIHOC',
+      'NGUOIHOC_TEN',
+      'QLSV_NGUOIHOC_TEN',
+      'SINHVIEN_TEN',
+      'TEN_SINHVIEN',
+      'FULLNAME',
+      'FULL_NAME',
+    };
+
+    String? walk(Object? node, [int depth = 0]) {
+      if (node == null || depth > 6) return null;
+      if (node is Map) {
+        for (final entry in node.entries) {
+          final key = entry.key.toString().trim().toUpperCase();
+          final compact = key.replaceAll(RegExp(r'[^A-Z0-9]'), '');
+          final looksLikeStudentName =
+              exactKeys.contains(key) ||
+              compact == 'HOTEN' ||
+              compact == 'HOVATEN' ||
+              compact == 'TENNGUOIHOC' ||
+              compact == 'NGUOIHOTEN' ||
+              compact == 'SINHVIENTEN' ||
+              compact == 'TENSINHVIEN' ||
+              (compact.contains('NGUOIHOC') && compact.endsWith('TEN'));
+          if (looksLikeStudentName) {
+            final value = _string(entry.value);
+            if (value.isNotEmpty && value.length <= 120) return value;
+          }
+        }
+        for (final value in node.values) {
+          final found = walk(value, depth + 1);
+          if (found != null && found.isNotEmpty) return found;
+        }
+      } else if (node is List) {
+        for (final value in node) {
+          final found = walk(value, depth + 1);
+          if (found != null && found.isNotEmpty) return found;
+        }
+      }
+      return null;
+    }
+
+    return walk(response)?.trim() ?? '';
+  }
+
+  static String _firstNonEmpty(List<Object?> values) {
+    for (final value in values) {
+      final text = _string(value);
+      if (text.isNotEmpty) {
+        return text;
+      }
+    }
+    return '';
+  }
+
+  static String _string(Object? value) => value?.toString().trim() ?? '';
+
+  static int? _int(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return int.tryParse(value?.toString() ?? '');
+  }
+}
+)
+        .hasMatch(raw)) return 'absent';
     return null;
   }
 
