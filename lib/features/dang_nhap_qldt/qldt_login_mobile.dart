@@ -225,10 +225,11 @@ Future<QldtLoginResult?> openQldtLogin(
 /// The same verified QLDT WebView sync can run behind the current app page.
 /// This does not create a Navigator route or a second authentication transport.
 class QldtInlineSync extends StatefulWidget {
-  const QldtInlineSync({super.key, required this.onComplete, required this.onFailed});
+  const QldtInlineSync({super.key, required this.onComplete, required this.onFailed, this.onSession});
 
   final ValueChanged<QldtLoginResult> onComplete;
   final ValueChanged<String> onFailed;
+  final ValueChanged<Map<String, String>>? onSession;
 
   @override
   State<QldtInlineSync> createState() => _QldtInlineSyncState();
@@ -267,6 +268,7 @@ class _QldtInlineSyncState extends State<QldtInlineSync> {
           portalPath: _portalPath,
           inlineOnCompleted: widget.onComplete,
           inlineOnFailed: widget.onFailed,
+          inlineOnSession: widget.onSession,
         );
 }
 
@@ -277,6 +279,7 @@ class _QldtWebLoginScreen extends StatefulWidget {
     this.testHtml,
     this.inlineOnCompleted,
     this.inlineOnFailed,
+    this.inlineOnSession,
   });
 
   final bool cachedSession;
@@ -284,6 +287,7 @@ class _QldtWebLoginScreen extends StatefulWidget {
   final String? testHtml;
   final ValueChanged<QldtLoginResult>? inlineOnCompleted;
   final ValueChanged<String>? inlineOnFailed;
+  final ValueChanged<Map<String, String>>? inlineOnSession;
 
   @override
   State<_QldtWebLoginScreen> createState() => _QldtWebLoginScreenState();
@@ -1514,6 +1518,20 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       _nativeSession = session;
       unawaited(_cacheNativeSession(session));
       unawaited(_rememberPortal(controller));
+      // Attendance gets its credentials from THIS working WebView session,
+      // never from a stored token that may be stale.
+      if (widget.inlineOnSession != null) {
+        widget.inlineOnSession!(<String, String>{
+          'tokenJWT': session.tokenJwt,
+          'userId': session.userId,
+          'iM': session.iM,
+          'appId': session.appId,
+          'strChucNangId': session.functionId,
+          'cookie': session.cookie,
+          'name': session.displayName,
+        });
+        return;
+      }
 
       if (!mounted) return;
       setState(() {
