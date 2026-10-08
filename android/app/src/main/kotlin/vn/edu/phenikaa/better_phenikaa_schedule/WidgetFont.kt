@@ -41,6 +41,15 @@ internal object WidgetFont {
         val prefs = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         val family = prefs.getString(MainActivity.WIDGET_FONT_FAMILY_KEY, "").orEmpty()
         val path = prefs.getString(MainActivity.WIDGET_FONT_PATH_KEY, "").orEmpty()
+        return typefaceFor(context, family, path, weight)
+    }
+
+    fun typefaceFor(
+        context: Context,
+        family: String,
+        path: String,
+        weight: Int = Typeface.NORMAL,
+    ): Typeface {
         val imported = File(path)
         val importDir = File(context.filesDir, "theme_imports").canonicalFile
         val base = runCatching {

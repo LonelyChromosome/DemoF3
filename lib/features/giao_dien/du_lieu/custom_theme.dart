@@ -1,6 +1,7 @@
 import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_source.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_tokens.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_choice.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/du_lieu/widget_theme_configuration.dart';
 import 'package:flutter/foundation.dart';
 
 @immutable
@@ -13,6 +14,8 @@ final class CustomThemeDefinition {
     required this.font,
     required this.createdAt,
     required this.updatedAt,
+    this.widgets = const WidgetThemeConfiguration(),
+    this.hasWidgetConfiguration = true,
   });
 
   factory fromJson(Map<String, Object?> json) {
@@ -37,6 +40,13 @@ final class CustomThemeDefinition {
       ),
       createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? now,
       updatedAt: DateTime.tryParse(json['updatedAt'] as String? ?? '') ?? now,
+      widgets: WidgetThemeConfiguration.fromJson(
+        Map<String, Object?>.from(
+          json['widgets'] as Map<Object?, Object?>? ??
+              const <String, Object?>{},
+        ),
+      ),
+      hasWidgetConfiguration: json.containsKey('widgets'),
     );
   }
 
@@ -47,6 +57,8 @@ final class CustomThemeDefinition {
   final AppFontChoice font;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final WidgetThemeConfiguration widgets;
+  final bool hasWidgetConfiguration;
 
   CustomThemeDefinition copyWith({
     String? name,
@@ -54,6 +66,8 @@ final class CustomThemeDefinition {
     ThemeTokens? tokens,
     AppFontChoice? font,
     DateTime? updatedAt,
+    WidgetThemeConfiguration? widgets,
+    bool? hasWidgetConfiguration,
   }) => CustomThemeDefinition(
     id: id,
     name: name ?? this.name,
@@ -62,6 +76,9 @@ final class CustomThemeDefinition {
     font: font ?? this.font,
     createdAt: createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
+    widgets: widgets ?? this.widgets,
+    hasWidgetConfiguration:
+        hasWidgetConfiguration ?? this.hasWidgetConfiguration,
   );
 
   Map<String, Object?> toJson() => <String, Object?>{
@@ -72,5 +89,6 @@ final class CustomThemeDefinition {
     'font': font.toJson(),
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
+    'widgets': widgets.toJson(),
   };
 }

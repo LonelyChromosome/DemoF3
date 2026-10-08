@@ -155,6 +155,9 @@ internal fun renderWidgetSlide(
     renderWidthDp: Int,
     renderHeightDp: Int,
     themeOverrideKey: String? = null,
+    paletteOverride: NativeWidgetPalette? = null,
+    typefaceOverride: Typeface? = null,
+    cornerRadiusDpOverride: Float? = null,
 ): Bitmap {
     val density = context.resources.displayMetrics.density
     val widthDp = renderWidthDp.coerceAtLeast(1)
@@ -165,8 +168,16 @@ internal fun renderWidgetSlide(
     val canvas = Canvas(horizontal)
     val widthPx = width.toFloat()
     val heightPx = height.toFloat()
-    val theme = themeOverrideKey?.let { widgetThemeForKey(context, it) }
+    val cornerRadius = ((cornerRadiusDpOverride ?: WidgetThemeV14.read(context).cornerRadiusDp) *
+        density).coerceIn(0f, minOf(widthPx, heightPx) / 2f)
+    canvas.clipRoundRect(RectF(0f, 0f, widthPx, heightPx), cornerRadius, cornerRadius)
+    val theme = paletteOverride?.let {
+        WidgetTheme(it.key, it.start, it.end, it.text, it.subtext)
+    } ?: themeOverrideKey?.let { widgetThemeForKey(context, it) }
         ?: readWidgetTheme(context)
+    val normalTypeface = typefaceOverride ?: WidgetFont.typeface(context, Typeface.NORMAL)
+    val boldTypeface = typefaceOverride?.let { Typeface.create(it, Typeface.BOLD) }
+        ?: WidgetFont.typeface(context, Typeface.BOLD)
     val backgroundPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = if (theme.key == "tien_mon_premium") {
             LinearGradient(
@@ -193,14 +204,14 @@ internal fun renderWidgetSlide(
     val subjectPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = theme.textColor
         textSize = heightPx * SUBJECT_TEXT_HEIGHT_FRACTION
-        typeface = WidgetFont.typeface(context, Typeface.BOLD)
+        typeface = boldTypeface
         textSize *= WidgetFont.scaleLikeSystem(this, Typeface.BOLD)
         setShadowLayer(heightPx * 0.018f, 0f, heightPx * 0.008f, 0x66000000)
     }
     val detailPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = theme.subtextColor
         textSize = heightPx * DETAIL_TEXT_HEIGHT_FRACTION
-        typeface = WidgetFont.typeface(context, Typeface.NORMAL)
+        typeface = normalTypeface
         textSize *= WidgetFont.scaleLikeSystem(this, Typeface.NORMAL)
         setShadowLayer(heightPx * 0.015f, 0f, heightPx * 0.006f, 0x66000000)
     }
@@ -231,7 +242,7 @@ internal fun renderWidgetSlide(
         val formPaint = TextPaint(detailPaint).apply {
             color = theme.textColor
             textSize = heightPx * 0.145f
-            typeface = WidgetFont.typeface(context, Typeface.BOLD)
+            typeface = boldTypeface
             textSize *= WidgetFont.scaleLikeSystem(this, Typeface.BOLD)
         }
         val label = "Thi: ${item.examForm.ifBlank { "Chưa rõ hình thức" }}"
@@ -300,8 +311,20 @@ internal fun renderWidgetStackCover(
     renderWidthDp: Int,
     renderHeightDp: Int,
     themeOverrideKey: String? = null,
+    paletteOverride: NativeWidgetPalette? = null,
+    typefaceOverride: Typeface? = null,
+    cornerRadiusDpOverride: Float? = null,
 ): Bitmap {
-    val source = renderWidgetSlide(context, item, renderWidthDp, renderHeightDp, themeOverrideKey)
+    val source = renderWidgetSlide(
+        context,
+        item,
+        renderWidthDp,
+        renderHeightDp,
+        themeOverrideKey,
+        paletteOverride,
+        typefaceOverride,
+        cornerRadiusDpOverride,
+    )
     val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
     val density = context.resources.displayMetrics.density
     val inset = kotlin.math.ceil(4f * density).toFloat()
@@ -311,6 +334,7 @@ internal fun renderWidgetStackCover(
         inset, source.height * 0.1f + inset,
         cardWidth - inset, source.height * 0.1f + cardHeight - inset,
     ), Paint(Paint.FILTER_BITMAP_FLAG))
+    source.recycle()
     return output
 }
 

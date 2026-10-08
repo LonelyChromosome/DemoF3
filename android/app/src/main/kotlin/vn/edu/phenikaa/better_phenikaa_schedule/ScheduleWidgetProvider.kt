@@ -32,6 +32,12 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 class ScheduleWidgetProvider : HomeWidgetProvider() {
+    internal fun renderFromDispatcher(
+        context: Context,
+        manager: AppWidgetManager,
+        widgetId: Int,
+    ) = renderWidget(context, manager, widgetId)
+
     internal fun isBetterDefault(context: Context): Boolean = readThemeColors(context).key == "classic"
 
     internal fun restoreDisplay(context: Context, manager: AppWidgetManager, ids: IntArray) {
@@ -73,8 +79,13 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         return bitmap
     }
 
-    internal fun overviewTimeColor(context: Context, index: Int, active: Boolean): Int {
-        val theme = readThemeColors(context)
+    internal fun overviewTimeColor(
+        context: Context,
+        index: Int,
+        active: Boolean,
+        paletteOverride: NativeWidgetPalette? = null,
+    ): Int {
+        val theme = paletteOverride?.toThemeColors() ?: readThemeColors(context)
         if (theme.key == "classic") return theme.textColor
         return WidgetVisualPalette(theme.startColor, theme.endColor,
             theme.textColor, theme.textColor, theme.key).timeText(index, active)
@@ -83,7 +94,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
     internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int): Bitmap {
         val theme = readThemeColors(context)
         if (theme.key == "tien_mon_premium") {
-            return renderTienMonOverviewBackground(context, widthDp, heightDp)
+            return WidgetStaticLayerRenderer.decorateLarge(
+                context,
+                renderTienMonOverviewBackground(context, widthDp, heightDp),
+            )
         }
         val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
             theme.textColor, theme.textColor, theme.key)
@@ -110,7 +124,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         if (theme.key != "classic") {
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), glow)
         }
-        return bitmap
+        return WidgetStaticLayerRenderer.decorateLarge(context, bitmap)
     }
 
     private fun renderTienMonOverviewBackground(
@@ -150,8 +164,13 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         return result
     }
 
-    internal fun overviewCardBackground(context: Context, index: Int, active: Boolean): Bitmap {
-        val theme = readThemeColors(context)
+    internal fun overviewCardBackground(
+        context: Context,
+        index: Int,
+        active: Boolean,
+        paletteOverride: NativeWidgetPalette? = null,
+    ): Bitmap {
+        val theme = paletteOverride?.toThemeColors() ?: readThemeColors(context)
         val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
             theme.textColor, theme.textColor, theme.key)
         val density = context.resources.displayMetrics.density
@@ -436,7 +455,11 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
                 context.getSharedPreferences(WIDGET_VISIBLE_POSITION_PREFS, Context.MODE_PRIVATE)
                     .edit().remove(visiblePositionKey(widgetId)).apply()
             }
-            renderWidget(context, appWidgetManager, widgetId)
+            WidgetRenderDispatcher.render(
+                context,
+                appWidgetManager,
+                WidgetRenderRequest(WidgetSurface.SMALL, widgetId),
+            )
         }
     }
 
@@ -515,7 +538,11 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         newOptions: Bundle,
     ) {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
-        renderWidget(context, appWidgetManager, appWidgetId)
+        WidgetRenderDispatcher.render(
+            context,
+            appWidgetManager,
+            WidgetRenderRequest(WidgetSurface.SMALL, appWidgetId),
+        )
     }
 
     private fun renderWidget(
@@ -530,7 +557,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         )
         val contentToken = collectionContentToken(context, widgetId, options)
         val previousToken = renderStatePrefs.getString(contentTokenKey(widgetId), null)
-        val orderChanged = previousToken != null && !previousToken.endsWith("|calendar-v3")
+        val orderChanged = previousToken != null &&
+            !previousToken.endsWith("|calendar-v4") &&
+            !previousToken.endsWith("|calendar-v3")
         if (orderChanged) {
             context.getSharedPreferences(WIDGET_SELECTION_PREFS, Context.MODE_PRIVATE)
                 .edit().putBoolean(resetChildKey(widgetId), true).apply()
@@ -989,6 +1018,14 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val iconColor: Int,
     )
 
+    private fun NativeWidgetPalette.toThemeColors() = ThemeColors(
+        key,
+        start,
+        end,
+        text,
+        icon,
+    )
+
     private fun readThemeColors(context: Context): ThemeColors {
         val prefs = context.getSharedPreferences(
             "FlutterSharedPreferences",
@@ -1035,30 +1072,17 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         context: Context,
         widthDp: Int,
         heightDp: Int,
-        theme: ThemeColors,
+        @Suppress("UNUSED_PARAMETER") theme: ThemeColors,
     ): Bitmap {
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (heightDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = if (theme.key == "tien_mon_premium") {
-                LinearGradient(
-                    0f, 0f, width.toFloat(), 0f,
-                    intArrayOf(0xFF082D2B.toInt(), 0xFF155953.toInt(), 0xFF667E7B.toInt()),
-                    floatArrayOf(0f, 0.60f, 1f),
-                    Shader.TileMode.CLAMP,
-                )
-            } else {
-                LinearGradient(
-                    0f, 0f, width.toFloat(), 0f,
-                    theme.startColor, theme.endColor, Shader.TileMode.CLAMP,
-                )
-            }
-        }
-        val canvas = Canvas(bitmap)
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-        return bitmap
+        return WidgetStaticLayerRenderer.render(
+            context,
+            WidgetSurface.SMALL,
+            width,
+            height,
+        )
     }
 
     private fun collectionContentToken(
@@ -1096,7 +1120,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         }.getOrDefault(snapshot)
         val fontKey = snapshotPreferences.getString(MainActivity.WIDGET_FONT_FAMILY_KEY, "").orEmpty()
         val fontPath = snapshotPreferences.getString(MainActivity.WIDGET_FONT_PATH_KEY, "").orEmpty()
-        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|${readThemeColors(context).key}|${fontKey.hashCode()}:${fontPath.hashCode()}|calendar-v3"
+        val visualConfig = WidgetThemeV14.read(context)
+        return "${content.hashCode()}|$selectedDate|$examMode|$sizeSignature|${readThemeColors(context).key}|${fontKey.hashCode()}:${fontPath.hashCode()}|${visualConfig.smallBorder}:${visualConfig.cornerRadiusDp}|calendar-v4"
     }
 
     private fun contentTokenKey(widgetId: Int): String = "content_token_$widgetId"

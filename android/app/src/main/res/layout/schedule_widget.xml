@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:background="@drawable/schedule_widget_outline"
     android:clipChildren="true"
-    android:clipToOutline="true"
+    android:clipToOutline="false"
     android:clipToPadding="true"
     android:outlineProvider="background">
 

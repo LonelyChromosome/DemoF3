@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -17,6 +18,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import androidx.work.WorkManager
 import java.io.DataInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -57,6 +59,7 @@ class MainActivity : FlutterActivity() {
         configureWidgetSessionChannel(flutterEngine)
         configureLocalFileChannel(flutterEngine)
         configureAssistantTestChannel(flutterEngine)
+        configureWidgetRenderChannel(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             WIDGET_PIN_CHANNEL).setMethodCallHandler { call, result ->
             if (call.method != "requestPin") {
@@ -66,6 +69,7 @@ class MainActivity : FlutterActivity() {
             val provider = when (call.arguments as? String) {
                 "small" -> ScheduleWidgetProvider::class.java
                 "overview" -> OverviewWidgetProvider::class.java
+                "widget2" -> Widget2Provider::class.java
                 else -> {
                     result.error("invalid_widget", "Không rõ loại widget.", null)
                     return@setMethodCallHandler
@@ -94,11 +98,15 @@ class MainActivity : FlutterActivity() {
             val currentToken = prefs.getString(THEME_TOKEN_KEY, currentTheme) ?: currentTheme
             val fontChanged = prefs.getString(WIDGET_FONT_FAMILY_KEY, "") != request.fontFamily ||
                 prefs.getString(WIDGET_FONT_PATH_KEY, "") != request.fontPath
+            val visualChanged = fontChanged || WidgetThemeV14.read(this) != request.widgetConfig
             val manager = AppWidgetManager.getInstance(this)
             val component = ComponentName(this, ScheduleWidgetProvider::class.java)
             val widgetIds = manager.getAppWidgetIds(component)
             val overviewIds = manager.getAppWidgetIds(
                 ComponentName(this, OverviewWidgetProvider::class.java),
+            )
+            val widget2Ids = manager.getAppWidgetIds(
+                ComponentName(this, Widget2Provider::class.java),
             )
 
             if (request.theme == "tien_mon_premium") {
@@ -111,43 +119,43 @@ class MainActivity : FlutterActivity() {
                 pendingWidgetRequest = null
 
                 if (currentToken == request.token) {
-                    if (fontChanged) {
+                    if (visualChanged) {
                         commitWidgetTheme(prefs, request, refreshOverview = false)
                         WidgetRefreshCoordinator.refreshData(this)
                     }
-                    result.success(widgetIds.size + overviewIds.size)
+                    result.success(widgetIds.size + overviewIds.size + widget2Ids.size)
                     return@setMethodCallHandler
                 }
 
-                if (widgetIds.isNotEmpty() || overviewIds.isNotEmpty()) {
+                if (widgetIds.isNotEmpty() || overviewIds.isNotEmpty() || widget2Ids.isNotEmpty()) {
                     pendingWidgetFromToken = currentToken
                     pendingWidgetRequest = request
                 } else {
                     commitWidgetTheme(prefs, request)
                 }
-                result.success(widgetIds.size + overviewIds.size)
+                result.success(widgetIds.size + overviewIds.size + widget2Ids.size)
                 return@setMethodCallHandler
             }
 
-            if (currentToken == request.token && fontChanged) {
+            if (currentToken == request.token && visualChanged) {
                 commitWidgetTheme(prefs, request, refreshOverview = false)
                 WidgetRefreshCoordinator.refreshData(this)
-                result.success(widgetIds.size + overviewIds.size)
+                result.success(widgetIds.size + overviewIds.size + widget2Ids.size)
                 return@setMethodCallHandler
             }
 
-            if ((widgetIds.isNotEmpty() || overviewIds.isNotEmpty()) &&
+            if ((widgetIds.isNotEmpty() || overviewIds.isNotEmpty() || widget2Ids.isNotEmpty()) &&
                 currentToken != request.token) {
                 // The target palette is committed only between fade-out and
                 // collection refresh, keeping the old widget frame intact.
                 pendingWidgetFromToken = currentToken
                 pendingWidgetRequest = request
                 pendingWidgetApply?.let(widgetHandler::removeCallbacks)
-            } else if ((widgetIds.isEmpty() && overviewIds.isEmpty()) ||
+            } else if ((widgetIds.isEmpty() && overviewIds.isEmpty() && widget2Ids.isEmpty()) ||
                 currentToken != request.token) {
                 commitWidgetTheme(prefs, request)
             }
-            result.success(widgetIds.size + overviewIds.size)
+            result.success(widgetIds.size + overviewIds.size + widget2Ids.size)
         }
     }
 
@@ -251,6 +259,55 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun configureWidgetRenderChannel(flutterEngine: FlutterEngine) {
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            WIDGET_RENDER_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            if (call.method != "renderPreview") {
+                result.notImplemented()
+                return@setMethodCallHandler
+            }
+            val values = call.arguments as? Map<*, *> ?: emptyMap<Any, Any>()
+            val surface = WidgetSurface.fromWireName(values["surface"] as? String)
+            val width = ((values["widthDp"] as? Number)?.toInt() ?: 320).coerceIn(180, 640)
+            val height = ((values["heightDp"] as? Number)?.toInt() ?: 150).coerceIn(56, 320)
+            val config = WidgetThemeV14.fromJson(values["widgetConfig"] as? String)
+            val palette = NativeWidgetPalette(
+                key = values["theme"] as? String ?: "custom",
+                start = (values["widgetStart"] as? Number)?.toInt() ?: DEFAULT_START,
+                end = (values["widgetEnd"] as? Number)?.toInt() ?: DEFAULT_END,
+                text = (values["widgetText"] as? Number)?.toInt() ?: DEFAULT_TEXT,
+                subtext = (values["widgetSubtext"] as? Number)?.toInt() ?: DEFAULT_SUBTEXT,
+                icon = (values["widgetIcon"] as? Number)?.toInt() ?: DEFAULT_TEXT,
+            )
+            fileExecutor.execute {
+                runCatching {
+                    val bitmap = NativeWidgetPreviewRenderer.render(
+                        applicationContext,
+                        surface,
+                        width,
+                        height,
+                        config,
+                        palette,
+                        values["fontFamily"] as? String ?: "",
+                        values["fontPath"] as? String ?: "",
+                    )
+                    ByteArrayOutputStream().use { stream ->
+                        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                        bitmap.recycle()
+                        stream.toByteArray()
+                    }
+                }.onSuccess { bytes -> runOnUiThread { result.success(bytes) } }
+                    .onFailure { error ->
+                        runOnUiThread {
+                            result.error("preview_render_failed", error.message, null)
+                        }
+                    }
+            }
+        }
+    }
+
     private fun schedulePendingWidgetThemeForHome() {
         val fromToken = pendingWidgetFromToken ?: return
         val request = pendingWidgetRequest ?: return
@@ -265,8 +322,11 @@ class MainActivity : FlutterActivity() {
             val overviewIds = manager.getAppWidgetIds(
                 ComponentName(this, OverviewWidgetProvider::class.java),
             )
+            val widget2Ids = manager.getAppWidgetIds(
+                ComponentName(this, Widget2Provider::class.java),
+            )
 
-            if (widgetIds.isEmpty() && overviewIds.isEmpty()) {
+            if (widgetIds.isEmpty() && overviewIds.isEmpty() && widget2Ids.isEmpty()) {
                 commitWidgetTheme(prefs, request)
                 clearPendingWidgetTheme(fromToken, request.token)
                 return@Runnable
@@ -281,6 +341,10 @@ class MainActivity : FlutterActivity() {
                 provider.stageThemeTransition(this, manager, widgetIds, fromToken, request.token)
                 provider.refreshHiddenCollection(this, manager, widgetIds, fromToken, request.token)
                 overview.animateThemeTransition(this, manager, overviewIds)
+                widget2Ids.forEach { id ->
+                    WidgetRenderDispatcher.render(this, manager,
+                        WidgetRenderRequest(WidgetSurface.WIDGET2, id))
+                }
                 clearPendingWidgetTheme(fromToken, request.token)
             }, THEME_FREEZE_SETTLE_MS)
         }
@@ -316,6 +380,7 @@ class MainActivity : FlutterActivity() {
             .putString(WIDGET_FONT_FAMILY_KEY, request.fontFamily)
             .putString(WIDGET_FONT_PATH_KEY, request.fontPath)
             .commit()
+        WidgetThemeV14.save(this, request.widgetConfig)
         if (refreshOverview) WidgetRefreshCoordinator.refreshOverview(this)
     }
 
@@ -345,12 +410,15 @@ class MainActivity : FlutterActivity() {
                         WIDGET_VISIBLE_POSITION_PREFS,
                         "better_phenikaa_widget_render_state",
                         "better_phenikaa_overview_state",
+                        "better_phenikaa_widget2_state",
+                        WidgetThemeV14.PREFS,
                         "better_phenikaa_small_widget_mode",
                         "better_phenikaa_daily_sync",
                     ).forEach { name ->
                         getSharedPreferences(name, Context.MODE_PRIVATE).edit().clear().commit()
                     }
                     File(filesDir, "theme_imports").deleteRecursively()
+                    File(cacheDir, "widget_v14_layers").deleteRecursively()
                     ExamChangeNotifier.clear(applicationContext)
                     WidgetRefreshCoordinator.refreshData(applicationContext)
                     result.success(null)
@@ -576,6 +644,7 @@ class MainActivity : FlutterActivity() {
         val iconColor: Int,
         val fontFamily: String,
         val fontPath: String,
+        val widgetConfig: WidgetThemeV14,
     ) {
         companion object {
             fun from(arguments: Any?): WidgetThemeRequest {
@@ -588,14 +657,16 @@ class MainActivity : FlutterActivity() {
                 val icon = (values["widgetIcon"] as? Number)?.toInt() ?: text
                 val fontFamily = values["fontFamily"] as? String ?: ""
                 val fontPath = values["fontPath"] as? String ?: ""
+                val widgetConfig = WidgetThemeV14.fromJson(values["widgetConfig"] as? String)
                 val token = if (theme == "custom") {
                     listOf(theme, start, end, text, subtext, icon,
-                        fontFamily.hashCode(), fontPath.hashCode()).joinToString(":")
+                        fontFamily.hashCode(), fontPath.hashCode(),
+                        widgetConfig.hashCode()).joinToString(":")
                 } else {
                     theme
                 }
                 return WidgetThemeRequest(theme, token, start, end, text, subtext, icon,
-                    fontFamily, fontPath)
+                    fontFamily, fontPath, widgetConfig)
             }
         }
     }
@@ -605,6 +676,7 @@ class MainActivity : FlutterActivity() {
         private const val QLDT_CREDENTIAL_CHANNEL = "better_phenikaa/qldt_credentials"
         private const val WIDGET_THEME_CHANNEL = "better_phenikaa/widget_theme"
         private const val WIDGET_PIN_CHANNEL = "better_phenikaa/widget_pin"
+        private const val WIDGET_RENDER_CHANNEL = "better_phenikaa/widget_render"
         private const val LOCAL_FILE_CHANNEL = "better_phenikaa/local_files"
         private const val ASSISTANT_TEST_CHANNEL = "better_phenikaa/assistant_test"
         private const val FLUTTER_PREFS = "FlutterSharedPreferences"

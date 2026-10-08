@@ -15,8 +15,15 @@ internal object WidgetRefreshCoordinator {
         val overviewIds = manager.getAppWidgetIds(
             ComponentName(appContext, OverviewWidgetProvider::class.java),
         )
+        val widget2Ids = manager.getAppWidgetIds(
+            ComponentName(appContext, Widget2Provider::class.java),
+        )
         ScheduleWidgetProvider().restoreDisplay(appContext, manager, smallIds)
         OverviewWidgetProvider().restoreDisplay(appContext, manager, overviewIds)
+        widget2Ids.forEach { id ->
+            WidgetRenderDispatcher.render(appContext, manager,
+                WidgetRenderRequest(WidgetSurface.WIDGET2, id))
+        }
     }
 
     fun refreshData(context: Context) {
@@ -28,9 +35,16 @@ internal object WidgetRefreshCoordinator {
         val overviewIds = manager.getAppWidgetIds(
             ComponentName(appContext, OverviewWidgetProvider::class.java),
         )
+        val widget2Ids = manager.getAppWidgetIds(
+            ComponentName(appContext, Widget2Provider::class.java),
+        )
         val data = appContext.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         ScheduleWidgetProvider().onUpdate(appContext, manager, smallIds, data)
         OverviewWidgetProvider().onUpdate(appContext, manager, overviewIds, data)
+        widget2Ids.forEach { id ->
+            WidgetRenderDispatcher.render(appContext, manager,
+                WidgetRenderRequest(WidgetSurface.WIDGET2, id))
+        }
     }
 
     fun refreshOverview(context: Context) {
@@ -38,6 +52,20 @@ internal object WidgetRefreshCoordinator {
         val ids = manager.getAppWidgetIds(ComponentName(context, OverviewWidgetProvider::class.java))
         val data = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         OverviewWidgetProvider().onUpdate(context, manager, ids, data)
+    }
+
+    fun refreshVisualSurfaces(context: Context) {
+        val appContext = context.applicationContext
+        val manager = AppWidgetManager.getInstance(appContext)
+        listOf(
+            WidgetSurface.SMALL to ComponentName(appContext, ScheduleWidgetProvider::class.java),
+            WidgetSurface.LARGE to ComponentName(appContext, OverviewWidgetProvider::class.java),
+            WidgetSurface.WIDGET2 to ComponentName(appContext, Widget2Provider::class.java),
+        ).forEach { (surface, component) ->
+            manager.getAppWidgetIds(component).forEach { id ->
+                WidgetRenderDispatcher.render(appContext, manager, WidgetRenderRequest(surface, id))
+            }
+        }
     }
 
     fun refreshToday(context: Context) {
@@ -48,7 +76,10 @@ internal object WidgetRefreshCoordinator {
         val overviewIds = manager.getAppWidgetIds(
             ComponentName(appContext, OverviewWidgetProvider::class.java),
         )
-        if (widgetIds.isEmpty() && overviewIds.isEmpty()) return
+        val widget2Ids = manager.getAppWidgetIds(
+            ComponentName(appContext, Widget2Provider::class.java),
+        )
+        if (widgetIds.isEmpty() && overviewIds.isEmpty() && widget2Ids.isEmpty()) return
 
         val selection = appContext.getSharedPreferences(
             ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
@@ -60,7 +91,7 @@ internal object WidgetRefreshCoordinator {
         )
         val selectionEditor = selection.edit()
         val visibleEditor = visible.edit()
-        (widgetIds + overviewIds).forEach { widgetId ->
+        (widgetIds + overviewIds + widget2Ids).forEach { widgetId ->
             selectionEditor
                 .remove(ScheduleWidgetProvider.selectedDateKey(widgetId))
                 .putBoolean(ScheduleWidgetProvider.resetChildKey(widgetId), true)
@@ -78,5 +109,9 @@ internal object WidgetRefreshCoordinator {
         // A date broadcast may end the process immediately after onReceive returns.
         // Render today's overview synchronously instead of leaving its fade on a Handler.
         OverviewWidgetProvider().restoreDisplay(appContext, manager, overviewIds)
+        widget2Ids.forEach { id ->
+            WidgetRenderDispatcher.render(appContext, manager,
+                WidgetRenderRequest(WidgetSurface.WIDGET2, id))
+        }
     }
 }

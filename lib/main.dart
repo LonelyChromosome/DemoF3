@@ -1,12 +1,17 @@
 import 'dart:async';
 
 import 'package:better_phenikaa_schedule/app/app.dart';
+import 'package:better_phenikaa_schedule/app/bpa_pen_trace_splash.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const _LoginCreditOverlay(child: BetterPhenikaaScheduleApp()));
+  runApp(
+    const BpaPenTraceSplash(
+      child: _LoginCreditOverlay(child: BetterPhenikaaScheduleApp()),
+    ),
+  );
 }
 
 class _LoginCreditOverlay extends StatefulWidget {

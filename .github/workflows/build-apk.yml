@@ -123,6 +123,8 @@ jobs:
           p.write_text(s.replace(v, ""))
           PY
           flutter pub get
+          flutter test --no-pub test/widget_theme_v14_test.dart
+          (cd android && ./gradlew testDebugUnitTest)
           COOC_VERSION_NAME="$VERSION_NAME" flutter build apk --release --build-number="$VERSION_CODE" \
             --dart-define="UPDATE_PUBLIC_KEY_BASE64=$UPDATE_PUBLIC_KEY_BASE64" \
             --dart-define="UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL"

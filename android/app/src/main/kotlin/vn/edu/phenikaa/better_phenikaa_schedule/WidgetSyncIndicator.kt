@@ -104,6 +104,9 @@ internal object WidgetSyncIndicator {
     fun applyToOverview(context: Context, views: RemoteViews) =
         apply(context, views, R.id.overview_reload)
 
+    fun applyToWidget2(context: Context, views: RemoteViews) =
+        apply(context, views, R.id.widget2_reload)
+
     private fun finishInternal(context: Context, succeeded: Boolean, token: Long): Boolean {
         val current: Int
         val expectedPhase: Phase
@@ -164,6 +167,13 @@ internal object WidgetSyncIndicator {
             apply(context, views, R.id.overview_reload)
             manager.partiallyUpdateAppWidget(id, views)
         }
+        val widget2Ids = manager.getAppWidgetIds(ComponentName(context,
+            Widget2Provider::class.java))
+        if (widget2Ids.isNotEmpty()) {
+            val views = RemoteViews(context.packageName, R.layout.widget2)
+            apply(context, views, R.id.widget2_reload)
+            manager.partiallyUpdateAppWidget(widget2Ids, views)
+        }
     }
 
     private fun apply(context: Context, views: RemoteViews, icon: Int) {
@@ -187,8 +197,8 @@ internal object WidgetSyncIndicator {
                 loadingRing(context, step * 360f / FRAME_COUNT))
         }
         views.setInt(icon, "setColorFilter", ScheduleWidgetProvider().overviewColors(context).second)
-        views.setContentDescription(if (icon == R.id.widget_reload) R.id.widget_reload_hit else icon,
-            description)
+        val target = if (icon == R.id.widget_reload) R.id.widget_reload_hit else icon
+        views.setContentDescription(target, description)
     }
 
     private fun loadingRing(context: Context, degrees: Float): Bitmap {

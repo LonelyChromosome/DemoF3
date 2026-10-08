@@ -12,13 +12,27 @@ import java.util.Locale
 /** One native reader for the normalized, app-local widget contract. */
 internal object WidgetSnapshotStore {
     fun readOverview(context: Context, widgetId: Int, examMode: Boolean): List<WidgetClass> {
+        val today = SimpleDateFormat(DATE_PATTERN, Locale.US).format(Date())
+        return readOverviewForDate(
+            context,
+            selectedDate(context, widgetId, today),
+            examMode,
+            today,
+        )
+    }
+
+    /** Same normalized source as both legacy widgets, with an explicit day for animations. */
+    fun readOverviewForDate(
+        context: Context,
+        selectedDate: String,
+        examMode: Boolean,
+        today: String = SimpleDateFormat(DATE_PATTERN, Locale.US).format(Date()),
+    ): List<WidgetClass> {
         val preferences = context.getSharedPreferences(SNAPSHOT_PREFS, Context.MODE_PRIVATE)
         val normalized = preferences.getString(WIDGET_SNAPSHOT_KEY, null)
         val legacy = preferences.getString(APP_SNAPSHOT_KEY, null)
         val raw = normalized ?: legacy ?: return emptyList()
         return runCatching {
-            val today = SimpleDateFormat(DATE_PATTERN, Locale.US).format(Date())
-            val date = selectedDate(context, widgetId, today)
             val records = JSONObject(raw).optJSONArray(
                 if (normalized != null) {
                     if (examMode) "exams" else "classes"
@@ -31,7 +45,7 @@ internal object WidgetSnapshotStore {
                 }
                 parseClass(record, examMode)
             }.filter { item ->
-                if (examMode) item.dateKey >= today else item.dateKey == date
+                if (examMode) item.dateKey >= today else item.dateKey == selectedDate
             }.sortedWith(compareBy(WidgetClass::startAt, WidgetClass::id))
         }.getOrElse { emptyList() }
     }

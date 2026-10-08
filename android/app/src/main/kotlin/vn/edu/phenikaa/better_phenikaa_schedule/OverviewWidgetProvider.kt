@@ -21,6 +21,12 @@ import java.util.Date
 import java.util.Locale
 
 class OverviewWidgetProvider : HomeWidgetProvider() {
+    internal fun renderFromDispatcher(
+        context: Context,
+        manager: AppWidgetManager,
+        widgetId: Int,
+    ) = render(context, manager, widgetId)
+
     private fun hostSize(context: Context, manager: AppWidgetManager, id: Int) =
         WidgetHostSizeResolver.currentSize(context, manager.getAppWidgetOptions(id), 320, 150)
 
@@ -171,7 +177,11 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
                 animateDate(context, appWidgetManager, id, 0)
             } else {
                 cancelNavigation(state, id)
-                render(context, appWidgetManager, id)
+                WidgetRenderDispatcher.render(
+                    context,
+                    appWidgetManager,
+                    WidgetRenderRequest(WidgetSurface.LARGE, id),
+                )
             }
         }
     }
@@ -183,7 +193,11 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
         val state = context.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
         cancelNavigation(state, appWidgetId)
-        render(context, appWidgetManager, appWidgetId)
+        WidgetRenderDispatcher.render(
+            context,
+            appWidgetManager,
+            WidgetRenderRequest(WidgetSurface.LARGE, appWidgetId),
+        )
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
