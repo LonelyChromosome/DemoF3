@@ -1,4 +1,4 @@
-name: Build cooc.1.3 NFC VFX isolated preview (NO PUBLISH)
+name: Build cooc.1.3 NFC + hold VFX final preview (NO PUBLISH)
 
 on:
   push:
