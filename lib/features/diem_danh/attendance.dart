@@ -105,7 +105,6 @@ final class AttendanceStore {
       // Keep QLDT status scoped to the exact course/session that submitted
       // the code. Never take a review from another attendance-list ID.
       if (existing.attendanceListId.isNotEmpty &&
-          lesson.attendanceListId.isNotEmpty &&
           existing.attendanceListId != lesson.attendanceListId) {
         continue;
       }
