@@ -1,5 +1,7 @@
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_native_transport.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_changes.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/attendance.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -83,6 +85,72 @@ void main() {
     );
     final absent = await store.reconcile(updated, [markedAbsent]);
     expect(absent[lesson.id]!.status, AttendanceStatus.absent);
+  });
+
+  test('attendance stays scoped to one lesson, not a whole subject', () async {
+    final store = AttendanceStore();
+    final submitted = await store.recordSent({}, lesson, '4217');
+    final otherLesson = ScheduleRecord(
+      id: 'class|2026-10-09|mobile',
+      isExam: false,
+      subjectName: lesson.subjectName,
+      room: lesson.room,
+      startAt: lesson.startAt.add(const Duration(days: 1)),
+      endAt: lesson.endAt.add(const Duration(days: 1)),
+      attendanceListId: 'other-list',
+      attendanceReview: 'present',
+    );
+    final next = await store.reconcile(submitted, [otherLesson]);
+    expect(next[lesson.id]!.status, AttendanceStatus.pending);
+    expect(next[otherLesson.id], isNull);
+
+    final wrongList = ScheduleRecord(
+      id: lesson.id,
+      isExam: false,
+      subjectName: lesson.subjectName,
+      room: lesson.room,
+      startAt: lesson.startAt,
+      endAt: lesson.endAt,
+      attendanceListId: 'other-list',
+      attendanceReview: 'absent',
+    );
+    final wrong = await store.reconcile(next, [wrongList]);
+    expect(wrong[lesson.id]!.status, AttendanceStatus.pending);
+  });
+
+  test('attendance labels never count as a modified timetable', () {
+    CurrentSemester semester(ScheduleRecord study) => CurrentSemester(
+      semesterId: 'S2026',
+      semesterName: '2026-1',
+      displayName: 'Test Student',
+      syncedAt: DateTime(2026, 10, 8),
+      subjects: [
+        SemesterSubject(
+          subjectId: 'S2026|mobile',
+          name: lesson.subjectName,
+          normalizedName: 'lap trinh thiet bi di dong',
+          studySchedules: [study],
+          examSchedules: const [],
+        ),
+      ],
+    );
+    final reviewed = ScheduleRecord(
+      id: lesson.id,
+      isExam: false,
+      subjectName: lesson.subjectName,
+      room: lesson.room,
+      startAt: lesson.startAt,
+      endAt: lesson.endAt,
+      attendanceListId: 'other-list',
+      attendanceReview: 'present',
+    );
+    final difference = const SemesterChangeDetector().compare(
+      semester(lesson),
+      semester(reviewed),
+    );
+    expect(difference.hasChanges, isFalse);
+    expect(difference.study.modified, 0);
+    expect(difference.exams.modified, 0);
   });
 
   test('schedule parser keeps server attendance id and explicit label', () {
