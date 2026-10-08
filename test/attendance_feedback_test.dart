@@ -16,7 +16,7 @@ void main() {
   test('attendance errors are concise and explain what to do', () {
     expect(
       attendanceFailureMessage(StateError('ATTENDANCE_LIST_ID_MISSING')),
-      'Chưa có thông tin điểm danh của buổi này.',
+      'QLĐT chưa trả mã lớp điểm danh. Thử lại.',
     );
     expect(
       attendanceFailureMessage(StateError('QLĐT chưa mở điểm danh')),
