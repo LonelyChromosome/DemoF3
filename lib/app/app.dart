@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:better_phenikaa_schedule/features/app_update/update_controller.dart';
+import 'package:better_phenikaa_schedule/features/app_update/update_ui.dart';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/qldt_sync_diagnostics.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/exam_period.dart';
@@ -70,6 +72,9 @@ class _AppRoot extends StatefulWidget {
 
 class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   static const _storageKey = 'better_phenikaa_snapshot_v1';
+  final UpdateController _update = UpdateController();
+  static const _updateInfoChannel = MethodChannel('better_phenikaa/update');
+  String _appVersionName = '';
   static const _routeKey = 'better_phenikaa_qldt_registration_route_v1';
   static const _widgetSessionChannel = MethodChannel(
     'better_phenikaa/widget_session',
@@ -95,6 +100,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   DateTime? _lastSuccessfulSync;
   AssistantPack _assistantPack = AssistantPack.normal;
   String _accountDisplayName = '';
+  bool _shownInstallSuccess = false;
   static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
 
   @override
@@ -102,12 +108,32 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     AppThemeController.instance.addListener(_handleThemeChanged);
+    _update.addListener(_handleThemeChanged);
+    unawaited(_update.restore());
+    unawaited(_loadAppVersionName());
     unawaited(_restore());
   }
 
+  Future<void> _loadAppVersionName() async {
+    try {
+      final name = await _updateInfoChannel.invokeMethod<String>('versionName');
+      if (mounted && name != null) setState(() => _appVersionName = name);
+    } on Object {
+      // Display metadata cannot affect login or schedule synchronization.
+    }
+  }
+
   void _handleThemeChanged() {
-    if (mounted) {
-      setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    if (_update.phase == UpdatePhase.installed && !_shownInstallSuccess) {
+      _shownInstallSuccess = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Cập nhật Better Phenikaa thành công'),
+        ));
+      });
     }
   }
 
@@ -119,11 +145,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     _exitGestureTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     AppThemeController.instance.removeListener(_handleThemeChanged);
+    _update.removeListener(_handleThemeChanged);
+    _update.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_update.onResumed());
     if (state != AppLifecycleState.resumed || _data == null) return;
     unawaited(_expireStoredSemesters());
     setState(() {});
@@ -251,6 +280,33 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         ? _AppPage.timetable
         : _page;
     _openPage(_AppPage.notifications);
+  }
+
+  Future<void> _openUpdate() async {
+    unawaited(_update.checkQuietly());
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => UpdateFlowSheet(
+        controller: _update,
+        // The exact same value shown at the top of the Account page.
+        displayName: _accountDisplayName.isEmpty
+            ? (_data?.displayName ?? '')
+            : _accountDisplayName,
+      ),
+    );
+    if (!_update.isRunningInBackground &&
+        _update.phase != UpdatePhase.installerLaunched) {
+      await _update.cancel();
+    }
+  }
+
+  Future<void> _openCardBinding() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => CardBindingSheet(controller: _update),
+    );
   }
 
   Future<void> _refreshDifference() async {
@@ -846,7 +902,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                         layoutBuilder: (current, previous) =>
                             current ?? const SizedBox.shrink(),
                         child: _booting
-                            ? const _SplashScreen()
+                            ? _SplashScreen(versionName: _appVersionName)
                             : _data == null || _data!.displayName.isEmpty
                             ? _LoginScreen(
                                 onLogin: _loginOrSync,
@@ -889,10 +945,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                     _openPage(_AppPage.exam),
                                 onShowDifferences: _showDifferences,
                                 latestDifference: _latestDifference,
+                                onOpenUpdate: _openUpdate,
+                                onOpenCardBinding: _openCardBinding,
+                                appVersionName: _appVersionName,
                                 onTogglePanel: () =>
                                     setState(() => _panelOpen = !_panelOpen),
                                 onOpenPage: _openPage,
-                                onSync: _loginOrSync,
+                                onSync: () => unawaited(_loginOrSync()),
                                 onLogout: _logout,
                                 onDateChanged: (date) => setState(
                                   () => _selectedDate = _dateOnly(date),
@@ -916,7 +975,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 }
 
 class _SplashScreen extends StatelessWidget {
-  const new();
+  const new({required this.versionName});
+  final String versionName;
 
   @override
   Widget build(BuildContext context) {
@@ -945,7 +1005,7 @@ class _SplashScreen extends StatelessWidget {
           ),
           const SizedBox(height: 7),
           Text(
-            'cooc.1.1 • Lịch học & Lịch thi',
+            '${versionName.isEmpty ? "Better Phenikaa" : versionName} • Lịch học & Lịch thi',
             style: TextStyle(color: palette.textSecondary, fontSize: 15),
           ),
           const SizedBox(height: 120),
@@ -1099,6 +1159,9 @@ class _MainShell extends StatefulWidget {
     required this.onOpenExamFromNotification,
     required this.onShowDifferences,
     required this.latestDifference,
+    required this.onOpenUpdate,
+    required this.onOpenCardBinding,
+    required this.appVersionName,
     required this.onTogglePanel,
     required this.onOpenPage,
     required this.onSync,
@@ -1128,6 +1191,9 @@ class _MainShell extends StatefulWidget {
   final VoidCallback onOpenExamFromNotification;
   final Future<void> Function() onShowDifferences;
   final SemesterDifference? latestDifference;
+  final VoidCallback onOpenUpdate;
+  final VoidCallback onOpenCardBinding;
+  final String appVersionName;
   final VoidCallback onTogglePanel;
   final ValueChanged<_AppPage> onOpenPage;
   final VoidCallback onSync;
@@ -1201,6 +1267,9 @@ class _MainShellState extends State<_MainShell>
     final onOpenExamFromNotification = widget.onOpenExamFromNotification;
     final onShowDifferences = widget.onShowDifferences;
     final latestDifference = widget.latestDifference;
+    final onOpenUpdate = widget.onOpenUpdate;
+    final onOpenCardBinding = widget.onOpenCardBinding;
+    final appVersionName = widget.appVersionName;
     final onTogglePanel = widget.onTogglePanel;
     final onOpenPage = widget.onOpenPage;
     final onSync = widget.onSync;
@@ -1262,6 +1331,9 @@ class _MainShellState extends State<_MainShell>
                       accountDisplayName: accountDisplayName,
                       onLogout: onLogout,
                       onSync: onSync,
+                      onOpenCardBinding: onOpenCardBinding,
+                      onOpenUpdate: onOpenUpdate,
+                      appVersionName: appVersionName,
                       assistantPack: assistantPack,
                       onAssistantPackChanged: onAssistantPackChanged,
                     ),
@@ -2056,6 +2128,9 @@ class _AccountScreen extends StatelessWidget {
     required this.accountDisplayName,
     required this.onLogout,
     required this.onSync,
+    required this.onOpenCardBinding,
+    required this.onOpenUpdate,
+    required this.appVersionName,
     required this.assistantPack,
     required this.onAssistantPackChanged,
   });
@@ -2064,6 +2139,9 @@ class _AccountScreen extends StatelessWidget {
   final String accountDisplayName;
   final VoidCallback onLogout;
   final VoidCallback onSync;
+  final VoidCallback onOpenCardBinding;
+  final VoidCallback onOpenUpdate;
+  final String appVersionName;
   final AssistantPack assistantPack;
   final ValueChanged<AssistantPack> onAssistantPackChanged;
   static const _widgetPinChannel = MethodChannel('better_phenikaa/widget_pin');
@@ -2313,6 +2391,21 @@ class _AccountScreen extends StatelessWidget {
                   RepaintBoundary(child: _InfoPanel(data: data)), 
                   const SizedBox(height: 12),
                   const RepaintBoundary(child: AppThemeSettingButton()),
+                  const SizedBox(height: 12),
+                  FilledButton.tonalIcon(
+                    onPressed: onOpenUpdate,
+                    icon: const Icon(Icons.system_update_rounded),
+                    label: const Text('Cập nhật ứng dụng'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: onOpenCardBinding,
+                    icon: const Icon(Icons.nfc_rounded),
+                    label: const Text('Liên kết thẻ cập nhật'),
+                  ),
+                  if (appVersionName.isNotEmpty)
+                    Text('Phiên bản $appVersionName',
+                        style: TextStyle(color: palette.textSecondary)),
                   const SizedBox(height: 12),
                   Text(
                     'Model Trợ Lí',
@@ -2603,10 +2696,7 @@ class _TopTitle extends StatelessWidget {
                 icon: Stack(
                   clipBehavior: Clip.none,
                   children: <Widget>[
-                    Icon(
-                      Icons.notifications_none_rounded,
-                      color: palette.primary,
-                    ),
+                    Icon(Icons.notifications_none_rounded, color: palette.primary),
                     if (unreadDifference || hasActiveExamPeriod)
                       Positioned(
                         right: -2,

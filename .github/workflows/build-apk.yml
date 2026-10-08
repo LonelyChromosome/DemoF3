@@ -1,63 +1,237 @@
-name: Build APK
+name: Feature Updater - signed APK release
 
+# Manual only. A merge into main never publishes or changes update metadata.
 on:
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Target version, e.g. cooc.1.2"
+        required: true
+        type: string
+        default: "cooc.1.2"
+      version_code:
+        description: "Android versionCode (1.1=30; 1.2=32; later versions higher)"
+        required: true
+        type: string
+        default: "32"
+      notes:
+        description: "Release notes (500 characters maximum)"
+        required: true
+        type: string
+        default: "Cập nhật Better Phenikaa cooc.1.2."
+      publish:
+        description: "Publish to updater channel after signed APK validation"
+        type: boolean
+        default: false
+      publish_confirmation:
+        description: "To publish, enter PUBLISH exactly. Otherwise leave empty."
+        type: string
+        required: false
+        default: ""
+
+concurrency:
+  group: feature-updater-release
+  cancel-in-progress: false
 
 jobs:
-  apk:
+  build:
     runs-on: ubuntu-latest
-
+    environment: cooc-release
+    permissions:
+      contents: read
+    outputs:
+      release_tag: ${{ steps.meta.outputs.release_tag }}
+      apk_name: ${{ steps.meta.outputs.apk_name }}
+      artifact_name: ${{ steps.meta.outputs.artifact_name }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Java 17
-        uses: actions/setup-java@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Flutter 3.47.2
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
           channel: stable
           cache: true
-
-      - name: Bootstrap
+      - name: Validate request and derive immutable release tag
+        id: meta
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          NOTES: ${{ inputs.notes }}
+          PUBLISH: ${{ inputs.publish }}
+          CONFIRM: ${{ inputs.publish_confirmation }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          from pathlib import Path
+          name, code, notes = (os.environ[k] for k in ("VERSION_NAME", "VERSION_CODE", "NOTES"))
+          if not re.fullmatch(r"cooc\.\d+\.\d+", name):
+              raise SystemExit("version_name must be cooc.N.N")
+          if not re.fullmatch(r"[1-9][0-9]*", code) or int(code) <= 30:
+              raise SystemExit("New versionCode must be > 30 (cooc.1.1 is 30)")
+          if not notes or len(notes) > 500 or "\n" in notes:
+              raise SystemExit("Notes must be one nonempty line, max 500 characters")
+          if os.environ["PUBLISH"] == "true" and os.environ["CONFIRM"] != "PUBLISH":
+              raise SystemExit("Publishing requires publish_confirmation=PUBLISH")
+          tag = name + "-build-" + os.environ["GITHUB_SHA"][:12]
+          apk_name = "Better-Phenikaa-" + name + "-Public.apk"
+          artifact = "feature-updater-" + name + "-" + code
+          out = Path(os.environ["GITHUB_OUTPUT"])
+          with out.open("a") as f:
+              f.write(f"release_tag={tag}\napk_name={apk_name}\nartifact_name={artifact}\n")
+          PY
+      - name: Bootstrap Android release tooling
         run: bash tool/bootstrap.sh
-
-      - name: Prepare cooc release signing
+      - name: Restore and validate protected signer
         env:
           COOC_KEYSTORE_BASE64: ${{ secrets.COOC_KEYSTORE_BASE64 }}
           COOC_KEYSTORE_PASSWORD: ${{ secrets.COOC_KEYSTORE_PASSWORD }}
+          UPDATE_MANIFEST_PRIVATE_KEY_BASE64: ${{ secrets.UPDATE_MANIFEST_PRIVATE_KEY_BASE64 }}
+          UPDATE_PUBLIC_KEY_BASE64: ${{ vars.UPDATE_PUBLIC_KEY_BASE64 }}
+          EXPECTED_APK_CERT_SHA256: ${{ vars.EXPECTED_APK_CERT_SHA256 }}
         run: |
-          test -n "$COOC_KEYSTORE_BASE64"
-          test -n "$COOC_KEYSTORE_PASSWORD"
+          set -euo pipefail
+          test -n "$COOC_KEYSTORE_BASE64" && test -n "$COOC_KEYSTORE_PASSWORD"
+          test -n "$UPDATE_MANIFEST_PRIVATE_KEY_BASE64" && test -n "$UPDATE_PUBLIC_KEY_BASE64"
+          test -n "$EXPECTED_APK_CERT_SHA256"
           echo "$COOC_KEYSTORE_BASE64" | base64 --decode > android/cooc-release.jks
-          cat > android/key.properties <<EOF
-          storePassword=$COOC_KEYSTORE_PASSWORD
-          keyPassword=$COOC_KEYSTORE_PASSWORD
-          keyAlias=cooc
-          storeFile=cooc-release.jks
-          EOF
-
-      - name: Build Public
+          echo "$UPDATE_MANIFEST_PRIVATE_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/update-manifest-private.pem"
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=cooc-release-v2\nstoreFile=cooc-release.jks\n' \
+            "$COOC_KEYSTORE_PASSWORD" "$COOC_KEYSTORE_PASSWORD" > android/key.properties
+          chmod 600 android/key.properties android/cooc-release.jks "$RUNNER_TEMP/update-manifest-private.pem"
+          derived="$(openssl pkey -in "$RUNNER_TEMP/update-manifest-private.pem" -pubout -outform DER | tail -c 32 | base64 -w 0)"
+          test "$derived" = "$UPDATE_PUBLIC_KEY_BASE64"
+      - name: Build one target APK only
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          APK_NAME: ${{ steps.meta.outputs.apk_name }}
+          UPDATE_PUBLIC_KEY_BASE64: ${{ vars.UPDATE_PUBLIC_KEY_BASE64 }}
+          UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/LonelyChromosome/DemoF3/feature/1.2-card-update/updates/latest.json
         run: |
-          flutter build apk --release
+          set -euo pipefail
+          # Remove dev-only integration_test registrant only from this runner.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("pubspec.yaml")
+          s = p.read_text()
+          v = "  integration_test:\n    sdk: flutter\n"
+          if s.count(v) != 1:
+              raise SystemExit("Unexpected Flutter integration_test dependency")
+          p.write_text(s.replace(v, ""))
+          PY
+          flutter pub get
+          COOC_VERSION_NAME="$VERSION_NAME" flutter build apk --release --build-number="$VERSION_CODE" \
+            --dart-define="UPDATE_PUBLIC_KEY_BASE64=$UPDATE_PUBLIC_KEY_BASE64" \
+            --dart-define="UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL"
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Public.apk
-
-      - name: Build Dev
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/$APK_NAME"
+      - name: Verify package signer and sign exact manifest bytes
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          NOTES: ${{ inputs.notes }}
+          APK_NAME: ${{ steps.meta.outputs.apk_name }}
+          TAG: ${{ steps.meta.outputs.release_tag }}
+          EXPECTED_APK_CERT_SHA256: ${{ vars.EXPECTED_APK_CERT_SHA256 }}
         run: |
-          flutter build apk --release --dart-define=ASSISTANT_TEST_PANEL=true
-          cp build/app/outputs/flutter-apk/app-release.apk dist/Better-Phenikaa-cooc.1.1-Dev.apk
-
-      - name: Upload APKs
-        uses: actions/upload-artifact@v4
+          set -euo pipefail
+          apk="dist/$APK_NAME"
+          signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
+          aapt="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
+          test -x "$signer" && test -x "$aapt"
+          "$signer" verify --print-certs "$apk" > dist/signing.txt
+          badging="$("$aapt" dump badging "$apk")"
+          [[ "$badging" == *"package: name='vn.edu.phenikaa.better_phenikaa_schedule' versionCode='$VERSION_CODE' versionName='$VERSION_NAME'"* ]]
+          fp="$(sed -nE 's/^(Signer #[0-9]+|V[0-9]+ Signer): certificate SHA-256 digest: ([0-9a-fA-F]+)$/\2/p' dist/signing.txt | sort -u)"
+          test -n "$fp" && test "${fp,,}" = "${EXPECTED_APK_CERT_SHA256,,}"
+          ! grep -q 'CN=Android Debug' dist/signing.txt
+          url="https://github.com/LonelyChromosome/DemoF3/releases/download/$TAG/$APK_NAME"
+          python3 tool/release_update_manifest.py "$apk" "$url" dist/latest.json "$VERSION_NAME" "$VERSION_CODE" "30" "$NOTES"
+          openssl pkeyutl -sign -rawin -inkey "$RUNNER_TEMP/update-manifest-private.pem" \
+            -in dist/latest.json -out "$RUNNER_TEMP/latest.sig.bin"
+          base64 -w 0 "$RUNNER_TEMP/latest.sig.bin" > dist/latest.json.sig
+          sha256sum "$apk" > dist/SHA256SUMS
+      - name: Remove signing secrets from runner
+        if: always()
+        run: |
+          rm -f android/key.properties android/cooc-release.jks
+          rm -f "$RUNNER_TEMP/update-manifest-private.pem" "$RUNNER_TEMP/latest.sig.bin"
+      - uses: actions/upload-artifact@v4
         with:
-          name: better-phenikaa-cooc-1-1
+          name: ${{ steps.meta.outputs.artifact_name }}
           path: |
-            dist/Better-Phenikaa-cooc.1.1-Public.apk
-            dist/Better-Phenikaa-cooc.1.1-Dev.apk
+            dist/*.apk
+            dist/latest.json
+            dist/latest.json.sig
+            dist/SHA256SUMS
           retention-days: 14
+
+  publish:
+    if: ${{ inputs.publish == true }}
+    needs: build
+    runs-on: ubuntu-latest
+    environment: cooc-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: dist
+      - name: Check signed artifact and existing public update channel
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          APK_NAME: ${{ needs.build.outputs.apk_name }}
+          TAG: ${{ needs.build.outputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f "dist/$APK_NAME" && test -f dist/latest.json && test -f dist/latest.json.sig
+          (cd dist && sha256sum --check SHA256SUMS)
+          git fetch origin refs/heads/feature/1.2-card-update:refs/remotes/origin/feature/1.2-card-update
+          git show origin/feature/1.2-card-update:updates/latest.json > "$RUNNER_TEMP/current-latest.json"
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          data = json.loads(Path("dist/latest.json").read_bytes())
+          prev = json.loads((Path(os.environ["RUNNER_TEMP"]) / "current-latest.json").read_bytes())
+          apk = Path("dist") / os.environ["APK_NAME"]
+          assert data["packageName"] == "vn.edu.phenikaa.better_phenikaa_schedule"
+          assert data["versionName"] == os.environ["VERSION_NAME"]
+          assert data["versionCode"] == int(os.environ["VERSION_CODE"])
+          assert data["minimumVersionCode"] == 30
+          assert data["apkSha256"] == hashlib.sha256(apk.read_bytes()).hexdigest()
+          assert data["apkSize"] == apk.stat().st_size
+          assert data["versionCode"] >= prev["versionCode"], "Cannot downgrade the public updater"
+          assert data["apkUrl"].endswith("/" + os.environ["TAG"] + "/" + os.environ["APK_NAME"])
+          PY
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Refusing to clobber an existing signed release tag" >&2
+            exit 1
+          fi
+      - name: Publish immutable release and update existing 1.1 feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION_NAME: ${{ inputs.version_name }}
+          TAG: ${{ needs.build.outputs.release_tag }}
+          APK_NAME: ${{ needs.build.outputs.apk_name }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" "dist/$APK_NAME" --target "$GITHUB_SHA" \
+            --title "Better Phenikaa $VERSION_NAME" --notes "$NOTES"
+          # Existing cooc.1.1 APKs already embed the URL on this branch.
+          # Do not move the feed without a migration.
+          git switch -C publish-feature-updater-feed origin/feature/1.2-card-update
+          mkdir -p updates
+          cp dist/latest.json dist/latest.json.sig updates/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates/latest.json updates/latest.json.sig
+          git commit -m "Publish signed $VERSION_NAME Feature Updater metadata"
+          git push origin HEAD:refs/heads/feature/1.2-card-update

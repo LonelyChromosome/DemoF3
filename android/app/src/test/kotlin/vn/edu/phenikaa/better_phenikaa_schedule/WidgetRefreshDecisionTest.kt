@@ -62,7 +62,7 @@ class WidgetRefreshDecisionTest {
             set(Calendar.MILLISECOND, 0)
         }
         val next = Calendar.getInstance(zone).apply {
-            timeInMillis = WidgetDayChangeReceiver.nextMidnight(now)
+            timeInMillis = WidgetDayChangeReceiver.nextRefreshBoundary(now)
         }
         assertEquals(26, next.get(Calendar.DAY_OF_MONTH))
         assertEquals(0, next.get(Calendar.HOUR_OF_DAY))
