@@ -12,6 +12,7 @@ import android.content.pm.PackageInfo
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.os.Build
+import java.util.concurrent.atomic.AtomicReference
 import java.io.File
 import java.security.MessageDigest
 
@@ -151,7 +152,14 @@ class UpdateStatusReceiver : BroadcastReceiver() {
                 @Suppress("DEPRECATION")
                 val confirmation = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
                 confirmation?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                if (confirmation != null) context.startActivity(confirmation)
+                if (confirmation != null) {
+                    if (UpdateConfirmation.visible &&
+                        runCatching { context.startActivity(confirmation) }.isSuccess) {
+                        // Android now owns the confirmation screen.
+                    } else {
+                        UpdateConfirmation.defer(context, confirmation)
+                    }
+                }
             }
             PackageInstaller.STATUS_SUCCESS -> UpdateInstaller.finished(context, true)
             else -> UpdateInstaller.finished(context, false)
@@ -184,7 +192,40 @@ class UpdateInstalledReceiver : BroadcastReceiver() {
             .setContentTitle("Cập nhật Better Phenikaa thành công")
             .setContentText("Đã cài phiên bản mới.")
             .setAutoCancel(true).setContentIntent(open).build()
-        manager.notify(4842, notification)
-        UpdateInstaller.takeStatus(context)
+        if (runCatching { manager.notify(4842, notification) }.isSuccess) {
+            UpdateInstaller.takeStatus(context)
+        }
+    }
+}
+
+/** Android's own installer confirmation remains mandatory. */
+internal object UpdateConfirmation {
+    @Volatile var visible = false
+    private val pending = AtomicReference<Intent?>()
+    fun take(): Intent? = pending.getAndSet(null)
+
+    fun defer(context: Context, confirmation: Intent) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED) {
+            pending.set(confirmation)
+            return
+        }
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val channel = "app_update_install"
+        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(
+            channel, "Cài đặt Better Phenikaa", NotificationManager.IMPORTANCE_HIGH))
+        val open = PendingIntent.getActivity(context, 4843, confirmation,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        @Suppress("DEPRECATION")
+        val notification = (if (Build.VERSION.SDK_INT >= 26)
+            Notification.Builder(context, channel) else Notification.Builder(context))
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("Bản cập nhật đã sẵn sàng")
+            .setContentText("Chạm để tiếp tục cài đặt bằng Android.")
+            .setAutoCancel(true).setContentIntent(open).build()
+        if (runCatching { manager.notify(4843, notification) }.isFailure) {
+            pending.set(confirmation)
+        }
     }
 }
