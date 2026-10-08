@@ -59,7 +59,13 @@ jobs:
           aapt="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
           test -x "$aapt"
           identity="$("$aapt" dump badging "$apk")"
-          [[ "$identity" == *"package: name='vn.edu.phenikaa.better_phenikaa_schedule.preview13' versionCode='34'"* ]]
+          # Flutter's --split-per-abi offsets versionCode by an ABI-specific
+          # multiple of 1000. Check the logical base code and exact package.
+          [[ "$identity" == *"package: name='vn.edu.phenikaa.better_phenikaa_schedule.preview13'"* ]]
+          [[ "$identity" == *"versionName='cooc.1.3'"* ]]
+          code="$(printf '%s\n' "$identity" | sed -nE "s/^package:.*versionCode='([0-9]+)'.*/\\1/p")"
+          test -n "$code"
+          test "$((code % 1000))" -eq 34
           echo "$identity" | grep '^package:'
           sha256sum "$apk" > dist/SHA256SUMS
       - uses: actions/upload-artifact@v4
