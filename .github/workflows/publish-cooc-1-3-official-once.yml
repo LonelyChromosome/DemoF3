@@ -1,0 +1,145 @@
+name: Publish cooc.1.3 official signed updater
+
+on:
+  push:
+    branches:
+      - feature/1.2-card-update
+    paths:
+      - .github/workflows/publish-cooc-1-3-official-once.yml
+
+concurrency:
+  group: publish-cooc-1-3-official
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: cooc-release
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Checkout official main source and release metadata script
+        uses: actions/checkout@v5
+        with:
+          ref: f997d89b5599cbe709f78c76255fd1693c6692a5
+          persist-credentials: true
+      - name: Reuse original release-signed cooc.1.3 APK (no rebuild)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh run download 37768630512 -R LonelyChromosome/DemoF3 \
+            --name cooc-1-3-real-nfc-manual-vfx-signed-NOT-PUBLISHED \
+            --dir dist
+          sha256sum -c dist/SHA256SUMS
+          test -s dist/Better-Phenikaa-cooc.1.3-RealNFC-VFX.apk
+          cp dist/Better-Phenikaa-cooc.1.3-RealNFC-VFX.apk dist/Better-Phenikaa-cooc.1.3.apk
+      - name: Verify production APK package version and trusted cooc signing certificate
+        env:
+          EXPECTED_CERT: ${{ vars.EXPECTED_APK_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          test -n "$EXPECTED_CERT"
+          apk=dist/Better-Phenikaa-cooc.1.3.apk
+          signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
+          aapt="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
+          test -x "$signer" && test -x "$aapt"
+          "$signer" verify --print-certs "$apk" > dist/signing.txt
+          identity="$("$aapt" dump badging "$apk")"
+          [[ "$identity" == *"package: name='vn.edu.phenikaa.better_phenikaa_schedule' versionCode='34' versionName='cooc.1.3'"* ]]
+          actual="$(sed -nE 's/^(Signer #[0-9]+|V[0-9]+ Signer): certificate SHA-256 digest: ([0-9a-fA-F]+)$/\\2/p' dist/signing.txt | sort -u)"
+          test -n "$actual" && test "${actual,,}" = "${EXPECTED_CERT,,}"
+          ! grep -q 'CN=Android Debug' dist/signing.txt
+      - name: Verify main includes only approved production VFX
+        run: |
+          set -euo pipefail
+          grep -q 'class HenshinVfx' lib/features/app_update/henshin_vfx.dart
+          grep -q 'startManualAfterHold' lib/features/app_update/update_ui.dart
+          ! grep -q 'COOC_13_VFX_PREVIEW' lib/features/app_update/update_ui.dart
+          ! grep -q 'Xem thử' lib/features/app_update/update_ui.dart
+          ! grep -q '_demoNfc' lib/features/app_update/update_ui.dart
+      - name: Restore and check the established manifest signing key
+        env:
+          PRIVATE: ${{ secrets.UPDATE_MANIFEST_PRIVATE_KEY_BASE64 }}
+          PUBLIC: ${{ vars.UPDATE_PUBLIC_KEY_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$PRIVATE" && test -n "$PUBLIC"
+          echo "$PRIVATE" | base64 --decode > "$RUNNER_TEMP/ed25519-private.pem"
+          chmod 600 "$RUNNER_TEMP/ed25519-private.pem"
+          derived="$(openssl pkey -in "$RUNNER_TEMP/ed25519-private.pem" -pubout -outform DER | tail -c 32 | base64 -w 0)"
+          test "$derived" = "$PUBLIC"
+      - name: Generate verified cooc.1.3 official manifest
+        run: |
+          set -euo pipefail
+          url="https://github.com/LonelyChromosome/DemoF3/releases/download/cooc.1.3/Better-Phenikaa-cooc.1.3.apk"
+          python3 tool/release_update_manifest.py \
+            dist/Better-Phenikaa-cooc.1.3.apk "$url" dist/latest.json \
+            cooc.1.3 34 30 "cooc.1.3: Hiệu ứng quét NFC và nhấn giữ xác thực 2 giây."
+          openssl pkeyutl -sign -rawin -inkey "$RUNNER_TEMP/ed25519-private.pem" \
+            -in dist/latest.json -out "$RUNNER_TEMP/latest.sig.bin"
+          base64 -w 0 "$RUNNER_TEMP/latest.sig.bin" > dist/latest.json.sig
+          openssl pkey -in "$RUNNER_TEMP/ed25519-private.pem" -pubout -out "$RUNNER_TEMP/ed25519-public.pem"
+          openssl pkeyutl -verify -rawin -pubin \
+            -inkey "$RUNNER_TEMP/ed25519-public.pem" \
+            -in dist/latest.json -sigfile "$RUNNER_TEMP/latest.sig.bin"
+          python3 - <<'PY'
+          import json,hashlib
+          from pathlib import Path
+          manifest=json.loads(Path("dist/latest.json").read_bytes())
+          apk=Path("dist/Better-Phenikaa-cooc.1.3.apk")
+          assert manifest["versionCode"]==34 and manifest["versionName"]=="cooc.1.3"
+          assert manifest["minimumVersionCode"]==30
+          assert manifest["apkSize"]==apk.stat().st_size
+          assert manifest["apkSha256"]==hashlib.sha256(apk.read_bytes()).hexdigest()
+          assert manifest["apkUrl"]=="https://github.com/LonelyChromosome/DemoF3/releases/download/cooc.1.3/Better-Phenikaa-cooc.1.3.apk"
+          PY
+      - name: Validate replacement of 1.4 feed with approved 1.3 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view cooc.1.3 >/dev/null 2>&1; then
+            echo "Existing cooc.1.3 tag, refusing to overwrite" >&2
+            exit 1
+          fi
+          git fetch origin refs/heads/feature/1.2-card-update:refs/remotes/origin/feature/1.2-card-update
+          git show origin/feature/1.2-card-update:updates/latest.json > "$RUNNER_TEMP/previous.json"
+          python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          old=json.loads((Path(os.environ["RUNNER_TEMP"])/"previous.json").read_bytes())
+          new=json.loads(Path("dist/latest.json").read_bytes())
+          assert old["packageName"]==new["packageName"]
+          assert old["versionName"]=="cooc.1.4" and old["versionCode"]==36
+          assert new["versionName"]=="cooc.1.3" and new["versionCode"]==34
+          assert old["minimumVersionCode"]==new["minimumVersionCode"]==30
+          PY
+      - name: Publish cooc.1.3 official APK as GitHub Latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create cooc.1.3 dist/Better-Phenikaa-cooc.1.3.apk \
+            --target f997d89b5599cbe709f78c76255fd1693c6692a5 \
+            --title "Better Phenikaa cooc.1.3" \
+            --notes "cooc.1.3: Hiệu ứng quét thẻ NFC và nhấn giữ 2 giây." \
+            --latest
+      - name: Publish signed latest.json to the existing update channel
+        run: |
+          set -euo pipefail
+          git switch -C publish-cooc13-official origin/feature/1.2-card-update
+          mkdir -p updates
+          cp dist/latest.json dist/latest.json.sig updates/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates/latest.json updates/latest.json.sig
+          ! git diff --cached --quiet
+          git commit -m "Set cooc.1.3 as official latest signed update"
+          git push origin HEAD:refs/heads/feature/1.2-card-update
+      - name: Remove ephemeral manifest keys
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/ed25519-private.pem" "$RUNNER_TEMP/ed25519-public.pem" "$RUNNER_TEMP/latest.sig.bin"
