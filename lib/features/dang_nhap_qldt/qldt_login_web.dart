@@ -236,3 +236,31 @@ String _formatDate(DateTime value) {
   final month = value.month.toString().padLeft(2, '0');
   return '$day/$month/${value.year}';
 }
+
+/// Browser bridge cannot be embedded as a silent Android platform view.
+class QldtInlineSync extends StatefulWidget {
+  const QldtInlineSync({
+    super.key,
+    required this.onComplete,
+    required this.onFailed,
+  });
+
+  final ValueChanged<QldtLoginResult> onComplete;
+  final ValueChanged<String> onFailed;
+
+  @override
+  State<QldtInlineSync> createState() => _QldtInlineSyncState();
+}
+
+class _QldtInlineSyncState extends State<QldtInlineSync> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onFailed('INLINE_SYNC_ONLY_ANDROID');
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
+}

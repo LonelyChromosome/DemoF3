@@ -18,7 +18,6 @@ import 'package:better_phenikaa_schedule/features/diem_danh/attendance.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/attendance_sheet.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/attendance_submit.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/user_feedback.dart';
-import 'package:better_phenikaa_schedule/features/diem_danh/inplace_refresh.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/pull_sync.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/schedule/tien_mon_schedule_views.dart';
@@ -89,6 +88,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _booting = true;
   bool _syncing = false;
   bool _pullSyncing = false;
+  Completer<QldtLoginResult>? _inlineQldtSync;
   Map<String, AttendanceEntry> _attendance = <String, AttendanceEntry>{};
   bool _panelOpen = false;
   ImportedScheduleData? _data;
@@ -780,14 +780,35 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     ));
   }
 
+  void _inlineQldtSucceeded(QldtLoginResult result) {
+    final request = _inlineQldtSync;
+    if (request != null && !request.isCompleted) request.complete(result);
+  }
+
+  void _inlineQldtFailed(String reason) {
+    final request = _inlineQldtSync;
+    if (request != null && !request.isCompleted) {
+      request.completeError(StateError(reason));
+    }
+  }
+
   Future<void> _pullRefresh() async {
     if (_syncing || _pullSyncing || _data == null) return;
-    setState(() => _pullSyncing = true);
+    if (!supportsLiveQldtLogin) return;
+    final request = Completer<QldtLoginResult>();
+    setState(() {
+      _pullSyncing = true;
+      _inlineQldtSync = request;
+    });
     var stage = 'download';
     try {
-      // Reload runs inside the current page using the cached QLDT session.
-      // Never call openQldtLogin or replace the displayed data while loading.
-      final verified = await reloadQldtInPlace(_data!);
+      // One QLDT engine: the *same* WebView login, request, verification and
+      // parser used by the manual Sync button. No cached-JWT HTTP substitute.
+      // The engine is composed invisibly behind the current screen.
+      final verified = await request.future.timeout(
+        const Duration(seconds: 95),
+        onTimeout: () => throw TimeoutException('INLINE_Q LDT_TIMEOUT'),
+      );
       stage = 'save';
       await _save(verified);
       final prefs = await SharedPreferences.getInstance();
@@ -821,7 +842,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           ..showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
-      if (mounted) setState(() => _pullSyncing = false);
+      if (mounted) {
+        setState(() {
+          _pullSyncing = false;
+          if (identical(_inlineQldtSync, request)) _inlineQldtSync = null;
+        });
+      }
     }
   }
 
@@ -993,7 +1019,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 onLogin: _loginOrSync,
                                 supportsLive: supportsLiveQldtLogin,
                               )
-                            : _MainShell(
+                            : Stack(
+                                fit: StackFit.expand,
+                                children: <Widget>[
+                                  _MainShell(
                                 data: _data!,
                                 attendance: _attendance,
                                 onOpenAttendance: _openAttendance,
@@ -1050,6 +1079,20 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                     setState(() => _showPastExams = past),
                                 onDismissError: () =>
                                     setState(() => _errorMessage = null),
+                              ),
+                                  if (_pullSyncing)
+                                    Positioned.fill(
+                                      child: IgnorePointer(
+                                        child: Opacity(
+                                          opacity: .001,
+                                          child: buildQldtInlineSync(
+                                            onComplete: _inlineQldtSucceeded,
+                                            onFailed: _inlineQldtFailed,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                       ),
                     ),

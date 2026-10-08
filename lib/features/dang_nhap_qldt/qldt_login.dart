@@ -23,3 +23,8 @@ Future<bool> isQldtFirstLoginSetupComplete() =>
 
 Future<void> markQldtFirstLoginSetupComplete() =>
     implementation.markQldtFirstLoginSetupComplete();
+
+Widget buildQldtInlineSync({
+  required ValueChanged<QldtLoginResult> onComplete,
+  required ValueChanged<String> onFailed,
+}) => implementation.QldtInlineSync(onComplete: onComplete, onFailed: onFailed);
