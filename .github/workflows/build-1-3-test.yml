@@ -1,9 +1,8 @@
 name: Build cooc.1.3 private test APK (NO PUBLISH)
 
 on:
-  push:
-    branches:
-      - feature/1.3-attendance-refresh
+  # Signed in-place upgrade requires an authorized release signer.
+  # Deliberately not triggered by push; never publishes update metadata.
   workflow_dispatch:
 
 permissions:
