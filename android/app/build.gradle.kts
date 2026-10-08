@@ -42,7 +42,7 @@ android {
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
         // flag during build.
         versionCode = flutter.versionCode
-        versionName = System.getenv("COOC_VERSION_NAME") ?: "cooc.1.1"
+        versionName = System.getenv("COOC_VERSION_NAME") ?: "cooc.1.3"
     }
 
     signingConfigs {
