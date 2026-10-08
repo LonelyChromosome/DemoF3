@@ -13,6 +13,12 @@ String attendanceFailureMessage(Object error) {
   ])) {
     return 'Giảng viên chưa mở điểm danh.';
   }
+  if (_matches(raw, <String>['attendance_lesson_not_found'])) {
+    return 'Không tìm thấy buổi này trên QLĐT.';
+  }
+  if (_matches(raw, <String>['attendance_lesson_ambiguous'])) {
+    return 'Không xác định được buổi điểm danh.';
+  }
   if (_matches(raw, <String>[
     'attendance_list_id_missing', 'chưa có mã danh sách',
     'chưa có mã điểm danh',
