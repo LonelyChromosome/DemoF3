@@ -644,7 +644,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loginOrSync() async {
+  Future<void> _loginOrSync({bool updateAttendance = false}) async {
     if (!supportsLiveQldtLogin) {
       if (!mounted) {
         return;
@@ -700,9 +700,23 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           final displayed = saved == null
               ? imported.schedule
               : ImportedScheduleData.decode(saved);
+          // Initial login and widget sync never read or update attendance.
+          // Only an explicit in-app Sync button opts in.
+          var attendance = _attendance;
+          if (updateAttendance) {
+            try {
+              attendance = await AttendanceStore().reconcile(
+                _attendance,
+                displayed.classes,
+              );
+            } on Object {
+              // A local attendance badge should never invalidate a good sync.
+            }
+          }
           if (!mounted) return;
           setState(() {
             _data = displayed;
+            _attendance = attendance;
             _accountDisplayName = accountDisplayName;
             _lastSuccessfulSync = displayed.syncedAt;
             _selectedDate = _initialDateFor(displayed);
@@ -1024,7 +1038,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 onTogglePanel: () =>
                                     setState(() => _panelOpen = !_panelOpen),
                                 onOpenPage: _openPage,
-                                onSync: () => unawaited(_loginOrSync()),
+                                onSync: () => unawaited(
+                                  _loginOrSync(updateAttendance: true),
+                                ),
                                 onLogout: _logout,
                                 onDateChanged: (date) => setState(
                                   () => _selectedDate = _dateOnly(date),

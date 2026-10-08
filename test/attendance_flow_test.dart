@@ -1,4 +1,5 @@
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_native_transport.dart';
 import 'package:better_phenikaa_schedule/features/diem_danh/attendance.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,6 +18,22 @@ void main() {
   );
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
+
+  test('manual app sync and pull sync use same QLDT readiness requirements', () {
+    final session = QldtNativeSession.fromJson(<String, dynamic>{
+      'tokenJWT': 'test-token',
+      'userId': 'test-user',
+      'iM': 'test-im',
+      'appId': '',
+      'strChucNangId': '',
+    });
+    expect(session.isValid, isTrue);
+    expect(QldtNativeSession.fromJson(<String, dynamic>{
+      'tokenJWT': '',
+      'userId': 'test-user',
+      'iM': 'test-im',
+    }).isValid, isFalse);
+  });
 
   test('no code means no attendance status', () async {
     final entries = await AttendanceStore().read();
