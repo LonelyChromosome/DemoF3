@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BPA — Splash Pen Trace VFX</title>
+  <!--
+    Better Phenikaa App / cooc.1.4 — standalone VFX concept ONLY.
+    For Work integration later:
+    - Animate the actual BPA B-over-P logo outline using the final vector paths.
+    - The SVG paths below are a manual approximation, not an official logo asset.
+    - Six sequential stroke segments, total drawing time 850 ms.
+    - Mobile: trace the visible stroke tip (a small pen point), no audio.
+    - Preserve app splash timing, loading flow, color/theme and existing functionality.
+    - Convert to a Flutter CustomPainter using PathMetric.extractPath if desired.
+    - This HTML is intentionally outside lib/ and does not affect the APK.
+  -->
+  <style>
+    * {box-sizing:border-box}
+    body {margin:0;padding:20px 12px;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#10151f;font-family:system-ui,-apple-system,Roboto,sans-serif}
+    .demo {display:flex;flex-direction:column;align-items:center;gap:14px;width:100%}
+    .screen {width:min(100%,335px);aspect-ratio:9/16.5;background:white;border:5px solid #2d3039;border-radius:32px;overflow:hidden;position:relative;color:#0d2e72;box-shadow:0 14px 46px #0007}
+    .status {position:absolute;top:13px;left:20px;right:20px;display:flex;justify-content:space-between;color:#262c36;font-size:12px;font-weight:600}
+    .center {position:absolute;left:0;right:0;top:29%;display:flex;flex-direction:column;align-items:center}
+    .logo {width:157px;height:157px;overflow:visible}
+    .ink {fill:none;stroke:#163b70;stroke-width:12;stroke-linecap:round;stroke-linejoin:round}
+    .accent {fill:none;stroke:#f46d22;stroke-width:8;stroke-linecap:round}
+    .tip {fill:#286bd3}
+    .halo {fill:#4b86ec;opacity:.17}
+    .name {font-weight:800;font-size:23px;color:#123574;letter-spacing:-.6px;margin-top:22px;white-space:nowrap}
+    .version {font-size:11px;color:#8d98af;margin-top:12px}
+    .loading {position:absolute;top:75%;width:100%;display:flex;flex-direction:column;align-items:center;gap:14px}
+    .track {width:126px;height:4px;border-radius:10px;background:#eff1f8;overflow:hidden}
+    .track>div {height:100%;width:38%;background:#1b4db4;border-radius:10px}
+    .loading span {font-size:12px;color:#8b96ad}
+    button {font:600 13px system-ui,-apple-system,sans-serif;cursor:pointer;color:#ecf2ff;border:1px solid #7687a2;border-radius:10px;background:#223045;padding:10px 24px}
+    button:active {transform:scale(.98)}
+    .hint {font-size:12px;color:#bbc4d3;text-align:center}
+    @media(max-width:360px){.screen{width:300px}.name{font-size:21px}}
+  </style>
+</head>
+<body>
+  <div class="demo" id="bpa-pen-vfx">
+    <div class="screen">
+      <div class="status"><span>23:33</span><span>◕ ▮▮▮ ▰</span></div>
+      <div class="center">
+        <svg class="logo" viewBox="0 0 230 230" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="BPA logo drawn by a moving pen">
+          <path class="ink" data-segment="0" d="M52 190 L52 67 Q52 42 76 42 L115 42 Q152 42 152 70 Q152 92 128 104"/>
+          <path class="ink" data-segment="1" d="M128 104 C165 91 194 116 194 147 C194 181 165 195 134 195 L52 195"/>
+          <path class="ink" data-segment="2" d="M91 188 L91 130 Q91 113 110 113 L129 113 Q158 113 159 140 Q159 163 128 163 L96 163"/>
+          <path class="accent" data-segment="3" d="M195 75 L211 52"/>
+          <path class="accent" data-segment="4" d="M205 93 L227 82"/>
+          <path class="accent" data-segment="5" d="M209 111 L229 117"/>
+          <circle id="bpa-tip-halo" class="halo" cx="0" cy="0" r="11" opacity="0"/>
+          <circle id="bpa-tip-dot" class="tip" cx="0" cy="0" r="4" opacity="0"/>
+        </svg>
+        <div class="name">Better Phenikaa App</div>
+        <div class="version">cooc.1.4 · Lịch học &amp; Lịch thi</div>
+      </div>
+      <div class="loading"><div class="track"><div></div></div><span>Đang khởi động...</span></div>
+    </div>
+    <button id="bpa-replay" type="button">↻ Phát lại VFX</button>
+    <div class="hint">850 ms · Vẽ tuần tự từng nét · Không âm thanh</div>
+  </div>
+  <script>
+    (() => {
+      const root = document.getElementById('bpa-pen-vfx');
+      const paths = Array.from(root.querySelectorAll('[data-segment]'));
+      // Absolute segment boundaries in milliseconds. Total: 850 ms.
+      const times = [0, 300, 510, 725, 770, 810, 850];
+      const lengths = paths.map(path => {
+        const length = path.getTotalLength();
+        path.style.strokeDasharray = String(length);
+        path.style.strokeDashoffset = String(length);
+        return length;
+      });
+      const tip = root.querySelector('#bpa-tip-dot');
+      const halo = root.querySelector('#bpa-tip-halo');
+      const animationPeriod = 2600; // 850 ms drawing + a hold to inspect the completed logo.
+      let start = performance.now();
+
+      function draw(now) {
+        const elapsed = (now - start) % animationPeriod;
+        for (let i = 0; i < paths.length; i++) {
+          const linear = Math.max(0, Math.min(1, (elapsed - times[i]) / (times[i + 1] - times[i])));
+          const eased = linear * linear * (3 - 2 * linear);
+          paths[i].style.strokeDashoffset = String(lengths[i] * (1 - eased));
+        }
+
+        let active = -1;
+        if (elapsed < 850) {
+          for (let i = 0; i < paths.length; i++) {
+            if (elapsed >= times[i] && elapsed < times[i + 1]) {
+              active = i;
+              break;
+            }
+          }
+        }
+        if (active >= 0) {
+          const linear = Math.max(0, Math.min(1, (elapsed - times[active]) / (times[active + 1] - times[active])));
+          const eased = linear * linear * (3 - 2 * linear);
+          const point = paths[active].getPointAtLength(lengths[active] * eased);
+          for (const marker of [tip, halo]) {
+            marker.setAttribute('cx', point.x);
+            marker.setAttribute('cy', point.y);
+            marker.style.opacity = '1';
+          }
+          const color = active >= 3 ? '#f46d22' : '#286bd3';
+          tip.style.fill = color;
+          halo.style.fill = color;
+        } else {
+          tip.style.opacity = '0';
+          halo.style.opacity = '0';
+        }
+        requestAnimationFrame(draw);
+      }
+
+      root.querySelector('#bpa-replay').addEventListener('click', () => {
+        start = performance.now();
+      });
+      requestAnimationFrame(draw);
+    })();
+  </script>
+</body>
+</html>
