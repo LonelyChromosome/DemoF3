@@ -30,7 +30,7 @@ on:
         default: ""
 
 concurrency:
-  group: feature-updater-release
+  group: feature-updater-release-v14
   cancel-in-progress: true
 
 jobs:
