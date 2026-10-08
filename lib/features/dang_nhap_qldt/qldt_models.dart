@@ -277,7 +277,7 @@ final class QldtParser {
     );
   }
 
-  // A stored code is not proof of approved attendance.
+  // A saved code is never proof of approved attendance.
   static String? _attendanceReview(Map<String, dynamic> row) {
     final raw = _firstNonEmpty(<Object?>[
       row['THONGTINCHUYENCAN'],
@@ -285,11 +285,17 @@ final class QldtParser {
       row['TRANGTHAIDIEMDANH'],
       row['DIEMDANH_KETQUA'],
     ]).trim().toLowerCase();
-    // Strings such as "Có mặt(3)" / "Vắng mặt(3)" are supplied by
-    // QLDT. The number is not interpreted as an approval state.
-    if (RegExp(r'^(có mặt|co mat)(?:\\s*\\(\\d+\\))?
+    // Recognize the QLDT label and ignore the optional lesson count.
+    final label = raw.split('(').first.trim();
+    final suffix = raw.substring(label.length).trim();
+    final validSuffix = suffix.isEmpty ||
+        (suffix.startsWith('(') && suffix.endsWith(')') &&
+         int.tryParse(suffix.substring(1, suffix.length - 1)) != null);
+    if (!validSuffix) return null;
+    if (label == 'có mặt' || label == 'co mat') return 'present';
+    if (label == 'vắng mặt' || label == 'vang mat') return 'absent';
+    return null;
   }
-
   static DateTime? _parseVietnameseDate(String value) {
     final parts = value.split('/');
     if (parts.length != 3) {
