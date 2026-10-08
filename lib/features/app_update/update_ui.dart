@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:better_phenikaa_schedule/features/app_update/update_controller.dart';
+import 'package:better_phenikaa_schedule/features/app_update/update_name_match.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 
@@ -17,11 +18,10 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
   Timer? _hold;
   bool _holding = false;
   final TextEditingController _manualName = TextEditingController();
-  String _normalizedName(String value) =>
-      value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
-
-  bool get _nameMatches => _normalizedName(widget.displayName).isNotEmpty &&
-      _normalizedName(_manualName.text) == _normalizedName(widget.displayName);
+  bool get _nameMatches =>
+      normalizeUpdateAccountName(widget.displayName).isNotEmpty &&
+      normalizeUpdateAccountName(_manualName.text) ==
+          normalizeUpdateAccountName(widget.displayName);
 
   @override
   void dispose() {
@@ -59,14 +59,27 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
       final progress = controller.total > 0
           ? (controller.downloaded / controller.total).clamp(0.0, 1.0)
           : null;
+      final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+      final screenHeight = MediaQuery.sizeOf(context).height;
       return AnimatedPadding(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOut,
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.only(bottom: keyboard),
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: (screenHeight - keyboard - 32)
+                  .clamp(160.0, screenHeight),
+            ),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: SingleChildScrollView(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: const EdgeInsets.fromLTRB(22, 22, 22, 8),
+                    child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -110,16 +123,7 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
                     onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(labelText: 'Họ và tên'),
                   ),
-                  const SizedBox(height: 8),
-                  Listener(
-                    onPointerDown: _beginHold,
-                    onPointerUp: _endHold,
-                    onPointerCancel: _endHold,
-                    child: FilledButton.tonal(
-                      onPressed: _nameMatches ? () {} : null,
-                      child: Text(_holding ? 'Đang giữ…' : 'Giữ để tiếp tục'),
-                    ),
-                  ),
+
                 ],
               ],
               if (notice == null && phase == UpdatePhase.notAvailable)
@@ -182,6 +186,31 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
                   child: const Text('Đóng'),
                 ),
             ],
+                    ),
+                  ),
+                ),
+                if (_manualSummary &&
+                    (phase == UpdatePhase.available ||
+                     phase == UpdatePhase.cancelled ||
+                     phase == UpdatePhase.failed ||
+                     phase == UpdatePhase.notAvailable))
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(22, 8, 22, 12),
+                    child: Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: _beginHold,
+                      onPointerUp: _endHold,
+                      onPointerCancel: _endHold,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.tonal(
+                          onPressed: _nameMatches ? () {} : null,
+                          child: Text(_holding ? 'Đang giữ…' : 'Giữ để tiếp tục'),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
