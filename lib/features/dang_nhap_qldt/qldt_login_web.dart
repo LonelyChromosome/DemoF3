@@ -243,10 +243,12 @@ class QldtInlineSync extends StatefulWidget {
     super.key,
     required this.onComplete,
     required this.onFailed,
+    this.onSession,
   });
 
   final ValueChanged<QldtLoginResult> onComplete;
   final ValueChanged<String> onFailed;
+  final ValueChanged<Map<String, String>>? onSession;
 
   @override
   State<QldtInlineSync> createState() => _QldtInlineSyncState();

@@ -28,3 +28,12 @@ Widget buildQldtInlineSync({
   required ValueChanged<QldtLoginResult> onComplete,
   required ValueChanged<String> onFailed,
 }) => implementation.QldtInlineSync(onComplete: onComplete, onFailed: onFailed);
+
+Widget buildQldtInlineSession({
+  required ValueChanged<Map<String, String>> onSession,
+  required ValueChanged<String> onFailed,
+}) => implementation.QldtInlineSync(
+  onComplete: (_) {},
+  onFailed: onFailed,
+  onSession: onSession,
+);

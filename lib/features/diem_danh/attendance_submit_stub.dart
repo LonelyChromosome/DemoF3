@@ -1,9 +1,16 @@
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 
-Future<ScheduleRecord> resolveAttendanceLesson(ScheduleRecord lesson) async {
+Future<ScheduleRecord> resolveAttendanceLesson(
+  ScheduleRecord lesson, {
+  required Map<String, String> liveSession,
+}) async {
   throw UnsupportedError('Điểm danh chỉ hỗ trợ trong APK Android.');
 }
 
-Future<void> submitAttendanceCode(ScheduleRecord lesson, String code) async {
-  throw UnsupportedError('Điểm danh qua API chỉ hỗ trợ trong ứng dụng Android.');
+Future<void> submitAttendanceCode(
+  ScheduleRecord lesson,
+  String code, {
+  required Map<String, String> liveSession,
+}) async {
+  throw UnsupportedError('Điểm danh qua API chỉ hỗ trợ trong APK Android.');
 }

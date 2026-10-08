@@ -3,13 +3,14 @@ import 'dart:io';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_native_transport.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-const _sessionKey = 'better_phenikaa_qldt_native_session_v1';
 /// Read the selected day's existing QLDT record, never the whole semester.
-Future<ScheduleRecord> resolveAttendanceLesson(ScheduleRecord lesson) async {
+Future<ScheduleRecord> resolveAttendanceLesson(
+  ScheduleRecord lesson, {
+  required Map<String, String> liveSession,
+}) async {
   if (lesson.isExam) throw StateError('ATTENDANCE_LESSON_NOT_FOUND');
-  final session = await _readAttendanceSession();
+  final session = _liveSession(liveSession);
   final raw = await const QldtNativeTransport().fetchScheduleEnvelope(
     session: session,
     start: DateTime(lesson.startAt.year, lesson.startAt.month, lesson.startAt.day),
@@ -48,23 +49,20 @@ Future<ScheduleRecord> resolveAttendanceLesson(ScheduleRecord lesson) async {
   );
 }
 
-Future<QldtNativeSession> _readAttendanceSession() async {
-  final prefs = await SharedPreferences.getInstance();
-  final rawSession = prefs.getString(_sessionKey);
-  if (rawSession == null || rawSession.isEmpty) {
-    throw StateError('SESSION_EXPIRED');
-  }
-  final session = QldtNativeSession.fromJson(
-    Map<String, dynamic>.from(jsonDecode(rawSession) as Map),
-  );
-  if (!session.isValid) throw StateError('SESSION_EXPIRED');
+QldtNativeSession _liveSession(Map<String, String> snapshot) {
+  final session = QldtNativeSession.fromJson(snapshot);
+  if (!session.isValid) throw StateError('SESSION_NOT_READY');
   return session;
 }
 
 const _endpoint = 'https://qldtbeta.phenikaa-uni.edu.vn/chuyencanapi/api/'
     'CC_ThongTin/Them_QLSV_NguoiHoc_TuGhiNhan';
 
-Future<void> submitAttendanceCode(ScheduleRecord lesson, String code) async {
+Future<void> submitAttendanceCode(
+  ScheduleRecord lesson,
+  String code, {
+  required Map<String, String> liveSession,
+}) async {
   final listId = lesson.attendanceListId.trim();
   if (listId.isEmpty) {
     throw StateError('ATTENDANCE_LIST_ID_MISSING');
@@ -73,7 +71,7 @@ Future<void> submitAttendanceCode(ScheduleRecord lesson, String code) async {
     throw const FormatException('Hãy nhập code điểm danh.');
   }
 
-  final session = await _readAttendanceSession();
+  final session = _liveSession(liveSession);
   // Submission timestamp reflects the student's actual button press,
   // not the scheduled start of the class.
   final started = DateTime.now();
