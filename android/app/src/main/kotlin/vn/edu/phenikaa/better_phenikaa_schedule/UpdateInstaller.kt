@@ -1,5 +1,9 @@
 package vn.edu.phenikaa.better_phenikaa_schedule
 
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -95,7 +99,11 @@ internal object UpdateInstaller {
             val info = context.packageManager.getPackageInfo(context.packageName, 0)
             version(info)
         }.getOrDefault(0)
-        if (version <= installed || (started != 0L && System.currentTimeMillis() - started > 86_400_000L)) {
+        if (version >= 0 && version <= installed) {
+            val id = prefs.getInt("session", -1)
+            if (id >= 0) runCatching { context.packageManager.packageInstaller.abandonSession(id) }
+            finished(context, true)
+        } else if (started != 0L && System.currentTimeMillis() - started > 86_400_000L) {
             val id = prefs.getInt("session", -1)
             if (id >= 0) runCatching { context.packageManager.packageInstaller.abandonSession(id) }
             prefs.edit().clear().apply()
@@ -148,5 +156,35 @@ class UpdateStatusReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_SUCCESS -> UpdateInstaller.finished(context, true)
             else -> UpdateInstaller.finished(context, false)
         }
+    }
+}
+
+/** Only package replacement after the expected version is installed counts as success. */
+class UpdateInstalledReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        UpdateInstaller.cleanupStale(context)
+        val prefs = context.getSharedPreferences("update_install_session", Context.MODE_PRIVATE)
+        if (prefs.getString("last_status", null) != "installed") return
+        if (Build.VERSION.SDK_INT >= 33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED) return
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val channel = "app_update_success"
+        if (Build.VERSION.SDK_INT >= 26) {
+            manager.createNotificationChannel(NotificationChannel(
+                channel, "Cập nhật Better Phenikaa", NotificationManager.IMPORTANCE_DEFAULT))
+        }
+        val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        @Suppress("DEPRECATION")
+        val notification = (if (Build.VERSION.SDK_INT >= 26)
+            Notification.Builder(context, channel) else Notification.Builder(context))
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("Cập nhật Better Phenikaa thành công")
+            .setContentText("Đã cài phiên bản mới.")
+            .setAutoCancel(true).setContentIntent(open).build()
+        manager.notify(4842, notification)
+        UpdateInstaller.takeStatus(context)
     }
 }
