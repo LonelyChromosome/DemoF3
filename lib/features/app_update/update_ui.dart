@@ -70,7 +70,9 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
               const SizedBox(height: 12),
               Text(
                 notice == null
-                    ? 'Chưa có bản cập nhật.'
+                    ? (phase == UpdatePhase.checking
+                        ? 'Đang kiểm tra bản cập nhật…'
+                        : 'Chưa có bản cập nhật.')
                     : '${notice.versionName} · ${notice.notes}',
               ),
               const SizedBox(height: 20),
@@ -114,6 +116,11 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
                   ),
                 ],
               ],
+              if (notice == null && phase == UpdatePhase.notAvailable)
+                TextButton(
+                  onPressed: controller.checkQuietly,
+                  child: const Text('Kiểm tra lại'),
+                ),
               if (phase == UpdatePhase.waitingForCard ||
                   phase == UpdatePhase.wrongCard)
                 Text(
