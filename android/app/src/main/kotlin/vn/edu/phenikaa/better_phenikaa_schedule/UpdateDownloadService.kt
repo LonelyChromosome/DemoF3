@@ -43,16 +43,24 @@ class UpdateDownloadService : Service() {
             !sha.matches(Regex("[0-9a-fA-F]{64}")) || version <= installedVersion() ||
             !url.startsWith("https://")) {
             running.set(false)
+            events?.invoke("updateFailed", 0, 0)
             stopSelf(startId)
             return START_NOT_STICKY
         }
         running.set(true)
         createChannel()
-        val notification = progressNotification(0, size)
-        if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            val notification = progressNotification(0, size)
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (_: Exception) {
+            running.set(false)
+            report("updateFailed")
+            stopSelf(startId)
+            return START_NOT_STICKY
         }
         executor.execute {
             try {
