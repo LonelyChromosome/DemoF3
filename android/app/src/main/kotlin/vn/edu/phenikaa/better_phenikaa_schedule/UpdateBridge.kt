@@ -61,7 +61,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
                     }
                 }
                 "startCard" -> {
-                    if (busy.get()) result.error("busy", "Đang cập nhật.", null)
+                    if (UpdateDownloadService.running.get()) result.error("busy", "Đang cập nhật.", null)
                     else if (nfc == null || !nfc.isEnabled) result.error("nfc_unavailable", "Hãy bật NFC để đọc thẻ.", null)
                     else {
                         bindingOnly = false
