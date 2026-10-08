@@ -1521,13 +1521,28 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       // Attendance gets its credentials from THIS working WebView session,
       // never from a stored token that may be stale.
       if (widget.inlineOnSession != null) {
+        // HttpOnly SSO cookies aren't visible via document.cookie. Capture
+        // cookies from the SAME WebView profile for the attendance API only.
+        var activeCookie = session.cookie;
+        try {
+          final browserCookies = await CookieManager.instance().getCookies(
+            url: _qldtUri,
+          );
+          final allCookies = browserCookies
+              .map((cookie) => '${cookie.name}=${cookie.value}')
+              .join('; ');
+          if (allCookies.isNotEmpty) activeCookie = allCookies;
+        } on Object {
+          // Browser JWT and non-HttpOnly cookies remain available.
+        }
+        if (!mounted) return;
         widget.inlineOnSession!(<String, String>{
           'tokenJWT': session.tokenJwt,
           'userId': session.userId,
           'iM': session.iM,
           'appId': session.appId,
           'strChucNangId': session.functionId,
-          'cookie': session.cookie,
+          'cookie': activeCookie,
           'name': session.displayName,
         });
         return;
