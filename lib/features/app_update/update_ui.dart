@@ -17,8 +17,11 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
   Timer? _hold;
   bool _holding = false;
   final TextEditingController _manualName = TextEditingController();
-  bool get _nameMatches => widget.displayName.trim().isNotEmpty &&
-      _manualName.text.trim() == widget.displayName.trim();
+  String _normalizedName(String value) =>
+      value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+
+  bool get _nameMatches => _normalizedName(widget.displayName).isNotEmpty &&
+      _normalizedName(_manualName.text) == _normalizedName(widget.displayName);
 
   @override
   void dispose() {
@@ -56,10 +59,14 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
       final progress = controller.total > 0
           ? (controller.downloaded / controller.total).clamp(0.0, 1.0)
           : null;
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
-          child: Column(
+      return AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
+            child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -101,7 +108,6 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
                   TextField(
                     controller: _manualName,
                     onChanged: (_) => setState(() {}),
-                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(labelText: 'Họ và tên'),
                   ),
                   const SizedBox(height: 8),
@@ -168,12 +174,15 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet> {
               if (phase != UpdatePhase.installerLaunched)
                 TextButton(
                   onPressed: () {
-                    unawaited(controller.cancel());
+                    if (!controller.isRunningInBackground) {
+                      unawaited(controller.cancel());
+                    }
                     Navigator.of(context).pop();
                   },
                   child: const Text('Đóng'),
                 ),
             ],
+            ),
           ),
         ),
       );
