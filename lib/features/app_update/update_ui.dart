@@ -195,7 +195,14 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
   @override
   void initState() {
     super.initState();
-    unawaited(widget.controller.refreshCardBinding());
+    unawaited(_startBinding());
+  }
+
+  Future<void> _startBinding() async {
+    await widget.controller.refreshCardBinding();
+    if (mounted && !widget.controller.hasBoundCard) {
+      await widget.controller.startBindingCard();
+    }
   }
 
   @override
@@ -228,7 +235,7 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
                 FilledButton.icon(
                   onPressed: controller.startBindingCard,
                   icon: const Icon(Icons.nfc_rounded),
-                  label: const Text('Liên kết thẻ'),
+                  label: const Text('Quét lại thẻ'),
                 ),
               ],
               if (controller.error != null) ...[
