@@ -14,6 +14,11 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.d
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_retention.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/sync_reminder_policy.dart';
 import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
+import 'package:better_phenikaa_schedule/features/diem_danh/attendance.dart';
+import 'package:better_phenikaa_schedule/features/diem_danh/attendance_sheet.dart';
+import 'package:better_phenikaa_schedule/features/diem_danh/attendance_submit.dart';
+import 'package:better_phenikaa_schedule/features/diem_danh/inplace_refresh.dart';
+import 'package:better_phenikaa_schedule/features/diem_danh/pull_sync.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/schedule/tien_mon_schedule_views.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
@@ -82,6 +87,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   bool _booting = true;
   bool _syncing = false;
+  bool _pullSyncing = false;
+  Map<String, AttendanceEntry> _attendance = <String, AttendanceEntry>{};
   bool _panelOpen = false;
   ImportedScheduleData? _data;
   _AppPage _page = _AppPage.timetable;
@@ -397,6 +404,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       await _repairStoredDisplayName();
       final prefs = await SharedPreferences.getInstance();
       _assistantPack = await AssistantSelection.load();
+      _attendance = await AttendanceStore().read();
       _accountDisplayName = await readQldtAccountDisplayName();
       var raw = prefs.getString(_storageKey);
       var semester = await CurrentSemesterStore().read();
@@ -741,6 +749,56 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
+  void _openAttendance(ScheduleRecord lesson) {
+    unawaited(showAttendanceSheet(
+      context: context,
+      lesson: lesson,
+      current: _attendance[lesson.id],
+      onSubmit: (code) async {
+        await submitAttendanceCode(lesson, code);
+        final next = await AttendanceStore().recordSent(
+          _attendance, lesson, code,
+        );
+        if (mounted) setState(() => _attendance = next);
+      },
+    ));
+  }
+
+  Future<void> _pullRefresh() async {
+    if (_syncing || _pullSyncing || _data == null) return;
+    setState(() => _pullSyncing = true);
+    try {
+      final verified = await reloadQldtInPlace(_data!);
+      await _save(verified);
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getString(_storageKey);
+      final updated = saved == null
+          ? verified.schedule
+          : ImportedScheduleData.decode(saved);
+      final attendance = await AttendanceStore().reconcile(
+        _attendance, updated.classes,
+      );
+      if (!mounted) return;
+      setState(() {
+        _data = updated;
+        _attendance = attendance;
+        _lastSuccessfulSync = updated.syncedAt;
+      });
+      _scheduleExamClock();
+      unawaited(_refreshDifference());
+    } on Object {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(
+            content: Text('Không thể làm mới. Dữ liệu cũ vẫn được giữ.'),
+          ));
+      }
+    } finally {
+      if (mounted) setState(() => _pullSyncing = false);
+    }
+  }
+
   Future<void> _logout() async {
     _examClockTimer?.cancel();
     _syncStaleTimer?.cancel();
@@ -773,6 +831,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         _lastSuccessfulSync = null;
         _assistantPack = AssistantPack.normal;
         _accountDisplayName = '';
+        _attendance = <String, AttendanceEntry>{};
       });
     }
   }
@@ -910,6 +969,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                               )
                             : _MainShell(
                                 data: _data!,
+                                attendance: _attendance,
+                                onOpenAttendance: _openAttendance,
+                                onPullRefresh: _pullRefresh,
                                 accountDisplayName: _accountDisplayName,
                                 page: _page,
                                 selectedDate: _selectedDate,
@@ -1140,6 +1202,9 @@ class _LoginScreen extends StatelessWidget {
 class _MainShell extends StatefulWidget {
   const new({
     required this.data,
+    required this.attendance,
+    required this.onOpenAttendance,
+    required this.onPullRefresh,
     required this.accountDisplayName,
     required this.page,
     required this.selectedDate,
@@ -1172,6 +1237,9 @@ class _MainShell extends StatefulWidget {
   });
 
   final ImportedScheduleData data;
+  final Map<String, AttendanceEntry> attendance;
+  final ValueChanged<ScheduleRecord> onOpenAttendance;
+  final Future<void> Function() onPullRefresh;
   final String accountDisplayName;
   final _AppPage page;
   final DateTime selectedDate;
@@ -1230,7 +1298,12 @@ class _MainShellState extends State<_MainShell>
   @override
   void didUpdateWidget(covariant _MainShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.page == widget.page) return;
+    if (oldWidget.page == widget.page) {
+      if (oldWidget.data.syncedAt != widget.data.syncedAt) {
+        _pageFadeController.forward(from: .78);
+      }
+      return;
+    }
 
     // Main navigation keeps every page mounted in the IndexedStack. Switch
     // the active page immediately, then fade the new page in: slower than the
@@ -1285,7 +1358,11 @@ class _MainShellState extends State<_MainShell>
       _AppPage.notifications => 3,
     };
 
-    return _PhoneSurface(
+    return PullSyncSurface(
+      onReload: widget.onPullRefresh,
+      color: palette.primary,
+      enabled: !syncing && !widget.panelOpen,
+      child: _PhoneSurface(
       child: Stack(
         children: <Widget>[
           Positioned.fill(
@@ -1300,6 +1377,8 @@ class _MainShellState extends State<_MainShell>
                   child: RepaintBoundary(
                     child: _TimetableScreen(
                       data: data,
+                      attendance: widget.attendance,
+                      onOpenAttendance: widget.onOpenAttendance,
                       assistantPack: assistantPack,
                       selectedDate: selectedDate,
                       onDateChanged: onDateChanged,
@@ -1440,6 +1519,7 @@ class _MainShellState extends State<_MainShell>
             ),
         ],
       ),
+      ),
     );
   }
 }
@@ -1447,6 +1527,8 @@ class _MainShellState extends State<_MainShell>
 class _TimetableScreen extends StatefulWidget {
   const new({
     required this.data,
+    required this.attendance,
+    required this.onOpenAttendance,
     required this.assistantPack,
     required this.selectedDate,
     required this.onDateChanged,
@@ -1456,6 +1538,8 @@ class _TimetableScreen extends StatefulWidget {
   });
 
   final ImportedScheduleData data;
+  final Map<String, AttendanceEntry> attendance;
+  final ValueChanged<ScheduleRecord> onOpenAttendance;
   final AssistantPack assistantPack;
   final DateTime selectedDate;
   final ValueChanged<DateTime> onDateChanged;
@@ -1754,6 +1838,8 @@ class _TimetableScreenState extends State<_TimetableScreen>
                                               _ScheduleCard(
                                                 item: items[index],
                                                 accent: _accentFor(index),
+                                                attendance: widget.attendance[items[index].id],
+                                                onOpenAttendance: widget.onOpenAttendance,
                                               ),
                                         ),
                                 ),
@@ -1768,6 +1854,8 @@ class _TimetableScreenState extends State<_TimetableScreen>
                       child: RepaintBoundary(
                         child: WeekTimetable(
                           data: widget.data,
+                          attendance: widget.attendance,
+                          onOpenAttendance: widget.onOpenAttendance,
                           week: _week,
                           onWeekChanged: (value) =>
                               setState(() => _week = weekMonday(value)),
@@ -3287,10 +3375,13 @@ class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
 }
 
 class _ScheduleCard extends StatelessWidget {
-  const new({required this.item, required this.accent});
+  const new({required this.item, required this.accent,
+    required this.attendance, required this.onOpenAttendance});
 
   final ScheduleRecord item;
   final Color accent;
+  final AttendanceEntry? attendance;
+  final ValueChanged<ScheduleRecord> onOpenAttendance;
 
   @override
   Widget build(BuildContext context) {
@@ -3346,6 +3437,25 @@ class _ScheduleCard extends StatelessWidget {
                   icon: Icons.access_time_rounded,
                   text: '${_time(item.startAt)} - ${_time(item.endAt)}',
                 ),
+                const SizedBox(height: 6),
+                if (attendance == null)
+                  Text('Nhấn để nhập code điểm danh',
+                    style: TextStyle(color: palette.primary, fontSize: 11)),
+                if (attendance != null)
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: palette.cardAlt,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      child: Text(switch (attendance!.status) {
+                        AttendanceStatus.pending => 'Chờ xác thực',
+                        AttendanceStatus.present => 'Có mặt',
+                        AttendanceStatus.absent => 'Vắng mặt',
+                      }, style: TextStyle(color: palette.textPrimary, fontSize: 12)),
+                    ),
+                  ),
                 if (item.periodStart != null &&
                     item.periodEnd != null) ...<Widget>[
                   const SizedBox(height: 5),
@@ -3361,18 +3471,26 @@ class _ScheduleCard extends StatelessWidget {
       ],
     );
     if (premium) {
-      return ConstrainedBox(
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onOpenAttendance(item),
+        child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 106),
         child: TienMonEdgeSurface(
           active: active,
           scene: TienMonPremiumContract.appSceneFor(now),
           child: content,
         ),
+      ),
       );
     }
-    return AppThemePanel(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onOpenAttendance(item),
+      child: AppThemePanel(
       constraints: const BoxConstraints(minHeight: 106),
       child: content,
+      ),
     );
   }
 }
