@@ -19,6 +19,14 @@ import java.util.Calendar
 import kotlin.math.max
 import kotlin.math.roundToInt
 
+// Android Canvas clips a rounded rectangle through a Path.
+internal fun Canvas.clipRoundRect(rect: RectF, radiusX: Float, radiusY: Float) {
+    val path = android.graphics.Path().apply {
+        addRoundRect(rect, radiusX, radiusY, android.graphics.Path.Direction.CW)
+    }
+    clipPath(path)
+}
+
 internal data class NativeWidgetPalette(
     val key: String,
     val start: Int,
