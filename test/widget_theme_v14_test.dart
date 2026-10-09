@@ -56,6 +56,24 @@ void main() {
       expect(restored.cornerRadius, 24);
     });
 
+    test('widget text colors persist separately and can reset', () {
+      final config = const WidgetThemeConfiguration()
+          .withTextColor(WidgetSurfaceKind.small, const Color(0xFFEDB873))
+          .withTextColor(WidgetSurfaceKind.large, const Color(0xFFEFF7FF))
+          .withTextColor(WidgetSurfaceKind.widget2, const Color(0xFF28F4CC));
+      final restored = WidgetThemeConfiguration.fromJson(config.toJson());
+      expect(restored.textColorFor(WidgetSurfaceKind.small), const Color(0xFFEDB873));
+      expect(restored.textColorFor(WidgetSurfaceKind.large), const Color(0xFFEFF7FF));
+      expect(restored.textColorFor(WidgetSurfaceKind.widget2), const Color(0xFF28F4CC));
+
+      final changed = restored.withTextColor(WidgetSurfaceKind.large, null);
+      expect(changed.textColorFor(WidgetSurfaceKind.large), isNull);
+      expect(changed.textColorFor(WidgetSurfaceKind.small), const Color(0xFFEDB873));
+      expect(changed.textColorFor(WidgetSurfaceKind.widget2), const Color(0xFF28F4CC));
+      expect(WidgetThemeConfiguration.fromJson(const <String, Object?>{})
+          .textColorFor(WidgetSurfaceKind.widget2), isNull);
+    });
+
     test('BPA source keeps six sequential strokes and 850 ms drawing', () {
       expect(BpaPenTracePainter.buildPaths(), hasLength(6));
       expect(BpaPenTracePainter.segmentTimes.first, 0);

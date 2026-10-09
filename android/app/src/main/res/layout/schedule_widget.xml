@@ -49,6 +49,17 @@
         android:scaleType="fitXY"
         android:visibility="gone" />
 
+    <!-- Above the StackView so its slide bitmap cannot conceal the inset border. -->
+    <ImageView
+        android:id="@+id/widget_custom_border"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:visibility="gone" />
+
     <ImageView
         android:id="@+id/widget_premium_frame"
         android:layout_width="match_parent"

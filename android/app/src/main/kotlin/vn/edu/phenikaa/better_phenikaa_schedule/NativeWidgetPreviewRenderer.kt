@@ -29,14 +29,15 @@ internal object NativeWidgetPreviewRenderer {
         val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val items = WidgetSnapshotStore.readOverviewForDate(context, date, false)
         val typeface = WidgetFont.typefaceFor(context, fontFamily, fontPath)
+        val themedPalette = config.textPalette(surface, palette)
         return when (surface) {
             WidgetSurface.SMALL -> renderSmall(context, widthDp, heightDp, width, height,
-                items.firstOrNull(), config, palette, typeface)
+                items.firstOrNull(), config, themedPalette, typeface)
             WidgetSurface.LARGE -> renderLarge(
-                context, widthDp, heightDp, width, height, items, config, palette, typeface,
+                context, widthDp, heightDp, width, height, items, config, themedPalette, typeface,
             )
             WidgetSurface.WIDGET2 -> renderWidget2(context, width, height, date, items,
-                config, palette, typeface)
+                config, themedPalette, typeface)
         }
     }
 
@@ -76,6 +77,12 @@ internal object NativeWidgetPreviewRenderer {
             Canvas(result).drawText("Không có lịch học", width * .46f, height * .57f, paint)
         }
         drawControls(context, Canvas(result), width, height, palette, WidgetSurface.SMALL)
+        if (config.smallBorder.enabled) {
+            val border = WidgetStaticLayerRenderer.renderBorderOverlay(context,
+                WidgetSurface.SMALL, width, height, config, palette)
+            Canvas(result).drawBitmap(border, 0f, 0f, null)
+            border.recycle()
+        }
         return result
     }
 

@@ -171,10 +171,16 @@ internal fun renderWidgetSlide(
     val cornerRadius = ((cornerRadiusDpOverride ?: WidgetThemeV14.read(context).cornerRadiusDp) *
         density).coerceIn(0f, minOf(widthPx, heightPx) / 2f)
     canvas.clipRoundRect(RectF(0f, 0f, widthPx, heightPx), cornerRadius, cornerRadius)
-    val theme = paletteOverride?.let {
+    val originalTheme = paletteOverride?.let {
         WidgetTheme(it.key, it.start, it.end, it.text, it.subtext)
     } ?: themeOverrideKey?.let { widgetThemeForKey(context, it) }
         ?: readWidgetTheme(context)
+    val selectedColor = if (paletteOverride == null && originalTheme.key == "custom")
+        WidgetThemeV14.read(context).smallTextColor else null
+    val theme = if (selectedColor == null) originalTheme else originalTheme.copy(
+        textColor = selectedColor,
+        subtextColor = (selectedColor and 0x00FFFFFF) or (0xD8 shl 24),
+    )
     val normalTypeface = typefaceOverride ?: WidgetFont.typeface(context, Typeface.NORMAL)
     val boldTypeface = typefaceOverride?.let { Typeface.create(it, Typeface.BOLD) }
         ?: WidgetFont.typeface(context, Typeface.BOLD)

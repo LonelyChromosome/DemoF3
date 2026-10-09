@@ -80,6 +80,7 @@ final class WidgetThemeConfiguration {
     this.smallBorder = const WidgetBorderDefinition(),
     this.largeBorder = const WidgetBorderDefinition(),
     this.widget2Border = const WidgetBorderDefinition(),
+    this.textColors = const <WidgetSurfaceKind, Color>{},
     this.cornerRadius = 18,
     this.glassOpacity = .58,
     this.glowStrength = .32,
@@ -110,6 +111,14 @@ final class WidgetThemeConfiguration {
       smallBorder: border('smallBorder'),
       largeBorder: border('largeBorder'),
       widget2Border: border('widget2Border'),
+      textColors: <WidgetSurfaceKind, Color>{
+        if (json['smallTextColor'] is num)
+          WidgetSurfaceKind.small: Color((json['smallTextColor'] as num).toInt()),
+        if (json['largeTextColor'] is num)
+          WidgetSurfaceKind.large: Color((json['largeTextColor'] as num).toInt()),
+        if (json['widget2TextColor'] is num)
+          WidgetSurfaceKind.widget2: Color((json['widget2TextColor'] as num).toInt()),
+      },
       cornerRadius: ((json['cornerRadiusDp'] as num?)?.toDouble() ?? 18).clamp(
         0,
         28,
@@ -132,6 +141,7 @@ final class WidgetThemeConfiguration {
   final WidgetBorderDefinition smallBorder;
   final WidgetBorderDefinition largeBorder;
   final WidgetBorderDefinition widget2Border;
+  final Map<WidgetSurfaceKind, Color> textColors;
   final double cornerRadius;
   final double glassOpacity;
   final double glowStrength;
@@ -151,6 +161,18 @@ final class WidgetThemeConfiguration {
     WidgetSurfaceKind.widget2 => copyWith(widget2Border: border),
   };
 
+  Color? textColorFor(WidgetSurfaceKind kind) => textColors[kind];
+
+  WidgetThemeConfiguration withTextColor(WidgetSurfaceKind kind, Color? color) {
+    final updated = Map<WidgetSurfaceKind, Color>.of(textColors);
+    if (color == null) {
+      updated.remove(kind);
+    } else {
+      updated[kind] = color;
+    }
+    return copyWith(textColors: updated);
+  }
+
   WidgetThemeConfiguration copyWith({
     String? largeImagePath,
     WidgetImageCrop? largeImageCrop,
@@ -159,6 +181,7 @@ final class WidgetThemeConfiguration {
     WidgetBorderDefinition? smallBorder,
     WidgetBorderDefinition? largeBorder,
     WidgetBorderDefinition? widget2Border,
+    Map<WidgetSurfaceKind, Color>? textColors,
     double? cornerRadius,
     double? glassOpacity,
     double? glowStrength,
@@ -170,6 +193,7 @@ final class WidgetThemeConfiguration {
     smallBorder: smallBorder ?? this.smallBorder,
     largeBorder: largeBorder ?? this.largeBorder,
     widget2Border: widget2Border ?? this.widget2Border,
+    textColors: textColors ?? this.textColors,
     cornerRadius: cornerRadius ?? this.cornerRadius,
     glassOpacity: glassOpacity ?? this.glassOpacity,
     glowStrength: glowStrength ?? this.glowStrength,
@@ -184,6 +208,9 @@ final class WidgetThemeConfiguration {
     'smallBorder': smallBorder.toJson(),
     'largeBorder': largeBorder.toJson(),
     'widget2Border': widget2Border.toJson(),
+    'smallTextColor': textColors[WidgetSurfaceKind.small]?.toARGB32(),
+    'largeTextColor': textColors[WidgetSurfaceKind.large]?.toARGB32(),
+    'widget2TextColor': textColors[WidgetSurfaceKind.widget2]?.toARGB32(),
     'cornerRadiusDp': cornerRadius,
     'glassOpacity': glassOpacity,
     'glowStrength': glowStrength,

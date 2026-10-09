@@ -106,11 +106,11 @@ class Widget2Provider : AppWidgetProvider() {
         val date = selectedDate(context, id)
         val examMode = state(context).getBoolean(modeKey(id), false)
         val items = WidgetSnapshotStore.readOverviewForDate(context, date, examMode)
-        val dynamic = Widget2BitmapRenderer.content(
-            context, contentWidthPx, heightPx, date, examMode, items,
-        )
-        val palette = NativeWidgetPalette.read(context)
         val config = WidgetThemeV14.read(context)
+        val palette = config.textPalette(WidgetSurface.WIDGET2, NativeWidgetPalette.read(context))
+        val dynamic = Widget2BitmapRenderer.content(
+            context, contentWidthPx, heightPx, date, examMode, items, config, palette,
+        )
         val source = if (config.widget2ImagePath.isBlank()) null else java.io.File(config.widget2ImagePath)
         val token = widget2StaticLayerToken(
             widthPx,
@@ -229,10 +229,12 @@ class Widget2Provider : AppWidgetProvider() {
         val width = (size.width.coerceAtLeast(250f) * density * CONTENT_FRACTION)
             .roundToInt().coerceIn(1, (1600 * CONTENT_FRACTION).roundToInt())
         val height = (size.height.coerceAtLeast(110f) * density).roundToInt().coerceIn(1, 1000)
+        val config = WidgetThemeV14.read(context)
+        val palette = config.textPalette(WidgetSurface.WIDGET2, NativeWidgetPalette.read(context))
         val old = Widget2BitmapRenderer.content(context, width, height, oldDate, oldExam,
-            WidgetSnapshotStore.readOverviewForDate(context, oldDate, oldExam))
+            WidgetSnapshotStore.readOverviewForDate(context, oldDate, oldExam), config, palette)
         val next = Widget2BitmapRenderer.content(context, width, height, nextDate, nextExam,
-            WidgetSnapshotStore.readOverviewForDate(context, nextDate, nextExam))
+            WidgetSnapshotStore.readOverviewForDate(context, nextDate, nextExam), config, palette)
         val state = state(context)
         val generation = state.getInt(generationKey(id), 0) + 1
         state.edit().putInt(generationKey(id), generation).apply()

@@ -54,7 +54,9 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
 
     internal fun overviewColors(context: Context): Pair<Int, Int> {
         val colors = readThemeColors(context)
-        return colors.textColor to colors.iconColor
+        val chosen = if (colors.key == "custom")
+            WidgetThemeV14.read(context).largeTextColor else null
+        return (chosen ?: colors.textColor) to colors.iconColor
     }
 
     internal fun overviewEmblem(context: Context): Bitmap? {
@@ -86,6 +88,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         paletteOverride: NativeWidgetPalette? = null,
     ): Int {
         val theme = paletteOverride?.toThemeColors() ?: readThemeColors(context)
+        if (theme.key == "custom") {
+            return paletteOverride?.text ?: WidgetThemeV14.read(context).largeTextColor
+                ?: theme.textColor
+        }
         if (theme.key == "classic") return theme.textColor
         return WidgetVisualPalette(theme.startColor, theme.endColor,
             theme.textColor, theme.textColor, theme.key).timeText(index, active)
@@ -740,6 +746,18 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         }
 
         val theme = readThemeColors(context)
+        val widgetConfig = WidgetThemeV14.read(context)
+        val smallColor = if (theme.key == "custom") widgetConfig.smallTextColor else null
+        val density = context.resources.displayMetrics.density
+        if (theme.key == "custom" && widgetConfig.smallBorder.enabled) {
+            views.setImageViewBitmap(R.id.widget_custom_border,
+                WidgetStaticLayerRenderer.renderBorderOverlay(context, WidgetSurface.SMALL,
+                    (widthDp * density).roundToInt().coerceAtLeast(1),
+                    (heightDp * density).roundToInt().coerceAtLeast(1), widgetConfig))
+            views.setViewVisibility(R.id.widget_custom_border, View.VISIBLE)
+        } else {
+            views.setViewVisibility(R.id.widget_custom_border, View.GONE)
+        }
         views.setImageViewBitmap(R.id.widget_theme_background,
             renderThemeBackground(context, renderWidthDp, renderHeightDp, theme))
         views.setViewVisibility(R.id.widget_premium_frame,
@@ -760,7 +778,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             if (examMode) AssistantText.of(AssistantEvent.exam_empty,
                 AssistantText.selected(context), inWidget = true)
             else "Không có lịch học")
-        views.setTextColor(R.id.widget_empty, theme.textColor)
+        views.setTextColor(R.id.widget_empty, smallColor ?: theme.textColor)
         val waitingForTheme = context.getSharedPreferences(
             WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE,
         ).getString(transitionPhaseKey(widgetId), null) == PHASE_WAITING_TARGET
@@ -916,7 +934,11 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         hiddenTarget.setInt(R.id.widget_calendar, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setInt(R.id.widget_mode, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setInt(R.id.widget_reload, "setColorFilter", targetTheme.iconColor)
-        hiddenTarget.setTextColor(R.id.widget_empty, targetTheme.textColor)
+        hiddenTarget.setTextColor(R.id.widget_empty,
+            if (targetTheme.key == "custom")
+                WidgetThemeV14.read(context).smallTextColor ?: targetTheme.textColor
+            else targetTheme.textColor)
+        hiddenTarget.setViewVisibility(R.id.widget_custom_border, View.GONE)
         hiddenTarget.setFloat(R.id.widget_root, "setAlpha", 0f)
         val hasItems = WidgetSnapshotStore.read(context, widgetId).items.isNotEmpty()
         if (hasItems) {

@@ -351,6 +351,23 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
     }
   }
 
+  Future<void> _chooseWidgetTextColor(WidgetSurfaceKind surface) async {
+    final chosen = await showModalBottomSheet<Color>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _RgbColorPicker(
+        initial: _widgetConfiguration.textColorFor(surface) ??
+            appThemePalette.widgetText,
+      ),
+    );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      _widgetConfiguration = _widgetConfiguration.withTextColor(surface, chosen);
+    });
+    _scheduleNativePreviews();
+  }
+
   Future<void> _chooseBorderColor(WidgetSurfaceKind surface) async {
     final border = _widgetConfiguration.borderFor(surface);
     final selected = await showModalBottomSheet<Color>(
@@ -698,9 +715,41 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
               label: const Text('Chỉnh lại vùng ảnh'),
             ),
         ],
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Màu chữ widget'),
+          subtitle: Text(_widgetConfiguration.textColorFor(surface) == null
+              ? 'Theo màu theme'
+              : 'Màu chữ tùy chỉnh'),
+          leading: InkWell(
+            onTap: () => _chooseWidgetTextColor(surface),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: _widgetConfiguration.textColorFor(surface) ?? active.widgetText,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: active.border, width: 2),
+              ),
+            ),
+          ),
+          onTap: () => _chooseWidgetTextColor(surface),
+          trailing: _widgetConfiguration.textColorFor(surface) == null
+              ? const Icon(Icons.color_lens_outlined)
+              : IconButton(
+                  icon: const Icon(Icons.settings_backup_restore),
+                  tooltip: 'Khôi phục màu chữ theme',
+                  onPressed: () {
+                    setState(() => _widgetConfiguration =
+                        _widgetConfiguration.withTextColor(surface, null));
+                    _scheduleNativePreviews();
+                  },
+                ),
+        ),
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Viền ngoài'),
+          title: const Text('Viền trong'),
           value: border.enabled,
           onChanged: (value) {
             setState(() {

@@ -42,6 +42,9 @@ internal data class WidgetThemeV14(
     val smallBorder: WidgetBorderConfig = WidgetBorderConfig(),
     val largeBorder: WidgetBorderConfig = WidgetBorderConfig(),
     val widget2Border: WidgetBorderConfig = WidgetBorderConfig(),
+    val smallTextColor: Int? = null,
+    val largeTextColor: Int? = null,
+    val widget2TextColor: Int? = null,
     val cornerRadiusDp: Float = 18f,
     val glassOpacity: Float = .58f,
     val glowStrength: Float = .32f,
@@ -50,6 +53,18 @@ internal data class WidgetThemeV14(
         WidgetSurface.SMALL -> smallBorder
         WidgetSurface.LARGE -> largeBorder
         WidgetSurface.WIDGET2 -> widget2Border
+    }
+
+    fun textColor(surface: WidgetSurface): Int? = when (surface) {
+        WidgetSurface.SMALL -> smallTextColor
+        WidgetSurface.LARGE -> largeTextColor
+        WidgetSurface.WIDGET2 -> widget2TextColor
+    }
+
+    fun textPalette(surface: WidgetSurface, palette: NativeWidgetPalette): NativeWidgetPalette {
+        if (palette.key != "custom") return palette
+        val chosen = textColor(surface) ?: return palette
+        return palette.copy(text = chosen, subtext = (chosen and 0x00FFFFFF) or (0xD8 shl 24))
     }
 
     fun toJson(): JSONObject = JSONObject()
@@ -61,6 +76,9 @@ internal data class WidgetThemeV14(
         .put("smallBorder", smallBorder.toJson())
         .put("largeBorder", largeBorder.toJson())
         .put("widget2Border", widget2Border.toJson())
+        .put("smallTextColor", smallTextColor)
+        .put("largeTextColor", largeTextColor)
+        .put("widget2TextColor", widget2TextColor)
         .put("cornerRadiusDp", cornerRadiusDp.toDouble())
         .put("glassOpacity", glassOpacity.toDouble())
         .put("glowStrength", glowStrength.toDouble())
@@ -92,6 +110,9 @@ internal data class WidgetThemeV14(
                 smallBorder = border(json.optJSONObject("smallBorder")),
                 largeBorder = border(json.optJSONObject("largeBorder")),
                 widget2Border = border(json.optJSONObject("widget2Border")),
+                smallTextColor = if (json.isNull("smallTextColor")) null else json.optInt("smallTextColor"),
+                largeTextColor = if (json.isNull("largeTextColor")) null else json.optInt("largeTextColor"),
+                widget2TextColor = if (json.isNull("widget2TextColor")) null else json.optInt("widget2TextColor"),
                 cornerRadiusDp = json.optDouble("cornerRadiusDp", 18.0).toFloat()
                     .coerceIn(0f, 28f),
                 glassOpacity = json.optDouble("glassOpacity", .58).toFloat().coerceIn(.18f, .92f),
