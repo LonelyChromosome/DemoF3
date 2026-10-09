@@ -150,7 +150,14 @@ jobs:
           result=$?
           set -e
           echo "Build exit code: $result at $(date -u +%FT%TZ)"
-          tail -n 100 "$log"
+          if [ "$result" -ne 0 ]; then
+            echo "Build error summary (with context):"
+            grep -n -i -E -B 12 -A 18 "FAILURE:|What went wrong:|Execution failed for task|Caused by:|^.*(Error:|Exception:|error:)" "$log" | tail -n 240 || true
+            echo "Build log ending:"
+            tail -n 30 "$log"
+          else
+            tail -n 30 "$log"
+          fi
           if [ "$result" -ne 0 ]; then
             exit "$result"
           fi
