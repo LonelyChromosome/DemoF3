@@ -99,7 +99,8 @@ jobs:
           chmod 600 android/key.properties android/cooc-release.jks "$RUNNER_TEMP/update-manifest-private.pem"
           derived="$(openssl pkey -in "$RUNNER_TEMP/update-manifest-private.pem" -pubout -outform DER | tail -c 32 | base64 -w 0)"
           test "$derived" = "$UPDATE_PUBLIC_KEY_BASE64"
-      - name: Build one target APK only
+      - name: Resolve release dependencies
+        timeout-minutes: 5
         env:
           VERSION_NAME: ${{ inputs.version_name }}
           VERSION_CODE: ${{ inputs.version_code }}
@@ -119,9 +120,40 @@ jobs:
           p.write_text(s.replace(v, ""))
           PY
           flutter pub get
-          COOC_VERSION_NAME="$VERSION_NAME" flutter build apk --release --build-number="$VERSION_CODE" \
+      - name: Build one target APK only
+        timeout-minutes: 20
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          APK_NAME: ${{ steps.meta.outputs.apk_name }}
+          UPDATE_PUBLIC_KEY_BASE64: ${{ vars.UPDATE_PUBLIC_KEY_BASE64 }}
+          UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/LonelyChromosome/DemoF3/feature/1.2-card-update/updates/latest.json
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/flutter-build.log"
+          echo "Build started: $(date -u +%FT%TZ)"
+          (
+            while sleep 60; do
+              echo "Build heartbeat: $(date -u +%FT%TZ)"
+              free -h | head -n 2
+              df -h . | tail -n 1
+              tail -n 8 "$log" 2>/dev/null || true
+            done
+          ) &
+          monitor=$!
+          trap 'kill "$monitor" 2>/dev/null || true' EXIT
+          set +e
+          COOC_VERSION_NAME="$VERSION_NAME" timeout --signal=INT --kill-after=30s 18m \
+            flutter build apk --release --verbose --build-number="$VERSION_CODE" \
             --dart-define="UPDATE_PUBLIC_KEY_BASE64=$UPDATE_PUBLIC_KEY_BASE64" \
-            --dart-define="UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL"
+            --dart-define="UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL" > "$log" 2>&1
+          result=$?
+          set -e
+          echo "Build exit code: $result at $(date -u +%FT%TZ)"
+          tail -n 100 "$log"
+          if [ "$result" -ne 0 ]; then
+            exit "$result"
+          fi
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-release.apk "dist/$APK_NAME"
       - name: Verify package signer and sign exact manifest bytes
@@ -155,6 +187,13 @@ jobs:
         run: |
           rm -f android/key.properties android/cooc-release.jks
           rm -f "$RUNNER_TEMP/update-manifest-private.pem" "$RUNNER_TEMP/latest.sig.bin"
+      - name: Save failed build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: 1.4-build-diagnostic-${{ github.run_id }}
+          path: ${{ runner.temp }}/flutter-build.log
+          retention-days: 3
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.meta.outputs.artifact_name }}
