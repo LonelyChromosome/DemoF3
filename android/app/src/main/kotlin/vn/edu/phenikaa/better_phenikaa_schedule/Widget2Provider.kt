@@ -361,7 +361,7 @@ internal fun widget2StaticLayerToken(
     imageModifiedAt: Long,
     imageLength: Long,
 ): String = listOf(
-    "v7-preset-image",
+    "v8-flush-rounded-border",
     widthPx,
     heightPx,
     palette,

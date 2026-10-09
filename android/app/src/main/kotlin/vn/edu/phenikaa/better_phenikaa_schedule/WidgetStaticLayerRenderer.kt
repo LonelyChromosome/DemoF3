@@ -158,7 +158,7 @@ internal object WidgetStaticLayerRenderer {
         val presetImage = if (surface == WidgetSurface.WIDGET2 && source == null)
             Widget2ThemeImage.assetName(palette.key) else null
         val cacheKey = listOf(
-            "v9-inner-border", surface.wireName, safeWidth, safeHeight, palette, presetImage,
+            "v10-flush-rounded-border", surface.wireName, safeWidth, safeHeight, palette, presetImage,
             source?.absolutePath.orEmpty(),
             source?.lastModified() ?: 0L, source?.length() ?: 0L,
             effectiveConfig.border(surface), effectiveConfig.cornerRadiusDp, effectiveConfig.largeImageCrop,
@@ -412,7 +412,7 @@ internal object WidgetStaticLayerRenderer {
         return result
     }
 
-    /** An inset ring: neither its straight sides nor its rounded corners touch the outer edge. */
+    /** An inward-only rounded ring following the exact radius of the background mask. */
     private fun drawOuterBorder(
         canvas: Canvas,
         surface: WidgetSurface,
@@ -424,17 +424,24 @@ internal object WidgetStaticLayerRenderer {
     ) {
         val border = config.border(surface)
         if (!border.enabled) return
-        // Keep the entire colored border inside the card, with equal clearance on all sides.
-        val gap = max(2f, 2f * density)
-        val maxThickness = (minOf(width, height) / 3f - gap).coerceAtLeast(.5f)
-        val thickness = (border.widthDp * density).coerceIn(.5f, maxThickness)
-        val outer = RectF(gap, gap, width - gap, height - gap)
-        val inner = RectF(gap + thickness, gap + thickness,
-            width - gap - thickness, height - gap - thickness)
+        // Match the same 0..width / 0..height rounded mask as the widget background.
+        // Only half a physical pixel is reserved for antialiasing at the edge.
+        // The full user-selected border thickness is drawn INWARD, never outward.
+        val edgeGuardPx = .5f
+        val minSide = minOf(width, height).toFloat()
+        val availableHalf = (minSide / 2f - edgeGuardPx - .5f)
+        if (availableHalf < .5f) return
+        val thickness = (border.widthDp * density).coerceIn(.5f, availableHalf)
+        val outer = RectF(edgeGuardPx, edgeGuardPx,
+            width - edgeGuardPx, height - edgeGuardPx)
+        val innerEdge = edgeGuardPx + thickness
+        val inner = RectF(innerEdge, innerEdge,
+            width - innerEdge, height - innerEdge)
         if (inner.width() <= 0f || inner.height() <= 0f) return
-        val cornerLimit = minOf(outer.width(), outer.height()) / 2f
-        val outerRadius = max(config.cornerRadiusDp * density - gap,
-            thickness + 2f * density).coerceIn(0f, cornerLimit)
+        // Offset curves have radii r - inset. Do not enlarge the radius based
+        // on stroke thickness: that caused the corners to diverge from the mask.
+        val outerRadius = (config.cornerRadiusDp * density - edgeGuardPx)
+            .coerceIn(0f, minOf(outer.width(), outer.height()) / 2f)
         val innerRadius = (outerRadius - thickness)
             .coerceIn(0f, minOf(inner.width(), inner.height()) / 2f)
         val region = android.graphics.Path().apply {
@@ -448,10 +455,10 @@ internal object WidgetStaticLayerRenderer {
         })
         if (border.tienMonStyle) {
             val line = (thickness * .25f).coerceIn(.5f, 2f * density)
-            val offset = gap + thickness + line / 2f + .5f
+            val offset = innerEdge + line / 2f + .5f
             val highlight = RectF(offset, offset, width - offset, height - offset)
             if (highlight.width() > 0f && highlight.height() > 0f) {
-                val highlightRadius = (outerRadius - (offset - gap))
+                val highlightRadius = (outerRadius - (offset - edgeGuardPx))
                     .coerceIn(0f, minOf(highlight.width(), highlight.height()) / 2f)
                 canvas.drawRoundRect(highlight, highlightRadius, highlightRadius,
                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
