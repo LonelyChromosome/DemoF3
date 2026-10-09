@@ -369,7 +369,7 @@ internal fun widget2StaticLayerToken(
     imageModifiedAt: Long,
     imageLength: Long,
 ): String = listOf(
-    "v9-widget2-foreground-outline",
+    "v10-unified-foreground-frame",
     widthPx,
     heightPx,
     palette,

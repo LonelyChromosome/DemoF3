@@ -44,5 +44,9 @@
    </LinearLayout>
   </FrameLayout>
  </LinearLayout>
+ <ImageView android:id="@+id/overview_border_layer"
+  android:layout_width="match_parent" android:layout_height="match_parent"
+  android:scaleType="fitXY" android:clickable="false" android:focusable="false"
+  android:contentDescription="@null" android:visibility="gone"/>
  </FrameLayout>
 </FrameLayout>

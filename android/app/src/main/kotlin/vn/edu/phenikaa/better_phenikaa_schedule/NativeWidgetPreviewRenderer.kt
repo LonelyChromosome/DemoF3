@@ -165,6 +165,12 @@ internal object NativeWidgetPreviewRenderer {
         canvas.restore()
         drawControls(context, canvas, width, panelHeight, palette, WidgetSurface.LARGE,
             topOffset = panelTop)
+        if (config.largeBorder.enabled) {
+            val frame = WidgetStaticLayerRenderer.renderBorderOverlay(context,
+                WidgetSurface.LARGE, width, panelHeight, config, palette)
+            canvas.drawBitmap(frame, 0f, panelTop.toFloat(), null)
+            frame.recycle()
+        }
         return result
     }
 

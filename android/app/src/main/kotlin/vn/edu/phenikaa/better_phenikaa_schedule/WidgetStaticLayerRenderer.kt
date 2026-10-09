@@ -125,15 +125,6 @@ internal object WidgetStaticLayerRenderer {
             decoded.recycle()
         }
         resultCanvas.restore()
-        drawOuterBorder(
-            resultCanvas,
-            WidgetSurface.LARGE,
-            result.width,
-            result.height,
-            effectiveConfig,
-            palette,
-            context.resources.displayMetrics.density,
-        )
         return result
     }
 
@@ -158,7 +149,7 @@ internal object WidgetStaticLayerRenderer {
         val presetImage = if (surface == WidgetSurface.WIDGET2 && source == null)
             Widget2ThemeImage.assetName(palette.key) else null
         val cacheKey = listOf(
-            "v11-widget2-foreground-outline", surface.wireName, safeWidth, safeHeight, palette, presetImage,
+            "v12-unified-foreground-frame", surface.wireName, safeWidth, safeHeight, palette, presetImage,
             source?.absolutePath.orEmpty(),
             source?.lastModified() ?: 0L, source?.length() ?: 0L,
             effectiveConfig.border(surface), effectiveConfig.cornerRadiusDp, effectiveConfig.largeImageCrop,
@@ -243,14 +234,6 @@ internal object WidgetStaticLayerRenderer {
         }
         decoded?.recycle()
         canvas.restore()
-        // The small widget's real foreground frame is drawn above StackView.
-        // Avoid painting the same antialiased ring twice at the round corners.
-        if (surface == WidgetSurface.LARGE) {
-            drawOuterBorder(
-                canvas, surface, safeWidth, safeHeight, effectiveConfig, palette,
-                context.resources.displayMetrics.density,
-            )
-        }
         if (useCache) runCatching {
             FileOutputStream(cached).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             trimCache(cacheDirectory(context), keep = 20)
@@ -266,8 +249,7 @@ internal object WidgetStaticLayerRenderer {
             shader = if (surface == WidgetSurface.SMALL && palette.key == "custom") {
                 // Match the horizontal slide gradient behind StackView's 90% card.
                 // Otherwise its diagonal backdrop shows as a second color layer.
-                val cardRight = (width * .9f - 4f * density).coerceAtLeast(1f)
-                LinearGradient(0f, 0f, cardRight, 0f,
+                LinearGradient(0f, 0f, width.toFloat(), 0f,
                     palette.start, palette.end, Shader.TileMode.CLAMP)
             } else {
                 LinearGradient(
@@ -435,25 +417,18 @@ internal object WidgetStaticLayerRenderer {
     ) {
         val border = config.border(surface)
         if (!border.enabled) return
-        // Match the same 0..width / 0..height rounded mask as the widget background.
-        // Only half a physical pixel is reserved for antialiasing at the edge.
-        // The full user-selected border thickness is drawn INWARD, never outward.
-        val edgeGuardPx = .5f
-        val minSide = minOf(width, height).toFloat()
-        val availableHalf = (minSide / 2f - edgeGuardPx - .5f)
-        if (availableHalf < .5f) return
-        val thickness = (border.widthDp * density).coerceIn(.5f, availableHalf)
-        val outer = RectF(edgeGuardPx, edgeGuardPx,
-            width - edgeGuardPx, height - edgeGuardPx)
-        val innerEdge = edgeGuardPx + thickness
-        val inner = RectF(innerEdge, innerEdge,
-            width - innerEdge, height - innerEdge)
+        // The border shares exactly the same rounded mask as the background.
+        // Its thickness is removed inward: no offset gap, no outside stroke.
+        val outer = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        val radius = (config.cornerRadiusDp * density)
+            .coerceIn(0f, minOf(width, height) / 2f)
+        val limit = (minOf(width, height) / 2f - .5f).coerceAtLeast(.5f)
+        val thickness = (border.widthDp * density).coerceIn(.5f, limit)
+        val inner = RectF(thickness, thickness,
+            width - thickness, height - thickness)
         if (inner.width() <= 0f || inner.height() <= 0f) return
-        // Offset curves have radii r - inset. Do not enlarge the radius based
-        // on stroke thickness: that caused the corners to diverge from the mask.
-        val outerRadius = (config.cornerRadiusDp * density - edgeGuardPx)
-            .coerceIn(0f, minOf(outer.width(), outer.height()) / 2f)
-        val innerRadius = (outerRadius - thickness)
+        val outerRadius = radius
+        val innerRadius = (radius - thickness)
             .coerceIn(0f, minOf(inner.width(), inner.height()) / 2f)
         val region = android.graphics.Path().apply {
             fillType = android.graphics.Path.FillType.EVEN_ODD
@@ -466,10 +441,10 @@ internal object WidgetStaticLayerRenderer {
         })
         if (border.tienMonStyle) {
             val line = (thickness * .25f).coerceIn(.5f, 2f * density)
-            val offset = innerEdge + line / 2f + .5f
+            val offset = thickness + line / 2f + .5f
             val highlight = RectF(offset, offset, width - offset, height - offset)
             if (highlight.width() > 0f && highlight.height() > 0f) {
-                val highlightRadius = (outerRadius - (offset - edgeGuardPx))
+                val highlightRadius = (outerRadius - offset)
                     .coerceIn(0f, minOf(highlight.width(), highlight.height()) / 2f)
                 canvas.drawRoundRect(highlight, highlightRadius, highlightRadius,
                     Paint(Paint.ANTI_ALIAS_FLAG).apply {

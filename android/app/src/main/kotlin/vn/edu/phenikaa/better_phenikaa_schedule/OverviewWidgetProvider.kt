@@ -19,6 +19,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 class OverviewWidgetProvider : HomeWidgetProvider() {
     internal fun renderFromDispatcher(
@@ -543,6 +544,21 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             if (compact) 10f else 11f)
         views.setImageViewBitmap(R.id.overview_background,
             ScheduleWidgetProvider().overviewBackground(context, width, panelHeight))
+        // The frame is drawn over the cards in the same bitmap bounds as the background.
+        val frameConfig = WidgetThemeV14.read(context)
+        val framePalette = NativeWidgetPalette.read(context)
+        if (framePalette.key == "custom" && frameConfig.largeBorder.enabled) {
+            val density = context.resources.displayMetrics.density
+            views.setImageViewBitmap(R.id.overview_border_layer,
+                WidgetStaticLayerRenderer.renderBorderOverlay(context,
+                    WidgetSurface.LARGE,
+                    (width * density).roundToInt().coerceAtLeast(1),
+                    (panelHeight * density).roundToInt().coerceAtLeast(1),
+                    frameConfig, framePalette))
+            views.setViewVisibility(R.id.overview_border_layer, View.VISIBLE)
+        } else {
+            views.setViewVisibility(R.id.overview_border_layer, View.GONE)
+        }
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val selected = selectedDate(context, id)
         val date = if (selected.length == 10) "${selected.substring(8, 10)}/${selected.substring(5, 7)}"
