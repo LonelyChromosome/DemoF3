@@ -40,14 +40,6 @@ class MainActivity : FlutterActivity() {
                 .getString("flutter.better_phenikaa_current_semester_v1", null)
             semester?.let { runCatching { ExamReminderScheduler.reconcile(applicationContext, it) } }
         }
-        if (requestCode == GALLERY_PERMISSION_REQUEST_CODE) {
-            if (grantResults.any { it == android.content.pm.PackageManager.PERMISSION_GRANTED }) {
-                openWidgetGallery()
-            } else {
-                // The platform picker still works when gallery access is declined.
-                startFilePicker("image")
-            }
-        }
     }
 
     private val widgetHandler = Handler(Looper.getMainLooper())
@@ -356,7 +348,7 @@ class MainActivity : FlutterActivity() {
                 overview.animateThemeTransition(this, manager, overviewIds)
                 widget2Ids.forEach { id ->
                     WidgetRenderDispatcher.render(this, manager,
-                        WidgetRenderRequest(WidgetSurface.WIDGET2, id))
+                        WidgetRenderRequest(WidgetSurface.WIDGET2, id, fadeContent = true))
                 }
                 clearPendingWidgetTheme(fromToken, request.token)
             }, THEME_FREEZE_SETTLE_MS)
@@ -393,7 +385,8 @@ class MainActivity : FlutterActivity() {
             .putString(WIDGET_FONT_FAMILY_KEY, request.fontFamily)
             .putString(WIDGET_FONT_PATH_KEY, request.fontPath)
             .commit()
-        WidgetThemeV14.save(this, request.widgetConfig)
+        WidgetThemeV14.save(this,
+            if (request.theme == "custom") request.widgetConfig else WidgetThemeV14())
         if (refreshOverview) WidgetRefreshCoordinator.refreshOverview(this)
     }
 
@@ -551,38 +544,10 @@ class MainActivity : FlutterActivity() {
             }
             pendingFileResult = result
             pendingFileKind = kind
-            if (kind == "image") {
-                val permission = if (Build.VERSION.SDK_INT >= 33)
-                    Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
-                val hasGalleryAccess = checkSelfPermission(permission) ==
-                    android.content.pm.PackageManager.PERMISSION_GRANTED ||
-                    (Build.VERSION.SDK_INT >= 34 &&
-                        checkSelfPermission(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) ==
-                        android.content.pm.PackageManager.PERMISSION_GRANTED)
-                if (hasGalleryAccess) {
-                    openWidgetGallery()
-                } else {
-                    val permissions = if (Build.VERSION.SDK_INT >= 34)
-                        arrayOf(Manifest.permission.READ_MEDIA_IMAGES,
-                            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-                    else arrayOf(permission)
-                    requestPermissions(permissions, GALLERY_PERMISSION_REQUEST_CODE)
-                }
-                return@setMethodCallHandler
-            }
+            // Use Android's original system Photo Picker (Photos / Collections).
+            // No custom gallery dialog, broad image permission, or dark overlay.
             startFilePicker(kind)
         }
-    }
-
-    private fun openWidgetGallery() {
-        showWidgetGallery(this, fileExecutor,
-            onSelected = ::completePickedFile,
-            onCancelled = {
-                pendingFileResult?.success(null)
-                pendingFileResult = null
-                pendingFileKind = null
-            },
-        )
     }
 
     private fun startFilePicker(kind: String) {

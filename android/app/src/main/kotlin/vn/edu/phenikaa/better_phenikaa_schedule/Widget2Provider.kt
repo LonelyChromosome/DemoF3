@@ -28,7 +28,8 @@ class Widget2Provider : AppWidgetProvider() {
         }
         ids.forEach { id ->
             WidgetRenderDispatcher.render(context, manager,
-                WidgetRenderRequest(WidgetSurface.WIDGET2, id, forceStaticLayer = true))
+                WidgetRenderRequest(WidgetSurface.WIDGET2, id,
+                    forceStaticLayer = true, fadeContent = true))
         }
     }
 

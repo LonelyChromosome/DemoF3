@@ -97,12 +97,13 @@ internal object WidgetStaticLayerRenderer {
         config: WidgetThemeV14 = WidgetThemeV14.read(context),
         palette: NativeWidgetPalette = NativeWidgetPalette.read(context),
     ): Bitmap {
-        val source = File(config.largeImagePath).takeIf(File::isFile)
+        val effectiveConfig = if (palette.key == "custom") config else WidgetThemeV14()
+        val source = File(effectiveConfig.largeImagePath).takeIf(File::isFile)
         // The supplied base may change with the date/theme; caching by photo
         // alone can return an old card and an old border after a refresh.
         val result = Bitmap.createBitmap(base.width, base.height, Bitmap.Config.ARGB_8888)
         val resultCanvas = Canvas(result)
-        val radius = cornerRadiusPx(context, config, result.width, result.height)
+        val radius = cornerRadiusPx(context, effectiveConfig, result.width, result.height)
         resultCanvas.save()
         resultCanvas.clipRoundRect(
             RectF(0f, 0f, result.width.toFloat(), result.height.toFloat()),
@@ -112,14 +113,14 @@ internal object WidgetStaticLayerRenderer {
         resultCanvas.drawBitmap(base, 0f, 0f, null)
         base.recycle()
         val decoded = source?.let {
-            decodeForRegion(it, result.width, result.height, config.largeImageCrop)
+            decodeForRegion(it, result.width, result.height, effectiveConfig.largeImageCrop)
         }
         if (decoded != null) {
             drawSelected(
                 resultCanvas,
                 decoded,
                 RectF(0f, 0f, result.width.toFloat(), result.height.toFloat()),
-                config.largeImageCrop,
+                effectiveConfig.largeImageCrop,
             )
             decoded.recycle()
         }
@@ -129,7 +130,7 @@ internal object WidgetStaticLayerRenderer {
             WidgetSurface.LARGE,
             result.width,
             result.height,
-            config,
+            effectiveConfig,
             palette,
             context.resources.displayMetrics.density,
         )
@@ -145,23 +146,24 @@ internal object WidgetStaticLayerRenderer {
         palette: NativeWidgetPalette = NativeWidgetPalette.read(context),
         useCache: Boolean = true,
     ): Bitmap {
+        val effectiveConfig = if (palette.key == "custom") config else WidgetThemeV14()
         val safeWidth = widthPx.coerceIn(1, 1600)
         val safeHeight = heightPx.coerceIn(1, 1000)
         val imagePath = when (surface) {
             WidgetSurface.SMALL -> ""
-            WidgetSurface.LARGE -> config.largeImagePath
-            WidgetSurface.WIDGET2 -> config.widget2ImagePath
+            WidgetSurface.LARGE -> effectiveConfig.largeImagePath
+            WidgetSurface.WIDGET2 -> effectiveConfig.widget2ImagePath
         }
         val source = File(imagePath).takeIf { it.isFile }
         val presetImage = if (surface == WidgetSurface.WIDGET2 && source == null)
             Widget2ThemeImage.assetName(palette.key) else null
         val cacheKey = listOf(
-            "v7", surface.wireName, safeWidth, safeHeight, palette, presetImage,
+            "v8", surface.wireName, safeWidth, safeHeight, palette, presetImage,
             source?.absolutePath.orEmpty(),
             source?.lastModified() ?: 0L, source?.length() ?: 0L,
-            config.border(surface), config.cornerRadiusDp, config.largeImageCrop,
-            config.widget2ImageCrop,
-            config.glassOpacity, config.glowStrength,
+            effectiveConfig.border(surface), effectiveConfig.cornerRadiusDp, effectiveConfig.largeImageCrop,
+            effectiveConfig.widget2ImageCrop,
+            effectiveConfig.glassOpacity, effectiveConfig.glowStrength,
         ).joinToString("|")
         val cached = File(cacheDirectory(context), "${sha256(cacheKey)}.png")
         if (useCache && cached.isFile) {
@@ -170,7 +172,7 @@ internal object WidgetStaticLayerRenderer {
 
         val bitmap = Bitmap.createBitmap(safeWidth, safeHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        val outerRadius = cornerRadiusPx(context, config, safeWidth, safeHeight)
+        val outerRadius = cornerRadiusPx(context, effectiveConfig, safeWidth, safeHeight)
         canvas.save()
         canvas.clipRoundRect(
             RectF(0f, 0f, safeWidth.toFloat(), safeHeight.toFloat()),
@@ -180,15 +182,15 @@ internal object WidgetStaticLayerRenderer {
         drawThemeBase(canvas, safeWidth, safeHeight, palette)
         val decoded = source?.let {
             if (surface == WidgetSurface.LARGE)
-                decodeForRegion(it, safeWidth, safeHeight, config.largeImageCrop)
-            else decodeForRegion(it, safeWidth, safeHeight, config.widget2ImageCrop)
+                decodeForRegion(it, safeWidth, safeHeight, effectiveConfig.largeImageCrop)
+            else decodeForRegion(it, safeWidth, safeHeight, effectiveConfig.widget2ImageCrop)
         } ?: presetImage?.let { Widget2ThemeImage.decode(context, it, safeWidth, safeHeight) }
         when (surface) {
             WidgetSurface.SMALL -> Unit
             WidgetSurface.LARGE -> decoded?.let {
                 drawSelected(canvas, it,
                     RectF(0f, 0f, safeWidth.toFloat(), safeHeight.toFloat()),
-                    config.largeImageCrop)
+                    effectiveConfig.largeImageCrop)
             }
             WidgetSurface.WIDGET2 -> {
                 decoded?.let {
@@ -213,7 +215,7 @@ internal object WidgetStaticLayerRenderer {
                     val save = canvas.save()
                     canvas.clipRoundRect(imageRect, imageRadius, imageRadius)
                     if (source == null) drawCover(canvas, decoded, imageRect)
-                    else drawSelected(canvas, decoded, imageRect, config.widget2ImageCrop)
+                    else drawSelected(canvas, decoded, imageRect, effectiveConfig.widget2ImageCrop)
                     canvas.restoreToCount(save)
                 } else {
                     val drawable = context.getDrawable(R.drawable.ic_widget_study)?.mutate()
@@ -230,7 +232,13 @@ internal object WidgetStaticLayerRenderer {
                     style = Paint.Style.STROKE
                     strokeWidth = max(1f, safeHeight / 150f)
                 }
-                canvas.drawRoundRect(imageRect, imageRadius, imageRadius, photoBorder)
+                val borderInset = photoBorder.strokeWidth / 2f
+                canvas.drawRoundRect(
+                    RectF(imageRect.left + borderInset, imageRect.top + borderInset,
+                        imageRect.right - borderInset, imageRect.bottom - borderInset),
+                    max(0f, imageRadius - borderInset), max(0f, imageRadius - borderInset),
+                    photoBorder,
+                )
             }
         }
         decoded?.recycle()
@@ -240,7 +248,7 @@ internal object WidgetStaticLayerRenderer {
             surface,
             safeWidth,
             safeHeight,
-            config,
+            effectiveConfig,
             palette,
             context.resources.displayMetrics.density,
         )
@@ -402,9 +410,10 @@ internal object WidgetStaticLayerRenderer {
         if (!border.enabled) return
         val densityScale = height / if (surface == WidgetSurface.SMALL) 64f else 150f
         val stroke = (border.widthDp * densityScale).coerceIn(1.5f, 16f)
-        val inset = 1f
+        // Fully inset, constant-thickness rounded ring (no corner overflow).
+        val inset = max(1f, stroke * .5f)
         val radius = ((config.cornerRadiusDp * density) - inset)
-            .coerceIn(0f, max(0f, minOf(width, height) / 2f - inset))
+            .coerceIn(stroke, max(stroke, minOf(width, height) / 2f - inset))
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (border.tienMonStyle) 0xFFFFD66B.toInt() else border.color
             style = Paint.Style.FILL
@@ -425,9 +434,12 @@ internal object WidgetStaticLayerRenderer {
             paint.color = withAlpha(palette.text, 105)
             paint.style = Paint.Style.STROKE
             paint.strokeWidth = max(1f, stroke * .34f)
+            val highlightInset = inset + stroke + paint.strokeWidth / 2f
+            val highlightRadius = max(0f, radius - stroke - paint.strokeWidth / 2f)
             canvas.drawRoundRect(
-                RectF(inset + stroke, inset + stroke, width - inset - stroke, height - inset - stroke),
-                max(1f, radius - stroke), max(1f, radius - stroke), paint,
+                RectF(highlightInset, highlightInset,
+                    width - highlightInset, height - highlightInset),
+                highlightRadius, highlightRadius, paint,
             )
         }
     }

@@ -212,7 +212,11 @@ internal object Widget2BitmapRenderer {
             style = Paint.Style.STROKE
             strokeWidth = max(1f, rect.height() * .035f)
         }
-        canvas.drawRoundRect(rect, radius, radius, border)
+        val borderInset = border.strokeWidth / 2f
+        val inside = RectF(rect.left + borderInset, rect.top + borderInset,
+            rect.right - borderInset, rect.bottom - borderInset)
+        canvas.drawRoundRect(inside, max(0f, radius - borderInset),
+            max(0f, radius - borderInset), border)
     }
 
     private fun drawText(

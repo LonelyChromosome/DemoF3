@@ -521,7 +521,10 @@ class AppThemeController extends ChangeNotifier {
   List<CustomThemeDefinition> get customThemes =>
       List<CustomThemeDefinition>.unmodifiable(_customThemes);
   CustomThemeDefinition? get activeCustomTheme => _activeCustomTheme;
-  WidgetThemeConfiguration get widgetConfiguration => _widgetConfiguration;
+  // Presets always expose their own immutable widget configuration.
+  WidgetThemeConfiguration get widgetConfiguration => _theme == AppThemeId.custom
+      ? _widgetConfiguration
+      : const WidgetThemeConfiguration();
   bool get isTransitioning => _transitionPalette != null;
 
   void resetAfterLogout() {
@@ -634,9 +637,9 @@ class AppThemeController extends ChangeNotifier {
           restored.font,
         );
         _theme = AppThemeId.custom;
-        if (widgetConfigurationRaw == null) {
-          _widgetConfiguration = restored.widgets;
-        }
+        _widgetConfiguration = restored.hasWidgetConfiguration
+            ? restored.widgets
+            : const WidgetThemeConfiguration();
       }
     } else if (saved != null) {
       for (final candidate in AppThemeId.values) {
@@ -702,9 +705,11 @@ class AppThemeController extends ChangeNotifier {
     final fontFamily = await ThemeFontManager.instance.resolveFamily(
       theme.font,
     );
-    // Themes saved before 1.4 had no widget section. Applying one must not
-    // discard the user's current photos or per-surface borders.
-    if (theme.hasWidgetConfiguration) _widgetConfiguration = theme.widgets;
+    // Each custom theme owns its widget settings. Never inherit another
+    // custom theme's photo or a preset's previous state.
+    _widgetConfiguration = theme.hasWidgetConfiguration
+        ? theme.widgets
+        : const WidgetThemeConfiguration();
     await _transitionTo(
       themeId: AppThemeId.custom,
       customTheme: theme,
@@ -715,6 +720,9 @@ class AppThemeController extends ChangeNotifier {
   Future<void> setWidgetConfiguration(
     WidgetThemeConfiguration configuration,
   ) async {
+    if (_theme != AppThemeId.custom) {
+      throw StateError('Preset theme không hỗ trợ tùy chỉnh widget.');
+    }
     _widgetConfiguration = configuration;
     final preferences = await SharedPreferences.getInstance();
     await preferences.setString(
@@ -857,10 +865,13 @@ class AppThemeController extends ChangeNotifier {
 
   Future<void> _commitSelection(AppThemePalette target) async {
     final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(
-      _widgetConfigurationKey,
-      jsonEncode(_widgetConfiguration.toJson()),
-    );
+    // Do not persist custom widget settings while choosing a fixed preset.
+    if (_theme == AppThemeId.custom) {
+      await preferences.setString(
+        _widgetConfigurationKey,
+        jsonEncode(_widgetConfiguration.toJson()),
+      );
+    }
     final selectionKey =
         _theme == AppThemeId.custom && _activeCustomTheme != null
         ? 'custom:${_activeCustomTheme!.id}'
@@ -915,7 +926,10 @@ class AppThemeController extends ChangeNotifier {
               : _theme == AppThemeId.tienMonPremium
               ? _tienMonFont.path ?? ''
               : '',
-          'widgetConfig': jsonEncode(_widgetConfiguration.toJson()),
+          'widgetConfig': jsonEncode((themeKey == 'custom'
+                  ? _widgetConfiguration
+                  : const WidgetThemeConfiguration())
+              .toJson()),
         },
       );
       return true;

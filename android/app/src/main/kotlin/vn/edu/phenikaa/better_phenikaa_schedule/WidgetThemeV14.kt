@@ -67,6 +67,11 @@ internal data class WidgetThemeV14(
 
     companion object {
         fun read(context: Context): WidgetThemeV14 {
+            // Do not leak saved custom photo/border settings into native presets.
+            val activeTheme = context.getSharedPreferences(
+                "FlutterSharedPreferences", Context.MODE_PRIVATE,
+            ).getString("flutter.appTheme", "classic")
+            if (activeTheme != "custom") return WidgetThemeV14()
             val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getString(KEY, null) ?: return WidgetThemeV14()
             return fromJson(raw)

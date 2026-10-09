@@ -59,7 +59,7 @@ internal object WidgetRefreshCoordinator {
         manager.getAppWidgetIds(ComponentName(context, Widget2Provider::class.java))
             .forEach { id ->
                 WidgetRenderDispatcher.render(context, manager,
-                    WidgetRenderRequest(WidgetSurface.WIDGET2, id))
+                    WidgetRenderRequest(WidgetSurface.WIDGET2, id, fadeContent = true))
             }
     }
 
@@ -72,7 +72,8 @@ internal object WidgetRefreshCoordinator {
             WidgetSurface.WIDGET2 to ComponentName(appContext, Widget2Provider::class.java),
         ).forEach { (surface, component) ->
             manager.getAppWidgetIds(component).forEach { id ->
-                WidgetRenderDispatcher.render(appContext, manager, WidgetRenderRequest(surface, id))
+                WidgetRenderDispatcher.render(appContext, manager, WidgetRenderRequest(surface, id,
+                    fadeContent = surface == WidgetSurface.WIDGET2))
             }
         }
     }
