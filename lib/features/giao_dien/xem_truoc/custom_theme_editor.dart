@@ -520,7 +520,7 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
               },
             ),
             const SizedBox(height: 10),
-            if (_nativePreviews[_previewSurface] case final bytes)
+            if (_nativePreviews[_previewSurface] case final bytes?)
               ClipRRect(
                 borderRadius: BorderRadius.circular(_radius),
                 child: Image.memory(
