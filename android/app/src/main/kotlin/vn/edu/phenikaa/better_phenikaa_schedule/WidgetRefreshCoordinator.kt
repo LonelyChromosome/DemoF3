@@ -43,7 +43,7 @@ internal object WidgetRefreshCoordinator {
         OverviewWidgetProvider().onUpdate(appContext, manager, overviewIds, data)
         widget2Ids.forEach { id ->
             WidgetRenderDispatcher.render(appContext, manager,
-                WidgetRenderRequest(WidgetSurface.WIDGET2, id))
+                WidgetRenderRequest(WidgetSurface.WIDGET2, id, fadeContent = true))
         }
     }
 
@@ -111,7 +111,7 @@ internal object WidgetRefreshCoordinator {
         OverviewWidgetProvider().restoreDisplay(appContext, manager, overviewIds)
         widget2Ids.forEach { id ->
             WidgetRenderDispatcher.render(appContext, manager,
-                WidgetRenderRequest(WidgetSurface.WIDGET2, id))
+                WidgetRenderRequest(WidgetSurface.WIDGET2, id, fadeContent = true))
         }
     }
 }

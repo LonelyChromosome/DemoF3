@@ -10,8 +10,33 @@ internal data class WidgetBorderConfig(
     val tienMonStyle: Boolean = false,
 )
 
+internal data class WidgetImageCrop(
+    val left: Float = 0f,
+    val top: Float = 0f,
+    val right: Float = 1f,
+    val bottom: Float = 1f,
+) {
+    val isFull: Boolean get() = left == 0f && top == 0f && right == 1f && bottom == 1f
+
+    fun toJson(): JSONObject = JSONObject().put("left", left.toDouble())
+        .put("top", top.toDouble()).put("right", right.toDouble())
+        .put("bottom", bottom.toDouble())
+
+    companion object {
+        fun fromJson(json: JSONObject?): WidgetImageCrop {
+            if (json == null) return WidgetImageCrop()
+            val left = json.optDouble("left", 0.0).toFloat().coerceIn(0f, 1f)
+            val top = json.optDouble("top", 0.0).toFloat().coerceIn(0f, 1f)
+            return WidgetImageCrop(left, top,
+                json.optDouble("right", 1.0).toFloat().coerceIn(left, 1f),
+                json.optDouble("bottom", 1.0).toFloat().coerceIn(top, 1f))
+        }
+    }
+}
+
 internal data class WidgetThemeV14(
     val largeImagePath: String = "",
+    val largeImageCrop: WidgetImageCrop = WidgetImageCrop(),
     val widget2ImagePath: String = "",
     val smallBorder: WidgetBorderConfig = WidgetBorderConfig(),
     val largeBorder: WidgetBorderConfig = WidgetBorderConfig(),
@@ -29,6 +54,7 @@ internal data class WidgetThemeV14(
     fun toJson(): JSONObject = JSONObject()
         .put("schema", 1)
         .put("largeImagePath", largeImagePath)
+        .put("largeImageCrop", largeImageCrop.toJson())
         .put("widget2ImagePath", widget2ImagePath)
         .put("smallBorder", smallBorder.toJson())
         .put("largeBorder", largeBorder.toJson())
@@ -53,6 +79,7 @@ internal data class WidgetThemeV14(
             val json = JSONObject(raw ?: "{}")
             WidgetThemeV14(
                 largeImagePath = json.optString("largeImagePath"),
+                largeImageCrop = WidgetImageCrop.fromJson(json.optJSONObject("largeImageCrop")),
                 widget2ImagePath = json.optString("widget2ImagePath"),
                 smallBorder = border(json.optJSONObject("smallBorder")),
                 largeBorder = border(json.optJSONObject("largeBorder")),

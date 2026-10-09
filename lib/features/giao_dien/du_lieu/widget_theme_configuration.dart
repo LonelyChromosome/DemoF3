@@ -4,6 +4,31 @@ import 'package:flutter/material.dart';
 enum WidgetSurfaceKind { small, large, widget2 }
 
 @immutable
+final class WidgetImageCrop {
+  const new({this.left = 0, this.top = 0, this.right = 1, this.bottom = 1});
+
+  factory WidgetImageCrop.fromJson(Map<String, Object?> json) =>
+      WidgetImageCrop(
+        left: ((json['left'] as num?)?.toDouble() ?? 0).clamp(0, 1),
+        top: ((json['top'] as num?)?.toDouble() ?? 0).clamp(0, 1),
+        right: ((json['right'] as num?)?.toDouble() ?? 1).clamp(0, 1),
+        bottom: ((json['bottom'] as num?)?.toDouble() ?? 1).clamp(0, 1),
+      );
+
+  final double left;
+  final double top;
+  final double right;
+  final double bottom;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'left': left,
+    'top': top,
+    'right': right,
+    'bottom': bottom,
+  };
+}
+
+@immutable
 final class WidgetBorderDefinition {
   const new({
     this.enabled = false,
@@ -49,6 +74,7 @@ final class WidgetBorderDefinition {
 final class WidgetThemeConfiguration {
   const new({
     this.largeImagePath = '',
+    this.largeImageCrop = const WidgetImageCrop(),
     this.widget2ImagePath = '',
     this.smallBorder = const WidgetBorderDefinition(),
     this.largeBorder = const WidgetBorderDefinition(),
@@ -69,6 +95,11 @@ final class WidgetThemeConfiguration {
 
     return WidgetThemeConfiguration(
       largeImagePath: json['largeImagePath'] as String? ?? '',
+      largeImageCrop: json['largeImageCrop'] is Map
+          ? WidgetImageCrop.fromJson(
+              Map<String, Object?>.from(json['largeImageCrop'] as Map),
+            )
+          : const WidgetImageCrop(),
       widget2ImagePath: json['widget2ImagePath'] as String? ?? '',
       smallBorder: border('smallBorder'),
       largeBorder: border('largeBorder'),
@@ -89,6 +120,7 @@ final class WidgetThemeConfiguration {
   }
 
   final String largeImagePath;
+  final WidgetImageCrop largeImageCrop;
   final String widget2ImagePath;
   final WidgetBorderDefinition smallBorder;
   final WidgetBorderDefinition largeBorder;
@@ -114,6 +146,7 @@ final class WidgetThemeConfiguration {
 
   WidgetThemeConfiguration copyWith({
     String? largeImagePath,
+    WidgetImageCrop? largeImageCrop,
     String? widget2ImagePath,
     WidgetBorderDefinition? smallBorder,
     WidgetBorderDefinition? largeBorder,
@@ -123,6 +156,7 @@ final class WidgetThemeConfiguration {
     double? glowStrength,
   }) => WidgetThemeConfiguration(
     largeImagePath: largeImagePath ?? this.largeImagePath,
+    largeImageCrop: largeImageCrop ?? this.largeImageCrop,
     widget2ImagePath: widget2ImagePath ?? this.widget2ImagePath,
     smallBorder: smallBorder ?? this.smallBorder,
     largeBorder: largeBorder ?? this.largeBorder,
@@ -135,6 +169,7 @@ final class WidgetThemeConfiguration {
   Map<String, Object?> toJson() => <String, Object?>{
     'schema': 1,
     'largeImagePath': largeImagePath,
+    'largeImageCrop': largeImageCrop.toJson(),
     'widget2ImagePath': widget2ImagePath,
     'smallBorder': smallBorder.toJson(),
     'largeBorder': largeBorder.toJson(),

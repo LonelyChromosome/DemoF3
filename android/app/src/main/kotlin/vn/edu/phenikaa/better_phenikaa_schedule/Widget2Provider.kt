@@ -57,7 +57,8 @@ class Widget2Provider : AppWidgetProvider() {
                 // Reload uses the one shared unique WorkManager job and keeps the
                 // instance's selected day/photo untouched.
                 WidgetManualSync.request(context)
-                renderFromDispatcher(context, AppWidgetManager.getInstance(context), id)
+                renderFromDispatcher(context, AppWidgetManager.getInstance(context), id,
+                    fadeContent = true)
             }
             ACTION_PREVIOUS, ACTION_NEXT -> {
                 val direction = if (action == ACTION_NEXT) 1 else -1
@@ -87,6 +88,7 @@ class Widget2Provider : AppWidgetProvider() {
         manager: AppWidgetManager,
         id: Int,
         forceStaticLayer: Boolean = false,
+        fadeContent: Boolean = false,
     ) {
         val size = WidgetHostSizeResolver.currentSize(
             context,
@@ -125,7 +127,9 @@ class Widget2Provider : AppWidgetProvider() {
             views.setViewLayoutHeight(R.id.widget2_content_layer,
                 heightDp, TypedValue.COMPLEX_UNIT_DIP)
         }
-        views.setImageViewBitmap(R.id.widget2_content_layer, dynamic)
+        val firstFrame = if (fadeContent) Widget2BitmapRenderer.fadeFrame(dynamic, 0f)
+            else dynamic
+        views.setImageViewBitmap(R.id.widget2_content_layer, firstFrame)
         if (forceStaticLayer || previousToken != token) {
             views.setImageViewBitmap(
                 R.id.widget2_static_layer,
@@ -137,6 +141,33 @@ class Widget2Provider : AppWidgetProvider() {
             state(context).edit().putString(staticTokenKey(id), token).apply()
         } else {
             manager.partiallyUpdateAppWidget(id, views)
+        }
+        if (fadeContent) {
+            firstFrame.recycle()
+            animateRefresh(context, manager, id, dynamic)
+        }
+    }
+
+    private fun animateRefresh(
+        context: Context, manager: AppWidgetManager, id: Int, next: Bitmap,
+    ) {
+        val prefs = state(context)
+        val generation = prefs.getInt(generationKey(id), 0) + 1
+        prefs.edit().putInt(generationKey(id), generation).apply()
+        val handler = Handler(Looper.getMainLooper())
+        val frames = 7
+        repeat(frames) { index ->
+            handler.postDelayed({
+                if (prefs.getInt(generationKey(id), 0) == generation) {
+                    val progress = (index + 1).toFloat() / frames
+                    val frame = Widget2BitmapRenderer.fadeFrame(next, progress)
+                    val views = RemoteViews(context.packageName, R.layout.widget2)
+                    views.setImageViewBitmap(R.id.widget2_content_layer, frame)
+                    manager.partiallyUpdateAppWidget(id, views)
+                    frame.recycle()
+                }
+                if (index == frames - 1) next.recycle()
+            }, index * 45L)
         }
     }
 
@@ -321,6 +352,7 @@ internal fun widget2StaticLayerToken(
     imageModifiedAt: Long,
     imageLength: Long,
 ): String = listOf(
+    "v5-sharp-blur",
     widthPx,
     heightPx,
     palette,

@@ -24,10 +24,10 @@
 
     <LinearLayout
         android:id="@+id/widget2_day_actions"
-        android:layout_width="30dp"
+        android:layout_width="28dp"
         android:layout_height="76dp"
         android:layout_gravity="center_vertical|end"
-        android:layout_marginEnd="91dp"
+        android:layout_marginEnd="78dp"
         android:gravity="center"
         android:orientation="vertical">
         <ImageView
@@ -37,6 +37,7 @@
             android:layout_weight="1"
             android:contentDescription="Ngày trước"
             android:padding="5dp"
+            android:scaleType="centerInside"
             android:src="@drawable/ic_widget_up" />
         <ImageView
             android:id="@+id/widget2_next"
@@ -45,15 +46,16 @@
             android:layout_weight="1"
             android:contentDescription="Ngày tiếp theo"
             android:padding="5dp"
+            android:scaleType="centerInside"
             android:src="@drawable/ic_widget_down" />
     </LinearLayout>
 
     <LinearLayout
         android:id="@+id/widget2_actions"
-        android:layout_width="96dp"
+        android:layout_width="84dp"
         android:layout_height="34dp"
         android:layout_gravity="bottom|end"
-        android:layout_marginEnd="7dp"
+        android:layout_marginEnd="8dp"
         android:layout_marginBottom="5dp"
         android:gravity="center"
         android:orientation="horizontal">
@@ -64,6 +66,7 @@
             android:layout_weight="1"
             android:contentDescription="Chọn ngày"
             android:padding="6dp"
+            android:scaleType="centerInside"
             android:src="@drawable/ic_widget_calendar" />
         <ImageView
             android:id="@+id/widget2_reload"
@@ -72,6 +75,7 @@
             android:layout_weight="1"
             android:contentDescription="Đồng bộ"
             android:padding="6dp"
+            android:scaleType="centerInside"
             android:src="@drawable/ic_widget_reload" />
         <ImageView
             android:id="@+id/widget2_mode"
@@ -80,6 +84,7 @@
             android:layout_weight="1"
             android:contentDescription="Đổi lịch học và lịch thi"
             android:padding="6dp"
+            android:scaleType="centerInside"
             android:src="@drawable/ic_widget_bell" />
     </LinearLayout>
 </FrameLayout>

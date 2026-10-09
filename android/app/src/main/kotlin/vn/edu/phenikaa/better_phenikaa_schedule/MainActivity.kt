@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
+import android.provider.MediaStore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -538,7 +539,11 @@ class MainActivity : FlutterActivity() {
             }
             pendingFileResult = result
             pendingFileKind = kind
-            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            // The system photo picker grants access to only the selected photo.
+            // No broad gallery permission is needed or requested at app startup.
+            val intent = if (kind == "image" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                Intent(MediaStore.ACTION_PICK_IMAGES).apply { type = "image/*" }
+            } else Intent(if (kind == "image") Intent.ACTION_GET_CONTENT else Intent.ACTION_OPEN_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = if (kind == "image") "image/*" else "*/*"
                 if (kind == "font") {

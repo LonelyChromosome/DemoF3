@@ -149,6 +149,15 @@ internal object Widget2BitmapRenderer {
         return result
     }
 
+    fun fadeFrame(next: Bitmap, progress: Float): Bitmap {
+        val result = Bitmap.createBitmap(next.width, next.height, Bitmap.Config.ARGB_8888)
+        Canvas(result).drawBitmap(next, 0f, 0f,
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                alpha = (progress.coerceIn(0f, 1f) * 255).toInt()
+            })
+        return result
+    }
+
     internal fun visibleItemCount(itemCount: Int): Int = itemCount.coerceIn(0, 5)
 
     internal fun verticalOffsets(

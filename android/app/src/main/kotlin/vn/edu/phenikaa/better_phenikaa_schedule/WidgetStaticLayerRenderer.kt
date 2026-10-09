@@ -15,7 +15,6 @@ import android.media.ExifInterface
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
-import java.util.Calendar
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -99,20 +98,8 @@ internal object WidgetStaticLayerRenderer {
         palette: NativeWidgetPalette = NativeWidgetPalette.read(context),
     ): Bitmap {
         val source = File(config.largeImagePath).takeIf(File::isFile)
-        val clock = Calendar.getInstance()
-        val timeBucket = clock.get(Calendar.HOUR_OF_DAY) * 2 + clock.get(Calendar.MINUTE) / 30
-        val cacheKey = listOf(
-            "large-v2", base.width, base.height, palette,
-            source?.absolutePath.orEmpty(), source?.lastModified() ?: 0L,
-            source?.length() ?: 0L, config.largeBorder, config.cornerRadiusDp, timeBucket,
-        ).joinToString("|")
-        val cached = File(cacheDirectory(context), "${sha256(cacheKey)}.png")
-        if (cached.isFile) {
-            BitmapFactory.decodeFile(cached.absolutePath)?.let {
-                base.recycle()
-                return it
-            }
-        }
+        // The supplied base may change with the date/theme; caching by photo
+        // alone can return an old card and an old border after a refresh.
         val result = Bitmap.createBitmap(base.width, base.height, Bitmap.Config.ARGB_8888)
         val resultCanvas = Canvas(result)
         val radius = cornerRadiusPx(context, config, result.width, result.height)
@@ -124,12 +111,15 @@ internal object WidgetStaticLayerRenderer {
         )
         resultCanvas.drawBitmap(base, 0f, 0f, null)
         base.recycle()
-        val decoded = source?.let { decodeOriented(it, result.width * 2, result.height * 2) }
+        val decoded = source?.let {
+            decodeForRegion(it, result.width, result.height, config.largeImageCrop)
+        }
         if (decoded != null) {
-            drawContain(
+            drawSelected(
                 resultCanvas,
                 decoded,
                 RectF(0f, 0f, result.width.toFloat(), result.height.toFloat()),
+                config.largeImageCrop,
             )
             decoded.recycle()
         }
@@ -143,10 +133,6 @@ internal object WidgetStaticLayerRenderer {
             palette,
             context.resources.displayMetrics.density,
         )
-        runCatching {
-            FileOutputStream(cached).use { result.compress(Bitmap.CompressFormat.PNG, 100, it) }
-            trimCache(cacheDirectory(context), keep = 20)
-        }
         return result
     }
 
@@ -168,10 +154,10 @@ internal object WidgetStaticLayerRenderer {
         }
         val source = File(imagePath).takeIf { it.isFile }
         val cacheKey = listOf(
-            "v4", surface.wireName, safeWidth, safeHeight, palette,
+            "v5", surface.wireName, safeWidth, safeHeight, palette,
             source?.absolutePath.orEmpty(),
             source?.lastModified() ?: 0L, source?.length() ?: 0L,
-            config.border(surface), config.cornerRadiusDp,
+            config.border(surface), config.cornerRadiusDp, config.largeImageCrop,
             config.glassOpacity, config.glowStrength,
         ).joinToString("|")
         val cached = File(cacheDirectory(context), "${sha256(cacheKey)}.png")
@@ -189,13 +175,17 @@ internal object WidgetStaticLayerRenderer {
             outerRadius,
         )
         drawThemeBase(canvas, safeWidth, safeHeight, palette)
-        val decoded = source?.let { decodeOriented(it, safeWidth * 2, safeHeight * 2) }
+        val decoded = source?.let {
+            if (surface == WidgetSurface.LARGE)
+                decodeForRegion(it, safeWidth, safeHeight, config.largeImageCrop)
+            else decodeOriented(it, safeWidth * 2, safeHeight * 2)
+        }
         when (surface) {
             WidgetSurface.SMALL -> Unit
             WidgetSurface.LARGE -> decoded?.let {
-                // Final 1.4 rule: keep the complete photo visible. Any unused
-                // area remains the Theme Engine background; never crop/stretch.
-                drawContain(canvas, it, RectF(0f, 0f, safeWidth.toFloat(), safeHeight.toFloat()))
+                drawSelected(canvas, it,
+                    RectF(0f, 0f, safeWidth.toFloat(), safeHeight.toFloat()),
+                    config.largeImageCrop)
             }
             WidgetSurface.WIDGET2 -> {
                 decoded?.let {
@@ -219,7 +209,7 @@ internal object WidgetStaticLayerRenderer {
                 if (decoded != null) {
                     val save = canvas.save()
                     canvas.clipRoundRect(imageRect, imageRadius, imageRadius)
-                    drawContain(canvas, decoded, imageRect)
+                    drawCover(canvas, decoded, imageRect)
                     canvas.restoreToCount(save)
                 } else {
                     val drawable = context.getDrawable(R.drawable.ic_widget_study)?.mutate()
@@ -269,14 +259,73 @@ internal object WidgetStaticLayerRenderer {
     }
 
     private fun drawBlurredCover(canvas: Canvas, source: Bitmap, width: Int, height: Int) {
-        val tinyWidth = (width / 18).coerceAtLeast(18)
-        val tinyHeight = (height / 18).coerceAtLeast(10)
-        val cover = Bitmap.createBitmap(tinyWidth, tinyHeight, Bitmap.Config.ARGB_8888)
+        // Keep enough pixels for smooth gradients and text behind the glass.
+        // The old 1/18 thumbnail was visibly blocky when scaled to a launcher.
+        val blurWidth = (width / 2).coerceAtLeast(120)
+        val blurHeight = (height / 2).coerceAtLeast(70)
+        val cover = Bitmap.createBitmap(blurWidth, blurHeight, Bitmap.Config.ARGB_8888)
         val tinyCanvas = Canvas(cover)
-        drawCover(tinyCanvas, source, RectF(0f, 0f, tinyWidth.toFloat(), tinyHeight.toFloat()))
+        drawCover(tinyCanvas, source, RectF(0f, 0f, blurWidth.toFloat(), blurHeight.toFloat()))
+        val pixels = IntArray(blurWidth * blurHeight)
+        cover.getPixels(pixels, 0, blurWidth, 0, 0, blurWidth, blurHeight)
+        val softened = blurPixels(pixels, blurWidth, blurHeight, (blurWidth / 40).coerceIn(6, 24))
+        cover.setPixels(softened, 0, blurWidth, 0, 0, blurWidth, blurHeight)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { isDither = true }
         canvas.drawBitmap(cover, null, Rect(0, 0, width, height), paint)
         cover.recycle()
+    }
+
+    private fun blurPixels(source: IntArray, width: Int, height: Int, radius: Int): IntArray {
+        val horizontal = IntArray(source.size)
+        val output = IntArray(source.size)
+        val count = radius * 2 + 1
+        for (y in 0 until height) {
+            var red = 0; var green = 0; var blue = 0
+            for (k in -radius..radius) {
+                val color = source[y * width + k.coerceIn(0, width - 1)]
+                red += Color.red(color); green += Color.green(color); blue += Color.blue(color)
+            }
+            for (x in 0 until width) {
+                horizontal[y * width + x] = Color.rgb(red / count, green / count, blue / count)
+                val removed = source[y * width + (x - radius).coerceIn(0, width - 1)]
+                val added = source[y * width + (x + radius + 1).coerceIn(0, width - 1)]
+                red += Color.red(added) - Color.red(removed)
+                green += Color.green(added) - Color.green(removed)
+                blue += Color.blue(added) - Color.blue(removed)
+            }
+        }
+        for (x in 0 until width) {
+            var red = 0; var green = 0; var blue = 0
+            for (k in -radius..radius) {
+                val color = horizontal[k.coerceIn(0, height - 1) * width + x]
+                red += Color.red(color); green += Color.green(color); blue += Color.blue(color)
+            }
+            for (y in 0 until height) {
+                output[y * width + x] = Color.rgb(red / count, green / count, blue / count)
+                val removed = horizontal[(y - radius).coerceIn(0, height - 1) * width + x]
+                val added = horizontal[(y + radius + 1).coerceIn(0, height - 1) * width + x]
+                red += Color.red(added) - Color.red(removed)
+                green += Color.green(added) - Color.green(removed)
+                blue += Color.blue(added) - Color.blue(removed)
+            }
+        }
+        return output
+    }
+
+    private fun drawSelected(canvas: Canvas, source: Bitmap, target: RectF, crop: WidgetImageCrop) {
+        if (crop.isFull) {
+            drawContain(canvas, source, target)
+            return
+        }
+        val left = (crop.left * source.width).roundToInt().coerceIn(0, source.width - 1)
+        val top = (crop.top * source.height).roundToInt().coerceIn(0, source.height - 1)
+        val right = (crop.right * source.width).roundToInt().coerceIn(left + 1, source.width)
+        val bottom = (crop.bottom * source.height).roundToInt().coerceIn(top + 1, source.height)
+        val bounds = containBounds(right - left, bottom - top,
+            target.left, target.top, target.right, target.bottom)
+        canvas.drawBitmap(source, Rect(left, top, right, bottom),
+            RectF(bounds.left, bounds.top, bounds.right, bounds.bottom),
+            Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { isDither = true })
     }
 
     private fun drawContain(canvas: Canvas, source: Bitmap, target: RectF) {
@@ -337,8 +386,8 @@ internal object WidgetStaticLayerRenderer {
         val densityScale = height / if (surface == WidgetSurface.SMALL) 64f else 150f
         val stroke = (border.widthDp * densityScale).coerceIn(1f, 16f)
         val inset = stroke / 2f + 1f
-        val radius = (config.cornerRadiusDp * density)
-            .coerceIn(stroke, minOf(width, height) / 2f)
+        val radius = ((config.cornerRadiusDp * density) - inset)
+            .coerceIn(0f, max(0f, minOf(width, height) / 2f - inset))
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (border.tienMonStyle) 0xFFFFD66B.toInt() else border.color
             style = Paint.Style.STROKE
@@ -386,6 +435,16 @@ internal object WidgetStaticLayerRenderer {
         if (rotation == 0f) return decoded
         return Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height,
             Matrix().apply { postRotate(rotation) }, true).also { decoded.recycle() }
+    }
+
+    private fun decodeForRegion(file: File, width: Int, height: Int, crop: WidgetImageCrop): Bitmap? {
+        val fractionWidth = (crop.right - crop.left).coerceAtLeast(.05f)
+        val fractionHeight = (crop.bottom - crop.top).coerceAtLeast(.05f)
+        // Resolve enough original pixels for the selected region, not merely
+        // enough for the entire photo before cropping it.
+        return decodeOriented(file,
+            (width * 2 / fractionWidth).roundToInt().coerceAtMost(4096),
+            (height * 2 / fractionHeight).roundToInt().coerceAtMost(4096))
     }
 
     private fun cacheDirectory(context: Context): File =

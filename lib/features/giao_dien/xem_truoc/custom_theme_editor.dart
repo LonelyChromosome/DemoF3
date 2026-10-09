@@ -13,6 +13,7 @@ import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_manag
 import 'package:better_phenikaa_schedule/features/giao_dien/tep_cuc_bo/file_bytes.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tep_cuc_bo/local_file_bridge.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/native_widget_preview.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/widget_image_crop_editor.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
@@ -247,10 +248,47 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
       if (file == null || !mounted) return;
       // Validate the managed full-resolution copy. Native renderers decode a
       // bounded sample and cache the launcher-sized result.
-      await readManagedFile(file.path, maximumBytes: _maximumImageBytes);
+      final bytes = await readManagedFile(
+        file.path,
+        maximumBytes: _maximumImageBytes,
+      );
+      final selectRegion = surface == WidgetSurfaceKind.large
+          ? await showModalBottomSheet<bool>(
+              context: context,
+              builder: (sheetContext) => SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    ListTile(
+                      title: const Text('Dùng toàn ảnh'),
+                      onTap: () => Navigator.pop(sheetContext, false),
+                    ),
+                    ListTile(
+                      title: const Text('Chọn vùng ảnh'),
+                      onTap: () => Navigator.pop(sheetContext, true),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : false;
+      if (selectRegion == null || !mounted) return;
+      final crop = selectRegion
+          ? await Navigator.of(context).push<WidgetImageCrop>(
+              MaterialPageRoute<WidgetImageCrop>(
+                builder: (_) =>
+                    WidgetImageCropEditor(bytes: bytes, aspectRatio: 2.15),
+              ),
+            )
+          : const WidgetImageCrop();
+      if (crop == null) return;
+      if (!mounted) return;
       setState(() {
         _widgetConfiguration = surface == WidgetSurfaceKind.large
-            ? _widgetConfiguration.copyWith(largeImagePath: file.path)
+            ? _widgetConfiguration.copyWith(
+                largeImagePath: file.path,
+                largeImageCrop: crop,
+              )
             : _widgetConfiguration.copyWith(widget2ImagePath: file.path);
       });
       _scheduleNativePreviews();
@@ -264,10 +302,43 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
   void _clearWidgetImage(WidgetSurfaceKind surface) {
     setState(() {
       _widgetConfiguration = surface == WidgetSurfaceKind.large
-          ? _widgetConfiguration.copyWith(largeImagePath: '')
+          ? _widgetConfiguration.copyWith(
+              largeImagePath: '',
+              largeImageCrop: const WidgetImageCrop(),
+            )
           : _widgetConfiguration.copyWith(widget2ImagePath: '');
     });
     _scheduleNativePreviews();
+  }
+
+  Future<void> _adjustLargeImageRegion() async {
+    final path = _widgetConfiguration.largeImagePath;
+    if (path.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      final bytes = await readManagedFile(
+        path,
+        maximumBytes: _maximumImageBytes,
+      );
+      if (!mounted) return;
+      final crop = await Navigator.of(context).push<WidgetImageCrop>(
+        MaterialPageRoute<WidgetImageCrop>(
+          builder: (_) =>
+              WidgetImageCropEditor(bytes: bytes, aspectRatio: 2.15),
+        ),
+      );
+      if (crop == null || !mounted) return;
+      setState(
+        () => _widgetConfiguration = _widgetConfiguration.copyWith(
+          largeImageCrop: crop,
+        ),
+      );
+      _scheduleNativePreviews();
+    } on Object catch (error) {
+      if (mounted) setState(() => _error = 'Không đọc được ảnh widget: $error');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _chooseBorderColor(WidgetSurfaceKind surface) async {
@@ -588,7 +659,7 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
         Text(switch (surface) {
           WidgetSurfaceKind.small =>
             'Widget nhỏ giữ nguyên logic và background Theme Engine.',
-          WidgetSurfaceKind.large => 'Ảnh được đặt nguyên vẹn bằng fit/contain; không crop, không méo, không blur.',
+          WidgetSurfaceKind.large => 'Chọn vùng cần hiển thị; vùng ảnh được giữ sắc nét khi fit vào widget.',
           WidgetSurfaceKind.widget2 => 'Ảnh rõ nằm bên phải; lớp nền blur được cache và đứng yên khi đổi lịch.',
         }, style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 8),
@@ -620,6 +691,12 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          if (surface == WidgetSurfaceKind.large)
+            TextButton.icon(
+              onPressed: _busy ? null : _adjustLargeImageRegion,
+              icon: const Icon(Icons.crop),
+              label: const Text('Chỉnh lại vùng ảnh'),
+            ),
         ],
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,

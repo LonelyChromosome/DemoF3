@@ -209,11 +209,16 @@ internal object NativeWidgetPreviewRenderer {
             val left: Int
             val top: Int
             if (surface == WidgetSurface.WIDGET2 && index >= 3) {
-                left = (width * .66f).roundToInt() - size / 2
+                left = (width * .72f).roundToInt() - size / 2
                 top = topOffset + (height * (if (index == 3) .28f else .53f)).roundToInt()
             } else {
-                left = width - ((ids.size.coerceAtMost(3) - index) * size * 1.18f)
-                    .roundToInt() - (width * .015f).roundToInt()
+                left = if (surface == WidgetSurface.WIDGET2) {
+                    // Same three equally spaced centers as the 84dp launcher row.
+                    width - (width * (.025f + .2625f * (2.5f - index) / 3f)).roundToInt() - size / 2
+                } else {
+                    width - ((ids.size.coerceAtMost(3) - index) * size * 1.18f)
+                        .roundToInt() - (width * .015f).roundToInt()
+                }
                 top = topOffset + if (surface == WidgetSurface.WIDGET2)
                     (height * .76f).roundToInt() else (height * .04f).roundToInt()
             }

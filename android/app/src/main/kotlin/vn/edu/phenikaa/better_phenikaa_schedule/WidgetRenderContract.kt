@@ -19,6 +19,7 @@ internal data class WidgetRenderRequest(
     val surface: WidgetSurface,
     val widgetId: Int,
     val forceStaticLayer: Boolean = false,
+    val fadeContent: Boolean = false,
 )
 
 /**
@@ -44,6 +45,7 @@ internal object WidgetRenderDispatcher {
                 manager,
                 request.widgetId,
                 request.forceStaticLayer,
+                request.fadeContent,
             )
         }
     }
