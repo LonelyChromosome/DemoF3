@@ -149,7 +149,7 @@ internal object WidgetStaticLayerRenderer {
         val presetImage = if (surface == WidgetSurface.WIDGET2 && source == null)
             Widget2ThemeImage.assetName(palette.key) else null
         val cacheKey = listOf(
-            "v13-one-rounded-stroke", surface.wireName, safeWidth, safeHeight, palette, presetImage,
+            "v14-system-matched-outer-radius", surface.wireName, safeWidth, safeHeight, palette, presetImage,
             source?.absolutePath.orEmpty(),
             source?.lastModified() ?: 0L, source?.length() ?: 0L,
             effectiveConfig.border(surface), effectiveConfig.cornerRadiusDp, effectiveConfig.largeImageCrop,
@@ -424,8 +424,10 @@ internal object WidgetStaticLayerRenderer {
         val bounds = RectF(half, half, width.toFloat() - half, height.toFloat() - half)
         if (bounds.width() <= 0f || bounds.height() <= 0f) return
 
-        // The visible outer corner is R; the stroked path is inset by half the width.
-        val radius = (config.cornerRadiusDp * density - half)
+        // Match the same effective outer mask used by every static background.
+        // Android 12+ launchers may clip corners using their own (larger) radius.
+        val outerRadius = cornerRadiusPx(context, config, width, height)
+        val radius = (outerRadius - half)
             .coerceIn(0f, minOf(bounds.width(), bounds.height()) / 2f)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (border.tienMonStyle) 0xFFFFD66B.toInt() else border.color
@@ -440,8 +442,19 @@ internal object WidgetStaticLayerRenderer {
         config: WidgetThemeV14,
         width: Int,
         height: Int,
-    ): Float = (config.cornerRadiusDp * context.resources.displayMetrics.density)
-        .coerceIn(0f, minOf(width, height) / 2f)
+    ): Float {
+        val configured = config.cornerRadiusDp * context.resources.displayMetrics.density
+        // The launcher can round the outer widget more than the custom bitmap.
+        // Resolve that system dimension at runtime; manufacturers may override it.
+        val system = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            runCatching {
+                context.resources.getDimension(
+                    android.R.dimen.system_app_widget_background_radius,
+                )
+            }.getOrDefault(0f)
+        } else 0f
+        return maxOf(configured, system).coerceIn(0f, minOf(width, height) / 2f)
+    }
 
     private fun decodeOriented(file: File, targetWidth: Int, targetHeight: Int): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

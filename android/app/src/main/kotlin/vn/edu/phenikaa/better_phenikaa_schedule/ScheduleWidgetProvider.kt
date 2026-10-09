@@ -414,8 +414,43 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             val after = WidgetSnapshotStore.read(context, id).let { it.items.getOrNull(it.selectedIndex) }
             renderWidget(context, manager, id)
             if (before != null && after != null) {
-                animateModeSlide(context, manager, id, before, after,
-                    SmallWidgetMode.isExam(context, id))
+                // The mode slide runs on delayed RemoteViews updates. Keep this
+                // broadcast alive through adapter rebind and always release its
+                // cover, even if Samsung does not deliver the frame-ready signal.
+                val pendingResult = goAsync()
+                try {
+                    animateModeSlide(context, manager, id, before, after,
+                        SmallWidgetMode.isExam(context, id))
+                    val modeState = context.getSharedPreferences(
+                        WIDGET_RENDER_STATE_PREFS, Context.MODE_PRIVATE)
+                    val generation = modeState.getInt("mode_generation_$id", 0)
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        try {
+                            if (modeState.getInt("mode_generation_$id", 0) == generation) {
+                                val token = modeState.getString(contentTokenKey(id), null)
+                                if (token != null) {
+                                    applyPendingSelection(context, manager, id,
+                                        token, finish = true)
+                                }
+                                val reveal = RemoteViews(context.packageName,
+                                    R.layout.schedule_widget)
+                                val hasItems = WidgetSnapshotStore.read(context, id)
+                                    .items.isNotEmpty()
+                                reveal.setViewVisibility(R.id.widget_list,
+                                    if (hasItems) View.VISIBLE else View.GONE)
+                                reveal.setViewVisibility(R.id.widget_empty,
+                                    if (hasItems) View.GONE else View.VISIBLE)
+                                reveal.setViewVisibility(R.id.widget_refresh_cover, View.GONE)
+                                manager.partiallyUpdateAppWidget(id, reveal)
+                            }
+                        } finally {
+                            pendingResult.finish()
+                        }
+                    }, 2400L)
+                } catch (e: Exception) {
+                    pendingResult.finish()
+                    throw e
+                }
             }
             return
         }

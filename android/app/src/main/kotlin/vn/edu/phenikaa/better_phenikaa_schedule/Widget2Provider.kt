@@ -90,7 +90,12 @@ class Widget2Provider : AppWidgetProvider() {
         id: Int,
         forceStaticLayer: Boolean = false,
         fadeContent: Boolean = false,
+        initialAlpha: Float = 1f,
     ) {
+        if (fadeContent) {
+            animateRefresh(context, manager, id, forceStaticLayer)
+            return
+        }
         val size = WidgetHostSizeResolver.currentSize(
             context,
             manager.getAppWidgetOptions(id),
@@ -139,7 +144,7 @@ class Widget2Provider : AppWidgetProvider() {
                 insetDp + 4f, TypedValue.COMPLEX_UNIT_DIP)
         }
         views.setImageViewBitmap(R.id.widget2_content_layer, dynamic)
-        views.setFloat(R.id.widget2_root, "setAlpha", if (fadeContent) .18f else 1f)
+        views.setFloat(R.id.widget2_root, "setAlpha", initialAlpha.coerceIn(0f, 1f))
         if (forceStaticLayer || previousToken != token) {
             views.setImageViewBitmap(
                 R.id.widget2_static_layer,
@@ -160,29 +165,41 @@ class Widget2Provider : AppWidgetProvider() {
         } else {
             manager.partiallyUpdateAppWidget(id, views)
         }
-        if (fadeContent) {
-            animateRefresh(context, manager, id)
-        }
         dynamic.recycle()
     }
 
+    /** Fade the OLD widget to zero, replace it invisibly, then fade the NEW one in. */
     private fun animateRefresh(
         context: Context, manager: AppWidgetManager, id: Int,
+        forceStaticLayer: Boolean,
     ) {
         val prefs = state(context)
         val generation = prefs.getInt(generationKey(id), 0) + 1
         prefs.edit().putInt(generationKey(id), generation).apply()
         val handler = Handler(Looper.getMainLooper())
-        val frames = 7
-        repeat(frames) { index ->
+        val intervals = 5
+        val intervalMs = 50L
+
+        for (step in 0..intervals) {
             handler.postDelayed({
-                if (prefs.getInt(generationKey(id), 0) == generation) {
-                    val progress = (index + 1).toFloat() / frames
-                    val views = RemoteViews(context.packageName, R.layout.widget2)
-                    views.setFloat(R.id.widget2_root, "setAlpha", .18f + .82f * progress)
-                    manager.partiallyUpdateAppWidget(id, views)
+                if (prefs.getInt(generationKey(id), 0) != generation) return@postDelayed
+                val frame = RemoteViews(context.packageName, R.layout.widget2)
+                frame.setFloat(R.id.widget2_root, "setAlpha", 1f - step.toFloat() / intervals)
+                manager.partiallyUpdateAppWidget(id, frame)
+                if (step == intervals) {
+                    // Swap the complete bitmap and mode while fully transparent.
+                    renderFromDispatcher(context, manager, id,
+                        forceStaticLayer = forceStaticLayer, initialAlpha = 0f)
                 }
-            }, index * 45L)
+            }, step * intervalMs)
+        }
+        for (step in 1..intervals) {
+            handler.postDelayed({
+                if (prefs.getInt(generationKey(id), 0) != generation) return@postDelayed
+                val frame = RemoteViews(context.packageName, R.layout.widget2)
+                frame.setFloat(R.id.widget2_root, "setAlpha", step.toFloat() / intervals)
+                manager.partiallyUpdateAppWidget(id, frame)
+            }, (intervals + step) * intervalMs)
         }
     }
 
@@ -263,9 +280,15 @@ class Widget2Provider : AppWidgetProvider() {
                 manager.partiallyUpdateAppWidget(id, views)
                 frame.recycle()
                 if (frameIndex == frames - 1) {
-                    old.recycle()
-                    next.recycle()
-                    pending.finish()
+                    try {
+                        // Never leave a transient, flattened flip bitmap on the launcher.
+                        // Rebind the authoritative final exam/study state.
+                        renderFromDispatcher(context, manager, id)
+                    } finally {
+                        old.recycle()
+                        next.recycle()
+                        pending.finish()
+                    }
                 }
             }, frameIndex * delay)
         }
@@ -369,7 +392,7 @@ internal fun widget2StaticLayerToken(
     imageModifiedAt: Long,
     imageLength: Long,
 ): String = listOf(
-    "v11-one-rounded-stroke",
+    "v12-system-radius-and-two-phase-fade",
     widthPx,
     heightPx,
     palette,
