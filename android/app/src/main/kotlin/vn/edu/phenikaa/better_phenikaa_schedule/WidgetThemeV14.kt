@@ -102,7 +102,7 @@ internal data class WidgetThemeV14(
         private fun border(json: JSONObject?): WidgetBorderConfig = WidgetBorderConfig(
             enabled = json?.optBoolean("enabled", false) ?: false,
             color = json?.optLong("color", 0xFFFFD66BL)?.toInt() ?: 0xFFFFD66B.toInt(),
-            widthDp = (json?.optDouble("widthDp", 1.0)?.toFloat() ?: 1f).coerceIn(.5f, 8f),
+            widthDp = (json?.optDouble("widthDp", 1.0)?.toFloat() ?: 1f).coerceIn(.5f, 16f),
             tienMonStyle = json?.optBoolean("tienMonStyle", false) ?: false,
         )
 

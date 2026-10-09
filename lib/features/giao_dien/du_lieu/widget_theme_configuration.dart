@@ -41,7 +41,7 @@ final class WidgetBorderDefinition {
       WidgetBorderDefinition(
         enabled: json['enabled'] as bool? ?? false,
         color: Color((json['color'] as num?)?.toInt() ?? 0xFFFFD66B),
-        width: ((json['widthDp'] as num?)?.toDouble() ?? 1).clamp(.5, 8),
+        width: ((json['widthDp'] as num?)?.toDouble() ?? 1).clamp(.5, 16),
         tienMonStyle: json['tienMonStyle'] as bool? ?? false,
       );
 

@@ -253,10 +253,38 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
         file.path,
         maximumBytes: _maximumImageBytes,
       );
-      // Keep the complete original photo with automatic contain/fitting.
-      // No secondary crop dialog or manual interaction.
-      final crop = const WidgetImageCrop();
-      if (!mounted) return;
+      // Preserve both choices: full uncropped image or a manually selected
+      // region. The system photo picker itself stays unchanged.
+      final selectRegion = await showModalBottomSheet<bool>(
+        context: context,
+        builder: (sheetContext) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                title: const Text('Dùng toàn ảnh'),
+                onTap: () => Navigator.pop(sheetContext, false),
+              ),
+              ListTile(
+                title: const Text('Chọn vùng ảnh'),
+                onTap: () => Navigator.pop(sheetContext, true),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (selectRegion == null || !mounted) return;
+      final crop = selectRegion
+          ? await Navigator.of(context).push<WidgetImageCrop>(
+              MaterialPageRoute<WidgetImageCrop>(
+                builder: (_) => WidgetImageCropEditor(
+                  bytes: bytes,
+                  aspectRatio: surface == WidgetSurfaceKind.large ? 2.15 : .68,
+                ),
+              ),
+            )
+          : const WidgetImageCrop();
+      if (crop == null || !mounted) return;
       setState(() {
         _widgetConfiguration = surface == WidgetSurfaceKind.large
             ? _widgetConfiguration.copyWith(
@@ -663,7 +691,12 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall,
           ),
-
+          if (surface != WidgetSurfaceKind.small)
+            TextButton.icon(
+              onPressed: _busy ? null : () => _adjustImageRegion(surface),
+              icon: const Icon(Icons.crop),
+              label: const Text('Chỉnh lại vùng ảnh'),
+            ),
         ],
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
@@ -700,7 +733,7 @@ class _CustomThemeEditorState extends State<CustomThemeEditor> {
                 child: Slider(
                   value: border.width,
                   min: .5,
-                  max: 8,
+                  max: 16,
                   onChanged: (value) {
                     setState(() {
                       _widgetConfiguration = _widgetConfiguration.withBorder(

@@ -408,39 +408,38 @@ internal object WidgetStaticLayerRenderer {
     ) {
         val border = config.border(surface)
         if (!border.enabled) return
-        val densityScale = height / if (surface == WidgetSurface.SMALL) 64f else 150f
-        val stroke = (border.widthDp * densityScale).coerceIn(1.5f, 16f)
-        // Fully inset, constant-thickness rounded ring (no corner overflow).
-        val inset = max(1f, stroke * .5f)
-        val radius = ((config.cornerRadiusDp * density) - inset)
-            .coerceIn(stroke, max(stroke, minOf(width, height) / 2f - inset))
+        // All values use actual screen density: 0.8dp, 1dp, 10dp, etc.
+        // A centered stroke on an inward-offset path is fully contained in
+        // the card bounds on all four rounded corners at every thickness.
+        val thickness = (border.widthDp * density)
+            .coerceIn(0.5f, minOf(width, height) * .45f)
+        val centerInset = thickness / 2f + 1f // one-pixel antialiasing guard
+        val bounds = RectF(centerInset, centerInset,
+            width - centerInset, height - centerInset)
+        if (bounds.width() <= 0f || bounds.height() <= 0f) return
+        val radius = (config.cornerRadiusDp * density - centerInset)
+            .coerceIn(0f, minOf(bounds.width(), bounds.height()) / 2f)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (border.tienMonStyle) 0xFFFFD66B.toInt() else border.color
-            style = Paint.Style.FILL
+            style = Paint.Style.STROKE
+            strokeWidth = thickness
+            strokeJoin = Paint.Join.ROUND
+            strokeCap = Paint.Cap.ROUND
         }
-        // Fill the region between two concentric rounded rectangles. A stroked
-        // path rasterizes the corners thinner than its straight edges at <1dp.
-        val outer = RectF(inset, inset, width - inset, height - inset)
-        val inner = RectF(inset + stroke, inset + stroke,
-            width - inset - stroke, height - inset - stroke)
-        val ring = android.graphics.Path().apply {
-            fillType = android.graphics.Path.FillType.EVEN_ODD
-            addRoundRect(outer, radius, radius, android.graphics.Path.Direction.CW)
-            addRoundRect(inner, (radius - stroke).coerceAtLeast(0f),
-                (radius - stroke).coerceAtLeast(0f), android.graphics.Path.Direction.CW)
-        }
-        canvas.drawPath(ring, paint)
+        canvas.drawRoundRect(bounds, radius, radius, paint)
         if (border.tienMonStyle) {
+            // The optional inner highlight must also stay entirely inside.
             paint.color = withAlpha(palette.text, 105)
-            paint.style = Paint.Style.STROKE
-            paint.strokeWidth = max(1f, stroke * .34f)
-            val highlightInset = inset + stroke + paint.strokeWidth / 2f
-            val highlightRadius = max(0f, radius - stroke - paint.strokeWidth / 2f)
-            canvas.drawRoundRect(
-                RectF(highlightInset, highlightInset,
-                    width - highlightInset, height - highlightInset),
-                highlightRadius, highlightRadius, paint,
-            )
+            paint.strokeWidth = max(.5f, thickness * .34f)
+            val highlightInset = centerInset + thickness / 2f +
+                paint.strokeWidth / 2f + 1f
+            val highlightBounds = RectF(highlightInset, highlightInset,
+                width - highlightInset, height - highlightInset)
+            if (highlightBounds.width() > 0f && highlightBounds.height() > 0f) {
+                val highlightRadius = (config.cornerRadiusDp * density - highlightInset)
+                    .coerceIn(0f, minOf(highlightBounds.width(), highlightBounds.height()) / 2f)
+                canvas.drawRoundRect(highlightBounds, highlightRadius, highlightRadius, paint)
+            }
         }
     }
 
