@@ -45,9 +45,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          cache-read-only: false
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
@@ -121,9 +118,8 @@ jobs:
               raise SystemExit("Unexpected Flutter integration_test dependency")
           p.write_text(s.replace(v, ""))
           PY
-          # Resolve once. `flutter build` otherwise invokes pub a second time.
           flutter pub get
-          COOC_VERSION_NAME="$VERSION_NAME" flutter build apk --release --no-pub --build-number="$VERSION_CODE" \
+          COOC_VERSION_NAME="$VERSION_NAME" flutter build apk --release --build-number="$VERSION_CODE" \
             --dart-define="UPDATE_PUBLIC_KEY_BASE64=$UPDATE_PUBLIC_KEY_BASE64" \
             --dart-define="UPDATE_MANIFEST_URL=$UPDATE_MANIFEST_URL"
           mkdir -p dist
