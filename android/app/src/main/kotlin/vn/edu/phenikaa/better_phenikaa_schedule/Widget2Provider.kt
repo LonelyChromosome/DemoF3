@@ -369,7 +369,7 @@ internal fun widget2StaticLayerToken(
     imageModifiedAt: Long,
     imageLength: Long,
 ): String = listOf(
-    "v10-unified-foreground-frame",
+    "v11-one-rounded-stroke",
     widthPx,
     heightPx,
     palette,

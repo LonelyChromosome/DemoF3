@@ -149,7 +149,7 @@ internal object WidgetStaticLayerRenderer {
         val presetImage = if (surface == WidgetSurface.WIDGET2 && source == null)
             Widget2ThemeImage.assetName(palette.key) else null
         val cacheKey = listOf(
-            "v12-unified-foreground-frame", surface.wireName, safeWidth, safeHeight, palette, presetImage,
+            "v13-one-rounded-stroke", surface.wireName, safeWidth, safeHeight, palette, presetImage,
             source?.absolutePath.orEmpty(),
             source?.lastModified() ?: 0L, source?.length() ?: 0L,
             effectiveConfig.border(surface), effectiveConfig.cornerRadiusDp, effectiveConfig.largeImageCrop,
@@ -405,7 +405,7 @@ internal object WidgetStaticLayerRenderer {
         return result
     }
 
-    /** An inward-only rounded ring following the exact radius of the background mask. */
+    /** Draw one uniform rounded border inside the widget's exact bitmap frame. */
     private fun drawOuterBorder(
         canvas: Canvas,
         surface: WidgetSurface,
@@ -417,43 +417,22 @@ internal object WidgetStaticLayerRenderer {
     ) {
         val border = config.border(surface)
         if (!border.enabled) return
-        // The border shares exactly the same rounded mask as the background.
-        // Its thickness is removed inward: no offset gap, no outside stroke.
-        val outer = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        val radius = (config.cornerRadiusDp * density)
-            .coerceIn(0f, minOf(width, height) / 2f)
-        val limit = (minOf(width, height) / 2f - .5f).coerceAtLeast(.5f)
-        val thickness = (border.widthDp * density).coerceIn(.5f, limit)
-        val inner = RectF(thickness, thickness,
-            width - thickness, height - thickness)
-        if (inner.width() <= 0f || inner.height() <= 0f) return
-        val outerRadius = radius
-        val innerRadius = (radius - thickness)
-            .coerceIn(0f, minOf(inner.width(), inner.height()) / 2f)
-        val region = android.graphics.Path().apply {
-            fillType = android.graphics.Path.FillType.EVEN_ODD
-            addRoundRect(outer, outerRadius, outerRadius, android.graphics.Path.Direction.CW)
-            addRoundRect(inner, innerRadius, innerRadius, android.graphics.Path.Direction.CW)
-        }
-        canvas.drawPath(region, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+
+        val available = (minOf(width, height).toFloat() - 1f).coerceAtLeast(.5f)
+        val thicknessPx = (border.widthDp * density).coerceIn(.5f, available)
+        val half = thicknessPx / 2f
+        val bounds = RectF(half, half, width.toFloat() - half, height.toFloat() - half)
+        if (bounds.width() <= 0f || bounds.height() <= 0f) return
+
+        // The visible outer corner is R; the stroked path is inset by half the width.
+        val radius = (config.cornerRadiusDp * density - half)
+            .coerceIn(0f, minOf(bounds.width(), bounds.height()) / 2f)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (border.tienMonStyle) 0xFFFFD66B.toInt() else border.color
-            style = Paint.Style.FILL
-        })
-        if (border.tienMonStyle) {
-            val line = (thickness * .25f).coerceIn(.5f, 2f * density)
-            val offset = thickness + line / 2f + .5f
-            val highlight = RectF(offset, offset, width - offset, height - offset)
-            if (highlight.width() > 0f && highlight.height() > 0f) {
-                val highlightRadius = (outerRadius - offset)
-                    .coerceIn(0f, minOf(highlight.width(), highlight.height()) / 2f)
-                canvas.drawRoundRect(highlight, highlightRadius, highlightRadius,
-                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                        color = withAlpha(palette.text, 105)
-                        style = Paint.Style.STROKE
-                        strokeWidth = line
-                    })
-            }
+            style = Paint.Style.STROKE
+            strokeWidth = thicknessPx
         }
+        canvas.drawRoundRect(bounds, radius, radius, paint)
     }
 
     private fun cornerRadiusPx(

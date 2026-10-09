@@ -202,14 +202,7 @@ internal fun renderWidgetSlide(
             )
         }
     }
-    // The custom small widget already has its full-size background in the
-    // static image. StackView scales its children (and shifts them while
-    // swiping), so painting another opaque card here creates the visible
-    // second layer/seam around the rounded edges.
-    // Draw only the foreground text for custom themes.
-    if (theme.key != "custom" && !theme.key.startsWith("custom:")) {
-        canvas.drawRect(0f, 0f, widthPx, heightPx, backgroundPaint)
-    }
+    canvas.drawRect(0f, 0f, widthPx, heightPx, backgroundPaint)
     val left = widthPx * CONTENT_LEFT_FRACTION
     // The three actions form a narrow vertical rail at the right edge.
     val titleRight = minOf(widthPx * TITLE_RIGHT_FRACTION, widthPx - 50f * density)
