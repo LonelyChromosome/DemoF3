@@ -754,8 +754,8 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             widgetConfig.smallBorder.enabled) {
             views.setImageViewBitmap(R.id.widget_custom_border,
                 WidgetStaticLayerRenderer.renderBorderOverlay(context, WidgetSurface.SMALL,
-                    (widthDp * density).roundToInt().coerceAtLeast(1),
-                    (heightDp * density).roundToInt().coerceAtLeast(1), widgetConfig))
+                    (renderWidthDp * density).roundToInt().coerceAtLeast(1),
+                    (renderHeightDp * density).roundToInt().coerceAtLeast(1), widgetConfig))
             views.setViewVisibility(R.id.widget_custom_border, View.VISIBLE)
         } else {
             views.setViewVisibility(R.id.widget_custom_border, View.GONE)

@@ -158,7 +158,7 @@ internal object WidgetStaticLayerRenderer {
         val presetImage = if (surface == WidgetSurface.WIDGET2 && source == null)
             Widget2ThemeImage.assetName(palette.key) else null
         val cacheKey = listOf(
-            "v10-flush-rounded-border", surface.wireName, safeWidth, safeHeight, palette, presetImage,
+            "v11-widget2-foreground-outline", surface.wireName, safeWidth, safeHeight, palette, presetImage,
             source?.absolutePath.orEmpty(),
             source?.lastModified() ?: 0L, source?.length() ?: 0L,
             effectiveConfig.border(surface), effectiveConfig.cornerRadiusDp, effectiveConfig.largeImageCrop,
@@ -179,7 +179,7 @@ internal object WidgetStaticLayerRenderer {
             outerRadius,
             outerRadius,
         )
-        drawThemeBase(canvas, safeWidth, safeHeight, palette)
+        drawThemeBase(canvas, safeWidth, safeHeight, palette, surface, context.resources.displayMetrics.density)
         val decoded = source?.let {
             if (surface == WidgetSurface.LARGE)
                 decodeForRegion(it, safeWidth, safeHeight, effectiveConfig.largeImageCrop)
@@ -245,7 +245,7 @@ internal object WidgetStaticLayerRenderer {
         canvas.restore()
         // The small widget's real foreground frame is drawn above StackView.
         // Avoid painting the same antialiased ring twice at the round corners.
-        if (surface != WidgetSurface.SMALL) {
+        if (surface == WidgetSurface.LARGE) {
             drawOuterBorder(
                 canvas, surface, safeWidth, safeHeight, effectiveConfig, palette,
                 context.resources.displayMetrics.density,
@@ -258,13 +258,24 @@ internal object WidgetStaticLayerRenderer {
         return bitmap
     }
 
-    private fun drawThemeBase(canvas: Canvas, width: Int, height: Int, palette: NativeWidgetPalette) {
+    private fun drawThemeBase(
+        canvas: Canvas, width: Int, height: Int, palette: NativeWidgetPalette,
+        surface: WidgetSurface, density: Float,
+    ) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = LinearGradient(
-                0f, 0f, width.toFloat(), height.toFloat(),
-                intArrayOf(palette.start, blend(palette.start, palette.end, .48f), palette.end),
-                floatArrayOf(0f, .54f, 1f), Shader.TileMode.CLAMP,
-            )
+            shader = if (surface == WidgetSurface.SMALL && palette.key == "custom") {
+                // Match the horizontal slide gradient behind StackView's 90% card.
+                // Otherwise its diagonal backdrop shows as a second color layer.
+                val cardRight = (width * .9f - 4f * density).coerceAtLeast(1f)
+                LinearGradient(0f, 0f, cardRight, 0f,
+                    palette.start, palette.end, Shader.TileMode.CLAMP)
+            } else {
+                LinearGradient(
+                    0f, 0f, width.toFloat(), height.toFloat(),
+                    intArrayOf(palette.start, blend(palette.start, palette.end, .48f), palette.end),
+                    floatArrayOf(0f, .54f, 1f), Shader.TileMode.CLAMP,
+                )
+            }
         }
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
     }

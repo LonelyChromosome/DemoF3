@@ -147,6 +147,14 @@ class Widget2Provider : AppWidgetProvider() {
                     context, WidgetSurface.WIDGET2, widthPx, heightPx, config, palette,
                 ),
             )
+            if (palette.key == "custom" && config.widget2Border.enabled) {
+                views.setImageViewBitmap(R.id.widget2_border_layer,
+                    WidgetStaticLayerRenderer.renderBorderOverlay(context,
+                        WidgetSurface.WIDGET2, widthPx, heightPx, config, palette))
+                views.setViewVisibility(R.id.widget2_border_layer, View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.widget2_border_layer, View.GONE)
+            }
             manager.updateAppWidget(id, views)
             state(context).edit().putString(staticTokenKey(id), token).apply()
         } else {
@@ -361,7 +369,7 @@ internal fun widget2StaticLayerToken(
     imageModifiedAt: Long,
     imageLength: Long,
 ): String = listOf(
-    "v8-flush-rounded-border",
+    "v9-widget2-foreground-outline",
     widthPx,
     heightPx,
     palette,

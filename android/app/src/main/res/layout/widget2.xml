@@ -87,4 +87,14 @@
             android:scaleType="centerInside"
             android:src="@drawable/ic_widget_bell" />
     </LinearLayout>
+    <ImageView
+        android:id="@+id/widget2_border_layer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:visibility="gone" />
+
 </FrameLayout>

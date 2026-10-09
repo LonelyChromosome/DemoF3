@@ -190,6 +190,12 @@ internal object NativeWidgetPreviewRenderer {
         canvas.drawBitmap(dynamic, 0f, 0f, null)
         dynamic.recycle()
         drawControls(context, canvas, width, height, palette, WidgetSurface.WIDGET2)
+        if (config.widget2Border.enabled) {
+            val overlay = WidgetStaticLayerRenderer.renderBorderOverlay(
+                context, WidgetSurface.WIDGET2, width, height, config, palette)
+            canvas.drawBitmap(overlay, 0f, 0f, null)
+            overlay.recycle()
+        }
         return result
     }
 
