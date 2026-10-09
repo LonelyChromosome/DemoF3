@@ -22,9 +22,7 @@ dependencies {
 android {
     namespace = "vn.edu.phenikaa.better_phenikaa_schedule"
     compileSdk = 37
-    // GitHub's ubuntu-24.04 image keeps this NDK preinstalled. Pinning it
-    // avoids downloading Flutter's former 28.2 default on every signed build.
-    ndkVersion = "27.3.13750724"
+    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
