@@ -175,7 +175,8 @@ internal fun renderWidgetSlide(
         WidgetTheme(it.key, it.start, it.end, it.text, it.subtext)
     } ?: themeOverrideKey?.let { widgetThemeForKey(context, it) }
         ?: readWidgetTheme(context)
-    val selectedColor = if (paletteOverride == null && originalTheme.key == "custom")
+    val selectedColor = if (paletteOverride == null && (originalTheme.key == "custom" ||
+            originalTheme.key.startsWith("custom:")))
         WidgetThemeV14.read(context).smallTextColor else null
     val theme = if (selectedColor == null) originalTheme else originalTheme.copy(
         textColor = selectedColor,

@@ -54,7 +54,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
 
     internal fun overviewColors(context: Context): Pair<Int, Int> {
         val colors = readThemeColors(context)
-        val chosen = if (colors.key == "custom")
+        val chosen = if (colors.key == "custom" || colors.key.startsWith("custom:"))
             WidgetThemeV14.read(context).largeTextColor else null
         return (chosen ?: colors.textColor) to colors.iconColor
     }
@@ -88,7 +88,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         paletteOverride: NativeWidgetPalette? = null,
     ): Int {
         val theme = paletteOverride?.toThemeColors() ?: readThemeColors(context)
-        if (theme.key == "custom") {
+        if (theme.key == "custom" || theme.key.startsWith("custom:")) {
             return paletteOverride?.text ?: WidgetThemeV14.read(context).largeTextColor
                 ?: theme.textColor
         }
@@ -747,9 +747,11 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
 
         val theme = readThemeColors(context)
         val widgetConfig = WidgetThemeV14.read(context)
-        val smallColor = if (theme.key == "custom") widgetConfig.smallTextColor else null
+        val smallColor = if (theme.key == "custom" || theme.key.startsWith("custom:"))
+            widgetConfig.smallTextColor else null
         val density = context.resources.displayMetrics.density
-        if (theme.key == "custom" && widgetConfig.smallBorder.enabled) {
+        if ((theme.key == "custom" || theme.key.startsWith("custom:")) &&
+            widgetConfig.smallBorder.enabled) {
             views.setImageViewBitmap(R.id.widget_custom_border,
                 WidgetStaticLayerRenderer.renderBorderOverlay(context, WidgetSurface.SMALL,
                     (widthDp * density).roundToInt().coerceAtLeast(1),
@@ -935,7 +937,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         hiddenTarget.setInt(R.id.widget_mode, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setInt(R.id.widget_reload, "setColorFilter", targetTheme.iconColor)
         hiddenTarget.setTextColor(R.id.widget_empty,
-            if (targetTheme.key == "custom")
+            if (targetTheme.key == "custom" || targetTheme.key.startsWith("custom:"))
                 WidgetThemeV14.read(context).smallTextColor ?: targetTheme.textColor
             else targetTheme.textColor)
         hiddenTarget.setViewVisibility(R.id.widget_custom_border, View.GONE)
