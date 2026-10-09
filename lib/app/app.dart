@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:better_phenikaa_schedule/app/bpa_pen_trace_splash.dart';
 import 'package:better_phenikaa_schedule/features/app_update/update_controller.dart';
 import 'package:better_phenikaa_schedule/features/app_update/update_ui.dart';
 
@@ -55,6 +56,9 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
           debugShowCheckedModeBanner: false,
           themeAnimationDuration: Duration.zero,
           theme: buildBetterTheme(palette),
+          builder: (context, child) => BpaPenTraceSplash(
+            child: child ?? const SizedBox.shrink(),
+          ),
           home: const _AppRoot(),
         );
       },
