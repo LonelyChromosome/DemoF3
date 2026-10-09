@@ -38,6 +38,7 @@ internal data class WidgetThemeV14(
     val largeImagePath: String = "",
     val largeImageCrop: WidgetImageCrop = WidgetImageCrop(),
     val widget2ImagePath: String = "",
+    val widget2ImageCrop: WidgetImageCrop = WidgetImageCrop(),
     val smallBorder: WidgetBorderConfig = WidgetBorderConfig(),
     val largeBorder: WidgetBorderConfig = WidgetBorderConfig(),
     val widget2Border: WidgetBorderConfig = WidgetBorderConfig(),
@@ -56,6 +57,7 @@ internal data class WidgetThemeV14(
         .put("largeImagePath", largeImagePath)
         .put("largeImageCrop", largeImageCrop.toJson())
         .put("widget2ImagePath", widget2ImagePath)
+        .put("widget2ImageCrop", widget2ImageCrop.toJson())
         .put("smallBorder", smallBorder.toJson())
         .put("largeBorder", largeBorder.toJson())
         .put("widget2Border", widget2Border.toJson())
@@ -81,6 +83,7 @@ internal data class WidgetThemeV14(
                 largeImagePath = json.optString("largeImagePath"),
                 largeImageCrop = WidgetImageCrop.fromJson(json.optJSONObject("largeImageCrop")),
                 widget2ImagePath = json.optString("widget2ImagePath"),
+                widget2ImageCrop = WidgetImageCrop.fromJson(json.optJSONObject("widget2ImageCrop")),
                 smallBorder = border(json.optJSONObject("smallBorder")),
                 largeBorder = border(json.optJSONObject("largeBorder")),
                 widget2Border = border(json.optJSONObject("widget2Border")),

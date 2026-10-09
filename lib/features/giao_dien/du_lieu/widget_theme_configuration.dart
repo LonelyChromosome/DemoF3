@@ -76,6 +76,7 @@ final class WidgetThemeConfiguration {
     this.largeImagePath = '',
     this.largeImageCrop = const WidgetImageCrop(),
     this.widget2ImagePath = '',
+    this.widget2ImageCrop = const WidgetImageCrop(),
     this.smallBorder = const WidgetBorderDefinition(),
     this.largeBorder = const WidgetBorderDefinition(),
     this.widget2Border = const WidgetBorderDefinition(),
@@ -101,6 +102,11 @@ final class WidgetThemeConfiguration {
             )
           : const WidgetImageCrop(),
       widget2ImagePath: json['widget2ImagePath'] as String? ?? '',
+      widget2ImageCrop: json['widget2ImageCrop'] is Map
+          ? WidgetImageCrop.fromJson(
+              Map<String, Object?>.from(json['widget2ImageCrop'] as Map),
+            )
+          : const WidgetImageCrop(),
       smallBorder: border('smallBorder'),
       largeBorder: border('largeBorder'),
       widget2Border: border('widget2Border'),
@@ -122,6 +128,7 @@ final class WidgetThemeConfiguration {
   final String largeImagePath;
   final WidgetImageCrop largeImageCrop;
   final String widget2ImagePath;
+  final WidgetImageCrop widget2ImageCrop;
   final WidgetBorderDefinition smallBorder;
   final WidgetBorderDefinition largeBorder;
   final WidgetBorderDefinition widget2Border;
@@ -148,6 +155,7 @@ final class WidgetThemeConfiguration {
     String? largeImagePath,
     WidgetImageCrop? largeImageCrop,
     String? widget2ImagePath,
+    WidgetImageCrop? widget2ImageCrop,
     WidgetBorderDefinition? smallBorder,
     WidgetBorderDefinition? largeBorder,
     WidgetBorderDefinition? widget2Border,
@@ -158,6 +166,7 @@ final class WidgetThemeConfiguration {
     largeImagePath: largeImagePath ?? this.largeImagePath,
     largeImageCrop: largeImageCrop ?? this.largeImageCrop,
     widget2ImagePath: widget2ImagePath ?? this.widget2ImagePath,
+    widget2ImageCrop: widget2ImageCrop ?? this.widget2ImageCrop,
     smallBorder: smallBorder ?? this.smallBorder,
     largeBorder: largeBorder ?? this.largeBorder,
     widget2Border: widget2Border ?? this.widget2Border,
@@ -171,6 +180,7 @@ final class WidgetThemeConfiguration {
     'largeImagePath': largeImagePath,
     'largeImageCrop': largeImageCrop.toJson(),
     'widget2ImagePath': widget2ImagePath,
+    'widget2ImageCrop': widget2ImageCrop.toJson(),
     'smallBorder': smallBorder.toJson(),
     'largeBorder': largeBorder.toJson(),
     'widget2Border': widget2Border.toJson(),

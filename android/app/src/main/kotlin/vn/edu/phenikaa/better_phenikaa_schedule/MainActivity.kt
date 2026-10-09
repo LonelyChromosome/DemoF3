@@ -40,6 +40,14 @@ class MainActivity : FlutterActivity() {
                 .getString("flutter.better_phenikaa_current_semester_v1", null)
             semester?.let { runCatching { ExamReminderScheduler.reconcile(applicationContext, it) } }
         }
+        if (requestCode == GALLERY_PERMISSION_REQUEST_CODE) {
+            if (grantResults.any { it == android.content.pm.PackageManager.PERMISSION_GRANTED }) {
+                openWidgetGallery()
+            } else {
+                // The platform picker still works when gallery access is declined.
+                startFilePicker("image")
+            }
+        }
     }
 
     private val widgetHandler = Handler(Looper.getMainLooper())
@@ -194,16 +202,20 @@ class MainActivity : FlutterActivity() {
             super.onActivityResult(requestCode, resultCode, data)
             return
         }
-        val callback = pendingFileResult
-        val kind = pendingFileKind
-        pendingFileResult = null
-        pendingFileKind = null
-        if (callback == null || kind == null) return
         if (resultCode != Activity.RESULT_OK || data?.data == null) {
-            callback.success(null)
+            pendingFileResult?.success(null)
+            pendingFileResult = null
+            pendingFileKind = null
             return
         }
-        val uri = data.data!!
+        completePickedFile(data.data!!)
+    }
+
+    private fun completePickedFile(uri: Uri) {
+        val callback = pendingFileResult ?: return
+        val kind = pendingFileKind ?: return
+        pendingFileResult = null
+        pendingFileKind = null
         fileExecutor.execute {
             runCatching { importLocalFile(uri, kind) }
                 .onSuccess { value -> runOnUiThread { callback.success(value) } }
@@ -539,37 +551,70 @@ class MainActivity : FlutterActivity() {
             }
             pendingFileResult = result
             pendingFileKind = kind
-            // The system photo picker grants access to only the selected photo.
-            // No broad gallery permission is needed or requested at app startup.
-            val intent = if (kind == "image" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                Intent(MediaStore.ACTION_PICK_IMAGES).apply { type = "image/*" }
-            } else Intent(if (kind == "image") Intent.ACTION_GET_CONTENT else Intent.ACTION_OPEN_DOCUMENT).apply {
-                addCategory(Intent.CATEGORY_OPENABLE)
-                type = if (kind == "image") "image/*" else "*/*"
-                if (kind == "font") {
-                    putExtra(
-                        Intent.EXTRA_MIME_TYPES,
-                        arrayOf(
-                            "font/ttf",
-                            "font/otf",
-                            "font/sfnt",
-                            "application/font-sfnt",
-                            "application/x-font-ttf",
-                            "application/x-font-otf",
-                            "application/x-font-opentype",
-                            "application/vnd.ms-opentype",
-                            "application/octet-stream",
-                        ),
-                    )
+            if (kind == "image") {
+                val permission = if (Build.VERSION.SDK_INT >= 33)
+                    Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+                val hasGalleryAccess = checkSelfPermission(permission) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                    (Build.VERSION.SDK_INT >= 34 &&
+                        checkSelfPermission(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) ==
+                        android.content.pm.PackageManager.PERMISSION_GRANTED)
+                if (hasGalleryAccess) {
+                    openWidgetGallery()
+                } else {
+                    val permissions = if (Build.VERSION.SDK_INT >= 34)
+                        arrayOf(Manifest.permission.READ_MEDIA_IMAGES,
+                            Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
+                    else arrayOf(permission)
+                    requestPermissions(permissions, GALLERY_PERMISSION_REQUEST_CODE)
                 }
+                return@setMethodCallHandler
             }
-            runCatching { startActivityForResult(intent, FILE_PICK_REQUEST_CODE) }
-                .onFailure { error ->
-                    pendingFileResult = null
-                    pendingFileKind = null
-                    result.error("picker_unavailable", error.message, null)
-                }
+            startFilePicker(kind)
         }
+    }
+
+    private fun openWidgetGallery() {
+        showWidgetGallery(this, fileExecutor,
+            onSelected = ::completePickedFile,
+            onCancelled = {
+                pendingFileResult?.success(null)
+                pendingFileResult = null
+                pendingFileKind = null
+            },
+        )
+    }
+
+    private fun startFilePicker(kind: String) {
+        val intent = if (kind == "image" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Intent(MediaStore.ACTION_PICK_IMAGES).apply { type = "image/*" }
+        } else Intent(if (kind == "image") Intent.ACTION_GET_CONTENT else Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = if (kind == "image") "image/*" else "*/*"
+            if (kind == "font") {
+                putExtra(
+                    Intent.EXTRA_MIME_TYPES,
+                    arrayOf(
+                        "font/ttf",
+                        "font/otf",
+                        "font/sfnt",
+                        "application/font-sfnt",
+                        "application/x-font-ttf",
+                        "application/x-font-otf",
+                        "application/x-font-opentype",
+                        "application/vnd.ms-opentype",
+                        "application/octet-stream",
+                    ),
+                )
+            }
+        }
+        runCatching { startActivityForResult(intent, FILE_PICK_REQUEST_CODE) }
+            .onFailure { error ->
+                val result = pendingFileResult
+                pendingFileResult = null
+                pendingFileKind = null
+                result?.error("picker_unavailable", error.message, null)
+            }
     }
 
     private fun importLocalFile(uri: Uri, kind: String): Map<String, Any> {
@@ -697,6 +742,7 @@ class MainActivity : FlutterActivity() {
         private const val HOME_SURFACE_SETTLE_MS = 360L
         private const val THEME_FREEZE_SETTLE_MS = 140L
         private const val FILE_PICK_REQUEST_CODE = 70_041
+        private const val GALLERY_PERMISSION_REQUEST_CODE = 70_042
         private const val MAX_IMAGE_BYTES = 20L * 1024L * 1024L
         private const val MAX_FONT_BYTES = 12L * 1024L * 1024L
         private const val COPY_BUFFER_BYTES = 64 * 1024

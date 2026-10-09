@@ -14,11 +14,12 @@ import java.util.Calendar
 class WidgetTimeThemeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val appContext = context.applicationContext
-        if (!hasOverviewWidgets(appContext)) {
+        if (!hasTimedWidgets(appContext)) {
             cancel(appContext)
             return
         }
         WidgetRefreshCoordinator.refreshOverview(appContext)
+        WidgetRefreshCoordinator.refreshWidget2TimeTheme(appContext)
         scheduleNext(appContext)
     }
 
@@ -47,7 +48,7 @@ class WidgetTimeThemeReceiver : BroadcastReceiver() {
 
         fun scheduleNext(context: Context) {
             val appContext = context.applicationContext
-            if (!hasOverviewWidgets(appContext)) {
+            if (!hasTimedWidgets(appContext)) {
                 cancel(appContext)
                 return
             }
@@ -82,10 +83,13 @@ class WidgetTimeThemeReceiver : BroadcastReceiver() {
             manager.cancel(pendingIntent(context.applicationContext))
         }
 
-        private fun hasOverviewWidgets(context: Context): Boolean =
-            AppWidgetManager.getInstance(context)
-                .getAppWidgetIds(ComponentName(context, OverviewWidgetProvider::class.java))
-                .isNotEmpty()
+        private fun hasTimedWidgets(context: Context): Boolean {
+            val manager = AppWidgetManager.getInstance(context)
+            return manager.getAppWidgetIds(ComponentName(context, OverviewWidgetProvider::class.java))
+                .isNotEmpty() ||
+                manager.getAppWidgetIds(ComponentName(context, Widget2Provider::class.java))
+                    .isNotEmpty()
+        }
 
         private fun boundary(now: Calendar, hour: Int, minute: Int): Calendar =
             (now.clone() as Calendar).apply {

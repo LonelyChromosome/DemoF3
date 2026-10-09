@@ -22,7 +22,7 @@ internal object WidgetRefreshCoordinator {
         OverviewWidgetProvider().restoreDisplay(appContext, manager, overviewIds)
         widget2Ids.forEach { id ->
             WidgetRenderDispatcher.render(appContext, manager,
-                WidgetRenderRequest(WidgetSurface.WIDGET2, id))
+                WidgetRenderRequest(WidgetSurface.WIDGET2, id, fadeContent = true))
         }
     }
 
@@ -52,6 +52,15 @@ internal object WidgetRefreshCoordinator {
         val ids = manager.getAppWidgetIds(ComponentName(context, OverviewWidgetProvider::class.java))
         val data = context.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         OverviewWidgetProvider().onUpdate(context, manager, ids, data)
+    }
+
+    fun refreshWidget2TimeTheme(context: Context) {
+        val manager = AppWidgetManager.getInstance(context)
+        manager.getAppWidgetIds(ComponentName(context, Widget2Provider::class.java))
+            .forEach { id ->
+                WidgetRenderDispatcher.render(context, manager,
+                    WidgetRenderRequest(WidgetSurface.WIDGET2, id))
+            }
     }
 
     fun refreshVisualSurfaces(context: Context) {

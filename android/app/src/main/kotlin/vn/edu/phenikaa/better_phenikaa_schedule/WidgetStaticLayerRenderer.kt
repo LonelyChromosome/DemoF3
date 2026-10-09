@@ -153,11 +153,14 @@ internal object WidgetStaticLayerRenderer {
             WidgetSurface.WIDGET2 -> config.widget2ImagePath
         }
         val source = File(imagePath).takeIf { it.isFile }
+        val presetImage = if (surface == WidgetSurface.WIDGET2 && source == null)
+            Widget2ThemeImage.assetName(palette.key) else null
         val cacheKey = listOf(
-            "v5", surface.wireName, safeWidth, safeHeight, palette,
+            "v7", surface.wireName, safeWidth, safeHeight, palette, presetImage,
             source?.absolutePath.orEmpty(),
             source?.lastModified() ?: 0L, source?.length() ?: 0L,
             config.border(surface), config.cornerRadiusDp, config.largeImageCrop,
+            config.widget2ImageCrop,
             config.glassOpacity, config.glowStrength,
         ).joinToString("|")
         val cached = File(cacheDirectory(context), "${sha256(cacheKey)}.png")
@@ -178,8 +181,8 @@ internal object WidgetStaticLayerRenderer {
         val decoded = source?.let {
             if (surface == WidgetSurface.LARGE)
                 decodeForRegion(it, safeWidth, safeHeight, config.largeImageCrop)
-            else decodeOriented(it, safeWidth * 2, safeHeight * 2)
-        }
+            else decodeForRegion(it, safeWidth, safeHeight, config.widget2ImageCrop)
+        } ?: presetImage?.let { Widget2ThemeImage.decode(context, it, safeWidth, safeHeight) }
         when (surface) {
             WidgetSurface.SMALL -> Unit
             WidgetSurface.LARGE -> decoded?.let {
@@ -209,7 +212,8 @@ internal object WidgetStaticLayerRenderer {
                 if (decoded != null) {
                     val save = canvas.save()
                     canvas.clipRoundRect(imageRect, imageRadius, imageRadius)
-                    drawCover(canvas, decoded, imageRect)
+                    if (source == null) drawCover(canvas, decoded, imageRect)
+                    else drawSelected(canvas, decoded, imageRect, config.widget2ImageCrop)
                     canvas.restoreToCount(save)
                 } else {
                     val drawable = context.getDrawable(R.drawable.ic_widget_study)?.mutate()
@@ -259,16 +263,15 @@ internal object WidgetStaticLayerRenderer {
     }
 
     private fun drawBlurredCover(canvas: Canvas, source: Bitmap, width: Int, height: Int) {
-        // Keep enough pixels for smooth gradients and text behind the glass.
-        // The old 1/18 thumbnail was visibly blocky when scaled to a launcher.
-        val blurWidth = (width / 2).coerceAtLeast(120)
-        val blurHeight = (height / 2).coerceAtLeast(70)
+        // Blur at launcher resolution; scaling a smaller bitmap back up exposes pixels.
+        val blurWidth = width
+        val blurHeight = height
         val cover = Bitmap.createBitmap(blurWidth, blurHeight, Bitmap.Config.ARGB_8888)
         val tinyCanvas = Canvas(cover)
         drawCover(tinyCanvas, source, RectF(0f, 0f, blurWidth.toFloat(), blurHeight.toFloat()))
         val pixels = IntArray(blurWidth * blurHeight)
         cover.getPixels(pixels, 0, blurWidth, 0, 0, blurWidth, blurHeight)
-        val softened = blurPixels(pixels, blurWidth, blurHeight, (blurWidth / 40).coerceIn(6, 24))
+        val softened = blurPixels(pixels, blurWidth, blurHeight, (blurWidth / 60).coerceIn(6, 24))
         cover.setPixels(softened, 0, blurWidth, 0, 0, blurWidth, blurHeight)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { isDither = true }
         canvas.drawBitmap(cover, null, Rect(0, 0, width, height), paint)
@@ -321,10 +324,24 @@ internal object WidgetStaticLayerRenderer {
         val top = (crop.top * source.height).roundToInt().coerceIn(0, source.height - 1)
         val right = (crop.right * source.width).roundToInt().coerceIn(left + 1, source.width)
         val bottom = (crop.bottom * source.height).roundToInt().coerceIn(top + 1, source.height)
-        val bounds = containBounds(right - left, bottom - top,
-            target.left, target.top, target.right, target.bottom)
-        canvas.drawBitmap(source, Rect(left, top, right, bottom),
-            RectF(bounds.left, bounds.top, bounds.right, bounds.bottom),
+        // A user-selected frame must fill the widget even when the launcher
+        // supplies a slightly different aspect ratio from the editor viewport.
+        val croppedWidth = right - left
+        val croppedHeight = bottom - top
+        val sourceRatio = croppedWidth.toFloat() / croppedHeight
+        val targetRatio = target.width() / target.height()
+        val src = if (sourceRatio > targetRatio) {
+            val adjusted = (croppedHeight * targetRatio).roundToInt().coerceAtLeast(1)
+            val center = (left + right) / 2
+            Rect((center - adjusted / 2).coerceAtLeast(left), top,
+                (center - adjusted / 2 + adjusted).coerceAtMost(right), bottom)
+        } else {
+            val adjusted = (croppedWidth / targetRatio).roundToInt().coerceAtLeast(1)
+            val center = (top + bottom) / 2
+            Rect(left, (center - adjusted / 2).coerceAtLeast(top), right,
+                (center - adjusted / 2 + adjusted).coerceAtMost(bottom))
+        }
+        canvas.drawBitmap(source, src, target,
             Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { isDither = true })
     }
 
@@ -384,18 +401,29 @@ internal object WidgetStaticLayerRenderer {
         val border = config.border(surface)
         if (!border.enabled) return
         val densityScale = height / if (surface == WidgetSurface.SMALL) 64f else 150f
-        val stroke = (border.widthDp * densityScale).coerceIn(1f, 16f)
-        val inset = stroke / 2f + 1f
+        val stroke = (border.widthDp * densityScale).coerceIn(1.5f, 16f)
+        val inset = 1f
         val radius = ((config.cornerRadiusDp * density) - inset)
             .coerceIn(0f, max(0f, minOf(width, height) / 2f - inset))
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (border.tienMonStyle) 0xFFFFD66B.toInt() else border.color
-            style = Paint.Style.STROKE
-            strokeWidth = stroke
+            style = Paint.Style.FILL
         }
-        canvas.drawRoundRect(RectF(inset, inset, width - inset, height - inset), radius, radius, paint)
+        // Fill the region between two concentric rounded rectangles. A stroked
+        // path rasterizes the corners thinner than its straight edges at <1dp.
+        val outer = RectF(inset, inset, width - inset, height - inset)
+        val inner = RectF(inset + stroke, inset + stroke,
+            width - inset - stroke, height - inset - stroke)
+        val ring = android.graphics.Path().apply {
+            fillType = android.graphics.Path.FillType.EVEN_ODD
+            addRoundRect(outer, radius, radius, android.graphics.Path.Direction.CW)
+            addRoundRect(inner, (radius - stroke).coerceAtLeast(0f),
+                (radius - stroke).coerceAtLeast(0f), android.graphics.Path.Direction.CW)
+        }
+        canvas.drawPath(ring, paint)
         if (border.tienMonStyle) {
             paint.color = withAlpha(palette.text, 105)
+            paint.style = Paint.Style.STROKE
             paint.strokeWidth = max(1f, stroke * .34f)
             canvas.drawRoundRect(
                 RectF(inset + stroke, inset + stroke, width - inset - stroke, height - inset - stroke),

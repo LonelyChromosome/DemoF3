@@ -27,7 +27,7 @@
         android:layout_width="28dp"
         android:layout_height="76dp"
         android:layout_gravity="center_vertical|end"
-        android:layout_marginEnd="78dp"
+        android:layout_marginEnd="92dp"
         android:gravity="center"
         android:orientation="vertical">
         <ImageView
@@ -55,7 +55,7 @@
         android:layout_width="84dp"
         android:layout_height="34dp"
         android:layout_gravity="bottom|end"
-        android:layout_marginEnd="8dp"
+        android:layout_marginEnd="12dp"
         android:layout_marginBottom="5dp"
         android:gravity="center"
         android:orientation="horizontal">
