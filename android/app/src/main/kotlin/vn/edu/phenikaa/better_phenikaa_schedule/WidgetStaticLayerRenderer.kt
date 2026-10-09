@@ -400,13 +400,14 @@ internal object WidgetStaticLayerRenderer {
     ): Bitmap {
         val result = Bitmap.createBitmap(width.coerceAtLeast(1), height.coerceAtLeast(1),
             Bitmap.Config.ARGB_8888)
-        drawOuterBorder(Canvas(result), surface, result.width, result.height, config, palette,
+        drawOuterBorder(context, Canvas(result), surface, result.width, result.height, config, palette,
             context.resources.displayMetrics.density)
         return result
     }
 
     /** Draw one uniform rounded border inside the widget's exact bitmap frame. */
     private fun drawOuterBorder(
+        context: Context,
         canvas: Canvas,
         surface: WidgetSurface,
         width: Int,
