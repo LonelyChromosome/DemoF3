@@ -1,0 +1,53 @@
+name: Publish signed 1.6 artifact
+on:
+  push:
+    branches: [fix/1.4-theme-preset-custom-isolation]
+    paths: [".github/workflows/publish-bpa-1.6-artifact.yml"]
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: cooc-release
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: feature-updater-cooc.1.6-47
+          path: dist
+          run-id: 38087711686
+          github-token: ${{ github.token }}
+      - name: Verify and publish already signed release artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: cooc.1.6-build-522a27643a01
+          APK_NAME: Better-Phenikaa-cooc.1.6-Public.apk
+        run: |
+          set -euo pipefail
+          sha256sum --check dist/SHA256SUMS
+          git fetch origin refs/heads/feature/1.2-card-update:refs/remotes/origin/feature/1.2-card-update
+          git show origin/feature/1.2-card-update:updates/latest.json > "$RUNNER_TEMP/current-latest.json"
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          data = json.loads(Path("dist/latest.json").read_bytes())
+          prev = json.loads((Path(os.environ["RUNNER_TEMP"]) / "current-latest.json").read_bytes())
+          apk = Path("dist") / os.environ["APK_NAME"]
+          assert data["packageName"] == "vn.edu.phenikaa.better_phenikaa_schedule"
+          assert data["versionName"] == "cooc.1.6" and data["versionCode"] == 47
+          assert data["versionCode"] >= prev["versionCode"]
+          assert data["apkSha256"] == hashlib.sha256(apk.read_bytes()).hexdigest()
+          assert data["apkSize"] == apk.stat().st_size
+          assert data["notes"] == "cooc.1.6: Báo thức theo lịch học, liên kết thẻ NFC và hiệu ứng hologram."
+          assert data["apkUrl"].endswith("/" + os.environ["TAG"] + "/" + os.environ["APK_NAME"])
+          PY
+          gh release create "$TAG" "dist/$APK_NAME" --target a421af2041566ad88b6a5649f9298ea3a28a4cdb --latest \
+            --title "Better Phenikaa cooc.1.6" --notes 'cooc.1.6: Báo thức theo lịch học, liên kết thẻ NFC và hiệu ứng hologram.'
+          git switch -C publish-feature-updater-feed origin/feature/1.2-card-update
+          cp dist/latest.json dist/latest.json.sig updates/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add updates/latest.json updates/latest.json.sig
+          git commit -m "Publish signed cooc.1.6 code 47 metadata"
+          git push origin HEAD:refs/heads/feature/1.2-card-update
