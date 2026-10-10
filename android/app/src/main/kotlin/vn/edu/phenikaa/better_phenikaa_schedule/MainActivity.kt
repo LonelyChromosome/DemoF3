@@ -60,6 +60,7 @@ class MainActivity : FlutterActivity() {
         configureWidgetSessionChannel(flutterEngine)
         configureLocalFileChannel(flutterEngine)
         configureAssistantTestChannel(flutterEngine)
+        StudyAlarmBridge.attach(this, flutterEngine.dartExecutor.binaryMessenger)
         configureWidgetRenderChannel(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
             WIDGET_PIN_CHANNEL).setMethodCallHandler { call, result ->

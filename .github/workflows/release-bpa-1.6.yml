@@ -1,17 +1,11 @@
-name: Publish Better Phenikaa 1.5
-
-# One-time handoff to the established, signed production release workflow.
-# The push path is this NEW file, so later app changes cannot republish 1.5.
+name: Publish Better Phenikaa 1.6
 on:
   push:
     branches: [fix/1.4-theme-preset-custom-isolation]
-    paths:
-      - ".github/workflows/release-bpa-1.5.yml"
-
+    paths: [".github/workflows/release-bpa-1.6.yml"]
 permissions:
   actions: write
   contents: read
-
 jobs:
   dispatch-signed-release:
     if: github.repository == 'LonelyChromosome/DemoF3' && github.ref == 'refs/heads/fix/1.4-theme-preset-custom-isolation'
@@ -23,8 +17,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           gh workflow run build-apk.yml --ref fix/1.4-theme-preset-custom-isolation \
-            -f version_name=cooc.1.5 \
-            -f version_code=44 \
-            -f notes='cooc.1.5: VFX và kiểm tra cập nhật khi mở app; không phát lại khi trở về từ đa tác vụ.' \
+            -f version_name=cooc.1.6 \
+            -f version_code=45 \
+            -f notes='cooc.1.6: Báo thức theo lịch học, liên kết thẻ NFC và hiệu ứng hologram.' \
             -f publish=true \
             -f publish_confirmation=PUBLISH
