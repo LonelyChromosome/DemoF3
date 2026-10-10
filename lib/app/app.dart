@@ -118,6 +118,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   AssistantPack _assistantPack = AssistantPack.normal;
   String _accountDisplayName = '';
   bool _shownInstallSuccess = false;
+  bool _wasBackgrounded = false;
   static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
 
   @override
@@ -188,7 +189,19 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(_update.onResumed());
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _wasBackgrounded = true;
+    }
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_update.onResumed());
+      if (_wasBackgrounded) {
+        _wasBackgrounded = false;
+        // Returning from Home is also an app entry, without a new process.
+        // The same saved-first-login guard and 1.5s deadline apply.
+        unawaited(_checkLatestOnLaunch(DateTime.now()));
+      }
+    }
     if (state != AppLifecycleState.resumed || _data == null) return;
     unawaited(_expireStoredSemesters());
     setState(() {});
