@@ -67,6 +67,18 @@ jobs:
           PY
       - name: Verify signed fake fixture
         run: flutter test --no-pub test/fake_latest_probe_test.dart
+      - name: Remove dev-only integration test registration for release
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          pubspec = Path("pubspec.yaml")
+          content = pubspec.read_text()
+          dependency = "  integration_test:\n    sdk: flutter\n"
+          if content.count(dependency) != 1:
+              raise SystemExit("Unexpected integration_test dependency")
+          pubspec.write_text(content.replace(dependency, ""))
+          PY
+          flutter pub get
       - name: Build one optimized independent APK (never publish Latest)
         run: flutter build apk --release --no-pub --dart-define=BPA_FAKE_UPDATE_TEST=true
       - name: Save separate test APK
