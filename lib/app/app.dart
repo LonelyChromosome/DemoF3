@@ -21,6 +21,7 @@ import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_pick
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/schedule/tien_mon_schedule_views.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/study_alarm_card.dart';
 import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
 import 'package:better_phenikaa_schedule/features/tro_li/assistant_text.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
@@ -855,6 +856,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _closeNotificationCenter();
       return;
     }
+    if (_page == _AppPage.timetable && StudyAlarmCard.dismissExpanded()) {
+      return;
+    }
     if (_page != _AppPage.timetable) {
       _openPage(_AppPage.timetable);
       return;
@@ -999,9 +1003,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 onOpenPage: _openPage,
                                 onSync: () => unawaited(_loginOrSync()),
                                 onLogout: _logout,
-                                onDateChanged: (date) => setState(
-                                  () => _selectedDate = _dateOnly(date),
-                                ),
+                                onDateChanged: (date) {
+                                  StudyAlarmCard.dismissExpanded();
+                                  setState(() => _selectedDate = _dateOnly(date));
+                                },
                                 onExamTabChanged: (past) =>
                                     setState(() => _showPastExams = past),
                                 onDismissError: () =>
@@ -1560,6 +1565,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
 
   Future<void> _changeTimetableMode(bool nextWeekly) async {
     if (_weekly == nextWeekly) return;
+    StudyAlarmCard.dismissExpanded();
     _weekly = nextWeekly;
     final serial = ++_modeSwitchSerial;
 
@@ -3469,19 +3475,24 @@ class _ScheduleCard extends StatelessWidget {
         ),
       ],
     );
+    final alarmContent = StudyAlarmCard(
+      key: ValueKey<String>('study-alarm-${item.id}'),
+      item: item,
+      content: content,
+    );
     if (premium) {
       return ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 106),
         child: TienMonEdgeSurface(
           active: active,
           scene: TienMonPremiumContract.appSceneFor(now),
-          child: content,
+          child: alarmContent,
         ),
       );
     }
     return AppThemePanel(
       constraints: const BoxConstraints(minHeight: 106),
-      child: content,
+      child: alarmContent,
     );
   }
 }
