@@ -147,7 +147,7 @@ final class UpdateController extends ChangeNotifier {
   }
 
   /// Version metadata is checked only from the Account update action.
-  Future<void> checkQuietly() async {
+  Future<void> checkQuietly({Duration? timeBudget}) async {
     if (_job ||
         isRunningInBackground ||
         bindingCard ||
@@ -159,7 +159,9 @@ final class UpdateController extends ChangeNotifier {
     final before = phase;
     if (notice == null) phase = UpdatePhase.checking;
     try {
-      final manifest = await _repository.fetch();
+      final manifest = timeBudget == null
+          ? await _repository.fetch()
+          : await _repository.fetch().timeout(timeBudget);
       final installed = await _installedVersion();
       final prefs = await SharedPreferences.getInstance();
       if (manifest.appliesTo(installed)) {
