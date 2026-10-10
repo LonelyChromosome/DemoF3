@@ -951,7 +951,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                         layoutBuilder: (current, previous) =>
                             current ?? const SizedBox.shrink(),
                         child: _booting
-                            ? _SplashScreen(versionName: _appVersionName)
+                            // No second, legacy logo/progress screen under
+                            // the 1-second pen-trace startup overlay.
+                            ? const ColoredBox(
+                                color: Colors.white,
+                                child: SizedBox.expand(),
+                              )
                             : _data == null || _data!.displayName.isEmpty
                             ? _LoginScreen(
                                 onLogin: _loginOrSync,
