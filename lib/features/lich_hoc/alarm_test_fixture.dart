@@ -23,7 +23,11 @@ ImportedScheduleData withAlarmTestFixture(
     final starts = DateTime(tomorrow.year, tomorrow.month, tomorrow.day, hour, minute);
     return ScheduleRecord(
       id: 'bpa16-fixture-$key-${tomorrow.year}-${tomorrow.month}-${tomorrow.day}',
-      subjectName: '[TEST 1.6] Báo thức ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
+      subjectName: '[TEST 1.6] ${switch (key) {
+        'ready-1' => 'Lập trình thiết bị di động',
+        'ready-5' => 'Phân tích thiết kế hệ thống',
+        _ => 'Cơ sở dữ liệu',
+      }}',
       room: 'Lịch giả • không thuộc QLĐT',
       startAt: starts,
       endAt: starts.add(Duration(minutes: minuteOfDay + 45 > 1440
