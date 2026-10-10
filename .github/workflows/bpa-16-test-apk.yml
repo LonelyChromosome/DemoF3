@@ -25,17 +25,32 @@ jobs:
           cache: true
       - name: Bootstrap Android
         run: bash tool/bootstrap.sh
+      - name: Isolate BPA 1.6 test installation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          gradle = Path('android/app/build.gradle.kts')
+          s = gradle.read_text()
+          old = 'applicationId = "vn.edu.phenikaa.better_phenikaa_schedule"'
+          assert s.count(old) == 1
+          gradle.write_text(s.replace(old, 'applicationId = "vn.edu.phenikaa.better_phenikaa_schedule.alarmtest"'))
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          s = manifest.read_text()
+          old = 'android:label="Better Phenikaa App"'
+          assert s.count(old) == 1
+          manifest.write_text(s.replace(old, 'android:label="BPA 1.6 Alarm Test"'))
+          PY
       - name: Build single ARM64 profile APK
         run: |
           set -euo pipefail
           flutter build apk --profile --target-platform android-arm64 --build-number=35
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.6-Alarm-Bridge-ARM64-Test.apk
-          sha256sum dist/BPA-1.6-Alarm-Bridge-ARM64-Test.apk > dist/SHA256SUMS
+          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.6-Alarm-Bridge-SideBySide.apk
+          sha256sum dist/BPA-1.6-Alarm-Bridge-SideBySide.apk > dist/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: BPA-1.6-Alarm-Bridge-ARM64-Test
+          name: BPA-1.6-Alarm-Bridge-SideBySide
           path: |
-            dist/BPA-1.6-Alarm-Bridge-ARM64-Test.apk
+            dist/BPA-1.6-Alarm-Bridge-SideBySide.apk
             dist/SHA256SUMS
           retention-days: 14
