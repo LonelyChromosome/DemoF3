@@ -127,7 +127,8 @@ class _CardLinkVfxState extends State<CardLinkVfx>
     _hold.reset();
     if (!_ready || !mounted) return;
     await _web?.evaluateJavascript(
-      source: 'window.paSetMode(${widget.deleting},'
+      source: '${widget.deleting && !_visible ? 'window.paCardPose={yaw:540,y:0};' : ''}'
+          'window.paSetMode(${widget.deleting},'
           '${jsonEncode(widget.status)},${jsonEncode(widget.displayName)});',
     );
   }
