@@ -1,12 +1,47 @@
+import 'dart:convert';
+
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// The previous whole hour is *strictly before* the start of class.
 /// 09:30 -> 09:00, 13:00 -> 12:00, 00:00 -> 23:00.
 int studyAlarmDefaultHour(DateTime startAt) =>
     (startAt.hour - (startAt.minute == 0 ? 1 : 0) + 24) % 24;
+
+/// Resolved to the previous calendar day when the selected clock time would
+/// otherwise be at or after the class start.
+DateTime studyAlarmOccurrence(DateTime classStart, int hour, int minute) {
+  var target = DateTime(
+    classStart.year, classStart.month, classStart.day, hour, minute,
+  );
+  if (!target.isBefore(classStart)) {
+    target = DateTime(classStart.year, classStart.month, classStart.day - 1, hour, minute);
+  }
+  return target;
+}
+
+/// The Android Clock public Intent can only choose the next occurrence of HH:MM.
+/// Never dispatch a request when this would silently target another date.
+String? studyAlarmValidation(DateTime classStart, DateTime now, int hour, int minute) {
+  if (!classStart.isAfter(now)) return 'Môn đã qua';
+  final desired = studyAlarmOccurrence(classStart, hour, minute);
+  if (!desired.isAfter(now.add(const Duration(seconds: 30)))) {
+    return 'Giờ báo thức đã qua';
+  }
+  var next = DateTime(now.year, now.month, now.day, hour, minute);
+  if (!next.isAfter(now.add(const Duration(seconds: 30)))) {
+    next = DateTime(now.year, now.month, now.day + 1, hour, minute);
+  }
+  if (next.year != desired.year ||
+      next.month != desired.month ||
+      next.day != desired.day) {
+    return 'Đồng hồ không hỗ trợ đặt đúng ngày này từ BPA';
+  }
+  return null;
+}
 
 class StudyAlarmCard extends StatefulWidget {
   const StudyAlarmCard({
@@ -40,6 +75,10 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
   late int _hour;
   int _minute = 0;
   bool _sending = false;
+  String? _savedLabel;
+  DateTime? _savedTime;
+
+  String get _prefsKey => 'better_phenikaa_alarm_${Uri.encodeComponent(_identity)}';
 
   String get _identity =>
       '${widget.item.id}|${widget.item.startAt.toIso8601String()}';
@@ -48,6 +87,52 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
   void initState() {
     super.initState();
     _resetPicker();
+    _loadSavedAlarm();
+  }
+
+  Future<void> _loadSavedAlarm() async {
+    final key = _prefsKey;
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || key != _prefsKey) return;
+    final raw = prefs.getString(key);
+    if (raw == null) return;
+    try {
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final label = json['label'] as String?;
+      final millis = json['target'] as int?;
+      if (label != null && millis != null && mounted) {
+        setState(() {
+          _savedLabel = label;
+          _savedTime = DateTime.fromMillisecondsSinceEpoch(millis);
+        });
+      }
+    } on FormatException {
+      await prefs.remove(key);
+    } on TypeError {
+      await prefs.remove(key);
+    }
+  }
+
+  Future<void> _storeAlarm(String label, DateTime target) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKey, jsonEncode(<String, Object>{
+      'label': label, 'target': target.millisecondsSinceEpoch,
+    }));
+  }
+
+  Future<void> _removeSavedAlarm() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_prefsKey);
+  }
+
+  void _showMessage(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(text),
+        duration: const Duration(seconds: 2),
+      ));
   }
 
   void _resetPicker() {
@@ -65,6 +150,9 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
       _hours.dispose();
       _minutes.dispose();
       _resetPicker();
+      _savedLabel = null;
+      _savedTime = null;
+      _loadSavedAlarm();
     }
   }
 
@@ -84,15 +172,26 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
 
   Future<void> _confirm() async {
     if (_sending) return;
-    setState(() => _sending = true);
     final hour = _hour;
     final minute = _minute;
-    final label = 'BPA - ${widget.item.subjectName}';
+    final problem = studyAlarmValidation(
+      widget.item.startAt, DateTime.now(), hour, minute,
+    );
+    if (problem != null) {
+      _showMessage(problem);
+      return;
+    }
+    final target = studyAlarmOccurrence(widget.item.startAt, hour, minute);
+    // Date + time make the label unique enough for ACTION_DISMISS_ALARM label search.
+    final label = 'BPA ${widget.item.subjectName} [${target.millisecondsSinceEpoch}]';
+    setState(() => _sending = true);
     try {
       final dispatched = await _channel.invokeMethod<bool>('setAlarm', <String, Object>{
         'hour': hour,
         'minute': minute,
         'label': label,
+        'target': target.millisecondsSinceEpoch,
+        'classStart': widget.item.startAt.millisecondsSinceEpoch,
       });
       if (!mounted) return;
       if (dispatched != true) {
@@ -101,27 +200,51 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
           message: 'Không gửi được yêu cầu tới Đồng hồ.',
         );
       }
+      await _storeAlarm(label, target);
+      if (!mounted) return;
+      setState(() {
+        _savedLabel = label;
+        _savedTime = target;
+      });
       StudyAlarmCard.dismissExpanded();
-      final time = '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text('Đặt báo thức $time thành công'),
-          duration: const Duration(seconds: 2),
-        ));
+      _showMessage('Đã gửi lệnh đặt báo thức ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}');
     } on PlatformException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text(error.message ?? 'Không thể đặt báo thức.'),
-          duration: const Duration(seconds: 3),
-        ));
+      _showMessage(error.message ?? 'Không thể đặt báo thức.');
     } on MissingPluginException {
+      _showMessage('Thiết bị chưa hỗ trợ đặt báo thức.');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _cancelAlarm() async {
+    if (_sending || _savedLabel == null || _savedTime == null) return;
+    final label = _savedLabel!;
+    final target = _savedTime!;
+    setState(() => _sending = true);
+    try {
+      final dispatched = await _channel.invokeMethod<bool>('dismissAlarm', <String, Object>{
+        'label': label,
+        'hour': target.hour,
+        'minute': target.minute,
+      });
+      if (dispatched != true) {
+        throw PlatformException(
+          code: 'clock_failed',
+          message: 'Không gửi được lệnh hủy báo thức.',
+        );
+      }
+      await _removeSavedAlarm();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Thiết bị chưa hỗ trợ đặt báo thức.')),
-      );
+      setState(() {
+        _savedLabel = null;
+        _savedTime = null;
+      });
+      _showMessage('Đã gửi yêu cầu tắt báo thức tới Đồng hồ');
+    } on PlatformException catch (error) {
+      _showMessage(error.message ?? 'Không thể hủy báo thức.');
+    } on MissingPluginException {
+      _showMessage('Đồng hồ không hỗ trợ lệnh hủy.');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -149,6 +272,7 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
       valueListenable: StudyAlarmCard._openItem,
       builder: (context, current, _) {
         final expanded = current == _identity;
+        final armed = _savedLabel != null;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -171,23 +295,31 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
                   top: 43,
                   child: Semantics(
                     button: true,
-                    label: expanded ? 'Xác nhận báo thức' : 'Đặt báo thức',
+                    label: armed
+                        ? 'Tắt báo thức đã đặt'
+                        : expanded ? 'Xác nhận báo thức' : 'Đặt báo thức',
                     child: Material(
                       color: Colors.transparent,
                       child: InkWell(
                         key: ValueKey<String>(
-                          expanded ? 'alarm-confirm-${widget.item.id}' : 'alarm-open-${widget.item.id}',
+                          armed
+                              ? 'alarm-cancel-${widget.item.id}'
+                              : expanded
+                                  ? 'alarm-confirm-${widget.item.id}'
+                                  : 'alarm-open-${widget.item.id}',
                         ),
-                        onTap: _sending ? null : (expanded ? _confirm : _open),
+                        onTap: _sending
+                            ? null
+                            : armed ? _cancelAlarm : (expanded ? _confirm : _open),
                         customBorder: const CircleBorder(),
                         child: Container(
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: accent.withValues(alpha: .055),
+                            color: armed ? const Color(0xFFD83333) : accent.withValues(alpha: .055),
                             border: Border.all(
-                              color: accent.withValues(alpha: .72),
+                              color: armed ? const Color(0xFFD83333) : accent.withValues(alpha: .72),
                               width: 1.35,
                             ),
                           ),
@@ -212,9 +344,11 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
                                     ),
                                   )
                                 : Icon(
-                                    expanded ? Icons.check_rounded : Icons.alarm_outlined,
-                                    key: ValueKey<bool>(expanded),
-                                    color: accent,
+                                    armed
+                                        ? Icons.close_rounded
+                                        : expanded ? Icons.check_rounded : Icons.alarm_outlined,
+                                    key: ValueKey<String>(armed ? 'cancel' : expanded ? 'confirm' : 'open'),
+                                    color: armed ? Colors.white : accent,
                                     size: 24,
                                   ),
                           ),
@@ -229,7 +363,7 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
               alignment: Alignment.topCenter,
               duration: _duration,
               curve: Curves.easeInOutCubic,
-              child: expanded
+              child: expanded && !armed
                   ? Padding(
                       padding: const EdgeInsets.fromLTRB(10, 0, 10, 15),
                       child: Center(
