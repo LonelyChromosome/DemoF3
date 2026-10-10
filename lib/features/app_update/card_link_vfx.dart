@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -36,6 +37,7 @@ class _CardLinkVfxState extends State<CardLinkVfx>
   InAppWebViewController? _web;
   bool _ready = false;
   bool _visible = false;
+  Uint8List? _transitionFrame;
   bool _holding = false;
   bool _busy = false;
   bool _finished = false;
@@ -121,11 +123,17 @@ class _CardLinkVfxState extends State<CardLinkVfx>
 
   Future<void> _switchMode() async {
     _ready = false;
-    _visible = false;
     _holding = false;
     _busy = false;
     _finished = false;
     _hold.reset();
+    // Keep the last card frame visible while its replacement page loads.
+    final frame = await _web?.takeScreenshot();
+    if (!mounted) return;
+    setState(() {
+      _transitionFrame = frame;
+      _visible = false;
+    });
     final html = await rootBundle.loadString(
       'assets/card_vfx/${widget.deleting ? 'unlink' : 'link'}.html',
     );
@@ -189,7 +197,9 @@ class _CardLinkVfxState extends State<CardLinkVfx>
               child: AnimatedOpacity(
                 opacity: _visible ? 0 : 1,
                 duration: const Duration(milliseconds: 160),
-                child: const ColoredBox(color: Color(0xFF050913)),
+                child: _transitionFrame == null
+                    ? const ColoredBox(color: Color(0xFF050913))
+                    : Image.memory(_transitionFrame!, fit: BoxFit.fill, gaplessPlayback: true),
               ),
             ),
           ),
