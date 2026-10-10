@@ -11,6 +11,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 int studyAlarmDefaultHour(DateTime startAt) => startAt.hour;
 int studyAlarmDefaultMinute(DateTime startAt) => startAt.minute;
 
+/// Native Clock shows just the subject's name. Test-only decoration stays
+/// visible on BPA cards, not in the OEM Clock alarm label.
+String studyAlarmClockLabel(String subjectName) {
+  final title = subjectName
+      .replaceFirst(RegExp(r'^\\[TEST 1\\.6\\]\\s*'), '')
+      .trim();
+  return title.length <= 120 ? title : title.substring(0, 120);
+}
+
 /// Only show the Clock action on classes scheduled for tomorrow.
 bool studyAlarmIsTomorrow(DateTime classStart, DateTime now) {
   final tomorrow = DateTime(now.year, now.month, now.day + 1);
@@ -264,11 +273,9 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
       return;
     }
     final target = studyAlarmOccurrence(widget.item.startAt, hour, minute);
-    // Date + time make the label unique enough for ACTION_DISMISS_ALARM label search.
-    final fullLabel = 'BPA ${widget.item.subjectName} [${target.millisecondsSinceEpoch}]';
-    final label = fullLabel.length > 120
-        ? fullLabel.substring(0, 120)
-        : fullLabel;
+    // Display only the exact course name in the native Clock.
+    // Keep target/id internally in BPA's saved-state key, never in Clock text.
+    final label = studyAlarmClockLabel(widget.item.subjectName);
     setState(() => _sending = true);
     try {
       final dispatched = await _channel.invokeMethod<bool>('setAlarm', <String, Object>{
