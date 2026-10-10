@@ -2,34 +2,56 @@ import 'package:better_phenikaa_schedule/features/lich_hoc/study_alarm_card.dart
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('alarm never silently uses tomorrow for a later class', () {
-    final now = DateTime(2026, 10, 10, 19);
-    final study = DateTime(2026, 10, 12, 9, 30);
-    expect(studyAlarmValidation(study, now, 9, 0), contains('đúng ngày'));
+  test('clock action only appears for classes tomorrow', () {
+    final now = DateTime(2026, 10, 10, 19, 15);
+    expect(studyAlarmIsTomorrow(DateTime(2026, 10, 9, 9), now), isFalse);
+    expect(studyAlarmIsTomorrow(DateTime(2026, 10, 10, 21), now), isFalse);
+    expect(studyAlarmIsTomorrow(DateTime(2026, 10, 11, 9), now), isTrue);
+    expect(studyAlarmIsTomorrow(DateTime(2026, 10, 12, 9), now), isFalse);
   });
 
-  test('rejects past classes and past selected alarm hours', () {
-    final now = DateTime(2026, 10, 10, 9, 15);
-    expect(studyAlarmValidation(DateTime(2026, 10, 9, 9), now, 8, 0), 'Môn đã qua');
-    expect(studyAlarmValidation(DateTime(2026, 10, 10, 10), now, 9, 0), 'Giờ báo thức đã qua');
+  test('tomorrow rolls over month and year boundaries', () {
+    expect(
+      studyAlarmIsTomorrow(DateTime(2027, 1, 1, 10), DateTime(2026, 12, 31, 22)),
+      isTrue,
+    );
+    expect(
+      studyAlarmIsTomorrow(DateTime(2026, 3, 1, 10), DateTime(2026, 2, 28, 22)),
+      isTrue,
+    );
   });
 
-  test('allows time that Android Clock can schedule for the correct day', () {
-    final now = DateTime(2026, 10, 10, 18);
+  test('clock request never silently schedules an earlier day', () {
+    final tomorrowClass = DateTime(2026, 10, 11, 9, 30);
+    expect(studyAlarmValidation(tomorrowClass, DateTime(2026, 10, 10, 19), 9, 0), isNull);
+    // At 07:00 today, a standard nonrepeating AlarmClock intent for 09:00
+    // would create an alarm for TODAY, not tomorrow: reject it.
+    expect(
+      studyAlarmValidation(tomorrowClass, DateTime(2026, 10, 10, 7), 9, 0),
+      contains('hôm nay'),
+    );
+  });
+
+  test('only earlier-than-class hours and minutes are valid', () {
     final study = DateTime(2026, 10, 11, 9, 30);
-    expect(studyAlarmValidation(study, now, 9, 0), isNull);
-    expect(studyAlarmOccurrence(study, 9, 0), DateTime(2026, 10, 11, 9));
+    final now = DateTime(2026, 10, 10, 19);
+    expect(studyAlarmValidation(study, now, 10, 0), contains('trước giờ học'));
+    expect(studyAlarmValidation(study, now, 9, 30), contains('trước giờ học'));
+    expect(studyAlarmValidation(study, now, 9, 29), isNull);
+    expect(
+      studyAlarmOccurrence(study, 9, 0), DateTime(2026, 10, 11, 9),
+    );
   });
 
-  test('night-before alarms for early classes resolve to previous day', () {
-    final study = DateTime(2026, 10, 11, 0, 30);
-    expect(studyAlarmOccurrence(study, 23, 0), DateTime(2026, 10, 10, 23));
+  test('correctly handles early tomorrow classes', () {
+    final now = DateTime(2026, 10, 10, 19);
+    final earlyClass = DateTime(2026, 10, 11, 0, 30);
+    expect(studyAlarmValidation(earlyClass, now, 0, 0), isNull);
+    expect(studyAlarmValidation(earlyClass, now, 23, 0), contains('trước giờ học'));
   });
 
-  test('default alarm picks previous whole hour', () {
-    expect(studyAlarmDefaultHour(DateTime(2026, 10, 10, 9, 30)), 9);
-    expect(studyAlarmDefaultHour(DateTime(2026, 10, 10, 13)), 12);
-    expect(studyAlarmDefaultHour(DateTime(2026, 10, 10, 0)), 23);
-    expect(studyAlarmDefaultHour(DateTime(2026, 10, 10, 23, 59)), 23);
+  test('default picker is previous whole hour where possible', () {
+    expect(studyAlarmDefaultHour(DateTime(2026, 10, 11, 9, 30)), 9);
+    expect(studyAlarmDefaultHour(DateTime(2026, 10, 11, 13)), 12);
   });
 }

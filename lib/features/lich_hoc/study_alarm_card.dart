@@ -11,23 +11,33 @@ import 'package:shared_preferences/shared_preferences.dart';
 int studyAlarmDefaultHour(DateTime startAt) =>
     (startAt.hour - (startAt.minute == 0 ? 1 : 0) + 24) % 24;
 
-/// Resolved to the previous calendar day when the selected clock time would
-/// otherwise be at or after the class start.
-DateTime studyAlarmOccurrence(DateTime classStart, int hour, int minute) {
-  var target = DateTime(
-    classStart.year, classStart.month, classStart.day, hour, minute,
-  );
-  if (!target.isBefore(classStart)) {
-    target = DateTime(classStart.year, classStart.month, classStart.day - 1, hour, minute);
-  }
-  return target;
+/// Only show the Clock action on classes scheduled for tomorrow.
+bool studyAlarmIsTomorrow(DateTime classStart, DateTime now) {
+  final tomorrow = DateTime(now.year, now.month, now.day + 1);
+  return classStart.year == tomorrow.year &&
+      classStart.month == tomorrow.month &&
+      classStart.day == tomorrow.day;
 }
 
-/// The Android Clock public Intent can only choose the next occurrence of HH:MM.
-/// Never dispatch a request when this would silently target another date.
-String? studyAlarmValidation(DateTime classStart, DateTime now, int hour, int minute) {
-  if (!classStart.isAfter(now)) return 'Môn đã qua';
+/// The picker is tied to the class date, never today's date or another day.
+DateTime studyAlarmOccurrence(DateTime classStart, int hour, int minute) =>
+    DateTime(classStart.year, classStart.month, classStart.day, hour, minute);
+
+/// ACTION_SET_ALARM always schedules the next HH:MM occurrence, so checking
+/// tomorrow's date alone is insufficient if the same time is still ahead today.
+String? studyAlarmValidation(
+  DateTime classStart,
+  DateTime now,
+  int hour,
+  int minute,
+) {
+  if (!studyAlarmIsTomorrow(classStart, now)) {
+    return 'Chỉ đặt báo thức cho lịch học ngày mai';
+  }
   final desired = studyAlarmOccurrence(classStart, hour, minute);
+  if (!desired.isBefore(classStart)) {
+    return 'Giờ báo thức phải trước giờ học';
+  }
   if (!desired.isAfter(now.add(const Duration(seconds: 30)))) {
     return 'Giờ báo thức đã qua';
   }
@@ -38,7 +48,7 @@ String? studyAlarmValidation(DateTime classStart, DateTime now, int hour, int mi
   if (next.year != desired.year ||
       next.month != desired.month ||
       next.day != desired.day) {
-    return 'Đồng hồ không hỗ trợ đặt đúng ngày này từ BPA';
+    return 'Giờ này Đồng hồ sẽ đặt cho hôm nay, không phải ngày mai';
   }
   return null;
 }
@@ -183,7 +193,7 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
     }
     final target = studyAlarmOccurrence(widget.item.startAt, hour, minute);
     // Date + time make the label unique enough for ACTION_DISMISS_ALARM label search.
-    final label = 'BPA ${widget.item.subjectName} [${target.millisecondsSinceEpoch}]';
+    final label = 'BPA ${widget.item.subjectName} [${target.millisecondsSinceEpoch}]'.substring(0, 120);
     setState(() => _sending = true);
     try {
       final dispatched = await _channel.invokeMethod<bool>('setAlarm', <String, Object>{
@@ -271,8 +281,9 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
     return ValueListenableBuilder<String?>(
       valueListenable: StudyAlarmCard._openItem,
       builder: (context, current, _) {
-        final expanded = current == _identity;
-        final armed = _savedLabel != null;
+        final eligible = studyAlarmIsTomorrow(widget.item.startAt, DateTime.now());
+        final expanded = eligible && current == _identity;
+        final armed = eligible && _savedLabel != null;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -290,7 +301,8 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
                       : null,
                   child: widget.content,
                 ),
-                Positioned(
+                if (eligible)
+                  Positioned(
                   right: 21,
                   top: 43,
                   child: Semantics(

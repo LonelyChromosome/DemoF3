@@ -34,14 +34,23 @@ internal object StudyAlarmBridge {
                         return@setMethodCallHandler
                     }
                     val now = System.currentTimeMillis()
-                    if (classMs <= now) {
-                        result.error("past_class", "Môn đã qua", null)
+                    val tomorrow = Calendar.getInstance().apply {
+                        timeInMillis = now
+                        add(Calendar.DAY_OF_MONTH, 1)
+                    }
+                    val classDate = Calendar.getInstance().apply { timeInMillis = classMs }
+                    if (classDate.get(Calendar.YEAR) != tomorrow.get(Calendar.YEAR) ||
+                        classDate.get(Calendar.DAY_OF_YEAR) != tomorrow.get(Calendar.DAY_OF_YEAR)
+                    ) {
+                        result.error("not_tomorrow", "Chỉ đặt báo thức cho lịch học ngày mai.", null)
                         return@setMethodCallHandler
                     }
                     val desired = Calendar.getInstance().apply { timeInMillis = targetMs }
                     if (desired.get(Calendar.HOUR_OF_DAY) != hour ||
                         desired.get(Calendar.MINUTE) != minute ||
-                        targetMs <= now + 30_000L || targetMs >= classMs
+                        targetMs <= now + 30_000L || targetMs >= classMs ||
+                        desired.get(Calendar.YEAR) != classDate.get(Calendar.YEAR) ||
+                        desired.get(Calendar.DAY_OF_YEAR) != classDate.get(Calendar.DAY_OF_YEAR)
                     ) {
                         result.error("past_alarm", "Giờ báo thức đã qua hoặc không hợp lệ.", null)
                         return@setMethodCallHandler
@@ -59,7 +68,7 @@ internal object StudyAlarmBridge {
                     if (next.get(Calendar.YEAR) != desired.get(Calendar.YEAR) ||
                         next.get(Calendar.DAY_OF_YEAR) != desired.get(Calendar.DAY_OF_YEAR)
                     ) {
-                        result.error("unsupported_date", "Đồng hồ không hỗ trợ đặt đúng ngày này từ BPA.", null)
+                        result.error("wrong_day", "Giờ này Đồng hồ sẽ đặt cho hôm nay, không phải ngày mai.", null)
                         return@setMethodCallHandler
                     }
                     Intent(AlarmClock.ACTION_SET_ALARM).apply {
