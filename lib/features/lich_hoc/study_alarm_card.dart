@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
@@ -6,10 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// The previous whole hour is *strictly before* the start of class.
-/// 09:30 -> 09:00, 13:00 -> 12:00, 00:00 -> 23:00.
-int studyAlarmDefaultHour(DateTime startAt) =>
-    (startAt.hour - (startAt.minute == 0 ? 1 : 0) + 24) % 24;
+/// Start at the class time. Confirmation requires scrolling to an earlier time.
+int studyAlarmDefaultHour(DateTime startAt) => startAt.hour;
+int studyAlarmDefaultMinute(DateTime startAt) => startAt.minute;
 
 /// Only show the Clock action on classes scheduled for tomorrow.
 bool studyAlarmIsTomorrow(DateTime classStart, DateTime now) {
@@ -17,6 +17,15 @@ bool studyAlarmIsTomorrow(DateTime classStart, DateTime now) {
   return classStart.year == tomorrow.year &&
       classStart.month == tomorrow.month &&
       classStart.day == tomorrow.day;
+}
+
+/// Only expose the control once today's clock has reached tomorrow's class
+/// start time. Every allowed earlier wheel selection has then passed today.
+bool studyAlarmCanOpen(DateTime classStart, DateTime now) {
+  if (!studyAlarmIsTomorrow(classStart, now)) return false;
+  final classMinute = classStart.hour * 60 + classStart.minute;
+  final nowMinute = now.hour * 60 + now.minute;
+  return classMinute > 0 && nowMinute >= classMinute;
 }
 
 /// The picker is tied to the class date, never today's date or another day.
@@ -34,9 +43,12 @@ String? studyAlarmValidation(
   if (!studyAlarmIsTomorrow(classStart, now)) {
     return 'Chỉ đặt báo thức cho lịch học ngày mai';
   }
+  if (!studyAlarmCanOpen(classStart, now)) {
+    return 'Chưa đến thời gian đặt báo thức cho môn này';
+  }
   final desired = studyAlarmOccurrence(classStart, hour, minute);
   if (!desired.isBefore(classStart)) {
-    return 'Giờ báo thức phải trước giờ học';
+    return 'Hãy kéo giờ báo thức về trước giờ học';
   }
   if (!desired.isAfter(now.add(const Duration(seconds: 30)))) {
     return 'Giờ báo thức đã qua';
@@ -85,6 +97,7 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
   late int _hour;
   int _minute = 0;
   bool _sending = false;
+  Timer? _eligibilityRefresh;
   String? _savedLabel;
   DateTime? _savedTime;
 
@@ -98,6 +111,36 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
     super.initState();
     _resetPicker();
     _loadSavedAlarm();
+    _scheduleEligibilityRefresh();
+  }
+
+  void _scheduleEligibilityRefresh() {
+    _eligibilityRefresh?.cancel();
+    final now = DateTime.now();
+    final nextMinute = DateTime(now.year, now.month, now.day, now.hour, now.minute + 1);
+    _eligibilityRefresh = Timer(
+      nextMinute.difference(now) + const Duration(milliseconds: 100),
+      () {
+        if (!mounted) return;
+        _clearExpiredAlarmIfNeeded();
+        setState(() {});
+        _scheduleEligibilityRefresh();
+      },
+    );
+  }
+
+  void _clearExpiredAlarmIfNeeded() {
+    final savedTime = _savedTime;
+    if (_sending || savedTime == null) return;
+    final now = DateTime.now();
+    if (now.isBefore(savedTime) && now.isBefore(widget.item.startAt)) return;
+    setState(() {
+      _savedTime = null;
+      _savedLabel = null;
+    });
+    // The Clock owns the already-triggered one-shot alarm. This only clears
+    // BPA's local "armed" badge; no external alarm is silently dismissed.
+    _removeSavedAlarm();
   }
 
   Future<void> _loadSavedAlarm() async {
@@ -111,9 +154,15 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
       final label = json['label'] as String?;
       final millis = json['target'] as int?;
       if (label != null && millis != null && mounted) {
+        final target = DateTime.fromMillisecondsSinceEpoch(millis);
+        if (!target.isAfter(DateTime.now()) ||
+            !widget.item.startAt.isAfter(DateTime.now())) {
+          await prefs.remove(key);
+          return;
+        }
         setState(() {
           _savedLabel = label;
-          _savedTime = DateTime.fromMillisecondsSinceEpoch(millis);
+          _savedTime = target;
         });
       }
     } on FormatException {
@@ -147,9 +196,9 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
 
   void _resetPicker() {
     _hour = studyAlarmDefaultHour(widget.item.startAt);
-    _minute = 0;
-    _hours = FixedExtentScrollController(initialItem: 24 * 500 + _hour);
-    _minutes = FixedExtentScrollController(initialItem: 60 * 500);
+    _minute = studyAlarmDefaultMinute(widget.item.startAt);
+    _hours = FixedExtentScrollController(initialItem: _hour);
+    _minutes = FixedExtentScrollController(initialItem: _minute);
   }
 
   @override
@@ -168,6 +217,7 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
 
   @override
   void dispose() {
+    _eligibilityRefresh?.cancel();
     _hours.dispose();
     _minutes.dispose();
     super.dispose();
@@ -178,6 +228,28 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
     _minutes.dispose();
     _resetPicker();
     StudyAlarmCard._openItem.value = _identity;
+  }
+
+  void _changeHour(int value) {
+    if (_hour == value) return;
+    final minute = value == widget.item.startAt.hour &&
+            _minute > widget.item.startAt.minute
+        ? widget.item.startAt.minute
+        : _minute;
+    setState(() {
+      _hour = value;
+      _minute = minute;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _minutes.hasClients && _minutes.selectedItem != _minute) {
+        _minutes.jumpToItem(_minute);
+      }
+    });
+  }
+
+  void _changeMinute(int value) {
+    if (_minute == value) return;
+    setState(() => _minute = value);
   }
 
   Future<void> _confirm() async {
@@ -284,9 +356,17 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
     return ValueListenableBuilder<String?>(
       valueListenable: StudyAlarmCard._openItem,
       builder: (context, current, _) {
-        final eligible = studyAlarmIsTomorrow(widget.item.startAt, DateTime.now());
-        final expanded = eligible && current == _identity;
-        final armed = eligible && _savedLabel != null;
+        final now = DateTime.now();
+        final eligible = studyAlarmCanOpen(widget.item.startAt, now);
+        // After midnight, retain X only while the scheduled alarm is pending.
+        final armed = _savedLabel != null &&
+            _savedTime != null &&
+            now.isBefore(_savedTime!) &&
+            now.isBefore(widget.item.startAt);
+        final expanded = eligible && !armed && current == _identity;
+        final showAction = eligible || armed;
+        final selectedBeforeClass = _hour * 60 + _minute <
+            widget.item.startAt.hour * 60 + widget.item.startAt.minute;
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
@@ -304,7 +384,7 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
                       : null,
                   child: widget.content,
                 ),
-                if (eligible)
+                if (showAction)
                   Positioned(
                   right: 21,
                   top: 43,
@@ -325,7 +405,11 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
                         ),
                         onTap: _sending
                             ? null
-                            : armed ? _cancelAlarm : (expanded ? _confirm : _open),
+                            : armed
+                                ? _cancelAlarm
+                                : expanded
+                                    ? (selectedBeforeClass ? _confirm : null)
+                                    : _open,
                         customBorder: const CircleBorder(),
                         child: Container(
                           width: 44,
@@ -363,7 +447,11 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
                                         ? Icons.close_rounded
                                         : expanded ? Icons.check_rounded : Icons.alarm_outlined,
                                     key: ValueKey<String>(armed ? 'cancel' : expanded ? 'confirm' : 'open'),
-                                    color: armed ? Colors.white : accent,
+                                    color: armed
+                                        ? Colors.white
+                                        : expanded && !selectedBeforeClass
+                                            ? accent.withValues(alpha: .38)
+                                            : accent,
                                     size: 24,
                                   ),
                           ),
@@ -390,10 +478,10 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
                               _WheelColumn(
                                 key: const ValueKey<String>('hours'),
                                 controller: _hours,
-                                count: 24,
+                                count: widget.item.startAt.hour + 1,
                                 selected: _hour,
                                 color: accent,
-                                onChanged: (value) => setState(() => _hour = value),
+                                onChanged: _changeHour,
                               ),
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 5),
@@ -408,10 +496,12 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
                               _WheelColumn(
                                 key: const ValueKey<String>('minutes'),
                                 controller: _minutes,
-                                count: 60,
+                                count: _hour == widget.item.startAt.hour
+                                    ? widget.item.startAt.minute + 1
+                                    : 60,
                                 selected: _minute,
                                 color: accent,
-                                onChanged: (value) => setState(() => _minute = value),
+                                onChanged: _changeMinute,
                               ),
                             ],
                           ),

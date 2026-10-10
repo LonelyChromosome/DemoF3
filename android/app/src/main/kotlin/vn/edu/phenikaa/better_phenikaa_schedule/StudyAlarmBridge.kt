@@ -45,6 +45,15 @@ internal object StudyAlarmBridge {
                         result.error("not_tomorrow", "Chỉ đặt báo thức cho lịch học ngày mai.", null)
                         return@setMethodCallHandler
                     }
+                    val today = Calendar.getInstance().apply { timeInMillis = now }
+                    val classMinute = classDate.get(Calendar.HOUR_OF_DAY) * 60 +
+                        classDate.get(Calendar.MINUTE)
+                    val todayMinute = today.get(Calendar.HOUR_OF_DAY) * 60 +
+                        today.get(Calendar.MINUTE)
+                    if (classMinute <= 0 || todayMinute < classMinute) {
+                        result.error("too_early", "Chưa đến thời gian đặt báo thức cho môn này.", null)
+                        return@setMethodCallHandler
+                    }
                     val desired = Calendar.getInstance().apply { timeInMillis = targetMs }
                     if (desired.get(Calendar.HOUR_OF_DAY) != hour ||
                         desired.get(Calendar.MINUTE) != minute ||
