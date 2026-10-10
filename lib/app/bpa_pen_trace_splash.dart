@@ -15,16 +15,18 @@ class BpaPenTraceSplash extends StatefulWidget {
 }
 
 class _BpaPenTraceSplashState extends State<BpaPenTraceSplash>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1000),
   );
   bool _visible = true;
+  bool _wasBackgrounded = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Start the 1-second stroke animation after the first painted frame.
     // A slow cold-start frame must not consume the animation before it shows.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -38,7 +40,22 @@ class _BpaPenTraceSplashState extends State<BpaPenTraceSplash>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _wasBackgrounded = true;
+    } else if (state == AppLifecycleState.resumed && _wasBackgrounded) {
+      _wasBackgrounded = false;
+      setState(() => _visible = true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _controller.forward(from: 0);
+      });
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }

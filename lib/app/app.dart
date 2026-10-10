@@ -78,7 +78,18 @@ class _AppRoot extends StatefulWidget {
 
 class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   static const _storageKey = 'better_phenikaa_snapshot_v1';
-  final UpdateController _update = UpdateController();
+  // Test APKs use the same signed-check flow as production, with a separate
+  // signed fixture. The fixture is never part of the production update feed.
+  final UpdateController _update = UpdateController(
+    repository: const bool.fromEnvironment('BPA_FAKE_UPDATE_TEST')
+        ? UpdateRepository(
+            manifestUrl: 'https://raw.githubusercontent.com/LonelyChromosome/'
+                'DemoF3/fix/1.4-theme-preset-custom-isolation/'
+                'test/fixtures/fake_latest.json',
+            publicKeyBase64: '7o8anfPOk2nPbSxhQt95+3km1yXx0dOKnKbqZK/uSFA=',
+          )
+        : null,
+  );
   static const _updateInfoChannel = MethodChannel('better_phenikaa/update');
   String _appVersionName = '';
   static const _routeKey = 'better_phenikaa_qldt_registration_route_v1';
@@ -107,7 +118,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   AssistantPack _assistantPack = AssistantPack.normal;
   String _accountDisplayName = '';
   bool _shownInstallSuccess = false;
-  bool _fakeUpdateAvailable = false;
   static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
 
   @override
@@ -117,62 +127,26 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     AppThemeController.instance.addListener(_handleThemeChanged);
     _update.addListener(_handleThemeChanged);
     final startupAt = DateTime.now();
-    final restoreUpdater = _update.restore();
-    if (const bool.fromEnvironment('BPA_FAKE_UPDATE_TEST')) {
-      // Do not spend the short probe budget restoring updater state in a
-      // separate test installation. Signed test metadata never touches it.
-      unawaited(restoreUpdater);
-      unawaited(_checkLatestOnLaunch(startupAt));
-    } else {
-      unawaited(restoreUpdater.then((_) => _checkLatestOnLaunch(startupAt)));
-    }
+    unawaited(_update.restore().then((_) => _checkLatestOnLaunch(startupAt)));
     unawaited(_loadAppVersionName());
     unawaited(_restore());
   }
 
-  // A 1.5-second, best-effort check; never gate VFX, login or schedule data.
+  // A best-effort check from the second installation launch onward.
+  // First-login users can still use Account > Update manually.
+  // The 1.5-second budget never gates VFX, login, QLDT or schedule data.
   Future<void> _checkLatestOnLaunch(DateTime startupAt) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      // Production runs only after first login. Isolated signed-fixture
-      // builds have separate app data, so the test probe must run even before
-      // that installation has its own saved login snapshot.
-      const fakeProbe = bool.fromEnvironment('BPA_FAKE_UPDATE_TEST');
-      if (!mounted ||
-          (!fakeProbe && prefs.getString(_storageKey)?.isNotEmpty != true)) {
+      if (!mounted || prefs.getString(_storageKey)?.isNotEmpty != true) {
         return;
       }
       final remaining = const Duration(milliseconds: 1500) -
           DateTime.now().difference(startupAt);
       if (remaining <= Duration.zero) return;
-
-      // Explicit test builds scan a separate, genuinely signed HTTPS fixture.
-      // No fake update is written to the real updater or its local cache.
-      if (fakeProbe) {
-        final manifest = await UpdateRepository(
-          manifestUrl: 'https://raw.githubusercontent.com/LonelyChromosome/'
-              'DemoF3/fix/1.4-theme-preset-custom-isolation/'
-              'test/fixtures/fake_latest.json',
-          publicKeyBase64: '7o8anfPOk2nPbSxhQt95+3km1yXx0dOKnKbqZK/uSFA=',
-        ).fetch().timeout(remaining);
-        if (!mounted ||
-            DateTime.now().difference(startupAt) >=
-                const Duration(milliseconds: 1500)) {
-          return;
-        }
-        final installed =
-            await _updateInfoChannel.invokeMethod<int>('versionCode') ?? 0;
-        if (mounted &&
-            DateTime.now().difference(startupAt) <
-                const Duration(milliseconds: 1500) &&
-            manifest.appliesTo(installed)) {
-          setState(() => _fakeUpdateAvailable = true);
-        }
-        return;
-      }
       await _update.checkQuietly(timeBudget: remaining);
     } on Object {
-      // A slow/unavailable check cannot delay or break the app.
+      // Startup and sign-in never depend on the update service.
     }
   }
 
@@ -1001,7 +975,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                   }
                                 },
                                 onOpenDifferences: _onNotificationTap,
-                                hasUpdateAvailable: _fakeUpdateAvailable || _update.notice != null,
+                                hasUpdateAvailable: _update.notice != null,
                                 onOpenUpdateAccount: () => _openPage(_AppPage.account),
                                 onCloseNotificationCenter:
                                     _closeNotificationCenter,

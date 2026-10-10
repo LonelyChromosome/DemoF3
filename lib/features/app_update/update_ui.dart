@@ -214,6 +214,14 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
                               : '${notice.versionName} · ${notice.notes}',
                         ),
                         const SizedBox(height: 16),
+                        if (const bool.fromEnvironment('BPA_FAKE_UPDATE_TEST')) ...[
+                          Text(
+                            'Bản thử nghiệm kiểm tra Latest qua chữ ký thật. '
+                            'Không có APK mới để tải hoặc cài đặt.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         if (_nfcVisible || realNfcActive) ...[
                           HenshinVfx(
                             progress: 0,
@@ -231,7 +239,8 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
                           ),
                           const SizedBox(height: 12),
                         ],
-                        if (_realManualAvailable) ...[
+                        if (!const bool.fromEnvironment('BPA_FAKE_UPDATE_TEST') &&
+                            _realManualAvailable) ...[
                           FilledButton.icon(
                             onPressed: notice == null ? null : _startNfc,
                             icon: const Icon(Icons.nfc_rounded),
