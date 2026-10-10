@@ -118,7 +118,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   AssistantPack _assistantPack = AssistantPack.normal;
   String _accountDisplayName = '';
   bool _shownInstallSuccess = false;
-  bool _wasBackgrounded = false;
   static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
 
   @override
@@ -188,18 +187,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.hidden) {
-      _wasBackgrounded = true;
-    }
     if (state == AppLifecycleState.resumed) {
+      // Resume only in-progress installer/permission state. Never fetch update
+      // metadata here: the automatic signed check belongs to a fresh launch.
       unawaited(_update.onResumed());
-      if (_wasBackgrounded) {
-        _wasBackgrounded = false;
-        // Returning from Home is also an app entry, without a new process.
-        // It triggers a fresh background check, independently of VFX.
-        unawaited(_checkLatestOnLaunch());
-      }
     }
     if (state != AppLifecycleState.resumed || _data == null) return;
     unawaited(_expireStoredSemesters());
