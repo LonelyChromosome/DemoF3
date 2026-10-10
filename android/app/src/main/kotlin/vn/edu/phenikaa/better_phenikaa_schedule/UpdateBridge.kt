@@ -3,6 +3,8 @@ package vn.edu.phenikaa.better_phenikaa_schedule
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.nfc.NfcAdapter
 import android.nfc.Tag
@@ -34,13 +36,27 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
     // Keep Android's foreground tag dispatch away from other apps after the
     // updater hands control to PackageInstaller, including if user declines.
     // This is passive: only startCard/startBindCard may process a UID.
-    @Volatile private var passiveNfcGuard = false
+    @Volatile private var passiveNfcGuard = true
     private var resumed = false
     private val cardAccepted = AtomicBoolean(false)
     @Volatile private var lastTag: Tag? = null
     private val uidStore = BoundCardStore(activity)
+    private val adapterReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (resumed && intent.getIntExtra(NfcAdapter.EXTRA_ADAPTER_STATE, -1) == NfcAdapter.STATE_ON) {
+                enableReader()
+            }
+        }
+    }
 
     init {
+        val adapterFilter = IntentFilter(NfcAdapter.ACTION_ADAPTER_STATE_CHANGED)
+        if (Build.VERSION.SDK_INT >= 33) {
+            activity.registerReceiver(adapterReceiver, adapterFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            activity.registerReceiver(adapterReceiver, adapterFilter)
+        }
         if (!UpdateDownloadService.running.get()) UpdateInstaller.cleanupStale(activity)
         UpdateDownloadService.events = { type, bytes, total -> event(type, bytes, total) }
         channel.setMethodCallHandler { call, result ->
@@ -48,6 +64,15 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
                 "versionCode" -> result.success(installedVersionCode())
                 "versionName" -> result.success(activity.packageManager.getPackageInfo(activity.packageName, 0).versionName)
                 "hasBoundCard" -> result.success(uidStore.hasBinding())
+                "removeBoundCard" -> {
+                    if (UpdateDownloadService.running.get()) result.error("busy", "Đang cập nhật.", null)
+                    else synchronized(uidStore) {
+                        stopReader()
+                        cardAccepted.set(true)
+                        if (uidStore.clearBinding()) result.success(null)
+                        else result.error("card_store", "Không xóa được liên kết thẻ.", null)
+                    }
+                }
                 "startBindCard" -> {
                     if (uidStore.hasBinding()) result.error("already_bound", "Thẻ đã được liên kết.", null)
                     else if (UpdateDownloadService.running.get()) result.error("busy", "Đang cập nhật.", null)
@@ -144,7 +169,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
 
     fun onResume() {
         resumed = true
-        if ((reading || passiveNfcGuard) && !enableReader() && reading) {
+        if (!enableReader() && reading) {
             reading = false
             bindingOnly = false
             event("cardError")
@@ -158,6 +183,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
         }
     }
     fun close() {
+        runCatching { activity.unregisterReceiver(adapterReceiver) }
         passiveNfcGuard = false
         stopReader()
         runCatching { nfc?.disableReaderMode(activity) }
@@ -176,7 +202,10 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
             if (normalized.isEmpty()) return@enableReaderMode
             // Reader callbacks can run more than once. The first readable tag wins on a fresh install.
             try {
-                val accepted = uidStore.matchesOrBind(normalized)
+                val accepted = synchronized(uidStore) {
+                    if (!reading || cardAccepted.get()) return@enableReaderMode
+                    uidStore.matchesOrBind(normalized)
+                }
                 if (accepted && cardAccepted.compareAndSet(false, true)) {
                     if (bindingOnly) {
                         // Keep reader mode while this sheet is visible. Turning it off
@@ -256,6 +285,8 @@ internal class BoundCardStore(context: Context) {
     private val prefs = context.getSharedPreferences("update_bound_card", Context.MODE_PRIVATE)
 
     fun hasBinding(): Boolean = prefs.contains("encrypted_uid")
+
+    @Synchronized fun clearBinding(): Boolean = prefs.edit().remove("encrypted_uid").commit()
 
     @Synchronized fun matchesOrBind(uid: String): Boolean {
         val saved = prefs.getString("encrypted_uid", null)

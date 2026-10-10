@@ -20,6 +20,8 @@ import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_pick
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/schedule/tien_mon_schedule_views.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/study_alarm_card.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/alarm_test_fixture.dart';
 import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
 import 'package:better_phenikaa_schedule/features/tro_li/assistant_text.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
@@ -90,6 +92,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _syncing = false;
   bool _panelOpen = false;
   ImportedScheduleData? _data;
+  // Fix test fixture times for a whole day: rebuilding the screen (including
+  // after returning from Clock) must not change class hours or keys.
+  DateTime? _alarmFixtureClock;
   _AppPage _page = _AppPage.timetable;
   DateTime _selectedDate = DateTime.now();
   bool _showPastExams = false;
@@ -333,7 +338,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => CardBindingSheet(controller: _update),
+      builder: (_) => CardBindingSheet(
+        controller: _update,
+        displayName: _accountDisplayName.isEmpty
+            ? (_data?.displayName ?? '')
+            : _accountDisplayName,
+      ),
     );
   }
 
@@ -483,6 +493,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _errorMessage = 'Không đọc được dữ liệu cục bộ: $error';
     }
     if (_data != null) await _refreshSyncStatus();
+    if (const bool.fromEnvironment('BPA_ALARM_TEST_FIXTURE')) {
+      final now = DateTime.now();
+      _selectedDate = DateTime(now.year, now.month, now.day + 1);
+    }
     await Future<void>.delayed(const Duration(milliseconds: 650));
     if (mounted) {
       setState(() => _booting = false);
@@ -844,6 +858,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _closeNotificationCenter();
       return;
     }
+    if (_page == _AppPage.timetable && StudyAlarmCard.dismissExpanded()) {
+      return;
+    }
     if (_page != _AppPage.timetable) {
       _openPage(_AppPage.timetable);
       return;
@@ -876,9 +893,25 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
+  DateTime _alarmFixtureForDay(DateTime now) {
+    final cached = _alarmFixtureClock;
+    if (cached == null ||
+        cached.year != now.year ||
+        cached.month != now.month ||
+        cached.day != now.day) {
+      _alarmFixtureClock = now;
+      return now;
+    }
+    return cached;
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
+    // Test-only overlay, never committed into _data or saved anywhere.
+    final displayData = const bool.fromEnvironment('BPA_ALARM_TEST_FIXTURE')
+        ? withAlarmTestFixture(_data, _alarmFixtureForDay(DateTime.now()))
+        : _data;
     return PopScope(
       canPop: kIsWeb || defaultTargetPlatform != TargetPlatform.android,
       onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
@@ -936,13 +969,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 color: Colors.white,
                                 child: SizedBox.expand(),
                               )
-                            : _data == null || _data!.displayName.isEmpty
+                            : displayData == null || displayData.displayName.isEmpty
                             ? _LoginScreen(
                                 onLogin: _loginOrSync,
                                 supportsLive: supportsLiveQldtLogin,
                               )
                             : _MainShell(
-                                data: _data!,
+                                data: displayData!,
                                 accountDisplayName: _accountDisplayName,
                                 page: _page,
                                 selectedDate: _selectedDate,
@@ -954,7 +987,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 unreadDifference: _unreadDifference,
                                 hasActiveExamPeriod:
                                     ExamPeriod.hasActiveExamPeriod(
-                                      _data!.exams,
+                                      displayData.exams,
                                       DateTime.now(),
                                     ),
                                 syncStale: const SyncReminderPolicy()
@@ -988,9 +1021,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 onOpenPage: _openPage,
                                 onSync: () => unawaited(_loginOrSync()),
                                 onLogout: _logout,
-                                onDateChanged: (date) => setState(
-                                  () => _selectedDate = _dateOnly(date),
-                                ),
+                                onDateChanged: (date) {
+                                  StudyAlarmCard.dismissExpanded();
+                                  setState(() => _selectedDate = _dateOnly(date));
+                                },
                                 onExamTabChanged: (past) =>
                                     setState(() => _showPastExams = past),
                                 onDismissError: () =>
@@ -1516,8 +1550,7 @@ class _TimetableScreen extends StatefulWidget {
   State<_TimetableScreen> createState() => _TimetableScreenState();
 }
 
-class _TimetableScreenState extends State<_TimetableScreen>
-    with WidgetsBindingObserver {
+class _TimetableScreenState extends State<_TimetableScreen> {
   bool _weekly = false;
   int _modeSwitchSerial = 0;
   final ValueNotifier<bool> _weeklySelection = ValueNotifier<bool>(false);
@@ -1525,30 +1558,19 @@ class _TimetableScreenState extends State<_TimetableScreen>
   final ValueNotifier<double> _modeOpacity = ValueNotifier<double>(1);
   DateTime _week = weekMonday(DateTime.now());
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
+  // Preserve the user-selected day when an external app (such as Clock)
+  // temporarily takes focus. Resuming BPA must not navigate to today.
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _weeklySelection.dispose();
     _weeklyMode.dispose();
     _modeOpacity.dispose();
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_weekly) {
-      widget.onDateChanged(DateTime.now());
-    }
-  }
-
   Future<void> _changeTimetableMode(bool nextWeekly) async {
     if (_weekly == nextWeekly) return;
+    StudyAlarmCard.dismissExpanded();
     _weekly = nextWeekly;
     final serial = ++_modeSwitchSerial;
 
@@ -1707,6 +1729,14 @@ class _TimetableScreenState extends State<_TimetableScreen>
                       examDays: _studyDayKeys(widget.data.exams),
                     ),
             ),
+            if (const bool.fromEnvironment('BPA_ALARM_TEST_FIXTURE'))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'TEST 1.6 • lịch giả ngày mai (không lưu vào QLĐT)',
+                  style: TextStyle(color: appThemePalette.primary, fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+              ),
             const SizedBox(height: 12),
             ValueListenableBuilder<bool>(
               valueListenable: _weeklySelection,
@@ -3458,19 +3488,24 @@ class _ScheduleCard extends StatelessWidget {
         ),
       ],
     );
+    final alarmContent = StudyAlarmCard(
+      key: ValueKey<String>('study-alarm-${item.id}'),
+      item: item,
+      content: content,
+    );
     if (premium) {
       return ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 106),
         child: TienMonEdgeSurface(
           active: active,
           scene: TienMonPremiumContract.appSceneFor(now),
-          child: content,
+          child: alarmContent,
         ),
       );
     }
     return AppThemePanel(
       constraints: const BoxConstraints(minHeight: 106),
-      child: content,
+      child: alarmContent,
     );
   }
 }
