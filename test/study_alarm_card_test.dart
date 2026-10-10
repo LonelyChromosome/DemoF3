@@ -16,7 +16,7 @@ void main() {
       'Cơ sở dữ liệu',
     );
     expect(
-      studyAlarmClockLabel('Tên môn ' + 'A' * 150).length,
+      studyAlarmClockLabel('Tên môn ' + List<String>.filled(150, 'A').join()).length,
       120,
     );
   });
