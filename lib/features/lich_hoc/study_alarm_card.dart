@@ -106,7 +106,7 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(
-          content: Text('Đã gửi yêu cầu đặt báo thức $time tới Đồng hồ'),
+          content: Text('Đặt báo thức $time thành công'),
           duration: const Duration(seconds: 2),
         ));
     } on PlatformException catch (error) {
