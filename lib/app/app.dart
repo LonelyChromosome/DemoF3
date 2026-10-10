@@ -349,7 +349,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => CardBindingSheet(controller: _update),
+      builder: (_) => CardBindingSheet(
+        controller: _update,
+        displayName: _accountDisplayName.isEmpty
+            ? (_data?.displayName ?? '')
+            : _accountDisplayName,
+      ),
     );
   }
 
