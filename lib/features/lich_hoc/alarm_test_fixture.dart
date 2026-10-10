@@ -15,7 +15,7 @@ ImportedScheduleData withAlarmTestFixture(
   // During the very first minute after midnight, an eligible class time
   // cannot exist; the first fixture becomes available at 00:01.
   int eligibleMinute(int minutesAgo) =>
-      (minutesNow - minutesAgo).clamp(1, 1439);
+      (minutesNow - minutesAgo).clamp(1, 1439).toInt();
 
   ScheduleRecord mock(String key, int minuteOfDay) {
     final hour = minuteOfDay ~/ 60;
