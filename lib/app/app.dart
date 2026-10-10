@@ -150,7 +150,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         }
         final installed =
             await _updateInfoChannel.invokeMethod<int>('versionCode') ?? 0;
-        if (mounted && manifest.appliesTo(installed)) {
+        if (mounted &&
+            DateTime.now().difference(startupAt) <
+                const Duration(milliseconds: 1500) &&
+            manifest.appliesTo(installed)) {
           setState(() => _fakeUpdateAvailable = true);
         }
         return;
