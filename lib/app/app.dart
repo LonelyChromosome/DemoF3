@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/app/bpa_pen_trace_splash.dart';
 import 'package:better_phenikaa_schedule/features/app_update/update_controller.dart';
-import 'package:better_phenikaa_schedule/features/app_update/update_repository.dart';
 import 'package:better_phenikaa_schedule/features/app_update/update_ui.dart';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/qldt_sync_diagnostics.dart';
@@ -78,18 +77,8 @@ class _AppRoot extends StatefulWidget {
 
 class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   static const _storageKey = 'better_phenikaa_snapshot_v1';
-  // Test APKs use the same signed-check flow as production, with a separate
-  // signed fixture. The fixture is never part of the production update feed.
-  final UpdateController _update = UpdateController(
-    repository: const bool.fromEnvironment('BPA_FAKE_UPDATE_TEST')
-        ? UpdateRepository(
-            manifestUrl: 'https://raw.githubusercontent.com/LonelyChromosome/'
-                'DemoF3/fix/1.4-theme-preset-custom-isolation/'
-                'test/fixtures/fake_latest.json',
-            publicKeyBase64: '7o8anfPOk2nPbSxhQt95+3km1yXx0dOKnKbqZK/uSFA=',
-          )
-        : null,
-  );
+  // Production uses the pinned, Ed25519-signed public updater feed.
+  final UpdateController _update = UpdateController();
   static const _updateInfoChannel = MethodChannel('better_phenikaa/update');
   String _appVersionName = '';
   static const _routeKey = 'better_phenikaa_qldt_registration_route_v1';
