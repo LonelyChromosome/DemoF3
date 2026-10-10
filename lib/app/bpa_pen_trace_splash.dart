@@ -19,12 +19,17 @@ class _BpaPenTraceSplashState extends State<BpaPenTraceSplash>
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1000),
-  )..forward();
+  );
   bool _visible = true;
 
   @override
   void initState() {
     super.initState();
+    // Start the 1-second stroke animation after the first painted frame.
+    // A slow cold-start frame must not consume the animation before it shows.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _controller.forward();
+    });
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed && mounted) {
         setState(() => _visible = false);
