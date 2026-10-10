@@ -425,7 +425,7 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
     if (!mounted) return;
     setState(() {
       _loading = false;
-      _deleting = false;
+      _deleting = widget.controller.hasBoundCard;
       _deleteDone = false;
       _accepted = false;
       _presented = widget.controller.hasBoundCard;
@@ -477,18 +477,19 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
                 displayName: widget.displayName,
                 deleting: _deleting,
                 status: _deleting ? 'bound' : _accepted ? 'accepted' : _presented ? 'bound' : 'waiting',
-                onDeleteRequested: _deleteCard,
-                onBeginDelete: _presented && controller.hasBoundCard && !controller.isRunningInBackground
-                    ? () => setState(() => _deleting = true)
-                    : null,
+                onDeleteRequested: controller.isRunningInBackground ? null : _deleteCard,
                 onHoldingChanged: (holding) {
                   if (mounted) setState(() => _deleteHolding = holding);
                 },
                 onComplete: () {
                   if (!mounted) return;
                   setState(() {
-                    if (_deleting) _deleteDone = true;
-                    else _presented = true;
+                    if (_deleting) {
+                      _deleteDone = true;
+                    } else {
+                      _presented = true;
+                      _deleting = true;
+                    }
                   });
                 },
               ),
