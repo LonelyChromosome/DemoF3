@@ -1738,7 +1738,7 @@ class _TimetableScreenState extends State<_TimetableScreen>
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
                   'TEST 1.6 • lịch giả ngày mai (không lưu vào QLĐT)',
-                  style: TextStyle(color: palette.primary, fontSize: 11, fontWeight: FontWeight.w700),
+                  style: TextStyle(color: appThemePalette.primary, fontSize: 11, fontWeight: FontWeight.w700),
                 ),
               ),
             const SizedBox(height: 12),
