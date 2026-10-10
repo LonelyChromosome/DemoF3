@@ -2,6 +2,25 @@ import 'package:better_phenikaa_schedule/features/lich_hoc/study_alarm_card.dart
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('native Clock label is only the course name without prefixes or IDs', () {
+    expect(
+      studyAlarmClockLabel('Lập trình thiết bị di động'),
+      'Lập trình thiết bị di động',
+    );
+    expect(
+      studyAlarmClockLabel('[TEST 1.6] Phân tích thiết kế hệ thống'),
+      'Phân tích thiết kế hệ thống',
+    );
+    expect(
+      studyAlarmClockLabel('  Cơ sở dữ liệu  '),
+      'Cơ sở dữ liệu',
+    );
+    expect(
+      studyAlarmClockLabel('Tên môn ' + 'A' * 150).length,
+      120,
+    );
+  });
+
   test('only tomorrow classes can show alarm button from today class time', () {
     final classStart = DateTime(2026, 10, 11, 9, 30);
     expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 10, 7)), isFalse);
