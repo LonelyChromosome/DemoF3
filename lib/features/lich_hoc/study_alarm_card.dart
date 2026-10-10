@@ -193,7 +193,10 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
     }
     final target = studyAlarmOccurrence(widget.item.startAt, hour, minute);
     // Date + time make the label unique enough for ACTION_DISMISS_ALARM label search.
-    final label = 'BPA ${widget.item.subjectName} [${target.millisecondsSinceEpoch}]'.substring(0, 120);
+    final fullLabel = 'BPA ${widget.item.subjectName} [${target.millisecondsSinceEpoch}]';
+    final label = fullLabel.length > 120
+        ? fullLabel.substring(0, 120)
+        : fullLabel;
     setState(() => _sending = true);
     try {
       final dispatched = await _channel.invokeMethod<bool>('setAlarm', <String, Object>{
