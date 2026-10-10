@@ -145,6 +145,22 @@ final class UpdateController extends ChangeNotifier {
     }
   }
 
+  Future<bool> removeBoundCard() async {
+    if (_job || isRunningInBackground) return false;
+    try {
+      await _channel.invokeMethod<void>('removeBoundCard');
+      bindingCard = false;
+      hasBoundCard = false;
+      error = null;
+      notifyListeners();
+      return true;
+    } on PlatformException catch (e) {
+      error = e.message ?? 'Không xóa được liên kết thẻ. Hãy thử lại.';
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> stopBindingCard() async {
     bindingCard = false;
     notifyListeners();
