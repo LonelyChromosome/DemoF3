@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +14,7 @@ class CardLinkVfx extends StatefulWidget {
     this.deleting = false,
     this.onDeleteRequested,
     this.onHoldingChanged,
+    this.onBeginDelete,
     super.key,
   });
 
@@ -24,6 +24,7 @@ class CardLinkVfx extends StatefulWidget {
   final VoidCallback onComplete;
   final Future<bool> Function()? onDeleteRequested;
   final ValueChanged<bool>? onHoldingChanged;
+  final VoidCallback? onBeginDelete;
 
   @override
   State<CardLinkVfx> createState() => _CardLinkVfxState();
@@ -32,12 +33,11 @@ class CardLinkVfx extends StatefulWidget {
 class _CardLinkVfxState extends State<CardLinkVfx>
     with SingleTickerProviderStateMixin {
   late final Future<String> _html = rootBundle.loadString(
-    'assets/card_vfx/${widget.deleting ? 'unlink' : 'link'}.html',
+    'assets/card_vfx/link.html',
   );
   InAppWebViewController? _web;
   bool _ready = false;
   bool _visible = false;
-  Uint8List? _transitionFrame;
   bool _holding = false;
   bool _busy = false;
   bool _finished = false;
@@ -59,7 +59,7 @@ class _CardLinkVfxState extends State<CardLinkVfx>
   }
 
   void _beginHold(PointerDownEvent event) {
-    if (!_ready || _busy || _finished || _holding || event.buttons != 1) return;
+    if (!widget.deleting || !_ready || _busy || _finished || _holding || event.buttons != 1) return;
     _holding = true;
     widget.onHoldingChanged?.call(true);
     _hold.forward(from: 0);
@@ -122,30 +122,20 @@ class _CardLinkVfxState extends State<CardLinkVfx>
   }
 
   Future<void> _switchMode() async {
-    _ready = false;
     _holding = false;
     _busy = false;
     _finished = false;
     _hold.reset();
-    // Keep the last card frame visible while its replacement page loads.
-    final frame = await _web?.takeScreenshot();
-    if (!mounted) return;
-    setState(() {
-      _transitionFrame = frame;
-      _visible = false;
-    });
-    final html = await rootBundle.loadString(
-      'assets/card_vfx/${widget.deleting ? 'unlink' : 'link'}.html',
+    if (!_ready || !mounted) return;
+    await _web?.evaluateJavascript(
+      source: 'window.paSetMode(${widget.deleting},'
+          '${jsonEncode(widget.status)},${jsonEncode(widget.displayName)});',
     );
-    if (!mounted) return;
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) return;
-    await _web?.loadData(data: html);
   }
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    height: widget.deleting ? 520 : 480,
+    height: 520,
     child: ClipRRect(
       borderRadius: BorderRadius.circular(22),
       child: FutureBuilder<String>(
@@ -187,7 +177,7 @@ class _CardLinkVfxState extends State<CardLinkVfx>
             },
             onLoadStop: (_, _) async {
               _ready = true;
-              await _present();
+              await _switchMode();
               await Future<void>.delayed(const Duration(milliseconds: 80));
               if (mounted) setState(() => _visible = true);
             },
@@ -197,23 +187,28 @@ class _CardLinkVfxState extends State<CardLinkVfx>
               child: AnimatedOpacity(
                 opacity: _visible ? 0 : 1,
                 duration: const Duration(milliseconds: 160),
-                child: _transitionFrame == null
-                    ? const ColoredBox(color: Color(0xFF050913))
-                    : Image.memory(_transitionFrame!, fit: BoxFit.fill, gaplessPlayback: true),
+                child: const ColoredBox(color: Color(0xFF050913)),
               ),
             ),
           ),
-          if (widget.deleting && !_finished)
+          if ((widget.deleting && !_finished) ||
+              (!widget.deleting && (widget.status == 'bound' || _finished)))
             Positioned(
               left: 0, right: 0, bottom: 16,
               child: Center(
                 child: Semantics(
                   button: true,
-                  label: 'Giữ 2 giây để xóa liên kết thẻ',
+                  label: widget.deleting ? 'Giữ 2 giây để xóa liên kết thẻ' : 'Xóa liên kết thẻ',
                   child: Listener(
                     behavior: HitTestBehavior.opaque,
                     onPointerDown: _beginHold,
-                    onPointerUp: (_) => _cancelHold(),
+                    onPointerUp: (_) {
+                      if (widget.deleting) {
+                        _cancelHold();
+                      } else if (_ready) {
+                        widget.onBeginDelete?.call();
+                      }
+                    },
                     onPointerCancel: (_) => _cancelHold(),
                     onPointerMove: (event) {
                       if ((event.localPosition - const Offset(38, 38)).distance > 58) {

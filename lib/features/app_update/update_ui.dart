@@ -469,7 +469,7 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
               if (_loading) ClipRRect(
                 borderRadius: BorderRadius.circular(22),
                 child: const SizedBox(
-                  height: 480,
+                  height: 520,
                   child: ColoredBox(color: Color(0xFF050913)),
                 ),
               )
@@ -478,6 +478,9 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
                 deleting: _deleting,
                 status: _deleting ? 'bound' : _accepted ? 'accepted' : _presented ? 'bound' : 'waiting',
                 onDeleteRequested: _deleteCard,
+                onBeginDelete: _presented && controller.hasBoundCard && !controller.isRunningInBackground
+                    ? () => setState(() => _deleting = true)
+                    : null,
                 onHoldingChanged: (holding) {
                   if (mounted) setState(() => _deleteHolding = holding);
                 },
@@ -492,21 +495,6 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
               if (controller.error != null) ...[
                 const SizedBox(height: 12),
                 Text(controller.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              ],
-              if (_presented && controller.hasBoundCard && !_deleting) ...[
-                const SizedBox(height: 12),
-                Center(
-                  child: SizedBox(
-                    width: 64, height: 64,
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        shape: const CircleBorder(), padding: EdgeInsets.zero,
-                      ),
-                      onPressed: controller.isRunningInBackground ? null : () => setState(() => _deleting = true),
-                      child: const Text('Xóa'),
-                    ),
-                  ),
-                ),
               ],
               if (_deleteDone || (!_loading && !_deleting && !controller.hasBoundCard && !controller.bindingCard)) ...[
                 const SizedBox(height: 12),
