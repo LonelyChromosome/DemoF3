@@ -85,11 +85,14 @@ final class UpdateController extends ChangeNotifier {
       phase == UpdatePhase.readyForInstaller ||
       phase == UpdatePhase.installerLaunched;
   int _generation = 0;
+  // Prevent a slower cache restore from overwriting a newer live check.
+  int _checkRevision = 0;
 
   Future<int> _installedVersion() async =>
       await _channel.invokeMethod<int>('versionCode') ?? 0;
 
   Future<void> restore() async {
+    final revision = _checkRevision;
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_noticeKey);
@@ -97,13 +100,17 @@ final class UpdateController extends ChangeNotifier {
           ? null
           : UpdateNotice.fromJson(jsonDecode(raw));
       final installed = await _installedVersion();
+      final installStatus = await _channel.invokeMethod<String>('installStatus');
+      // The launch check may start while native cache restoration is pending.
+      // Its state is authoritative and must not be replaced by stale cache.
+      if (revision != _checkRevision) return;
       if (cached != null && cached.versionCode > installed) {
         notice = cached;
         phase = UpdatePhase.available;
       } else {
         await prefs.remove(_noticeKey);
       }
-      if (await _channel.invokeMethod<String>('installStatus') == 'installed') {
+      if (installStatus == 'installed') {
         phase = UpdatePhase.installed;
       }
       notifyListeners();
@@ -156,6 +163,7 @@ final class UpdateController extends ChangeNotifier {
         phase == UpdatePhase.wrongCard ||
         phase == UpdatePhase.permissionRequired)
       return;
+    _checkRevision++;
     final startedAt = DateTime.now();
     final before = phase;
     if (notice == null) phase = UpdatePhase.checking;

@@ -46,9 +46,12 @@ class _BpaPenTraceSplashState extends State<BpaPenTraceSplash>
       _wasBackgrounded = true;
     } else if (state == AppLifecycleState.resumed && _wasBackgrounded) {
       _wasBackgrounded = false;
+      // Replay the ORIGINAL pen-trace, from frame zero, on a warm app entry.
+      // Reset before painting so no stale fully-faded frame flashes first.
+      _controller.reset();
       setState(() => _visible = true);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _controller.forward(from: 0);
+        if (mounted) _controller.forward();
       });
     }
   }

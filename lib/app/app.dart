@@ -127,25 +127,24 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     AppThemeController.instance.addListener(_handleThemeChanged);
     _update.addListener(_handleThemeChanged);
-    final startupAt = DateTime.now();
-    unawaited(_update.restore().then((_) => _checkLatestOnLaunch(startupAt)));
+    // Both jobs start on entry. Cache restoration, network checking and
+    // the independent pen-trace animation never wait for one another.
+    unawaited(_update.restore());
+    unawaited(_checkLatestOnLaunch());
     unawaited(_loadAppVersionName());
     unawaited(_restore());
   }
 
-  // A best-effort check from the second installation launch onward.
-  // First-login users can still use Account > Update manually.
-  // The 1.5-second budget never gates VFX, login, QLDT or schedule data.
-  Future<void> _checkLatestOnLaunch(DateTime startupAt) async {
+  // Background-only signed check on launches after the first successful login.
+  // There is deliberately no splash/VFX deadline: slow networks may finish
+  // after the animation, and they must never delay navigation.
+  Future<void> _checkLatestOnLaunch() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (!mounted || prefs.getString(_storageKey)?.isNotEmpty != true) {
         return;
       }
-      final remaining = const Duration(milliseconds: 1500) -
-          DateTime.now().difference(startupAt);
-      if (remaining <= Duration.zero) return;
-      await _update.checkQuietly(timeBudget: remaining);
+      await _update.checkQuietly();
     } on Object {
       // Startup and sign-in never depend on the update service.
     }
@@ -198,8 +197,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       if (_wasBackgrounded) {
         _wasBackgrounded = false;
         // Returning from Home is also an app entry, without a new process.
-        // The same saved-first-login guard and 1.5s deadline apply.
-        unawaited(_checkLatestOnLaunch(DateTime.now()));
+        // It triggers a fresh background check, independently of VFX.
+        unawaited(_checkLatestOnLaunch());
       }
     }
     if (state != AppLifecycleState.resumed || _data == null) return;
