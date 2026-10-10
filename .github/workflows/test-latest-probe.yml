@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/test-latest-probe.yml
       - lib/app/app.dart
+      - lib/app/bpa_pen_trace_splash.dart
       - lib/features/app_update/**
       - test/fake_latest_probe_test.dart
       - test/fixtures/fake_latest.json
@@ -15,6 +16,12 @@ on:
 
 permissions:
   contents: read
+
+# Pushes while fixing the probe replace an in-flight test build;
+# they cannot create a queue of repeated APK builds.
+concurrency:
+  group: bpa-latest-probe-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-apk:
