@@ -14,7 +14,6 @@ class CardLinkVfx extends StatefulWidget {
     this.deleting = false,
     this.onDeleteRequested,
     this.onHoldingChanged,
-    this.onBeginDelete,
     super.key,
   });
 
@@ -24,7 +23,6 @@ class CardLinkVfx extends StatefulWidget {
   final VoidCallback onComplete;
   final Future<bool> Function()? onDeleteRequested;
   final ValueChanged<bool>? onHoldingChanged;
-  final VoidCallback? onBeginDelete;
 
   @override
   State<CardLinkVfx> createState() => _CardLinkVfxState();
@@ -59,7 +57,8 @@ class _CardLinkVfxState extends State<CardLinkVfx>
   }
 
   void _beginHold(PointerDownEvent event) {
-    if (!widget.deleting || !_ready || _busy || _finished || _holding || event.buttons != 1) return;
+    if (!widget.deleting || widget.onDeleteRequested == null ||
+        !_ready || _busy || _finished || _holding || event.buttons != 1) return;
     _holding = true;
     widget.onHoldingChanged?.call(true);
     _hold.forward(from: 0);
@@ -191,24 +190,17 @@ class _CardLinkVfxState extends State<CardLinkVfx>
               ),
             ),
           ),
-          if ((widget.deleting && !_finished) ||
-              (!widget.deleting && (widget.status == 'bound' || _finished)))
+          if (widget.deleting && !_finished)
             Positioned(
               left: 0, right: 0, bottom: 16,
               child: Center(
                 child: Semantics(
                   button: true,
-                  label: widget.deleting ? 'Giữ 2 giây để xóa liên kết thẻ' : 'Xóa liên kết thẻ',
+                  label: 'Giữ 2 giây để xóa liên kết thẻ',
                   child: Listener(
                     behavior: HitTestBehavior.opaque,
                     onPointerDown: _beginHold,
-                    onPointerUp: (_) {
-                      if (widget.deleting) {
-                        _cancelHold();
-                      } else if (_ready) {
-                        widget.onBeginDelete?.call();
-                      }
-                    },
+                    onPointerUp: (_) => _cancelHold(),
                     onPointerCancel: (_) => _cancelHold(),
                     onPointerMove: (event) {
                       if ((event.localPosition - const Offset(38, 38)).distance > 58) {
@@ -230,7 +222,8 @@ class _CardLinkVfxState extends State<CardLinkVfx>
                               ),
                               alignment: Alignment.center,
                               child: Text('Xóa', style: TextStyle(
-                                color: _ready ? const Color(0xFFFFC4D0) : const Color(0xFF877080),
+                                color: _ready && widget.onDeleteRequested != null
+                                    ? const Color(0xFFFFC4D0) : const Color(0xFF877080),
                                 fontSize: 14,
                               )),
                             ),
