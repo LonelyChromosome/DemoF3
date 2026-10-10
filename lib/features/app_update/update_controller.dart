@@ -156,6 +156,7 @@ final class UpdateController extends ChangeNotifier {
         phase == UpdatePhase.wrongCard ||
         phase == UpdatePhase.permissionRequired)
       return;
+    final startedAt = DateTime.now();
     final before = phase;
     if (notice == null) phase = UpdatePhase.checking;
     try {
@@ -164,6 +165,10 @@ final class UpdateController extends ChangeNotifier {
           : await _repository.fetch().timeout(timeBudget);
       final installed = await _installedVersion();
       final prefs = await SharedPreferences.getInstance();
+      if (timeBudget != null &&
+          DateTime.now().difference(startedAt) >= timeBudget) {
+        throw TimeoutException('Startup latest check budget exhausted');
+      }
       if (manifest.appliesTo(installed)) {
         notice = UpdateNotice(
           manifest.versionCode,
