@@ -34,7 +34,7 @@
 </div>
 <style>
 #pa-link-vfx {font-family:Inter,Arial,sans-serif;padding:0;color:#d9fbff;}
-#pa-link-vfx .pa-stage {position:relative;height:480px;max-width:680px;margin:auto;overflow:hidden;border-radius:22px;background:radial-gradient(ellipse at 50% 48%,#103347 0%,#08131f 45%,#050913 85%);--cyan:#66edff;--lime:#ceff62;--pink:#fc71d6;}
+#pa-link-vfx .pa-stage {position:relative;height:520px;max-width:680px;margin:auto;overflow:hidden;border-radius:22px;background:radial-gradient(ellipse at 50% 48%,#103347 0%,#08131f 45%,#050913 85%);--cyan:#66edff;--lime:#ceff62;--pink:#fc71d6;}
 #pa-link-vfx .pa-field {position:absolute;inset:0;width:100%;height:100%;}
 #pa-link-vfx .pa-top {position:absolute;top:24px;left:24px;right:24px;display:flex;justify-content:space-between;gap:8px;font:11px monospace;letter-spacing:1.5px;color:#84a8b7;}
 #pa-link-vfx .pa-phase {color:var(--cyan);}
@@ -50,7 +50,7 @@
 #pa-link-vfx .pa-emblem span {display:block;font:10px monospace;letter-spacing:6px;margin:6px 0 0 5px;color:#b3d5e1;}
 #pa-link-vfx .pa-chip {position:absolute;right:22px;top:89px;width:35px;height:29px;border:1px solid #81e4ff66;border-radius:6px;display:flex;flex-direction:column;justify-content:space-evenly;padding:3px;box-sizing:border-box;}
 #pa-link-vfx .pa-chip i {height:1px;background:#80eaff55;}
-#pa-link-vfx .pa-name {position:absolute;left:21px;right:18px;top:177px;font-size:23px;letter-spacing:-.6px;font-weight:500;white-space:nowrap;}
+#pa-link-vfx .pa-name {position:absolute;left:21px;right:18px;top:177px;font-size:23px;letter-spacing:-.6px;font-weight:500;white-space:nowrap;overflow:hidden;max-height:41px;}
 #pa-link-vfx .pa-state {position:absolute;left:21px;top:215px;font:14px monospace;letter-spacing:.3px;color:var(--cyan);}
 #pa-link-vfx .pa-back .pa-state {color:var(--lime);}
 #pa-link-vfx .pa-linked {position:absolute;left:21px;top:238px;font-size:11px;color:#a8c8bc;}
@@ -67,7 +67,7 @@
 #pa-link-vfx .pa-front .pa-state {color:#9ab6c8;}
 #pa-link-vfx .pa-card {transform:rotateY(540deg);}
 #pa-link-vfx .pa-flash {position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,#d6ffa877,transparent 65%);opacity:0;}
-@media(max-width:400px){#pa-link-vfx .pa-top{left:16px;right:16px;letter-spacing:.7px}#pa-link-vfx .pa-stage{height:480px}}
+@media(max-width:400px){#pa-link-vfx .pa-top{left:16px;right:16px;letter-spacing:.7px}#pa-link-vfx .pa-stage{height:520px}}
 </style>
 <style>
 #pa-link-vfx .pa-mechanism {position:absolute;width:244px;height:326px;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;opacity:0;}
@@ -81,8 +81,8 @@
 #pa-link-vfx .pa-slice {position:absolute;inset:0;pointer-events:none;}
 #pa-link-vfx .pa-slice .pa-face {backface-visibility:visible;transform:none;}
 #pa-link-vfx .pa-fragments {position:absolute;width:210px;height:292px;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;opacity:0;}
-#pa-link-vfx .pa-caption {bottom:73px;}
-#pa-link-vfx .pa-replay {touch-action:none;user-select:none;-webkit-user-select:none;min-width:212px;background:linear-gradient(90deg,#8c254a var(--hold,0%),#321b29 var(--hold,0%));}
+#pa-link-vfx .pa-caption {bottom:105px;}
+#pa-link-vfx .pa-replay {display:none;touch-action:none;user-select:none;-webkit-user-select:none;min-width:212px;background:linear-gradient(90deg,#8c254a var(--hold,0%),#321b29 var(--hold,0%));}
 #pa-link-vfx .pa-beam {height:5px;box-shadow:0 0 12px #ff467f,0 0 35px #ff467fcc,0 0 60px #ff467f66;}
 #pa-link-vfx .pa-fragments {z-index:2;}
 #pa-link-vfx .pa-mechanism {z-index:3;}
@@ -92,6 +92,29 @@
 <script>
 (() => {
  const root=document.getElementById('pa-link-vfx'),stage=root.querySelector('.pa-stage'),canvas=root.querySelector('canvas'),ctx=canvas.getContext('2d');
+ function fitName(el,name){
+  name=String(name||'').trim().replace(/\s+/g,' ');
+  if(el.dataset.fitted===name)return;
+  el.dataset.fitted=name;
+  const measure=document.createElement('canvas').getContext('2d'),limit=169;
+  const width=(s,size)=>{measure.font=`500 ${size}px Arial`;return measure.measureText(s).width;};
+  let size=23,lines=[name];
+  while(size>16&&width(name,size)>limit)size--;
+  if(width(name,size)>limit){
+   const words=name.split(' ');let best=null;
+   for(let i=1;i<words.length;i++){
+    const a=words.slice(0,i).join(' '),b=words.slice(i).join(' '),score=Math.max(width(a,18),width(b,18));
+    if(!best||score<best.score)best={lines:[a,b],score};
+   }
+   lines=best?best.lines:[name.slice(0,Math.ceil(name.length/2)),name.slice(Math.ceil(name.length/2))];
+   size=18;while(size>10&&Math.max(...lines.map(s=>width(s,size)))>limit)size--;
+  }
+  el.textContent=lines.join('\n');el.style.fontSize=size+'px';el.style.lineHeight='1.12';
+  el.style.top=lines.length===2?'167px':'177px';el.style.whiteSpace='pre-line';
+  el.style.letterSpacing='0';el.style.overflow='hidden';el.style.maxHeight='41px';
+  const widest=Math.max(...lines.map(s=>width(s,size)));
+  el.style.transform=widest>limit?`scaleX(${limit/widest})`:'none';el.style.transformOrigin='left center';
+ }
  const card=root.querySelector('.pa-card'),floating=root.querySelector('.pa-float'),phase=root.querySelector('.pa-phase'),caption=root.querySelector('.pa-caption'),button=root.querySelector('button'),state=root.querySelector('.pa-revoke-state'),flash=root.querySelector('.pa-flash'),mechanism=root.querySelector('.pa-mechanism'),beam=root.querySelector('.pa-beam'),command=root.querySelector('.pa-command');
  const fragmentBox=document.createElement('div');fragmentBox.className='pa-fragments';stage.insertBefore(fragmentBox,flash);
  const slices=[];
@@ -99,29 +122,21 @@
   const slice=document.createElement('div');slice.className='pa-slice';slice.style.clipPath=`inset(${i*10}% 0 ${90-i*10}% 0)`;
   const face=root.querySelector('.pa-back').cloneNode(true);face.querySelector('.pa-state').textContent=i%2?'DATA CORRUPT':'ACCESS REVOKED';slice.appendChild(face);fragmentBox.appendChild(slice);slices.push(slice);
  }
- let width=0,height=0,started=null,completed=false,origin=performance.now(),holdStart=null;
- window.paSetState=(state,name)=>{root.querySelector('.pa-back .pa-name').textContent=name||'';slices.forEach(s=>s.querySelector('.pa-name').textContent=name||'');};
+ let width=0,height=0,started=null,completed=false,origin=performance.now(),holdProgress=0;
+ window.paSetState=(state,name)=>{fitName(root.querySelector('.pa-back .pa-name'),name);slices.forEach(s=>fitName(s.querySelector('.pa-name'),name));};
  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
  function resize(){width=stage.clientWidth;height=stage.clientHeight;const d=Math.min(devicePixelRatio||1,2);canvas.width=width*d;canvas.height=height*d;ctx.setTransform(d,0,0,d,0,0);}
  new ResizeObserver(resize).observe(stage);resize();
- function beginHold(){if(started!==null||completed)return;holdStart=performance.now();caption.textContent='Giữ đủ 2 giây để xác nhận xóa';}
- function endHold(){if(holdStart===null)return;holdStart=null;button.style.setProperty('--hold','0%');button.textContent='Giữ để xóa thẻ · 2 giây';caption.textContent='Xóa liên kết với thẻ này?';}
- button.addEventListener('pointerdown',e=>{if(e.button!==0)return;button.setPointerCapture(e.pointerId);beginHold();});
- button.addEventListener('pointerup',endHold);button.addEventListener('pointercancel',endHold);button.addEventListener('lostpointercapture',endHold);
- button.addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter'){e.preventDefault();if(!e.repeat)beginHold();}});
- button.addEventListener('keyup',e=>{if(e.code==='Space'||e.code==='Enter'){e.preventDefault();if(completed)reset();else endHold();}});
- button.addEventListener('blur',endHold);
- function reset(){started=null;completed=false;holdStart=null;button.disabled=false;button.style.setProperty('--hold','0%');button.textContent='Giữ để xóa thẻ · 2 giây';caption.textContent='Xóa liên kết với thẻ này?';}
- button.addEventListener('click',()=>{if(completed)reset();});
+ window.paSetHold=value=>{if(started!==null||completed)return;holdProgress=Math.max(0,Math.min(1,value));caption.textContent=holdProgress>0?'Giữ đủ 2 giây để xác nhận xóa':'Xóa liên kết với thẻ này?';};
+ window.paStartDelete=()=>{if(started!==null||completed)return;holdProgress=0;started=performance.now();caption.textContent='Đang cưỡng chế xóa liên kết';};
  const clamp=v=>Math.max(0,Math.min(1,v));
  function frame(now){
   if(!root.isConnected)return;
-  if(holdStart!==null){const h=clamp((now-holdStart)/2000);button.style.setProperty('--hold',`${h*100}%`);button.textContent=`Đang giữ · ${(h*2).toFixed(1)} / 2 giây`;if(h>=1){holdStart=null;button.disabled=true;button.textContent='Đang xóa liên kết…';window.flutter_inappwebview.callHandler('deleteCard').then(ok=>{if(ok===true){started=performance.now();caption.textContent='Đang cưỡng chế xóa liên kết';}else{reset();}}).catch(()=>reset());}}
   const time=(now-origin)/1000,t=started===null?0:(now-started)/1000,active=started!==null,finish=active&&t>=5.8;
   const clampIn=clamp(t/.65),corrupt=active&&t>=.7&&t<2.4,purge=active&&t>=2.4;
   const tick=Math.floor(t*15),noise=Math.sin(tick*74.32),progress=clamp((t-2.4)/2.15);
   const cy=height/2,cx=width/2;
-  const holding=holdStart!==null,holdElapsed=holding?(now-holdStart)/1000:0;
+  const holding=started===null&&holdProgress>0,holdElapsed=holdProgress*2;
   const captureProgress=active?1:holding?clamp((holdElapsed-1.15)/.65):0;
   const captureEase=captureProgress*captureProgress*captureProgress*(captureProgress*(captureProgress*6-15)+10);
   const yaw=540+Math.sin(time*1.3)*8*(1-captureEase)+(corrupt&&!reduce?noise*3:0);

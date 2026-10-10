@@ -49,7 +49,7 @@
 #pa-link-vfx .pa-emblem span {display:block;font:10px monospace;letter-spacing:6px;margin:6px 0 0 5px;color:#b3d5e1;}
 #pa-link-vfx .pa-chip {position:absolute;right:22px;top:89px;width:35px;height:29px;border:1px solid #81e4ff66;border-radius:6px;display:flex;flex-direction:column;justify-content:space-evenly;padding:3px;box-sizing:border-box;}
 #pa-link-vfx .pa-chip i {height:1px;background:#80eaff55;}
-#pa-link-vfx .pa-name {position:absolute;left:21px;right:18px;top:177px;font-size:23px;letter-spacing:-.6px;font-weight:500;white-space:nowrap;}
+#pa-link-vfx .pa-name {position:absolute;left:21px;right:18px;top:177px;font-size:23px;letter-spacing:-.6px;font-weight:500;white-space:nowrap;overflow:hidden;max-height:41px;}
 #pa-link-vfx .pa-state {position:absolute;left:21px;top:215px;font:14px monospace;letter-spacing:.3px;color:var(--cyan);}
 #pa-link-vfx .pa-back .pa-state {color:var(--lime);}
 #pa-link-vfx .pa-linked {position:absolute;left:21px;top:238px;font-size:11px;color:#a8c8bc;}
@@ -67,9 +67,32 @@
 <script>
 (() => {
  const root=document.getElementById('pa-link-vfx'),stage=root.querySelector('.pa-stage'),canvas=root.querySelector('canvas'),ctx=canvas.getContext('2d');
+ function fitName(el,name){
+  name=String(name||'').trim().replace(/\s+/g,' ');
+  if(el.dataset.fitted===name)return;
+  el.dataset.fitted=name;
+  const measure=document.createElement('canvas').getContext('2d'),limit=169;
+  const width=(s,size)=>{measure.font=`500 ${size}px Arial`;return measure.measureText(s).width;};
+  let size=23,lines=[name];
+  while(size>16&&width(name,size)>limit)size--;
+  if(width(name,size)>limit){
+   const words=name.split(' ');let best=null;
+   for(let i=1;i<words.length;i++){
+    const a=words.slice(0,i).join(' '),b=words.slice(i).join(' '),score=Math.max(width(a,18),width(b,18));
+    if(!best||score<best.score)best={lines:[a,b],score};
+   }
+   lines=best?best.lines:[name.slice(0,Math.ceil(name.length/2)),name.slice(Math.ceil(name.length/2))];
+   size=18;while(size>10&&Math.max(...lines.map(s=>width(s,size)))>limit)size--;
+  }
+  el.textContent=lines.join('\n');el.style.fontSize=size+'px';el.style.lineHeight='1.12';
+  el.style.top=lines.length===2?'167px':'177px';el.style.whiteSpace='pre-line';
+  el.style.letterSpacing='0';el.style.overflow='hidden';el.style.maxHeight='41px';
+  const widest=Math.max(...lines.map(s=>width(s,size)));
+  el.style.transform=widest>limit?`scaleX(${limit/widest})`:'none';el.style.transformOrigin='left center';
+ }
  const card=root.querySelector('.pa-card'),floating=root.querySelector('.pa-float'),phase=root.querySelector('.pa-phase'),caption=root.querySelector('.pa-caption'),dots=root.querySelector('.pa-dots'),meter=root.querySelector('.pa-meter div'),flash=root.querySelector('.pa-flash'),scans=root.querySelectorAll('.pa-scan');
  const identity=root.querySelector('.pa-identity');let displayName='',started=null,alreadyBound=false;
- window.paSetState=(state,name)=>{displayName=name||'';root.querySelector('.pa-back .pa-name').textContent=displayName;if(state==='bound'){alreadyBound=true;done=true;}else if(state==='accepted'&&started===null){started=performance.now();}};
+ window.paSetState=(state,name)=>{displayName=name||'';fitName(root.querySelector('.pa-back .pa-name'),displayName);if(state==='bound'){alreadyBound=true;done=true;}else if(state==='accepted'&&started===null){started=performance.now();}};
  let width=0,height=0,start=performance.now(),done=false;
  const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
  function resize(){width=stage.clientWidth;height=stage.clientHeight;const d=Math.min(devicePixelRatio||1,2);canvas.width=width*d;canvas.height=height*d;ctx.setTransform(d,0,0,d,0,0);}
@@ -88,7 +111,7 @@
   floating.style.transform=`translateY(${reduce?0:Math.sin(ambient*1.7)*9-5}px)`;
   card.style.transform=`rotateY(${yaw}deg) rotateX(${reduce?0:3}deg)`;
   const reveal=clamp((t-2.65)/.65);
-  identity.textContent=t<2.65?'Unknown':t<3.3?displayName.slice(0,Math.floor(reveal*displayName.length))+'▍':displayName;
+  fitName(identity,t<2.65?'Unknown':t<3.3?displayName.slice(0,Math.floor(reveal*displayName.length))+'▍':displayName);
   identity.style.color=t<2.65?'#91b0bf':'#dbfaff';
   identity.style.textShadow=t>=2.65&&t<3.6?'0 0 14px #66edff80':'none';
   dots.textContent='.'.repeat(1+Math.floor(ambient*2)%3);meter.style.transform=`scaleX(${clamp(t/4.3)})`;

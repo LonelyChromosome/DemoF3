@@ -402,6 +402,7 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
   bool _deleting = false;
   bool _deleteDone = false;
   bool _deleteBusy = false;
+  bool _deleteHolding = false;
 
   @override
   void initState() {
@@ -457,6 +458,7 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
       canPop: !animating,
       child: SafeArea(
         child: SingleChildScrollView(
+          physics: _deleteHolding ? const NeverScrollableScrollPhysics() : null,
           padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -471,6 +473,9 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
                 deleting: _deleting,
                 status: _deleting ? 'bound' : _accepted ? 'accepted' : _presented ? 'bound' : 'waiting',
                 onDeleteRequested: _deleteCard,
+                onHoldingChanged: (holding) {
+                  if (mounted) setState(() => _deleteHolding = holding);
+                },
                 onComplete: () {
                   if (!mounted) return;
                   setState(() {
@@ -485,10 +490,17 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
               ],
               if (_presented && controller.hasBoundCard && !_deleting) ...[
                 const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: controller.isRunningInBackground ? null : () => setState(() => _deleting = true),
-                  icon: const Icon(Icons.link_off_rounded),
-                  label: const Text('Xóa thẻ đang liên kết'),
+                Center(
+                  child: SizedBox(
+                    width: 64, height: 64,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        shape: const CircleBorder(), padding: EdgeInsets.zero,
+                      ),
+                      onPressed: controller.isRunningInBackground ? null : () => setState(() => _deleting = true),
+                      child: const Text('Xóa'),
+                    ),
+                  ),
                 ),
               ],
               if (_deleteDone || (!_loading && !_deleting && !controller.hasBoundCard && !controller.bindingCard)) ...[
