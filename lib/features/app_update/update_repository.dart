@@ -25,11 +25,14 @@ final class UpdateRepository {
         _publicKeyBase64.isEmpty) {
       throw const FormatException('Update channel is not configured');
     }
-    final bytes = await transport.fetchUpdateBytes(uri, 8192);
-    final signature = await transport.fetchUpdateBytes(
-      Uri.parse('${uri.toString()}.sig'),
-      256,
-    );
+    // Both immutable small files can be downloaded concurrently; the
+    // existing signature verification still covers the exact manifest bytes.
+    final replies = await Future.wait<List<int>>(<Future<List<int>>>[
+      transport.fetchUpdateBytes(uri, 8192),
+      transport.fetchUpdateBytes(Uri.parse('${uri.toString()}.sig'), 256),
+    ]);
+    final bytes = replies[0];
+    final signature = replies[1];
     return _verifier.verify(
       bytes,
       ascii.decode(signature),
