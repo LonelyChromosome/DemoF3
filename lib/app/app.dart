@@ -103,6 +103,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _syncing = false;
   bool _panelOpen = false;
   ImportedScheduleData? _data;
+  // Fix test fixture times for a whole day: rebuilding the screen (including
+  // after returning from Clock) must not change class hours or keys.
+  DateTime? _alarmFixtureClock;
   _AppPage _page = _AppPage.timetable;
   DateTime _selectedDate = DateTime.now();
   bool _showPastExams = false;
@@ -896,12 +899,24 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
+  DateTime _alarmFixtureForDay(DateTime now) {
+    final cached = _alarmFixtureClock;
+    if (cached == null ||
+        cached.year != now.year ||
+        cached.month != now.month ||
+        cached.day != now.day) {
+      _alarmFixtureClock = now;
+      return now;
+    }
+    return cached;
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
     // Test-only overlay, never committed into _data or saved anywhere.
     final displayData = const bool.fromEnvironment('BPA_ALARM_TEST_FIXTURE')
-        ? withAlarmTestFixture(_data, DateTime.now())
+        ? withAlarmTestFixture(_data, _alarmFixtureForDay(DateTime.now()))
         : _data;
     return PopScope(
       canPop: kIsWeb || defaultTargetPlatform != TargetPlatform.android,
