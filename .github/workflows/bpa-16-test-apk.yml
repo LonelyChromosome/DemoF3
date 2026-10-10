@@ -38,19 +38,19 @@ jobs:
           s = manifest.read_text()
           old = 'android:label="Better Phenikaa App"'
           assert s.count(old) == 1
-          manifest.write_text(s.replace(old, 'android:label="BPA 1.6 Alarm Test"'))
+          manifest.write_text(s.replace(old, 'android:label="BPA 1.6 Test"'))
           PY
       - name: Build single ARM64 profile APK
         run: |
           set -euo pipefail
-          flutter build apk --profile --target-platform android-arm64 --build-number=35 --dart-define=BPA_ALARM_TEST_FIXTURE=true
+          flutter build apk --profile --target-platform android-arm64 --build-number=35 --dart-define=BPA_ALARM_TEST_FIXTURE=false
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.6-Alarm-Bridge-SideBySide.apk
-          sha256sum dist/BPA-1.6-Alarm-Bridge-SideBySide.apk > dist/SHA256SUMS
+          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.6-Card-VFX-Test.apk
+          sha256sum dist/BPA-1.6-Card-VFX-Test.apk > dist/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: BPA-1.6-Alarm-Bridge-SideBySide
+          name: BPA-1.6-Card-VFX-Test
           path: |
-            dist/BPA-1.6-Alarm-Bridge-SideBySide.apk
+            dist/BPA-1.6-Card-VFX-Test.apk
             dist/SHA256SUMS
           retention-days: 14
