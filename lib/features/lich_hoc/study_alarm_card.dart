@@ -96,7 +96,7 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
       });
       if (!mounted) return;
       if (dispatched != true) {
-        throw const PlatformException(
+        throw PlatformException(
           code: 'clock_failed',
           message: 'Không gửi được yêu cầu tới Đồng hồ.',
         );
