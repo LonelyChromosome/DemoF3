@@ -4,7 +4,7 @@ name: Publish Better Phenikaa 1.5
 # The push path is this NEW file, so later app changes cannot republish 1.5.
 on:
   push:
-    branches: [main]
+    branches: [fix/1.4-theme-preset-custom-isolation]
     paths:
       - ".github/workflows/release-bpa-1.5.yml"
 
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   dispatch-signed-release:
-    if: github.repository == 'LonelyChromosome/DemoF3' && github.ref == 'refs/heads/main'
+    if: github.repository == 'LonelyChromosome/DemoF3' && github.ref == 'refs/heads/fix/1.4-theme-preset-custom-isolation'
     runs-on: ubuntu-latest
     steps:
       - name: Dispatch established updater release pipeline
@@ -22,7 +22,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh workflow run build-apk.yml --ref main \
+          gh workflow run build-apk.yml --ref fix/1.4-theme-preset-custom-isolation \
             -f version_name=cooc.1.5 \
             -f version_code=44 \
             -f notes='cooc.1.5: VFX và kiểm tra cập nhật khi mở app; không phát lại khi trở về từ đa tác vụ.' \
