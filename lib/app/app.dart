@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/app/bpa_pen_trace_splash.dart';
 import 'package:better_phenikaa_schedule/features/app_update/update_controller.dart';
+import 'package:better_phenikaa_schedule/features/app_update/update_repository.dart';
 import 'package:better_phenikaa_schedule/features/app_update/update_ui.dart';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/qldt_sync_diagnostics.dart';
@@ -106,6 +107,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   AssistantPack _assistantPack = AssistantPack.normal;
   String _accountDisplayName = '';
   bool _shownInstallSuccess = false;
+  bool _fakeUpdateAvailable = false;
   static const _seenDifferenceKey = 'better_phenikaa_seen_difference_v1';
 
   @override
@@ -114,9 +116,49 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     AppThemeController.instance.addListener(_handleThemeChanged);
     _update.addListener(_handleThemeChanged);
-    unawaited(_update.restore());
+    final startupAt = DateTime.now();
+    unawaited(_update.restore().then((_) => _checkLatestOnLaunch(startupAt)));
     unawaited(_loadAppVersionName());
     unawaited(_restore());
+  }
+
+  // A 1.5-second, best-effort check; never gate VFX, login or schedule data.
+  Future<void> _checkLatestOnLaunch(DateTime startupAt) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Only installations with a successfully saved first login.
+      if (!mounted || (prefs.getString(_storageKey)?.isNotEmpty != true)) {
+        return;
+      }
+      final remaining = const Duration(milliseconds: 1500) -
+          DateTime.now().difference(startupAt);
+      if (remaining <= Duration.zero) return;
+
+      // Explicit test builds scan a separate, genuinely signed HTTPS fixture.
+      // No fake update is written to the real updater or its local cache.
+      if (const bool.fromEnvironment('BPA_FAKE_UPDATE_TEST')) {
+        final manifest = await UpdateRepository(
+          manifestUrl: 'https://raw.githubusercontent.com/LonelyChromosome/'
+              'DemoF3/fix/1.4-theme-preset-custom-isolation/'
+              'test/fixtures/fake_latest.json',
+          publicKeyBase64: '7o8anfPOk2nPbSxhQt95+3km1yXx0dOKnKbqZK/uSFA=',
+        ).fetch().timeout(remaining);
+        if (!mounted ||
+            DateTime.now().difference(startupAt) >=
+                const Duration(milliseconds: 1500)) {
+          return;
+        }
+        final installed =
+            await _updateInfoChannel.invokeMethod<int>('versionCode') ?? 0;
+        if (mounted && manifest.appliesTo(installed)) {
+          setState(() => _fakeUpdateAvailable = true);
+        }
+        return;
+      }
+      await _update.checkQuietly(timeBudget: remaining);
+    } on Object {
+      // A slow/unavailable check cannot delay or break the app.
+    }
   }
 
   Future<void> _loadAppVersionName() async {
@@ -944,6 +986,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                   }
                                 },
                                 onOpenDifferences: _onNotificationTap,
+                                hasUpdateAvailable: _fakeUpdateAvailable || _update.notice != null,
+                                onOpenUpdateAccount: () => _openPage(_AppPage.account),
                                 onCloseNotificationCenter:
                                     _closeNotificationCenter,
                                 onOpenExamFromNotification: () =>
@@ -1160,6 +1204,8 @@ class _MainShell extends StatefulWidget {
     required this.assistantPack,
     required this.onAssistantPackChanged,
     required this.onOpenDifferences,
+    required this.hasUpdateAvailable,
+    required this.onOpenUpdateAccount,
     required this.onCloseNotificationCenter,
     required this.onOpenExamFromNotification,
     required this.onShowDifferences,
@@ -1192,6 +1238,8 @@ class _MainShell extends StatefulWidget {
   final AssistantPack assistantPack;
   final ValueChanged<AssistantPack> onAssistantPackChanged;
   final VoidCallback onOpenDifferences;
+  final bool hasUpdateAvailable;
+  final VoidCallback onOpenUpdateAccount;
   final VoidCallback onCloseNotificationCenter;
   final VoidCallback onOpenExamFromNotification;
   final Future<void> Function() onShowDifferences;
@@ -1268,6 +1316,8 @@ class _MainShellState extends State<_MainShell>
     final assistantPack = widget.assistantPack;
     final onAssistantPackChanged = widget.onAssistantPackChanged;
     final onOpenDifferences = widget.onOpenDifferences;
+    final hasUpdateAvailable = widget.hasUpdateAvailable;
+    final onOpenUpdateAccount = widget.onOpenUpdateAccount;
     final onCloseNotificationCenter = widget.onCloseNotificationCenter;
     final onOpenExamFromNotification = widget.onOpenExamFromNotification;
     final onShowDifferences = widget.onShowDifferences;
@@ -1311,6 +1361,8 @@ class _MainShellState extends State<_MainShell>
                         unreadDifference: unreadDifference,
                         hasActiveExamPeriod: hasActiveExamPeriod,
                         onOpenDifferences: onOpenDifferences,
+                        hasUpdateAvailable: hasUpdateAvailable,
+                        onOpenUpdateAccount: onOpenUpdateAccount,
                       ),
                     ),
                   ),
@@ -1325,6 +1377,8 @@ class _MainShellState extends State<_MainShell>
                         unreadDifference: unreadDifference,
                         hasActiveExamPeriod: hasActiveExamPeriod,
                         onOpenDifferences: onOpenDifferences,
+                        hasUpdateAvailable: hasUpdateAvailable,
+                        onOpenUpdateAccount: onOpenUpdateAccount,
                       ),
                     ),
                   ),
@@ -1458,6 +1512,8 @@ class _TimetableScreen extends StatefulWidget {
     required this.unreadDifference,
     required this.hasActiveExamPeriod,
     required this.onOpenDifferences,
+    required this.hasUpdateAvailable,
+    required this.onOpenUpdateAccount,
   });
 
   final ImportedScheduleData data;
@@ -1467,6 +1523,8 @@ class _TimetableScreen extends StatefulWidget {
   final bool unreadDifference;
   final bool hasActiveExamPeriod;
   final VoidCallback onOpenDifferences;
+  final bool hasUpdateAvailable;
+  final VoidCallback onOpenUpdateAccount;
 
   @override
   State<_TimetableScreen> createState() => _TimetableScreenState();
@@ -1651,6 +1709,8 @@ class _TimetableScreenState extends State<_TimetableScreen>
               unreadDifference: widget.unreadDifference,
               hasActiveExamPeriod: widget.hasActiveExamPeriod,
               onNotificationTap: widget.onOpenDifferences,
+              hasUpdateAvailable: widget.hasUpdateAvailable,
+              onUpdateTap: widget.onOpenUpdateAccount,
               onCalendarTap: () => _weekly
                   ? _pickWeek()
                   : _showCalendarPicker(
@@ -1804,6 +1864,8 @@ class _ExamScreen extends StatelessWidget {
     required this.unreadDifference,
     required this.hasActiveExamPeriod,
     required this.onOpenDifferences,
+    required this.hasUpdateAvailable,
+    required this.onOpenUpdateAccount,
   });
 
   final ImportedScheduleData data;
@@ -1813,6 +1875,8 @@ class _ExamScreen extends StatelessWidget {
   final bool unreadDifference;
   final bool hasActiveExamPeriod;
   final VoidCallback onOpenDifferences;
+  final bool hasUpdateAvailable;
+  final VoidCallback onOpenUpdateAccount;
 
   @override
   Widget build(BuildContext context) {
@@ -1836,6 +1900,8 @@ class _ExamScreen extends StatelessWidget {
             unreadDifference: unreadDifference,
             hasActiveExamPeriod: hasActiveExamPeriod,
             onNotificationTap: onOpenDifferences,
+            hasUpdateAvailable: hasUpdateAvailable,
+            onUpdateTap: onOpenUpdateAccount,
           ),
           const SizedBox(height: 20),
           _SegmentTabs(showPast: showPast, onChanged: onTabChanged),
@@ -2630,6 +2696,8 @@ class _TopTitle extends StatelessWidget {
     this.badge,
     this.onCalendarTap,
     this.onNotificationTap,
+    this.onUpdateTap,
+    this.hasUpdateAvailable = false,
     this.unreadDifference = false,
     this.hasActiveExamPeriod = false,
   });
@@ -2638,6 +2706,8 @@ class _TopTitle extends StatelessWidget {
   final String? badge;
   final VoidCallback? onCalendarTap;
   final VoidCallback? onNotificationTap;
+  final VoidCallback? onUpdateTap;
+  final bool hasUpdateAvailable;
   final bool unreadDifference;
   final bool hasActiveExamPeriod;
 
@@ -2706,6 +2776,26 @@ class _TopTitle extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
+            if (hasUpdateAvailable && onUpdateTap != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: TextButton(
+                  onPressed: onUpdateTap,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 7),
+                    minimumSize: const Size(0, 32),
+                    foregroundColor: palette.primary,
+                    backgroundColor: palette.cardAlt,
+                    side: BorderSide(color: palette.border),
+                    shape: themeButtonShape(palette),
+                  ),
+                  child: const Text(
+                    'Có cập nhật mới',
+                    maxLines: 1,
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
             if (onNotificationTap != null)
               IconButton(
                 tooltip: hasActiveExamPeriod
