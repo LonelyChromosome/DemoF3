@@ -22,6 +22,7 @@ import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/sch
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/study_alarm_card.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/alarm_test_fixture.dart';
 import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
 import 'package:better_phenikaa_schedule/features/tro_li/assistant_text.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
@@ -495,6 +496,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _errorMessage = 'Không đọc được dữ liệu cục bộ: $error';
     }
     if (_data != null) await _refreshSyncStatus();
+    if (const bool.fromEnvironment('BPA_ALARM_TEST_FIXTURE')) {
+      final now = DateTime.now();
+      _selectedDate = DateTime(now.year, now.month, now.day + 1);
+    }
     await Future<void>.delayed(const Duration(milliseconds: 650));
     if (mounted) {
       setState(() => _booting = false);
@@ -894,6 +899,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
+    // Test-only overlay, never committed into _data or saved anywhere.
+    final displayData = const bool.fromEnvironment('BPA_ALARM_TEST_FIXTURE')
+        ? withAlarmTestFixture(_data, DateTime.now())
+        : _data;
     return PopScope(
       canPop: kIsWeb || defaultTargetPlatform != TargetPlatform.android,
       onPopInvokedWithResult: (didPop, _) => _handleSystemBack(didPop),
@@ -951,13 +960,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 color: Colors.white,
                                 child: SizedBox.expand(),
                               )
-                            : _data == null || _data!.displayName.isEmpty
+                            : displayData == null || displayData.displayName.isEmpty
                             ? _LoginScreen(
                                 onLogin: _loginOrSync,
                                 supportsLive: supportsLiveQldtLogin,
                               )
                             : _MainShell(
-                                data: _data!,
+                                data: displayData!,
                                 accountDisplayName: _accountDisplayName,
                                 page: _page,
                                 selectedDate: _selectedDate,
@@ -969,7 +978,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 unreadDifference: _unreadDifference,
                                 hasActiveExamPeriod:
                                     ExamPeriod.hasActiveExamPeriod(
-                                      _data!.exams,
+                                      displayData.exams,
                                       DateTime.now(),
                                     ),
                                 syncStale: const SyncReminderPolicy()
@@ -1724,6 +1733,14 @@ class _TimetableScreenState extends State<_TimetableScreen>
                       examDays: _studyDayKeys(widget.data.exams),
                     ),
             ),
+            if (const bool.fromEnvironment('BPA_ALARM_TEST_FIXTURE'))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'TEST 1.6 • lịch giả ngày mai (không lưu vào QLĐT)',
+                  style: TextStyle(color: palette.primary, fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+              ),
             const SizedBox(height: 12),
             ValueListenableBuilder<bool>(
               valueListenable: _weeklySelection,
