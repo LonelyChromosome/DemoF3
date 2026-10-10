@@ -14,9 +14,11 @@ int studyAlarmDefaultMinute(DateTime startAt) => startAt.minute;
 /// Native Clock shows just the subject's name. Test-only decoration stays
 /// visible on BPA cards, not in the OEM Clock alarm label.
 String studyAlarmClockLabel(String subjectName) {
-  final title = subjectName
-      .replaceFirst(RegExp(r'^\\[TEST 1\\.6\\]\\s*'), '')
-      .trim();
+  final name = subjectName.trim();
+  const testPrefix = '[TEST 1.6] ';
+  final title = name.startsWith(testPrefix)
+      ? name.substring(testPrefix.length).trim()
+      : name;
   return title.length <= 120 ? title : title.substring(0, 120);
 }
 
