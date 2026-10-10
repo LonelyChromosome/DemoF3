@@ -1541,8 +1541,7 @@ class _TimetableScreen extends StatefulWidget {
   State<_TimetableScreen> createState() => _TimetableScreenState();
 }
 
-class _TimetableScreenState extends State<_TimetableScreen>
-    with WidgetsBindingObserver {
+class _TimetableScreenState extends State<_TimetableScreen> {
   bool _weekly = false;
   int _modeSwitchSerial = 0;
   final ValueNotifier<bool> _weeklySelection = ValueNotifier<bool>(false);
@@ -1550,26 +1549,14 @@ class _TimetableScreenState extends State<_TimetableScreen>
   final ValueNotifier<double> _modeOpacity = ValueNotifier<double>(1);
   DateTime _week = weekMonday(DateTime.now());
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
+  // Preserve the user-selected day when an external app (such as Clock)
+  // temporarily takes focus. Resuming BPA must not navigate to today.
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     _weeklySelection.dispose();
     _weeklyMode.dispose();
     _modeOpacity.dispose();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_weekly) {
-      widget.onDateChanged(DateTime.now());
-    }
   }
 
   Future<void> _changeTimetableMode(bool nextWeekly) async {
