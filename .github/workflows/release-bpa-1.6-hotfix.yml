@@ -1,0 +1,24 @@
+name: Publish Better Phenikaa 1.6 transition fix
+on:
+  push:
+    branches: [fix/1.4-theme-preset-custom-isolation]
+    paths: [".github/workflows/release-bpa-1.6-hotfix.yml"]
+permissions:
+  actions: write
+  contents: read
+jobs:
+  dispatch-signed-release:
+    if: github.repository == 'LonelyChromosome/DemoF3' && github.ref == 'refs/heads/fix/1.4-theme-preset-custom-isolation'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch signed production updater release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh workflow run build-apk.yml --ref fix/1.4-theme-preset-custom-isolation \
+            -f version_name=cooc.1.6 \
+            -f version_code=46 \
+            -f notes='cooc.1.6: Sửa chuyển trạng thái liên kết sang xóa thẻ bị chồng hình và giật.' \
+            -f publish=true \
+            -f publish_confirmation=PUBLISH
