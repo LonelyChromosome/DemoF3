@@ -117,7 +117,15 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     AppThemeController.instance.addListener(_handleThemeChanged);
     _update.addListener(_handleThemeChanged);
     final startupAt = DateTime.now();
-    unawaited(_update.restore().then((_) => _checkLatestOnLaunch(startupAt)));
+    final restoreUpdater = _update.restore();
+    if (const bool.fromEnvironment('BPA_FAKE_UPDATE_TEST')) {
+      // Do not spend the short probe budget restoring updater state in a
+      // separate test installation. Signed test metadata never touches it.
+      unawaited(restoreUpdater);
+      unawaited(_checkLatestOnLaunch(startupAt));
+    } else {
+      unawaited(restoreUpdater.then((_) => _checkLatestOnLaunch(startupAt)));
+    }
     unawaited(_loadAppVersionName());
     unawaited(_restore());
   }
