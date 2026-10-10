@@ -234,7 +234,8 @@ jobs:
         run: |
           set -euo pipefail
           test -f "dist/$APK_NAME" && test -f dist/latest.json && test -f dist/latest.json.sig
-          (cd dist && sha256sum --check SHA256SUMS)
+          # Checksums contain dist/ paths, so verify from the repository root.
+          sha256sum --check dist/SHA256SUMS
           git fetch origin refs/heads/feature/1.2-card-update:refs/remotes/origin/feature/1.2-card-update
           git show origin/feature/1.2-card-update:updates/latest.json > "$RUNNER_TEMP/current-latest.json"
           python3 - <<'PY'
