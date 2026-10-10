@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:better_phenikaa_schedule/features/app_update/henshin_vfx.dart';
+import 'package:better_phenikaa_schedule/features/app_update/card_link_vfx.dart';
 import 'package:better_phenikaa_schedule/features/app_update/update_controller.dart';
 import 'package:better_phenikaa_schedule/features/app_update/update_name_match.dart';
 import 'package:flutter/gestures.dart';
@@ -385,74 +386,127 @@ class _UpdateFlowSheetState extends State<UpdateFlowSheet>
 }
 
 class CardBindingSheet extends StatefulWidget {
-  const CardBindingSheet({required this.controller, super.key});
+  const CardBindingSheet({required this.controller, required this.displayName, super.key});
   final UpdateController controller;
+  final String displayName;
 
   @override
   State<CardBindingSheet> createState() => _CardBindingSheetState();
 }
 
 class _CardBindingSheetState extends State<CardBindingSheet> {
+  bool _loading = true;
+  bool _scanning = false;
+  bool _accepted = false;
+  bool _presented = false;
+  bool _deleting = false;
+  bool _deleteDone = false;
+  bool _deleteBusy = false;
+
   @override
   void initState() {
     super.initState();
+    widget.controller.addListener(_onCardState);
     unawaited(_startBinding());
+  }
+
+  void _onCardState() {
+    if (!mounted) return;
+    if (_scanning && widget.controller.hasBoundCard) {
+      _scanning = false;
+      _accepted = true;
+    }
+    setState(() {});
   }
 
   Future<void> _startBinding() async {
     await widget.controller.refreshCardBinding();
-    if (mounted && !widget.controller.hasBoundCard) {
-      await widget.controller.startBindingCard();
-    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _deleting = false;
+      _deleteDone = false;
+      _accepted = false;
+      _presented = widget.controller.hasBoundCard;
+      _scanning = !widget.controller.hasBoundCard;
+    });
+    if (_scanning) await widget.controller.startBindingCard();
+  }
+
+  Future<bool> _deleteCard() async {
+    if (_deleteBusy || !widget.controller.hasBoundCard) return false;
+    _deleteBusy = true;
+    final removed = await widget.controller.removeBoundCard();
+    _deleteBusy = false;
+    return removed;
   }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_onCardState);
     unawaited(widget.controller.stopBindingCard());
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: widget.controller,
-    builder: (context, _) {
-      final controller = widget.controller;
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+  Widget build(BuildContext context) {
+    final controller = widget.controller;
+    final animating = (_accepted && !_presented) ||
+        (_deleting && !controller.hasBoundCard && !_deleteDone);
+    return PopScope(
+      canPop: !animating,
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text('Thẻ cập nhật', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 12),
-              Text(controller.hasBoundCard
-                  ? 'Đã liên kết một thẻ với thiết bị này.'
-                  : controller.bindingCard
-                      ? 'Đưa thẻ NFC lại gần điện thoại.'
-                      : 'Quét thẻ để liên kết với thiết bị này.'),
-              if (!controller.hasBoundCard && !controller.bindingCard) ...[
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: controller.startBindingCard,
-                  icon: const Icon(Icons.nfc_rounded),
-                  label: const Text('Quét lại thẻ'),
-                ),
-              ],
+              if (_loading) const SizedBox(height: 480)
+              else CardLinkVfx(
+                key: ValueKey(_deleting),
+                displayName: widget.displayName,
+                deleting: _deleting,
+                status: _deleting ? 'bound' : _accepted ? 'accepted' : _presented ? 'bound' : 'waiting',
+                onDeleteRequested: _deleteCard,
+                onComplete: () {
+                  if (!mounted) return;
+                  setState(() {
+                    if (_deleting) _deleteDone = true;
+                    else _presented = true;
+                  });
+                },
+              ),
               if (controller.error != null) ...[
                 const SizedBox(height: 12),
-                Text(controller.error!,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                Text(controller.error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
               ],
-              const SizedBox(height: 8),
+              if (_presented && controller.hasBoundCard && !_deleting) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: controller.isRunningInBackground ? null : () => setState(() => _deleting = true),
+                  icon: const Icon(Icons.link_off_rounded),
+                  label: const Text('Xóa thẻ đang liên kết'),
+                ),
+              ],
+              if (_deleteDone || (!_loading && !_deleting && !controller.hasBoundCard && !controller.bindingCard)) ...[
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  onPressed: _startBinding,
+                  icon: const Icon(Icons.nfc_rounded),
+                  label: Text(_deleteDone ? 'Liên kết thẻ mới' : 'Quét lại thẻ'),
+                ),
+              ],
               TextButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: animating ? null : () => Navigator.of(context).pop(),
                 child: const Text('Đóng'),
               ),
             ],
           ),
         ),
-      );
-    },
-  );
+      ),
+    );
+  }
 }
