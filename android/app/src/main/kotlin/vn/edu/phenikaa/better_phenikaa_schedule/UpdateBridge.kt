@@ -34,7 +34,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
     // Keep Android's foreground tag dispatch away from other apps after the
     // updater hands control to PackageInstaller, including if user declines.
     // This is passive: only startCard/startBindCard may process a UID.
-    @Volatile private var passiveNfcGuard = false
+    @Volatile private var passiveNfcGuard = true
     private var resumed = false
     private val cardAccepted = AtomicBoolean(false)
     @Volatile private var lastTag: Tag? = null
@@ -144,7 +144,7 @@ internal class UpdateBridge(private val activity: Activity, engine: FlutterEngin
 
     fun onResume() {
         resumed = true
-        if ((reading || passiveNfcGuard) && !enableReader() && reading) {
+        if (!enableReader() && reading) {
             reading = false
             bindingOnly = false
             event("cardError")
