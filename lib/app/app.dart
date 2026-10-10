@@ -126,8 +126,12 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   Future<void> _checkLatestOnLaunch(DateTime startupAt) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      // Only installations with a successfully saved first login.
-      if (!mounted || (prefs.getString(_storageKey)?.isNotEmpty != true)) {
+      // Production runs only after first login. Isolated signed-fixture
+      // builds have separate app data, so the test probe must run even before
+      // that installation has its own saved login snapshot.
+      const fakeProbe = bool.fromEnvironment('BPA_FAKE_UPDATE_TEST');
+      if (!mounted ||
+          (!fakeProbe && prefs.getString(_storageKey)?.isNotEmpty != true)) {
         return;
       }
       final remaining = const Duration(milliseconds: 1500) -
@@ -136,7 +140,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
       // Explicit test builds scan a separate, genuinely signed HTTPS fixture.
       // No fake update is written to the real updater or its local cache.
-      if (const bool.fromEnvironment('BPA_FAKE_UPDATE_TEST')) {
+      if (fakeProbe) {
         final manifest = await UpdateRepository(
           manifestUrl: 'https://raw.githubusercontent.com/LonelyChromosome/'
               'DemoF3/fix/1.4-theme-preset-custom-isolation/'
