@@ -97,7 +97,6 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
   late int _hour;
   int _minute = 0;
   bool _sending = false;
-  bool _cancelDialogOpen = false;
   Timer? _eligibilityRefresh;
   String? _savedLabel;
   DateTime? _savedTime;
@@ -304,101 +303,44 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
   }
 
   Future<void> _cancelAlarm() async {
-    if (_sending || _cancelDialogOpen ||
-        _savedLabel == null || _savedTime == null) return;
-
+    if (_sending || _savedLabel == null || _savedTime == null) return;
     final label = _savedLabel!;
     final target = _savedTime!;
-    _cancelDialogOpen = true;
-
+    setState(() => _sending = true);
     try {
-      // Android's Clock API has no cross-device silent delete or success
-      // callback. Do not navigate to Clock merely because X was tapped.
-      final proceed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Hủy báo thức'),
-          content: const Text(
-            'Android không cho BPA hủy ngầm báo thức của ứng dụng Đồng hồ '
-            'trên mọi thiết bị. Nếu tiếp tục, Đồng hồ có thể mở để xử lý '
-            'yêu cầu hủy. Ngày đang xem trong BPA sẽ được giữ nguyên.',
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Giữ báo thức'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('Tiếp tục hủy'),
-            ),
-          ],
-        ),
+      // One tap sends the targeted native Clock dismiss request.
+      // EXTRA_SKIP_UI is not supported by ACTION_DISMISS_ALARM:
+      // the device Clock may open on some Android implementations.
+      final dispatched = await _channel.invokeMethod<bool>(
+        'dismissAlarm',
+        <String, Object>{
+          'label': label,
+          'hour': target.hour,
+          'minute': target.minute,
+        },
       );
-      if (!mounted || proceed != true) return;
-
-      setState(() => _sending = true);
-      try {
-        final dispatched = await _channel.invokeMethod<bool>(
-          'dismissAlarm',
-          <String, Object>{
-            'label': label,
-            'hour': target.hour,
-            'minute': target.minute,
-          },
+      if (dispatched != true) {
+        throw PlatformException(
+          code: 'clock_failed',
+          message: 'Không gửi được yêu cầu hủy tới Đồng hồ.',
         );
-        if (!mounted) return;
-        if (dispatched != true) {
-          throw PlatformException(
-            code: 'clock_failed',
-            message: 'Không gửi được yêu cầu hủy tới Đồng hồ.',
-          );
-        }
-
-        // startActivity only confirms dispatch, not actual removal.
-        // Never silently clear X until the user explicitly confirms.
-        final confirmed = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (dialogContext) => AlertDialog(
-            title: const Text('Xác nhận đã hủy'),
-            content: const Text(
-              'BPA đã gửi yêu cầu tới Đồng hồ nhưng Android không trả '
-              'kết quả báo thức đã được xóa hay chưa. '
-              'Chỉ xác nhận sau khi bạn đã kiểm tra báo thức trong Đồng hồ.',
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Chưa xác nhận'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Đã hủy trong Đồng hồ'),
-              ),
-            ],
-          ),
-        );
-        if (!mounted || confirmed != true) return;
-
-        // The original card may have been rebound while Clock was open.
-        if (_savedLabel != label || _savedTime != target) return;
-        await _removeSavedAlarm();
-        if (!mounted) return;
-        setState(() {
-          _savedLabel = null;
-          _savedTime = null;
-        });
-        _showMessage('Đã xóa trạng thái báo thức khỏi BPA');
-      } on PlatformException catch (error) {
-        _showMessage(error.message ?? 'Không thể gửi yêu cầu hủy báo thức.');
-      } on MissingPluginException {
-        _showMessage('Đồng hồ không hỗ trợ lệnh hủy.');
-      } finally {
-        if (mounted) setState(() => _sending = false);
       }
+      // The Android intent has no result. This is an optimistic local
+      // dismissal request, NOT a verified Clock deletion.
+      if (_savedLabel != label || _savedTime != target) return;
+      await _removeSavedAlarm();
+      if (!mounted) return;
+      setState(() {
+        _savedLabel = null;
+        _savedTime = null;
+      });
+      _showMessage('Đã gửi yêu cầu hủy báo thức tới Đồng hồ');
+    } on PlatformException catch (error) {
+      _showMessage(error.message ?? 'Không thể gửi yêu cầu hủy báo thức.');
+    } on MissingPluginException {
+      _showMessage('Đồng hồ không hỗ trợ lệnh hủy.');
     } finally {
-      _cancelDialogOpen = false;
+      if (mounted) setState(() => _sending = false);
     }
   }
 
