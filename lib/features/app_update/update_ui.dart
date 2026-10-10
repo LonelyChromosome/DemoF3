@@ -466,7 +466,13 @@ class _CardBindingSheetState extends State<CardBindingSheet> {
             children: <Widget>[
               Text('Thẻ cập nhật', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 12),
-              if (_loading) const SizedBox(height: 480)
+              if (_loading) ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: const SizedBox(
+                  height: 480,
+                  child: ColoredBox(color: Color(0xFF050913)),
+                ),
+              )
               else CardLinkVfx(
                 key: ValueKey(_deleting),
                 displayName: widget.displayName,
