@@ -34,26 +34,12 @@ internal object StudyAlarmBridge {
                         return@setMethodCallHandler
                     }
                     val now = System.currentTimeMillis()
-                    val tomorrow = Calendar.getInstance().apply {
-                        timeInMillis = now
-                        add(Calendar.DAY_OF_MONTH, 1)
+                    val remaining = classMs - now
+                    if (remaining <= 0L || remaining >= 24L * 60 * 60 * 1000) {
+                        result.error("outside_window", "Chỉ đặt báo thức cho môn sắp bắt đầu trong dưới 24 giờ.", null)
+                        return@setMethodCallHandler
                     }
                     val classDate = Calendar.getInstance().apply { timeInMillis = classMs }
-                    if (classDate.get(Calendar.YEAR) != tomorrow.get(Calendar.YEAR) ||
-                        classDate.get(Calendar.DAY_OF_YEAR) != tomorrow.get(Calendar.DAY_OF_YEAR)
-                    ) {
-                        result.error("not_tomorrow", "Chỉ đặt báo thức cho lịch học ngày mai.", null)
-                        return@setMethodCallHandler
-                    }
-                    val today = Calendar.getInstance().apply { timeInMillis = now }
-                    val classMinute = classDate.get(Calendar.HOUR_OF_DAY) * 60 +
-                        classDate.get(Calendar.MINUTE)
-                    val todayMinute = today.get(Calendar.HOUR_OF_DAY) * 60 +
-                        today.get(Calendar.MINUTE)
-                    if (classMinute <= 0 || todayMinute < classMinute) {
-                        result.error("too_early", "Chưa đến thời gian đặt báo thức cho môn này.", null)
-                        return@setMethodCallHandler
-                    }
                     val desired = Calendar.getInstance().apply { timeInMillis = targetMs }
                     if (desired.get(Calendar.HOUR_OF_DAY) != hour ||
                         desired.get(Calendar.MINUTE) != minute ||
@@ -77,7 +63,7 @@ internal object StudyAlarmBridge {
                     if (next.get(Calendar.YEAR) != desired.get(Calendar.YEAR) ||
                         next.get(Calendar.DAY_OF_YEAR) != desired.get(Calendar.DAY_OF_YEAR)
                     ) {
-                        result.error("wrong_day", "Giờ này Đồng hồ sẽ đặt cho hôm nay, không phải ngày mai.", null)
+                        result.error("wrong_day", "Giờ này Đồng hồ sẽ đặt khác ngày học.", null)
                         return@setMethodCallHandler
                     }
                     Intent(AlarmClock.ACTION_SET_ALARM).apply {
