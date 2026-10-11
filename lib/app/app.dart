@@ -17,6 +17,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_retent
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/sync_reminder_policy.dart';
 import 'package:better_phenikaa_schedule/features/dong_bo_hang_ngay/daily_sync.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_dust_transition.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/schedule/tien_mon_schedule_views.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
@@ -58,8 +59,11 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
           debugShowCheckedModeBanner: false,
           themeAnimationDuration: Duration.zero,
           theme: buildBetterTheme(palette),
-          builder: (context, child) => BpaPenTraceSplash(
-            child: child ?? const SizedBox.shrink(),
+          builder: (context, child) => ThemeDustSurface(
+            key: ThemeDustSurface.surfaceKey,
+            child: BpaPenTraceSplash(
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
           home: const _AppRoot(),
         );
@@ -849,7 +853,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void _closeNotificationCenter() => _openPage(_notificationReturnPage);
 
   void _handleSystemBack(bool didPop) {
-    if (didPop) return;
+    if (didPop || ThemeDustSurface.busy.value) return;
     if (_panelOpen) {
       setState(() => _panelOpen = false);
       return;
@@ -2008,6 +2012,8 @@ class _NotificationCenterScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.only(bottom: 20),
               children: <Widget>[
+                _NotificationUpdateLogCard(palette: palette),
+                const SizedBox(height: 24),
                 if (hasActiveExamPeriod)
                   _NotificationExamCard(
                     text: AssistantText.of(
@@ -2076,17 +2082,12 @@ class _NotificationCenterScreen extends StatelessWidget {
                 ],
                 if (!hasActiveExamPeriod && !hasAnyChange)
                   Padding(
-                    padding: const EdgeInsets.only(top: 90),
+                    padding: const EdgeInsets.only(top: 24),
                     child: _EmptyState(
                       icon: Icons.notifications_none_rounded,
-                      title: AssistantText.of(
-                        AssistantEvent.notificationEmpty,
-                        assistantPack,
-                      ),
-                      message: AssistantText.of(
-                        AssistantEvent.notificationEmptyDescription,
-                        assistantPack,
-                      ),
+                      title: 'Chưa có thông báo lịch mới',
+                      message:
+                          'Các thay đổi lịch học và lịch thi sẽ xuất hiện ở đây.',
                     ),
                   ),
               ],
@@ -2096,6 +2097,67 @@ class _NotificationCenterScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Update reports occupy their own block, separate from exam reminders.
+class _NotificationUpdateLogCard extends StatelessWidget {
+  const _NotificationUpdateLogCard({required this.palette});
+  final AppThemePalette palette;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: palette.primary.withValues(alpha: .08),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: palette.primary.withValues(alpha: .25)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.new_releases_outlined, color: palette.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Update log',
+                style: TextStyle(
+                  color: palette.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Text(
+              'cooc1.6',
+              style: TextStyle(
+                color: palette.primary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        for (final line in const ['Bổ sung VFX', 'Báo thức', 'Fix lỗi vặt'])
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('•  ', style: TextStyle(color: palette.primary)),
+                Expanded(
+                  child: Text(
+                    line,
+                    style: TextStyle(color: palette.textPrimary, fontSize: 15),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
 }
 
 class _NotificationExamCard extends StatelessWidget {

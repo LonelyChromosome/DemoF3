@@ -748,7 +748,7 @@ class AppThemeController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteCustomTheme(String id) async {
+  Future<void> deleteCustomTheme(String id, {bool immediate = false}) async {
     final next = _customThemes.where((item) => item.id != id).toList();
     if (next.length == _customThemes.length) {
       return;
@@ -756,7 +756,22 @@ class AppThemeController extends ChangeNotifier {
     await const CustomThemeRepository().replaceAll(next);
     _customThemes = next;
     if (_activeCustomTheme?.id == id) {
-      await _transitionTo(themeId: AppThemeId.classic);
+      if (immediate) {
+        _transitionTimer?.cancel();
+        ++_transitionSerial;
+        final pending = _transitionCompletion;
+        if (pending != null && !pending.isCompleted) pending.complete();
+        _transitionCompletion = null;
+        _transitionTimer = null;
+        _theme = AppThemeId.classic;
+        _activeCustomTheme = null;
+        _activeCustomFontFamily = null;
+        _transitionPalette = null;
+        notifyListeners();
+        await _commitSelection(palette);
+      } else {
+        await _transitionTo(themeId: AppThemeId.classic);
+      }
     } else {
       notifyListeners();
     }
