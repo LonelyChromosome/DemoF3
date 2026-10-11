@@ -205,6 +205,24 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
       ));
   }
 
+  void _requestAlarmOffPermission() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: const Text(
+          'Để tự gạt tắt đúng báo thức trong Đồng hồ, hãy bật Trợ năng BPA một lần.',
+        ),
+        duration: const Duration(seconds: 10),
+        action: SnackBarAction(
+          label: 'Bật quyền',
+          onPressed: () {
+            _channel.invokeMethod<bool>('openOffAccessibilitySettings');
+          },
+        ),
+      ));
+  }
+
   void _resetPicker() {
     _hour = studyAlarmDefaultHour(widget.item.startAt);
     _minute = studyAlarmDefaultMinute(widget.item.startAt);
@@ -317,11 +335,12 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
     final target = _savedTime!;
     setState(() => _sending = true);
     try {
-      // One tap sends the targeted native Clock dismiss request.
-      // EXTRA_SKIP_UI is not supported by ACTION_DISMISS_ALARM:
-      // the device Clock may open on some Android implementations.
+      // One tap: open the native Clock list and ask the user's optional
+      // accessibility service to find HH:MM + course name and flip OFF.
+      // Do not send ACTION_DISMISS_ALARM here (it could disable an alarm
+      // before the UI scan, or trigger another confirmation screen).
       final dispatched = await _channel.invokeMethod<bool>(
-        'dismissAlarm',
+        'offAlarm',
         <String, Object>{
           'label': label,
           'hour': target.hour,
@@ -331,11 +350,9 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
       if (dispatched != true) {
         throw PlatformException(
           code: 'clock_failed',
-          message: 'Không gửi được yêu cầu hủy tới Đồng hồ.',
+          message: 'Không mở được Đồng hồ để tắt báo thức.',
         );
       }
-      // The Android intent has no result. This is an optimistic local
-      // dismissal request, NOT a verified Clock deletion.
       if (_savedLabel != label || _savedTime != target) return;
       await _removeSavedAlarm();
       if (!mounted) return;
@@ -343,11 +360,16 @@ class _StudyAlarmCardState extends State<StudyAlarmCard> {
         _savedLabel = null;
         _savedTime = null;
       });
-      _showMessage('Đã gửi yêu cầu hủy báo thức tới Đồng hồ');
+      // Preserve current 1.6 UX: X returns to bell immediately after
+      // dispatch. The service refuses to touch ambiguous rows.
     } on PlatformException catch (error) {
-      _showMessage(error.message ?? 'Không thể gửi yêu cầu hủy báo thức.');
+      if (error.code == 'accessibility_required') {
+        _requestAlarmOffPermission();
+      } else {
+        _showMessage(error.message ?? 'Không thể mở Đồng hồ để tắt báo thức.');
+      }
     } on MissingPluginException {
-      _showMessage('Đồng hồ không hỗ trợ lệnh hủy.');
+      _showMessage('Chưa hỗ trợ tự tắt báo thức trên thiết bị này.');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
