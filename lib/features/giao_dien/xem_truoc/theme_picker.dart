@@ -6,6 +6,7 @@ import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_choic
 import 'package:better_phenikaa_schedule/features/giao_dien/phong_chu/font_manager.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/custom_theme_editor.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_dust_transition.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 
@@ -29,9 +30,16 @@ Future<void> showAppThemePicker(BuildContext context) async {
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     barrierColor: const Color(0x99000000),
-    builder: (context) => AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) => _ThemePickerSheet(controller: controller),
+    builder: (context) => ValueListenableBuilder<bool>(
+      valueListenable: ThemeDustSurface.busy,
+      builder: (context, busy, child) => PopScope(
+        canPop: !busy,
+        child: child!,
+      ),
+      child: AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) => _ThemePickerSheet(controller: controller),
+      ),
     ),
   );
 }
@@ -787,7 +795,14 @@ class _ThemePickerSheet extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) await controller.deleteCustomTheme(theme.id);
+    if (confirmed != true) return;
+    if (controller.activeCustomTheme?.id == theme.id) {
+      await ThemeDustSurface.delete(
+        () => controller.deleteCustomTheme(theme.id, immediate: true),
+      );
+    } else {
+      await controller.deleteCustomTheme(theme.id);
+    }
   }
 }
 
