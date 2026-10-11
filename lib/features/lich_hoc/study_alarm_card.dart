@@ -30,32 +30,26 @@ bool studyAlarmIsTomorrow(DateTime classStart, DateTime now) {
       classStart.day == tomorrow.day;
 }
 
-/// Only expose the control once today's clock has reached tomorrow's class
-/// start time. Every allowed earlier wheel selection has then passed today.
+/// Show the control for any upcoming class less than 24 hours away.
 bool studyAlarmCanOpen(DateTime classStart, DateTime now) {
-  if (!studyAlarmIsTomorrow(classStart, now)) return false;
-  final classMinute = classStart.hour * 60 + classStart.minute;
-  final nowMinute = now.hour * 60 + now.minute;
-  return classMinute > 0 && nowMinute >= classMinute;
+  final remaining = classStart.difference(now);
+  return remaining > Duration.zero && remaining < const Duration(hours: 24);
 }
 
 /// The picker is tied to the class date, never today's date or another day.
 DateTime studyAlarmOccurrence(DateTime classStart, int hour, int minute) =>
     DateTime(classStart.year, classStart.month, classStart.day, hour, minute);
 
-/// ACTION_SET_ALARM always schedules the next HH:MM occurrence, so checking
-/// tomorrow's date alone is insufficient if the same time is still ahead today.
+/// ACTION_SET_ALARM schedules the next HH:MM occurrence. Validate the chosen
+/// time against the actual class date before handing it to the native Clock.
 String? studyAlarmValidation(
   DateTime classStart,
   DateTime now,
   int hour,
   int minute,
 ) {
-  if (!studyAlarmIsTomorrow(classStart, now)) {
-    return 'Chỉ đặt báo thức cho lịch học ngày mai';
-  }
   if (!studyAlarmCanOpen(classStart, now)) {
-    return 'Chưa đến thời gian đặt báo thức cho môn này';
+    return 'Chỉ đặt báo thức cho môn sắp bắt đầu trong dưới 24 giờ';
   }
   final desired = studyAlarmOccurrence(classStart, hour, minute);
   if (!desired.isBefore(classStart)) {
@@ -71,7 +65,7 @@ String? studyAlarmValidation(
   if (next.year != desired.year ||
       next.month != desired.month ||
       next.day != desired.day) {
-    return 'Giờ này Đồng hồ sẽ đặt cho hôm nay, không phải ngày mai';
+    return 'Giờ này Đồng hồ sẽ đặt khác ngày học';
   }
   return null;
 }

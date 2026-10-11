@@ -37,7 +37,9 @@ void main() {
     final data = withAlarmTestFixture(null, now);
     expect(data.records.every((r) => !studyAlarmCanOpen(r.startAt, now)), isTrue);
     expect(studyAlarmCanOpen(data.records.first.startAt,
-        DateTime(2026, 10, 11, 0, 1)), isTrue);
+        DateTime(2026, 10, 11, 0, 1)), isFalse);
+    expect(studyAlarmCanOpen(data.records.first.startAt,
+        DateTime(2026, 10, 11, 0, 1, 1)), isTrue);
   });
 
   test('fixture advances across year boundary without touching real data', () {

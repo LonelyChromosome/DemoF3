@@ -21,14 +21,24 @@ void main() {
     );
   });
 
-  test('only tomorrow classes can show alarm button from today class time', () {
-    final classStart = DateTime(2026, 10, 11, 9, 30);
-    expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 10, 7)), isFalse);
-    expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 10, 9, 29)), isFalse);
-    expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 10, 9, 30)), isTrue);
-    expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 10, 22)), isTrue);
+  test('alarm action uses a strict rolling 24-hour window', () {
+    final classStart = DateTime(2026, 10, 12, 9, 30);
+    expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 11, 9, 29)), isFalse);
     expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 11, 9, 30)), isFalse);
-    expect(studyAlarmCanOpen(DateTime(2026, 10, 12, 9, 30), DateTime(2026, 10, 10, 22)), isFalse);
+    expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 11, 9, 30, 1)), isTrue);
+    expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 12, 1)), isTrue);
+    expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 12, 3, 39)), isTrue);
+    expect(studyAlarmCanOpen(classStart, classStart), isFalse);
+    expect(studyAlarmCanOpen(classStart, DateTime(2026, 10, 12, 10)), isFalse);
+  });
+
+  test('setting an alarm after midnight for class later that morning works', () {
+    final classStart = DateTime(2026, 10, 12, 9, 30);
+    final now = DateTime(2026, 10, 12, 1);
+    expect(studyAlarmValidation(classStart, now, 8, 30), isNull);
+    expect(studyAlarmValidation(classStart, now, 0, 59), contains('đã qua'));
+    expect(studyAlarmValidation(classStart, now, 1, 0), contains('đã qua'));
+    expect(studyAlarmValidation(classStart, now, 9, 30), contains('trước giờ học'));
   });
 
   test('picker starts exactly at class time and requires scrolling back', () {
@@ -49,8 +59,8 @@ void main() {
     expect(studyAlarmValidation(s, DateTime(2026, 12, 31, 10), 9, 29), isNull);
   });
 
-  test('midnight class cannot be alarmed strictly before start on same day', () {
+  test('midnight class also falls within the rolling window', () {
     final s = DateTime(2026, 10, 11, 0, 0);
-    expect(studyAlarmCanOpen(s, DateTime(2026, 10, 10, 18)), isFalse);
+    expect(studyAlarmCanOpen(s, DateTime(2026, 10, 10, 18)), isTrue);
   });
 }
