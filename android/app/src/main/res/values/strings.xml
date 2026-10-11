@@ -8,4 +8,6 @@
     <string name="widget_small_description">Widget nhỏ 4×1: lịch học, lịch thi và ba nút chức năng.</string>
     <string name="widget_overview_description">Widget tổng quan 4×2: các môn theo ô cố định và chuyển trang.</string>
     <string name="widget2_description">Widget 2 4×2: tối đa năm môn, ảnh rõ và nền ảnh làm mờ.</string>
+    <string name="alarm_off_accessibility_label">BPA · Tắt báo thức theo môn</string>
+    <string name="alarm_off_accessibility_description">Chỉ khi bạn nhấn X trong BPA, dịch vụ đọc giờ và tên báo thức đang hiển thị trong ứng dụng Đồng hồ, tự cuộn để tìm đúng môn và gạt công tắc sang Tắt. Không tự điều khiển các ứng dụng khác; không cần quyền để đặt báo thức.</string>
 </resources>
