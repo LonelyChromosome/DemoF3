@@ -3,6 +3,8 @@ package vn.edu.phenikaa.better_phenikaa_schedule
 import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.provider.Settings
 import android.provider.AlarmClock
 import java.util.Calendar
 import io.flutter.plugin.common.BinaryMessenger
@@ -14,6 +16,15 @@ internal object StudyAlarmBridge {
 
     fun attach(activity: Activity, messenger: BinaryMessenger) {
         MethodChannel(messenger, CHANNEL).setMethodCallHandler { call, result ->
+            if (call.method == "openOffAccessibilitySettings") {
+                try {
+                    activity.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.error("settings_failed", e.message ?: "Không mở được cài đặt Trợ năng.", null)
+                }
+                return@setMethodCallHandler
+            }
             val label = call.argument<String>("label")
                 ?.takeIf { it.isNotBlank() }
                 ?.take(120)
@@ -21,6 +32,49 @@ internal object StudyAlarmBridge {
                 result.error("invalid_label", "Không có mã báo thức hợp lệ.", null)
                 return@setMethodCallHandler
             }
+            if (call.method == "offAlarm") {
+                // Opt-in. Without Accessibility no alarm is touched and Flutter
+                // retains its red X instead of pretending the alarm is off.
+                if (!ClockAlarmOffService.isReady()) {
+                    result.error("accessibility_required",
+                        "Bật Trợ năng BPA để tự tìm và gạt tắt báo thức.", null)
+                    return@setMethodCallHandler
+                }
+                val hour = call.argument<Int>("hour")
+                val minute = call.argument<Int>("minute")
+                if (hour == null || minute == null || hour !in 0..23 || minute !in 0..59) {
+                    result.error("invalid_time", "Giờ báo thức không hợp lệ.", null)
+                    return@setMethodCallHandler
+                }
+                val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS)
+                val clockPackage = activity.packageManager
+                    .resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+                    ?.activityInfo?.packageName
+                // If the chooser, not a Clock, is the default, refuse to scan
+                // an unknown third-party app. No generic Clock ID is exposed.
+                if (clockPackage.isNullOrBlank() || clockPackage == "android") {
+                    result.error("clock_unknown",
+                        "Hãy chọn ứng dụng Đồng hồ mặc định trước khi dùng tự tắt.", null)
+                    return@setMethodCallHandler
+                }
+                if (!ClockAlarmOffService.begin(label, hour, minute, clockPackage)) {
+                    result.error("accessibility_unavailable",
+                        "Dịch vụ Trợ năng BPA chưa sẵn sàng.", null)
+                    return@setMethodCallHandler
+                }
+                try {
+                    activity.startActivity(intent.setPackage(clockPackage))
+                    result.success(true)
+                } catch (_: ActivityNotFoundException) {
+                    ClockAlarmOffService.abort()
+                    result.error("no_clock", "Không mở được Đồng hồ.", null)
+                } catch (e: Exception) {
+                    ClockAlarmOffService.abort()
+                    result.error("clock_failed", e.message ?: "Không mở được Đồng hồ.", null)
+                }
+                return@setMethodCallHandler
+            }
+
             val request = when (call.method) {
                 "setAlarm" -> {
                     val hour = call.argument<Int>("hour")
