@@ -120,6 +120,8 @@ jobs:
           p.write_text(s.replace(v, ""))
           PY
           flutter pub get
+      - name: Verify study alarm time window
+        run: flutter test test/study_alarm_card_test.dart test/alarm_test_fixture_test.dart
       - name: Build one target APK only
         timeout-minutes: 20
         env:
