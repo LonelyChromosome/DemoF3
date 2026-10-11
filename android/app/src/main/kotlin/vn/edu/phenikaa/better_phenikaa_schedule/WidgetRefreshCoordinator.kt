@@ -54,12 +54,12 @@ internal object WidgetRefreshCoordinator {
         OverviewWidgetProvider().onUpdate(context, manager, ids, data)
     }
 
-    fun refreshWidget2TimeTheme(context: Context) {
+    fun refreshWidget2TimeTheme(context: Context, fadeContent: Boolean = true) {
         val manager = AppWidgetManager.getInstance(context)
         manager.getAppWidgetIds(ComponentName(context, Widget2Provider::class.java))
             .forEach { id ->
                 WidgetRenderDispatcher.render(context, manager,
-                    WidgetRenderRequest(WidgetSurface.WIDGET2, id, fadeContent = true))
+                    WidgetRenderRequest(WidgetSurface.WIDGET2, id, fadeContent = fadeContent))
             }
     }
 
@@ -78,7 +78,7 @@ internal object WidgetRefreshCoordinator {
         }
     }
 
-    fun refreshToday(context: Context) {
+    fun refreshToday(context: Context, fadeWidget2: Boolean = true) {
         val appContext = context.applicationContext
         val manager = AppWidgetManager.getInstance(appContext)
         val component = ComponentName(appContext, ScheduleWidgetProvider::class.java)
@@ -121,7 +121,7 @@ internal object WidgetRefreshCoordinator {
         OverviewWidgetProvider().restoreDisplay(appContext, manager, overviewIds)
         widget2Ids.forEach { id ->
             WidgetRenderDispatcher.render(appContext, manager,
-                WidgetRenderRequest(WidgetSurface.WIDGET2, id, fadeContent = true))
+                WidgetRenderRequest(WidgetSurface.WIDGET2, id, fadeContent = fadeWidget2))
         }
     }
 }

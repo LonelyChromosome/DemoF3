@@ -29,7 +29,7 @@ class Widget2Provider : AppWidgetProvider() {
         ids.forEach { id ->
             WidgetRenderDispatcher.render(context, manager,
                 WidgetRenderRequest(WidgetSurface.WIDGET2, id,
-                    forceStaticLayer = true, fadeContent = true))
+                    forceStaticLayer = true))
         }
     }
 
@@ -125,7 +125,6 @@ class Widget2Provider : AppWidgetProvider() {
             source?.lastModified() ?: 0L,
             source?.length() ?: 0L,
         )
-        val previousToken = state(context).getString(staticTokenKey(id), null)
         val views = baseViews(context, id, palette, examMode)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             views.setViewLayoutWidth(R.id.widget2_content_layer,
@@ -145,26 +144,25 @@ class Widget2Provider : AppWidgetProvider() {
         }
         views.setImageViewBitmap(R.id.widget2_content_layer, dynamic)
         views.setFloat(R.id.widget2_root, "setAlpha", initialAlpha.coerceIn(0f, 1f))
-        if (forceStaticLayer || previousToken != token) {
-            views.setImageViewBitmap(
-                R.id.widget2_static_layer,
-                WidgetStaticLayerRenderer.render(
-                    context, WidgetSurface.WIDGET2, widthPx, heightPx, config, palette,
-                ),
-            )
-            if (palette.key == "custom" && config.widget2Border.enabled) {
-                views.setImageViewBitmap(R.id.widget2_border_layer,
-                    WidgetStaticLayerRenderer.renderBorderOverlay(context,
-                        WidgetSurface.WIDGET2, widthPx, heightPx, config, palette))
-                views.setViewVisibility(R.id.widget2_border_layer, View.VISIBLE)
-            } else {
-                views.setViewVisibility(R.id.widget2_border_layer, View.GONE)
-            }
-            manager.updateAppWidget(id, views)
-            state(context).edit().putString(staticTokenKey(id), token).apply()
+        // A saved token does not prove the launcher still has our background.
+        // Package replacement can reinflate the layout with empty ImageViews.
+        // Always rebind a complete RemoteViews; the renderer caches its bitmap.
+        views.setImageViewBitmap(
+            R.id.widget2_static_layer,
+            WidgetStaticLayerRenderer.render(
+                context, WidgetSurface.WIDGET2, widthPx, heightPx, config, palette,
+            ),
+        )
+        if (palette.key == "custom" && config.widget2Border.enabled) {
+            views.setImageViewBitmap(R.id.widget2_border_layer,
+                WidgetStaticLayerRenderer.renderBorderOverlay(context,
+                    WidgetSurface.WIDGET2, widthPx, heightPx, config, palette))
+            views.setViewVisibility(R.id.widget2_border_layer, View.VISIBLE)
         } else {
-            manager.partiallyUpdateAppWidget(id, views)
+            views.setViewVisibility(R.id.widget2_border_layer, View.GONE)
         }
+        manager.updateAppWidget(id, views)
+        state(context).edit().putString(staticTokenKey(id), token).apply()
         dynamic.recycle()
     }
 

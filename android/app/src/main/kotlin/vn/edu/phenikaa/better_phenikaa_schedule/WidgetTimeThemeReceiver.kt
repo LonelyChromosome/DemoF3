@@ -19,7 +19,8 @@ class WidgetTimeThemeReceiver : BroadcastReceiver() {
             return
         }
         WidgetRefreshCoordinator.refreshOverview(appContext)
-        WidgetRefreshCoordinator.refreshWidget2TimeTheme(appContext)
+        WidgetRefreshCoordinator.refreshWidget2TimeTheme(appContext,
+            fadeContent = intent?.action != Intent.ACTION_MY_PACKAGE_REPLACED)
         scheduleNext(appContext)
     }
 
