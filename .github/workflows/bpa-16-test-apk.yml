@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/1.6-alarm-bridge
+      - feature/cooc1.6-theme-dust-update-log
 
 permissions:
   contents: read
@@ -40,17 +41,19 @@ jobs:
           assert s.count(old) == 1
           manifest.write_text(s.replace(old, 'android:label="BPA 1.6 Test"'))
           PY
+      - name: Check new theme transition and notification code
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/features/giao_dien/xem_truoc/theme_dust_transition.dart lib/features/giao_dien/xem_truoc/theme_picker.dart lib/theme/app_theme.dart lib/app/app.dart
       - name: Build single ARM64 profile APK
         run: |
           set -euo pipefail
-          flutter build apk --profile --target-platform android-arm64 --build-number=35 --dart-define=BPA_ALARM_TEST_FIXTURE=false
+          flutter build apk --profile --target-platform android-arm64 --build-number=48 --dart-define=BPA_ALARM_TEST_FIXTURE=false
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.6-Card-VFX-Test.apk
-          sha256sum dist/BPA-1.6-Card-VFX-Test.apk > dist/SHA256SUMS
+          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.6-Theme-Dust-Test.apk
+          sha256sum dist/BPA-1.6-Theme-Dust-Test.apk > dist/SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
-          name: BPA-1.6-Card-VFX-Test
+          name: BPA-1.6-Theme-Dust-Test
           path: |
-            dist/BPA-1.6-Card-VFX-Test.apk
+            dist/BPA-1.6-Theme-Dust-Test.apk
             dist/SHA256SUMS
           retention-days: 14
