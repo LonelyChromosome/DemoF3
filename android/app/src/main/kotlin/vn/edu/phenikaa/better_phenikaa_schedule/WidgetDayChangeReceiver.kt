@@ -33,7 +33,8 @@ class WidgetDayChangeReceiver : BroadcastReceiver() {
             WidgetRefreshDecision.dayChanged(previous, today)
 
         if (dayChanged) {
-            WidgetRefreshCoordinator.refreshToday(appContext)
+            WidgetRefreshCoordinator.refreshToday(appContext,
+                fadeWidget2 = intent?.action != Intent.ACTION_MY_PACKAGE_REPLACED)
         } else {
             // Same-day alarms exist only to refresh wall-clock-dependent overview visuals.
             WidgetRefreshCoordinator.refreshOverview(appContext)
