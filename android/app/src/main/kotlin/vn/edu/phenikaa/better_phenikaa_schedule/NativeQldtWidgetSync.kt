@@ -204,15 +204,61 @@ internal class NativeQldtWidgetSync(sessionJson: String) {
     }
 
     private fun fetchSchedule(start: String, end: String): String {
-        val response = post(
-            ACTION_SCHEDULE,
-            FUNC_SCHEDULE,
-            JSONObject().put("strNgayBatDau", start).put("strNgayKetThuc", end),
-        )
-        return JSONObject()
-            .put("name", session.displayName)
-            .put("response", response)
-            .toString()
+        // Retrieve the COMPLETE range in week-sized requests. QLĐT may cap
+        // or time out a whole-semester request; never publish partial data.
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).apply {
+            isLenient = false
+        }
+        val first = dateFormat.parse(start)
+            ?: throw NativeSyncException("INVALID_DATE: Ngày bắt đầu không hợp lệ.")
+        val last = dateFormat.parse(end)
+            ?: throw NativeSyncException("INVALID_DATE: Ngày kết thúc không hợp lệ.")
+        val cursor = Calendar.getInstance().apply { time = first }
+        val finalDay = Calendar.getInstance().apply { time = last }
+        val chunks = mutableListOf<Pair<String, String>>()
+        while (!cursor.after(finalDay)) {
+            val from = dateFormat.format(cursor.time)
+            val to = (cursor.clone() as Calendar).apply {
+                add(Calendar.DAY_OF_MONTH, 6)
+                if (after(finalDay)) time = finalDay.time
+            }
+            chunks.add(from to dateFormat.format(to.time))
+            cursor.time = to.time
+            cursor.add(Calendar.DAY_OF_MONTH, 1)
+        }
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(6)
+        try {
+            val futures = chunks.map { (from, to) ->
+                pool.submit<JSONArray> {
+                    if (cancelled.get()) {
+                        throw NativeSyncException("SYNC_STOPPED: Đã hủy.")
+                    }
+                    rows(post(
+                        ACTION_SCHEDULE,
+                        FUNC_SCHEDULE,
+                        JSONObject().put("strNgayBatDau", from)
+                            .put("strNgayKetThuc", to),
+                    ))
+                }
+            }
+            val merged = JSONArray()
+            for (future in futures) {
+                if (cancelled.get()) {
+                    throw NativeSyncException("SYNC_STOPPED: Đã hủy.")
+                }
+                val list = future.get()
+                for (index in 0 until list.length()) merged.put(list.get(index))
+            }
+            if (cancelled.get()) {
+                throw NativeSyncException("SYNC_STOPPED: Đã hủy.")
+            }
+            return JSONObject()
+                .put("name", session.displayName)
+                .put("response", JSONObject().put("Success", true).put("Data", merged))
+                .toString()
+        } finally {
+            pool.shutdownNow()
+        }
     }
 
     private fun post(action: String, func: String, extra: JSONObject): JSONObject {
