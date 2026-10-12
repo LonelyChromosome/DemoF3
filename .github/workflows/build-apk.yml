@@ -29,8 +29,13 @@ on:
         required: false
         default: ""
 
+concurrency:
+  group: cooc-release
+  cancel-in-progress: false
+
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: cooc-release
     permissions:
@@ -106,7 +111,7 @@ jobs:
           VERSION_CODE: ${{ inputs.version_code }}
           APK_NAME: ${{ steps.meta.outputs.apk_name }}
           UPDATE_PUBLIC_KEY_BASE64: ${{ vars.UPDATE_PUBLIC_KEY_BASE64 }}
-          UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/LonelyChromosome/DemoF3/feature/1.2-card-update/updates/latest.json
+          UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/LonelyChromosome/DemoF3/main/updates/latest.json
         run: |
           set -euo pipefail
           # Remove dev-only integration_test registrant only from this runner.
@@ -129,7 +134,7 @@ jobs:
           VERSION_CODE: ${{ inputs.version_code }}
           APK_NAME: ${{ steps.meta.outputs.apk_name }}
           UPDATE_PUBLIC_KEY_BASE64: ${{ vars.UPDATE_PUBLIC_KEY_BASE64 }}
-          UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/LonelyChromosome/DemoF3/feature/1.2-card-update/updates/latest.json
+          UPDATE_MANIFEST_URL: https://raw.githubusercontent.com/LonelyChromosome/DemoF3/main/updates/latest.json
         run: |
           set -euo pipefail
           log="$RUNNER_TEMP/flutter-build.log"
@@ -238,8 +243,8 @@ jobs:
           test -f "dist/$APK_NAME" && test -f dist/latest.json && test -f dist/latest.json.sig
           # Checksums contain dist/ paths, so verify from the repository root.
           sha256sum --check dist/SHA256SUMS
-          git fetch origin refs/heads/feature/1.2-card-update:refs/remotes/origin/feature/1.2-card-update
-          git show origin/feature/1.2-card-update:updates/latest.json > "$RUNNER_TEMP/current-latest.json"
+          git fetch origin refs/heads/main:refs/remotes/origin/main
+          git show origin/main:updates/latest.json > "$RUNNER_TEMP/current-latest.json"
           python3 - <<'PY'
           import hashlib, json, os
           from pathlib import Path
@@ -259,7 +264,7 @@ jobs:
             echo "Refusing to clobber an existing signed release tag" >&2
             exit 1
           fi
-      - name: Publish immutable release and update existing 1.1 feed
+      - name: Publish immutable release and update main plus legacy APK feed
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION_NAME: ${{ inputs.version_name }}
@@ -268,15 +273,31 @@ jobs:
           NOTES: ${{ inputs.notes }}
         run: |
           set -euo pipefail
+          # Old APKs retain the original raw URL, now served by a compatibility tag.
+          legacy_ref="feature/1.2-card-update"
+          legacy_tag_sha="$(git ls-remote origin "refs/tags/$legacy_ref" | cut -f1)"
+          test -n "$legacy_tag_sha"
+          legacy_branch_sha="$(git ls-remote origin "refs/heads/$legacy_ref" | cut -f1)"
+          git fetch origin refs/heads/main:refs/remotes/origin/main
+          # Never publish metadata over unrelated changes made during the build.
+          git diff --exit-code "$GITHUB_SHA" origin/main -- . ':!updates'
           gh release create "$TAG" "dist/$APK_NAME" --target "$GITHUB_SHA" \
             --title "Better Phenikaa $VERSION_NAME" --notes "$NOTES"
-          # Existing cooc.1.1 APKs already embed the URL on this branch.
-          # Do not move the feed without a migration.
-          git switch -C publish-feature-updater-feed origin/feature/1.2-card-update
+          main_sha="$(git rev-parse origin/main)"
+          git switch -C publish-main-updater-feed origin/main
           mkdir -p updates
           cp dist/latest.json dist/latest.json.sig updates/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add updates/latest.json updates/latest.json.sig
-          git commit -m "Publish signed $VERSION_NAME Feature Updater metadata"
-          git push origin HEAD:refs/heads/feature/1.2-card-update
+          git commit -m "Publish signed $VERSION_NAME updater metadata on main"
+          refs=("HEAD:refs/heads/main" "HEAD:refs/tags/$legacy_ref")
+          leases=("--force-with-lease=refs/heads/main:$main_sha"
+                  "--force-with-lease=refs/tags/$legacy_ref:$legacy_tag_sha")
+          # During migration the old branch still wins raw URL resolution.
+          # Keep it identical until the verified cleanup removes that branch.
+          if [ -n "$legacy_branch_sha" ]; then
+            refs+=("HEAD:refs/heads/$legacy_ref")
+            leases+=("--force-with-lease=refs/heads/$legacy_ref:$legacy_branch_sha")
+          fi
+          git push --atomic "${leases[@]}" origin "${refs[@]}"
