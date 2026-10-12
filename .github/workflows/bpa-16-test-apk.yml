@@ -1,16 +1,14 @@
 name: BPA 1.6 - profile test APK (no publish)
 
 on:
-  push:
-    branches:
-      - feature/1.6-alarm-bridge
-      - feature/cooc1.6-theme-dust-update-log
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
