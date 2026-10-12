@@ -1911,6 +1911,18 @@ class _TimetableScreenState extends State<_TimetableScreen> {
           children: <Widget>[
             GestureDetector(
       behavior: HitTestBehavior.opaque,
+      onVerticalDragUpdate: (!_weekly && items.isEmpty)
+          ? (details) {
+              final delta = details.primaryDelta ?? 0;
+              if (delta > 0 && widget.pullSyncPhase == PullSyncPhase.idle) {
+                setState(() {
+                  _pullDistance = (_pullDistance + delta)
+                      .clamp(0.0, _pullThreshold + 24);
+                });
+              }
+            }
+          : null,
+      onVerticalDragEnd: (_) => _finishPull(),
       onHorizontalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
         if (velocity.abs() < 180) {
