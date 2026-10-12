@@ -56,7 +56,30 @@ internal class BpaInlineSyncBridge(context: Context, engine: FlutterEngine) {
                 throw IllegalStateException("Chưa có phiên QLĐT và lịch đã xác minh.")
             }
             if (ticket != epoch.get()) return cancelled(reply)
-            val sync = NativeQldtWidgetSync(session)
+            // Initial login caches a native session before the verified QLĐT
+            // display name is known. Supply the previously verified name in
+            // memory; do not rewrite credentials, session or the old parser.
+            val resolvedSession = JSONObject(session)
+            if (resolvedSession.optString("name").isBlank()) {
+                val profile = runCatching {
+                    JSONObject(prefs.getString(
+                        "flutter.better_phenikaa_qldt_profile_v1", "{}"
+                    ) ?: "{}")
+                }.getOrNull()
+                val verifiedName = if (
+                    profile?.optString("source") == "qldt_api_registration" &&
+                    profile.optString("userId") == resolvedSession.optString("userId")
+                ) profile.optString("name") else ""
+                val savedName = runCatching {
+                    JSONObject(previous).optString("displayName")
+                }.getOrDefault("")
+                val name = verifiedName.ifBlank { savedName }.trim()
+                if (name.isNotEmpty()) {
+                    resolvedSession.put("name", name)
+                    resolvedSession.put("nameSource", "qldt_api_registration")
+                }
+            }
+            val sync = NativeQldtWidgetSync(resolvedSession.toString())
             active = sync
             val remote = sync.run()
             if (ticket != epoch.get()) return cancelled(reply)
