@@ -56,6 +56,7 @@ class MainActivity : FlutterActivity() {
         ExamChangeNotifier.recoverExisting(applicationContext)
         SyncStaleReminderScheduler.reconcile(applicationContext)
         configureDailySyncChannel(flutterEngine)
+        BpaInlineSyncBridge(applicationContext, flutterEngine)
         configureQldtCredentialChannel(flutterEngine)
         configureWidgetSessionChannel(flutterEngine)
         configureLocalFileChannel(flutterEngine)
