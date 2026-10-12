@@ -21,6 +21,8 @@ import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_dust
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/schedule/tien_mon_schedule_views.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/attendance_tag.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/pull_sync_indicator.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/study_alarm_card.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/alarm_test_fixture.dart';
 import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
@@ -95,6 +97,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _booting = true;
   bool _syncing = false;
   bool _panelOpen = false;
+  static const _attendanceStorageKey = 'better_phenikaa_attendance_v17';
+  static const _inlineSyncChannel = MethodChannel('better_phenikaa/inline_sync');
+  Map<String, AttendanceSummary> _attendance = const {};
+  PullSyncPhase _inlineSyncPhase = PullSyncPhase.idle;
+  Timer? _inlineSlowTimer;
+  Timer? _inlineResultTimer;
+  int _inlineSyncEpoch = 0;
+  bool _inlineCommitting = false;
   ImportedScheduleData? _data;
   // Fix test fixture times for a whole day: rebuilding the screen (including
   // after returning from Clock) must not change class hours or keys.
@@ -174,6 +184,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   void dispose() {
     _examClockTimer?.cancel();
     _syncStaleTimer?.cancel();
+    _inlineSlowTimer?.cancel();
+    _inlineResultTimer?.cancel();
     _semesterExpiryTimer?.cancel();
     _exitGestureTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -441,6 +453,23 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       _assistantPack = await AssistantSelection.load();
       _accountDisplayName = await readQldtAccountDisplayName();
       var raw = prefs.getString(_storageKey);
+      final attendanceRaw = prefs.getString(_attendanceStorageKey);
+      if (attendanceRaw != null) {
+        try {
+          final cached = jsonDecode(attendanceRaw) as Map<String, dynamic>;
+          if (cached['route'] == prefs.getString(_routeKey) &&
+              cached['counts'] is Map) {
+            final counts = cached['counts'] as Map;
+            _attendance = {
+              for (final entry in counts.entries)
+                if (AttendanceSummary.fromJson(entry.value) != null)
+                  entry.key.toString(): AttendanceSummary.fromJson(entry.value)!,
+            };
+          }
+        } on Object {
+          // The independent badge cache never affects timetable restoration.
+        }
+      }
       var semester = await CurrentSemesterStore().read();
       final startedAt = semester == null
           ? null
@@ -787,7 +816,128 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _runPullSync() async {
+    if (!mounted || _data == null || _syncing || _inlineCommitting ||
+        _inlineSyncPhase == PullSyncPhase.running ||
+        _inlineSyncPhase == PullSyncPhase.cancellable) return;
+    _inlineResultTimer?.cancel();
+    final epoch = ++_inlineSyncEpoch;
+    setState(() => _inlineSyncPhase = PullSyncPhase.running);
+    _inlineSlowTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && epoch == _inlineSyncEpoch && !_inlineCommitting) {
+        setState(() => _inlineSyncPhase = PullSyncPhase.cancellable);
+      }
+    });
+    try {
+      final reply = await _inlineSyncChannel.invokeMapMethod<String, String>('run');
+      if (!mounted || epoch != _inlineSyncEpoch) return;
+      if (reply == null || reply['schedule'] == null || reply['semester'] == null) {
+        throw const FormatException('QLĐT chưa trả lịch đã xác minh.');
+      }
+      final semester = CurrentSemester.fromJson(
+        Map<String, dynamic>.from(jsonDecode(reply['semester']!) as Map),
+      );
+      final schedule = ImportedScheduleData.decode(reply['schedule']!);
+      if (schedule.displayName.isEmpty || semester.displayName.isEmpty ||
+          semester.semesterId.isEmpty) {
+        throw const FormatException('Không xác minh được dữ liệu QLĐT.');
+      }
+      final attendance = AttendanceSummary.fromRawEnvelope(
+        reply['attendanceEnvelope'] ?? '',
+      );
+      // After this line original _save() either commits or rolls back.
+      // Cancellation never interrupts that transaction.
+      _inlineCommitting = true;
+      _inlineSlowTimer?.cancel();
+      final difference = await _save(QldtLoginResult(
+        schedule: schedule,
+        semester: semester,
+        registrationRoute: reply['registrationRoute'],
+      ));
+      if (!mounted) return;
+      final prefs = await SharedPreferences.getInstance();
+      final snapshot = prefs.getString(_storageKey);
+      if (snapshot == null) throw const FormatException('Thiếu snapshot sau sync.');
+      final displayed = ImportedScheduleData.decode(snapshot);
+      try {
+        await prefs.setString(_attendanceStorageKey, jsonEncode({
+          'route': prefs.getString(_routeKey),
+          'counts': attendance.map((k, v) => MapEntry(k, v.toJson())),
+        }));
+      } on Object {
+        // Attendance is optional, NEVER fail a successful schedule sync.
+      }
+      if (!mounted) return;
+      setState(() {
+        _data = displayed;
+        _attendance = attendance;
+        _lastSuccessfulSync = displayed.syncedAt;
+        _inlineSyncPhase = PullSyncPhase.success;
+      });
+      _scheduleExamClock();
+      unawaited(_refreshDifference());
+      final event = difference != null && difference.study.hasChanges &&
+              difference.exams.hasChanges
+          ? AssistantEvent.studyAndExamChanged
+          : difference != null && difference.study.hasChanges
+              ? AssistantEvent.studyChanged
+              : difference != null && difference.exams.hasChanges
+                  ? AssistantEvent.examChanged
+                  : AssistantEvent.syncSuccessNoChange;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(AssistantText.of(event, _assistantPack)),
+        ));
+    } on Object {
+      if (!mounted || epoch != _inlineSyncEpoch) return;
+      setState(() => _inlineSyncPhase = PullSyncPhase.failure);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content:
+            Text(AssistantText.of(AssistantEvent.syncFailed, _assistantPack))));
+    } finally {
+      _inlineSlowTimer?.cancel();
+      _inlineCommitting = false;
+      if (mounted && epoch == _inlineSyncEpoch &&
+          (_inlineSyncPhase == PullSyncPhase.success ||
+           _inlineSyncPhase == PullSyncPhase.failure)) {
+        _inlineResultTimer?.cancel();
+        _inlineResultTimer = Timer(const Duration(milliseconds: 1600), () {
+          if (mounted && epoch == _inlineSyncEpoch) {
+            setState(() => _inlineSyncPhase = PullSyncPhase.idle);
+          }
+        });
+      }
+    }
+  }
+
+  void _cancelPullSync() {
+    if (!mounted || _inlineCommitting ||
+        _inlineSyncPhase != PullSyncPhase.cancellable) return;
+    ++_inlineSyncEpoch;
+    _inlineSlowTimer?.cancel();
+    setState(() => _inlineSyncPhase = PullSyncPhase.idle);
+    unawaited(_sendPullCancellation());
+  }
+
+  Future<void> _sendPullCancellation() async {
+    try {
+      await _inlineSyncChannel.invokeMethod<void>('cancel');
+    } on Object {
+      // The epoch guard already rejects a late response.
+    }
+  }
+
   Future<void> _logout() async {
+    if (_inlineSyncPhase == PullSyncPhase.cancellable) _cancelPullSync();
+    _attendance = const {};
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_attendanceStorageKey);
+    } on Object {
+      // Independent tag cache is optional.
+    }
     _examClockTimer?.cancel();
     _syncStaleTimer?.cancel();
     if (!kIsWeb) {
@@ -980,6 +1130,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                               )
                             : _MainShell(
                                 data: displayData!,
+                                attendance: _attendance,
+                                pullSyncPhase: _inlineSyncPhase,
+                                onPullSync: () => unawaited(_runPullSync()),
+                                onCancelPullSync: _cancelPullSync,
                                 accountDisplayName: _accountDisplayName,
                                 page: _page,
                                 selectedDate: _selectedDate,
