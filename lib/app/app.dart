@@ -186,6 +186,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     _syncStaleTimer?.cancel();
     _inlineSlowTimer?.cancel();
     _inlineResultTimer?.cancel();
+    if (_inlineSyncPhase == PullSyncPhase.running ||
+        _inlineSyncPhase == PullSyncPhase.cancellable) {
+      ++_inlineSyncEpoch;
+      unawaited(_sendPullCancellation());
+    }
     _semesterExpiryTimer?.cancel();
     _exitGestureTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
@@ -711,6 +716,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   Future<void> _loginOrSync() async {
+    // Prevent original WebView sync from racing the new read-only pull sync.
+    if (_inlineCommitting ||
+        _inlineSyncPhase == PullSyncPhase.running ||
+        _inlineSyncPhase == PullSyncPhase.cancellable) return;
     if (!supportsLiveQldtLogin) {
       if (!mounted) {
         return;
@@ -838,6 +847,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         Map<String, dynamic>.from(jsonDecode(reply['semester']!) as Map),
       );
       final schedule = ImportedScheduleData.decode(reply['schedule']!);
+      // A truncated empty response must NEVER replace a known-good semester.
+      if (_data != null && _data!.records.isNotEmpty &&
+          schedule.records.isEmpty) {
+        throw const FormatException('QLĐT trả lịch trống bất thường.');
+      }
       if (schedule.displayName.isEmpty || semester.displayName.isEmpty ||
           semester.semesterId.isEmpty) {
         throw const FormatException('Không xác minh được dữ liệu QLĐT.');
@@ -930,7 +944,17 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   Future<void> _logout() async {
-    if (_inlineSyncPhase == PullSyncPhase.cancellable) _cancelPullSync();
+    if (_inlineSyncPhase == PullSyncPhase.running ||
+        _inlineSyncPhase == PullSyncPhase.cancellable) {
+      ++_inlineSyncEpoch;
+      _inlineSlowTimer?.cancel();
+      await _sendPullCancellation();
+      if (mounted) setState(() => _inlineSyncPhase = PullSyncPhase.idle);
+    }
+    // Do not clear the account while a verified snapshot is being committed.
+    while (_inlineCommitting) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
     _attendance = const {};
     try {
       final prefs = await SharedPreferences.getInstance();
