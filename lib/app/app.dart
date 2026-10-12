@@ -1734,6 +1734,30 @@ class _TimetableScreen extends StatefulWidget {
 }
 
 class _TimetableScreenState extends State<_TimetableScreen> {
+  static const double _pullThreshold = 184;
+  double _pullDistance = 0;
+
+  bool _trackPull(ScrollNotification notification) {
+    if (widget.pullSyncPhase != PullSyncPhase.idle ||
+        notification.metrics.axis != Axis.vertical ||
+        notification.metrics.extentBefore > 0) return false;
+    if (notification is OverscrollNotification &&
+        notification.dragDetails != null && notification.overscroll < 0) {
+      setState(() {
+        _pullDistance = (_pullDistance - notification.overscroll)
+            .clamp(0.0, _pullThreshold + 24);
+      });
+    }
+    return false;
+  }
+
+  void _finishPull() {
+    final ready = _pullDistance >= _pullThreshold &&
+        widget.pullSyncPhase == PullSyncPhase.idle;
+    if (_pullDistance != 0) setState(() => _pullDistance = 0);
+    if (ready) widget.onPullSync();
+  }
+
   bool _weekly = false;
   int _modeSwitchSerial = 0;
   final ValueNotifier<bool> _weeklySelection = ValueNotifier<bool>(false);
@@ -1876,7 +1900,16 @@ class _TimetableScreenState extends State<_TimetableScreen> {
         .where((record) => _sameDay(record.startAt, widget.selectedDate))
         .toList(growable: false);
 
-    return GestureDetector(
+    return Listener(
+      onPointerUp: (_) => _finishPull(),
+      onPointerCancel: (_) {
+        if (_pullDistance != 0) setState(() => _pullDistance = 0);
+      },
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _trackPull,
+        child: Stack(
+          children: <Widget>[
+            GestureDetector(
       behavior: HitTestBehavior.opaque,
       onHorizontalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
@@ -2010,6 +2043,7 @@ class _TimetableScreenState extends State<_TimetableScreen> {
                                               message: 'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
                                             )
                                           : ListView.separated(
+                                              physics: const AlwaysScrollableScrollPhysics(),
                                               padding: const EdgeInsets.only(
                                                 bottom: 82,
                                               ),
@@ -2045,6 +2079,26 @@ class _TimetableScreenState extends State<_TimetableScreen> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+            ),
+            Positioned(
+              top: 5,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                ignoring: widget.pullSyncPhase != PullSyncPhase.cancellable,
+                child: Center(
+                  child: PullSyncIndicator(
+                    phase: widget.pullSyncPhase,
+                    distance: _pullDistance,
+                    threshold: _pullThreshold,
+                    onCancel: widget.onCancelPullSync,
                   ),
                 ),
               ),
