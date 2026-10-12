@@ -44,6 +44,7 @@ final class AttendanceSummary {
       final rows = response['Data'] as List;
       final totals = <String, int>{};
       final absences = <String, int>{};
+      final confirmed = <String>{};
       final seen = <String>{};
       for (final value in rows) {
         if (value is! Map) continue;
@@ -60,6 +61,9 @@ final class AttendanceSummary {
         if (key == null || key.isEmpty || !seen.add(key)) continue;
         totals[subject] = (totals[subject] ?? 0) + periods;
         final status = value['THONGTINCHUYENCAN']?.toString().trim().toLowerCase() ?? '';
+        if (status.startsWith('có mặt') || status.startsWith('vắng mặt')) {
+          confirmed.add(subject);
+        }
         if (status.startsWith('vắng mặt')) {
           final match = RegExp(r'\((\d+)\)').firstMatch(status);
           final absent = match == null ? periods : int.tryParse(match[1]!) ?? periods;
@@ -70,7 +74,7 @@ final class AttendanceSummary {
       }
       return {
         for (final entry in totals.entries)
-          if (entry.value >= 15)
+          if (entry.value >= 15 && confirmed.contains(entry.key))
             entry.key: AttendanceSummary(
               absentPeriods: absences[entry.key] ?? 0,
               theoryPeriods: entry.value,
