@@ -1367,6 +1367,10 @@ class _LoginScreen extends StatelessWidget {
 class _MainShell extends StatefulWidget {
   const new({
     required this.data,
+    required this.attendance,
+    required this.pullSyncPhase,
+    required this.onPullSync,
+    required this.onCancelPullSync,
     required this.accountDisplayName,
     required this.page,
     required this.selectedDate,
@@ -1401,6 +1405,10 @@ class _MainShell extends StatefulWidget {
   });
 
   final ImportedScheduleData data;
+  final Map<String, AttendanceSummary> attendance;
+  final PullSyncPhase pullSyncPhase;
+  final VoidCallback onPullSync;
+  final VoidCallback onCancelPullSync;
   final String accountDisplayName;
   final _AppPage page;
   final DateTime selectedDate;
@@ -1461,7 +1469,12 @@ class _MainShellState extends State<_MainShell>
   @override
   void didUpdateWidget(covariant _MainShell oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.page == widget.page) return;
+    if (oldWidget.page == widget.page) {
+      if (!identical(oldWidget.data, widget.data)) {
+        _pageFadeController.forward(from: 0);
+      }
+      return;
+    }
 
     // Main navigation keeps every page mounted in the IndexedStack. Switch
     // the active page immediately, then fade the new page in: slower than the
@@ -1533,6 +1546,10 @@ class _MainShellState extends State<_MainShell>
                     child: RepaintBoundary(
                       child: _TimetableScreen(
                         data: data,
+                        attendance: widget.attendance,
+                        pullSyncPhase: widget.pullSyncPhase,
+                        onPullSync: widget.onPullSync,
+                        onCancelPullSync: widget.onCancelPullSync,
                         assistantPack: assistantPack,
                         selectedDate: selectedDate,
                         onDateChanged: onDateChanged,
@@ -1684,6 +1701,10 @@ class _MainShellState extends State<_MainShell>
 class _TimetableScreen extends StatefulWidget {
   const new({
     required this.data,
+    required this.attendance,
+    required this.pullSyncPhase,
+    required this.onPullSync,
+    required this.onCancelPullSync,
     required this.assistantPack,
     required this.selectedDate,
     required this.onDateChanged,
@@ -1695,6 +1716,10 @@ class _TimetableScreen extends StatefulWidget {
   });
 
   final ImportedScheduleData data;
+  final Map<String, AttendanceSummary> attendance;
+  final PullSyncPhase pullSyncPhase;
+  final VoidCallback onPullSync;
+  final VoidCallback onCancelPullSync;
   final AssistantPack assistantPack;
   final DateTime selectedDate;
   final ValueChanged<DateTime> onDateChanged;
@@ -1995,6 +2020,7 @@ class _TimetableScreenState extends State<_TimetableScreen> {
                                                   _ScheduleCard(
                                                     item: items[index],
                                                     accent: _accentFor(index),
+                                                    attendance: widget.attendance[normalizeSubjectName(items[index].subjectName)],
                                                   ),
                                             ),
                                     ),
@@ -2009,6 +2035,7 @@ class _TimetableScreenState extends State<_TimetableScreen> {
                           child: RepaintBoundary(
                             child: WeekTimetable(
                               data: widget.data,
+                              attendance: widget.attendance,
                               week: _week,
                               onWeekChanged: (value) =>
                                   setState(() => _week = weekMonday(value)),
@@ -3631,10 +3658,11 @@ class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
 }
 
 class _ScheduleCard extends StatelessWidget {
-  const new({required this.item, required this.accent});
+  const new({required this.item, required this.accent, this.attendance});
 
   final ScheduleRecord item;
   final Color accent;
+  final AttendanceSummary? attendance;
 
   @override
   Widget build(BuildContext context) {
@@ -3683,7 +3711,17 @@ class _ScheduleCard extends StatelessWidget {
                 ),
                 if (item.room.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 8),
-                  _MetaLine(icon: Icons.location_on_outlined, text: item.room),
+                  Row(
+                    children: <Widget>[
+                      Expanded(child: _MetaLine(
+                        icon: Icons.location_on_outlined, text: item.room,
+                      )),
+                      if (attendance != null) ...<Widget>[
+                        const SizedBox(width: 5),
+                        AttendanceTag(summary: attendance!),
+                      ],
+                    ],
+                  ),
                 ],
                 const SizedBox(height: 5),
                 _MetaLine(
