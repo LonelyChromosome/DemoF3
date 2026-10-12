@@ -314,14 +314,18 @@ jobs:
           python3 - <<'PY_CLEANUP'
           import json, subprocess, time
           from pathlib import Path
-          
+
           repo = 'LonelyChromosome/DemoF3'
           keep = {'.github/workflows/build-apk.yml', '.github/workflows/bpa-16-test-apk.yml'}
-          
-          def api(path, method='GET'):
-              output = subprocess.check_output(['gh', 'api', '--method', method, path], text=True)
-              return json.loads(output) if output.strip() else None
-          
+
+          def api(path, method='GET', missing=False):
+              result = subprocess.run(['gh', 'api', '--method', method, path], text=True, capture_output=True)
+              if result.returncode:
+                  if missing and '(HTTP 404)' in result.stderr:
+                      return {'total_count': 0}
+                  raise RuntimeError(f'{method} {path}: {result.stderr}')
+              return json.loads(result.stdout) if result.stdout.strip() else None
+
           workflows = []
           page = 1
           while True:
@@ -358,7 +362,7 @@ jobs:
                           raise RuntimeError(f'Run {rid} has not stopped; leave it intact')
                   api(f'repos/{repo}/actions/runs/{rid}', 'DELETE')
                   total += 1
-              assert api(f'repos/{repo}/actions/workflows/{wid}/runs?per_page=1')['total_count'] == 0
+              assert api(f'repos/{repo}/actions/workflows/{wid}/runs?per_page=1', missing=True)['total_count'] == 0
               print(f"Removed {len(runs)} obsolete runs: {workflow['name']}", flush=True)
           print(f'Cleanup complete: {len(old)} obsolete workflows, {total} old runs.', flush=True)
           PY_CLEANUP
