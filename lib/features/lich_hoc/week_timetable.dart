@@ -1,4 +1,6 @@
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/attendance_tag.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/schedule/tien_mon_schedule_views.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
@@ -12,6 +14,7 @@ const _premiumGoldShadows = tienMonTextShadows;
 class WeekTimetable extends StatelessWidget {
   const new({
     required this.data,
+    this.attendance = const {},
     required this.week,
     required this.onWeekChanged,
     required this.onPickWeek,
@@ -19,6 +22,7 @@ class WeekTimetable extends StatelessWidget {
   });
 
   final ImportedScheduleData data;
+  final Map<String, AttendanceSummary> attendance;
   final DateTime week;
   final ValueChanged<DateTime> onWeekChanged;
   final VoidCallback onPickWeek;
@@ -212,6 +216,13 @@ class WeekTimetable extends StatelessWidget {
                                               : null,
                                         ),
                                       ),
+                                      if (attendance[normalizeSubjectName(row.subjectName)] != null) ...[
+                                        const SizedBox(height: 3),
+                                        AttendanceTag(
+                                          summary: attendance[normalizeSubjectName(row.subjectName)]!,
+                                          compact: true,
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 );
