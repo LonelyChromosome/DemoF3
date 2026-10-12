@@ -62,7 +62,15 @@ def main():
         # The probe has no branch with the same name: prove raw URLs resolve tags.
         for name in ['latest.json', 'latest.json.sig']:
             assert raw(PROBE, name) == raw(LEGACY, name), f'Raw tag lookup failed: {name}'
-        print('All branch tips archived; tag-based raw feed matches the existing APK URL.')
+        # Replace only the old feed branch with its identical tag after proving
+        # tag lookup. This avoids advancing an old code branch during releases.
+        old = heads.get(LEGACY)
+        if old is not None:
+            git('push', f'--force-with-lease=refs/heads/{LEGACY}:{old}',
+                'origin', f':refs/heads/{LEGACY}')
+        for name in ['latest.json', 'latest.json.sig']:
+            assert raw(LEGACY, name) == raw(PROBE, name)
+        print('All branch tips archived; the installed APK URL now resolves the identical compatibility tag.')
         return
     assert phase == 'cleanup'
     main_sha = heads['main']
