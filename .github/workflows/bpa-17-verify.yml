@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify:
@@ -52,10 +52,41 @@ jobs:
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Pull-Test.apk
           sha256sum dist/BPA-1.7-Pull-Test.apk > dist/SHA256SUMS
+      - name: Assert standalone install package
+        run: |
+          set -euo pipefail
+          APK=dist/BPA-1.7-Pull-Test.apk
+          aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
+          signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
+          "$signer" verify "$APK"
+          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.bpa17test'"
+          "$aapt_bin" dump badging "$APK" | grep -F "application-label:'BPA 1.7 Test'"
       - uses: actions/upload-artifact@v4
         with:
           name: BPA-1.7-Pull-Test
           path: |
             dist/BPA-1.7-Pull-Test.apk
             dist/SHA256SUMS
-          retention-days: 7
+          retention-days: 14
+      - name: Publish separate 1.7 preview (not production updater)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="bpa-1.7-parallel-preview-${GITHUB_SHA:0:12}"
+          cat > dist/RELEASE_NOTES.md <<'NOTES'
+          BPA 1.7 — bản thử nghiệm cài song song với BPA 1.6.
+
+          - +1 icon reload
+          - Số buổi nghỉ
+          - Fix lỗi
+
+          Tên ứng dụng: BPA 1.7 Test.
+          Package riêng: vn.edu.phenikaa.better_phenikaa_schedule.bpa17test.
+          KHÔNG ghi đè BPA 1.6. Không thuộc kênh cập nhật chính.
+          NOTES
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release already exists for exactly this commit: $tag"
+          else
+            gh release create "$tag"               dist/BPA-1.7-Pull-Test.apk dist/SHA256SUMS               --target "$GITHUB_SHA"               --title "BPA 1.7 Parallel Preview (${GITHUB_SHA:0:7})"               --notes-file dist/RELEASE_NOTES.md               --prerelease --latest=false
+          fi
