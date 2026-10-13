@@ -1216,7 +1216,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         return null;
       },
     );
-    if (widget.inlinePull) {
+    // Both a silent pull and the existing manual account-sync route must
+    // restart readiness checks after reattaching a previously loaded WebView:
+    // keep-alive does not emit an onLoadStop event for an already loaded page.
+    if (widget.inlinePull ||
+        (widget.cachedSession && _retainedQldtPortalReady)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && !_inlineRouteClosing) _beginReadinessChecks();
       });

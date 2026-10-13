@@ -20,6 +20,10 @@ assert(mobile.includes("void _abortInlineSync(String reason)"));
 assert(mobile.includes('if (inlinePull) _inlineQldtFailure = null;'));
 assert(mobile.includes('InAppWebViewController.disposeKeepAlive(retained)'), 'Logout must discard QLDT WebView');
 assert(mobile.includes('const TracuuApi().scriptForAttempt(epoch)'));
+assert(mobile.includes('(widget.cachedSession && _retainedQldtPortalReady)'),
+  'Regular account-sync must reuse cached WebView without waiting for a navigation event');
+assert(mobile.includes('(!widget.inlinePull || !_retainedQldtPortalReady)'),
+  'A verified pull must not reload the portal URL');
 assert(mobile.includes('const SemesterScheduleVerifier().verify('));
 assert(common.includes('bool cancelQldtInlineSync()'));
 console.log('PASS: retained authenticated QLDT WebView, original parser/verifier, isolated native worker');
