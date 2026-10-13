@@ -80,11 +80,21 @@ internal class BpaInlineSyncBridge(context: Context, engine: FlutterEngine) {
                     if (ticket != epoch.get()) return cancelled(reply)
                     val route = JSONObject(remote.registration)
                         .optJSONObject("route")?.toString() ?: ""
+                    // The secondary attendance filter can only see lessons
+                    // already accepted by NativeSemesterVerifier. Failure is
+                    // strictly optional and never invalidates the timetable.
+                    val attendance = runCatching {
+                        BpaVerifiedAttendanceFilter.fromVerifiedEnvelope(
+                            remote.envelope, verified.appSnapshot
+                        )
+                    }.getOrDefault(
+                        """{"response":{"Success":true,"Data":[]}}"""
+                    )
                     val payload = mapOf(
                         "semester" to verified.semester,
                         "schedule" to verified.appSnapshot,
                         "registrationRoute" to route,
-                        "attendanceEnvelope" to remote.envelope,
+                        "attendanceEnvelope" to attendance,
                     )
                     main.post {
                         if (ticket == epoch.get()) reply.success(payload)
