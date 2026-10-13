@@ -22,7 +22,7 @@ internal class BpaInlineSyncBridge(context: Context, engine: FlutterEngine) {
     private val executor = Executors.newSingleThreadExecutor()
     private val epoch = AtomicInteger()
     @Volatile private var running = false
-    @Volatile private var active: NativeQldtWidgetSync? = null
+    @Volatile private var active: HeadlessQldtSync? = null
 
     init {
         MethodChannel(engine.dartExecutor.binaryMessenger, "better_phenikaa/inline_sync")
@@ -50,43 +50,28 @@ internal class BpaInlineSyncBridge(context: Context, engine: FlutterEngine) {
     private fun run(ticket: Int, reply: MethodChannel.Result) {
         try {
             val prefs = app.getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-            val session = prefs.getString("flutter.better_phenikaa_qldt_native_session_v1", null)
             val previous = prefs.getString("flutter.better_phenikaa_snapshot_v1", null)
-            if (session.isNullOrBlank() || previous.isNullOrBlank()) {
-                throw IllegalStateException("Chưa có phiên QLĐT và lịch đã xác minh.")
+            val cachedRoute = prefs.getString(
+                "flutter.better_phenikaa_qldt_registration_route_v1", null
+            )
+            if (previous.isNullOrBlank()) {
+                throw IllegalStateException("Chưa có lịch QLĐT đã xác minh.")
             }
             if (ticket != epoch.get()) return cancelled(reply)
-            // Initial login caches a native session before the verified QLĐT
-            // display name is known. Supply the previously verified name in
-            // memory; do not rewrite credentials, session or the old parser.
-            val resolvedSession = JSONObject(session)
-            if (resolvedSession.optString("name").isBlank()) {
-                val profile = runCatching {
-                    JSONObject(prefs.getString(
-                        "flutter.better_phenikaa_qldt_profile_v1", "{}"
-                    ) ?: "{}")
-                }.getOrNull()
-                val verifiedName = if (
-                    profile?.optString("source") == "qldt_api_registration" &&
-                    profile.optString("userId") == resolvedSession.optString("userId")
-                ) profile.optString("name") else ""
-                val savedName = runCatching {
-                    JSONObject(previous).optString("displayName")
-                }.getOrDefault("")
-                val name = verifiedName.ifBlank { savedName }.trim()
-                if (name.isNotEmpty()) {
-                    resolvedSession.put("name", name)
-                    resolvedSession.put("nameSource", "qldt_api_registration")
-                }
-            }
-            val sync = NativeQldtWidgetSync(resolvedSession.toString())
+            // Reuse the proven *existing* invisible WebView transport that
+            // services manual widget sync in BPA 1.6. Unlike the experimental
+            // direct-HTTP client, this follows QLĐT's actual edu.makeRequest
+            // authentication and works with the user's established session.
+            // Reuse ONLY its read result; this bridge never calls the worker
+            // or the worker's storage code.
+            val sync = HeadlessQldtSync(app, cachedRoute)
             active = sync
             val remote = sync.run()
             if (ticket != epoch.get()) return cancelled(reply)
             when (remote) {
-                is NativeQldtWidgetSync.Result.Failure ->
+                is HeadlessQldtSync.Result.Failure ->
                     throw IllegalStateException(remote.message)
-                is NativeQldtWidgetSync.Result.Success -> {
+                is HeadlessQldtSync.Result.Success -> {
                     // Native verifier is the SAME authority used by existing sync.
                     // The raw envelope is sent separately ONLY for attendance.
                     val verified = NativeSemesterVerifier.verify(
