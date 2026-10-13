@@ -151,11 +151,17 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
     }
   }
 
-  void _next(int count) {
-    if (_index >= count - 1) {
-      Navigator.of(context).pop();
-    } else {
+  void _navigateFromTap(TapUpDetails details, double width, int count) {
+    if (width <= 0 || count == 0) return;
+    if (details.localPosition.dx < width / 2) {
+      // First slide has no previous page. Never close on left-zone tapping.
+      if (_index > 0) setState(() => _index--);
+      return;
+    }
+    if (_index < count - 1) {
       setState(() => _index++);
+    } else {
+      Navigator.of(context).pop();
     }
   }
 
@@ -294,9 +300,11 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                         fontSize: 10, letterSpacing: .1),
                     ),
                   ),
-                Expanded(child: GestureDetector(
+                Expanded(child: LayoutBuilder(
+                  builder: (context, viewport) => GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _next(stories.length),
+                  onTapUp: (details) => _navigateFromTap(
+                    details, viewport.maxWidth, stories.length),
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 380),
                     switchInCurve: Curves.easeOutCubic,
@@ -318,24 +326,28 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                       facts: facts,
                     ),
                   ),
+                ),
                 )),
                 Padding(
-                  padding: const EdgeInsets.only(top: 10),
+                  padding: const EdgeInsets.only(top: 13, bottom: 4),
                   child: Row(children: [
-                    Text('${_index + 1} / ${stories.length}',
-                      style: const TextStyle(color: Color(0xFFAFBCD0),
-                        fontWeight: FontWeight.w700, fontSize: 13)),
+                    const Icon(Icons.chevron_left_rounded,
+                      color: Color(0xFFFFDEA0), size: 21),
+                    const Text('Chạm trái · Lùi', style: TextStyle(
+                      color: Color(0xFFCDD9E6), fontSize: 11,
+                      fontWeight: FontWeight.w600)),
                     const Spacer(),
-                    TextButton.icon(
-                      onPressed: () => _next(stories.length),
-                      iconAlignment: IconAlignment.end,
-                      icon: const Icon(Icons.arrow_forward_rounded, size: 19),
-                      label: Text(_index == stories.length - 1
-                        ? 'Hoàn tất' : 'Tiếp tục'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFFFFDEA0),
-                      ),
-                    ),
+                    Text('${_index + 1} / ${stories.length}',
+                      style: const TextStyle(color: Color(0xFFFFD28C),
+                        fontWeight: FontWeight.w900, fontSize: 12)),
+                    const Spacer(),
+                    Text(_index == stories.length - 1
+                        ? 'Phải · Kết thúc' : 'Phải · Tiến',
+                      style: const TextStyle(
+                        color: Color(0xFFCDD9E6), fontSize: 11,
+                        fontWeight: FontWeight.w600)),
+                    const Icon(Icons.chevron_right_rounded,
+                      color: Color(0xFFFFDEA0), size: 21),
                   ]),
                 ),
               ]),
