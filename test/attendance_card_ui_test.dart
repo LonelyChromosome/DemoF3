@@ -220,6 +220,70 @@ void main() {
     }
   });
 
+  testWidgets('TH tag appears on day and week only for practice classes', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      final now = DateTime.now();
+      ScheduleRecord row(String id, String className, int hour) => ScheduleRecord(
+        id: id, isExam: false, subjectName: 'Thiết kế web nâng cao',
+        className: className, room: 'A6',
+        startAt: DateTime(now.year, now.month, now.day, hour),
+        endAt: DateTime(now.year, now.month, now.day, hour + 1),
+      );
+      const route = 'practice-account';
+      final data = ImportedScheduleData(
+        displayName: 'Sinh viên', syncedAt: now,
+        records: [
+          row('lt', 'WEB-26.LT1', 7),
+          row('th', 'WEB-26.TH1', 9),
+          row('eln', 'WEB-26.ELN', 11),
+        ],
+      );
+      SharedPreferences.setMockInitialValues({
+        'better_phenikaa_snapshot_v1': data.encode(),
+        'better_phenikaa_qldt_registration_route_v1': route,
+        'better_phenikaa_attendance_v17': jsonEncode({
+          'schema': 3, 'route': route,
+          'counts': {
+            normalizeSubjectName('Thiết kế web nâng cao'): {
+              'absentSessions': 0, 'totalTheorySessions': 15,
+            },
+          },
+          'practiceIds': ['th'],
+        }),
+      });
+      await tester.pumpWidget(const BetterPhenikaaScheduleApp());
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+      expect(find.text('Đã nghỉ 0/3'), findsOneWidget);
+      expect(find.text('Thực Hành'), findsOneWidget);
+      final practiceCard = find.byKey(
+          const ValueKey<String>('study-alarm-th'));
+      final practiceTag = find.descendant(
+          of: practiceCard, matching: find.byType(PracticeTag));
+      expect(practiceTag, findsOneWidget);
+      expect(
+        tester.getRect(practiceTag).right,
+        lessThanOrEqualTo(tester.getRect(practiceCard).right - 21 - 44 - 8),
+      );
+      await tester.tap(find.text('Theo tuần'));
+      await tester.pumpAndSettle();
+      final week = find.byType(WeekTimetable);
+      expect(week, findsOneWidget);
+      final compact = find.descendant(
+          of: week, matching: find.text('Thực Hành'));
+      await tester.scrollUntilVisible(compact, 100,
+        scrollable: find.descendant(
+          of: week, matching: find.byType(Scrollable)).first);
+      expect(compact, findsOneWidget);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('unrelated account attendance never appears on a card', (
     tester,
   ) async {

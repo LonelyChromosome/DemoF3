@@ -223,6 +223,97 @@ AttendanceSummary? attendanceForStudyCard(
   return bySubject[normalizeSubjectName(record.subjectName)];
 }
 
+
+Set<String> practiceCardIdsFromVerifiedSchedule(ImportedScheduleData schedule) =>
+    schedule.classes
+        .where((record) => isPracticeStudyCard(record, const <String>{}))
+        .map((record) => record.id)
+        .toSet();
+
+/// Use only the native-verified rows sent through the isolated pull channel.
+/// Their IDs match the unchanged 1.6 schedule-card identifiers exactly.
+Set<String> practiceCardIdsFromVerifiedEnvelope(String envelope) {
+  try {
+    final parsed = jsonDecode(envelope);
+    if (parsed is! Map || parsed['response'] is! Map) return const <String>{};
+    final response = parsed['response'] as Map;
+    if (response['Success'] != true || response['Data'] is! List) {
+      return const <String>{};
+    }
+    final ids = <String>{};
+    for (final raw in response['Data'] as List) {
+      if (raw is! Map ||
+          raw['PHANLOAI']?.toString().toUpperCase() != 'LICHHOC') {
+        continue;
+      }
+      final id = raw['ID']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      if (AttendanceLessonClassifier.classify(
+        rawSubjectName: raw['TENHOCPHAN']?.toString() ?? '',
+        rawClassName: raw['TENLOPHOCPHAN']?.toString() ?? '',
+        attribute: raw['THUOCTINH_TEN']?.toString(),
+        room: raw['PHONGHOC_TEN']?.toString() ??
+            raw['TENPHONGHOC']?.toString() ?? '',
+      ) == 'TH') {
+        ids.add(id);
+      }
+    }
+    return ids;
+  } on Object {
+    return const <String>{};
+  }
+}
+
+/// TH is a lesson type, never a subject-wide absence counter.
+/// ELN takes precedence even when a class record contains other markers.
+bool isPracticeStudyCard(ScheduleRecord record, Set<String> practiceIds) {
+  if (record.isExam) return false;
+  final kind = AttendanceLessonClassifier.classify(
+    rawSubjectName: record.subjectName,
+    rawClassName: record.className,
+    attribute: record.lessonKind,
+    room: record.room,
+  );
+  if (kind == 'ELEARNING') return false;
+  return kind == 'TH' || practiceIds.contains(record.id);
+}
+
+/// A small non-interactive tag in the same visual family as AttendanceTag.
+class PracticeTag extends StatelessWidget {
+  const PracticeTag({this.compact = false, super.key});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF3B82F6);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: .12),
+        border: Border.all(color: accent.withValues(alpha: .45), width: .8),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 4 : 7,
+          vertical: compact ? 2 : 3,
+        ),
+        child: Text(
+          'Thực Hành',
+          maxLines: 1,
+          softWrap: false,
+          style: TextStyle(
+            fontSize: compact ? 9 : 11,
+            height: 1.1,
+            color: accent,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 final class _AttendanceLesson {
   const _AttendanceLesson({
     required this.id,

@@ -100,6 +100,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   static const _attendanceStorageKey = 'better_phenikaa_attendance_v17';
   static const _inlineSyncChannel = MethodChannel('better_phenikaa/inline_sync');
   Map<String, AttendanceSummary> _attendance = const {};
+  Set<String> _practiceIds = const <String>{};
   String? _attendanceRoute;
   int _attendanceWriteEpoch = 0;
   Future<void> _attendanceWriteQueue = Future<void>.value();
@@ -479,6 +480,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                 if (AttendanceSummary.fromJson(entry.value) != null)
                   entry.key.toString(): AttendanceSummary.fromJson(entry.value)!,
             };
+            final ids = cached['practiceIds'];
+            _practiceIds = ids is List
+                ? ids.whereType<String>().where((id) => id.isNotEmpty).toSet()
+                : const <String>{};
             _attendanceRoute = currentRoute;
           }
         } on Object {
@@ -729,8 +734,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   // authoritative transaction or delay navigation after a successful sync.
   Future<void> _persistAttendanceSidecar(
     String route,
-    Map<String, AttendanceSummary> summaries,
-  ) {
+    Map<String, AttendanceSummary> summaries, {
+    Set<String> practiceIds = const <String>{},
+  }) {
     final token = ++_attendanceWriteEpoch;
     final counts = summaries.map((key, value) =>
         MapEntry(key, value.toJson()));
@@ -745,6 +751,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           'schema': 3,
           'route': route,
           'counts': counts,
+          'practiceIds': practiceIds.toList(growable: false)..sort(),
         }));
       } on Object {
         // This optional cache must never fail an authoritative schedule sync.
@@ -822,9 +829,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           final verifiedAttendance = AttendanceSummary.fromVerifiedSchedule(
             imported.schedule,
           );
+          final practiceIds = practiceCardIdsFromVerifiedSchedule(imported.schedule);
           setState(() {
             _data = displayed;
             _attendance = verifiedAttendance;
+            _practiceIds = practiceIds;
             _accountDisplayName = accountDisplayName;
             _lastSuccessfulSync = displayed.syncedAt;
             _selectedDate = _initialDateFor(displayed);
@@ -833,7 +842,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           _syncStaleTimer?.cancel();
           _scheduleExamClock();
           if (route != null && route.isNotEmpty) {
-            unawaited(_persistAttendanceSidecar(route, verifiedAttendance));
+            unawaited(_persistAttendanceSidecar(route, verifiedAttendance,
+                practiceIds: practiceIds));
           }
           if (difference != null) {
             unawaited(_refreshDifference());
@@ -925,17 +935,22 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       final attendance = AttendanceSummary.fromRawEnvelope(
         reply['attendanceEnvelope'] ?? '',
       );
+      final practiceIds = practiceCardIdsFromVerifiedEnvelope(
+        reply['attendanceEnvelope'] ?? '',
+      );
       if (!mounted) return;
       setState(() {
         _data = displayed;
         _attendance = attendance;
+        _practiceIds = practiceIds;
         _lastSuccessfulSync = displayed.syncedAt;
         _inlineSyncPhase = PullSyncPhase.success;
       });
       _scheduleExamClock();
       unawaited(_refreshDifference());
       if (route != null && route.isNotEmpty) {
-        unawaited(_persistAttendanceSidecar(route, attendance));
+        unawaited(_persistAttendanceSidecar(route, attendance,
+          practiceIds: practiceIds));
       }
       final event = difference != null && difference.study.hasChanges &&
               difference.exams.hasChanges
@@ -1005,6 +1020,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     ++_attendanceWriteEpoch;
     await _attendanceWriteQueue;
     _attendance = const {};
+    _practiceIds = const <String>{};
     _attendanceRoute = null;
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -1205,6 +1221,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                             : _MainShell(
                                 data: displayData!,
                                 attendance: _attendance,
+                                practiceIds: _practiceIds,
                                 pullSyncPhase: _inlineSyncPhase,
                                 onPullSync: () => unawaited(_runPullSync()),
                                 onCancelPullSync: _cancelPullSync,
@@ -1442,6 +1459,8 @@ class _MainShell extends StatefulWidget {
   const new({
     required this.data,
     required this.attendance,
+
+    required this.practiceIds,
     required this.pullSyncPhase,
     required this.onPullSync,
     required this.onCancelPullSync,
@@ -1480,6 +1499,8 @@ class _MainShell extends StatefulWidget {
 
   final ImportedScheduleData data;
   final Map<String, AttendanceSummary> attendance;
+
+  final Set<String> practiceIds;
   final PullSyncPhase pullSyncPhase;
   final VoidCallback onPullSync;
   final VoidCallback onCancelPullSync;
@@ -1621,6 +1642,7 @@ class _MainShellState extends State<_MainShell>
                       child: _TimetableScreen(
                         data: data,
                         attendance: widget.attendance,
+                        practiceIds: widget.practiceIds,
                         pullSyncPhase: widget.pullSyncPhase,
                         onPullSync: widget.onPullSync,
                         onCancelPullSync: widget.onCancelPullSync,
@@ -1776,6 +1798,8 @@ class _TimetableScreen extends StatefulWidget {
   const new({
     required this.data,
     required this.attendance,
+
+    required this.practiceIds,
     required this.pullSyncPhase,
     required this.onPullSync,
     required this.onCancelPullSync,
@@ -1791,6 +1815,8 @@ class _TimetableScreen extends StatefulWidget {
 
   final ImportedScheduleData data;
   final Map<String, AttendanceSummary> attendance;
+
+  final Set<String> practiceIds;
   final PullSyncPhase pullSyncPhase;
   final VoidCallback onPullSync;
   final VoidCallback onCancelPullSync;
@@ -2144,6 +2170,9 @@ class _TimetableScreenState extends State<_TimetableScreen> {
                                                       items[index],
                                                       widget.attendance,
                                                     ),
+                                                    isPractice: isPracticeStudyCard(
+                                                      items[index], widget.practiceIds,
+                                                    ),
                                                   ),
                                             ),
                                     ),
@@ -2159,6 +2188,7 @@ class _TimetableScreenState extends State<_TimetableScreen> {
                             child: WeekTimetable(
                               data: widget.data,
                               attendance: widget.attendance,
+                              practiceIds: widget.practiceIds,
                               week: _week,
                               onWeekChanged: (value) =>
                                   setState(() => _week = weekMonday(value)),
@@ -3801,11 +3831,13 @@ class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
 }
 
 class _ScheduleCard extends StatelessWidget {
-  const new({required this.item, required this.accent, this.attendance});
+  const new({required this.item, required this.accent, this.attendance,
+    this.isPractice = false});
 
   final ScheduleRecord item;
   final Color accent;
   final AttendanceSummary? attendance;
+  final bool isPractice;
 
   @override
   Widget build(BuildContext context) {
@@ -3859,16 +3891,19 @@ class _ScheduleCard extends StatelessWidget {
                       Expanded(child: _MetaLine(
                         icon: Icons.location_on_outlined,
                         text: item.room,
-                        maxLines: attendance == null ? null : 1,
+                        maxLines: attendance == null && !isPractice ? null : 1,
                       )),
-                      if (attendance != null) ...<Widget>[
+                      if (isPractice) ...<Widget>[
+                        const SizedBox(width: 5),
+                        const PracticeTag(),
+                      ] else if (attendance != null) ...<Widget>[
                         const SizedBox(width: 5),
                         AttendanceTag(summary: attendance!),
                       ],
                       // 1.6 keeps its 44px alarm button overlaid at right: 21.
                       // Reserve that hit area on this row without moving the
                       // button or shrinking the other study-card metadata.
-                      if (attendance != null)
+                      if (attendance != null || isPractice)
                         const SizedBox(width: 64),
                     ],
                   ),

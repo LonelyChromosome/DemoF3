@@ -15,6 +15,7 @@ class WeekTimetable extends StatelessWidget {
   const new({
     required this.data,
     this.attendance = const {},
+    this.practiceIds = const <String>{},
     required this.week,
     required this.onWeekChanged,
     required this.onPickWeek,
@@ -23,6 +24,7 @@ class WeekTimetable extends StatelessWidget {
 
   final ImportedScheduleData data;
   final Map<String, AttendanceSummary> attendance;
+  final Set<String> practiceIds;
   final DateTime week;
   final ValueChanged<DateTime> onWeekChanged;
   final VoidCallback onPickWeek;
@@ -107,7 +109,8 @@ class WeekTimetable extends StatelessWidget {
                 // Preserve 1.6 height for untagged rows; avoid clipping
                 // the fourth line on only the rows with attendance badges.
                 final containsBadge = records.any((record) =>
-                    attendanceForStudyCard(record, attendance) != null);
+                    attendanceForStudyCard(record, attendance) != null ||
+                    isPracticeStudyCard(record, practiceIds));
                 final rowHeight = containsBadge ? 106.0 : 86.0;
                 final rowContent = Row(
                   children: <Widget>[
@@ -175,7 +178,8 @@ class WeekTimetable extends StatelessWidget {
                                   const SizedBox(width: 6),
                               itemBuilder: (context, index) {
                                 final row = records[index];
-                                final tag = attendanceForStudyCard(row, attendance);
+                                final practice = isPracticeStudyCard(row, practiceIds);
+                                final tag = practice ? null : attendanceForStudyCard(row, attendance);
                                 final content = Padding(
                                   padding: const EdgeInsets.fromLTRB(
                                     10,
@@ -222,12 +226,12 @@ class WeekTimetable extends StatelessWidget {
                                               : null,
                                         ),
                                       ),
-                                      if (tag != null) ...[
+                                      if (practice || tag != null) ...[
                                         const SizedBox(height: 3),
-                                        AttendanceTag(
-                                          summary: tag,
-                                          compact: true,
-                                        ),
+                                        if (practice)
+                                          const PracticeTag(compact: true)
+                                        else
+                                          AttendanceTag(summary: tag!, compact: true),
                                       ],
                                     ],
                                   ),

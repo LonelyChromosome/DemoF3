@@ -86,6 +86,45 @@ void main() {
     expect(counts[atbm]!.absentSessions, 0);
   });
 
+  test('TH badge uses actual class type, even without attendance', () {
+    ScheduleRecord card(String name, String section, {String? kind}) =>
+        ScheduleRecord(
+          id: section,
+          isExam: false,
+          subjectName: name,
+          className: section,
+          room: 'A6',
+          lessonKind: kind,
+          startAt: DateTime(2026, 10, 13, 9),
+          endAt: DateTime(2026, 10, 13, 11),
+        );
+    final practice = card('An toàn và bảo mật thông tin', 'N05.TH1');
+    final theory = card('An toàn và bảo mật thông tin', 'N05.LT1');
+    final online = card('An toàn và bảo mật thông tin', 'N05.ELN');
+    final attributeOnly = card('An toàn và bảo mật thông tin', 'N05', kind: 'TH');
+    expect(isPracticeStudyCard(practice, const {}), true);
+    expect(isPracticeStudyCard(theory, const {}), false);
+    expect(isPracticeStudyCard(online, const {}), false);
+    expect(isPracticeStudyCard(attributeOnly, const {}), true);
+
+    final ids = practiceCardIdsFromVerifiedSchedule(ImportedScheduleData(
+      displayName: 'Sinh viên',
+      syncedAt: DateTime(2026, 10, 13),
+      records: [practice, theory, online, attributeOnly],
+    ));
+    expect(ids, {practice.id, attributeOnly.id});
+    expect(isPracticeStudyCard(card('An toàn và bảo mật thông tin', 'N05'),
+        ids), true);
+    expect(isPracticeStudyCard(online, {online.id}), false);
+    final fromPull = practiceCardIdsFromVerifiedEnvelope(envelope([
+      row(0, section: 'N05.TH1'),
+      row(1, section: 'N05.ELN'),
+      row(2, section: 'N05', attribute: 'Thực hành'),
+    ]));
+    expect(fromPull.length, 2);
+    expect(practiceCardIdsFromVerifiedEnvelope('broken'), isEmpty);
+  });
+
   test('ELN-only has no badge; mixed LT and ELN show tag on LT only', () {
     final course = normalizeSubjectName('Kỹ thuật phần mềm');
     final all = <String, AttendanceSummary>{
