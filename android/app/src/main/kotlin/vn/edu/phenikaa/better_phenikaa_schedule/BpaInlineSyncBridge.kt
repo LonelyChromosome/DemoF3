@@ -3,6 +3,7 @@ package vn.edu.phenikaa.better_phenikaa_schedule
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.webkit.CookieManager
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
@@ -58,6 +59,11 @@ internal class BpaInlineSyncBridge(context: Context, engine: FlutterEngine) {
                 throw IllegalStateException("Chưa có lịch QLĐT đã xác minh.")
             }
             if (ticket != epoch.get()) return cancelled(reply)
+            // A first-login WebView may have authenticated in memory before
+            // Android persisted its cookies. Flush only for this independent
+            // pull channel, without changing widget/manual sync or adding
+            // another QLĐT request to the login critical path.
+            runCatching { CookieManager.getInstance().flush() }
             // Reuse the proven *existing* invisible WebView transport that
             // services manual widget sync in BPA 1.6. Unlike the experimental
             // direct-HTTP client, this follows QLĐT's actual edu.makeRequest
