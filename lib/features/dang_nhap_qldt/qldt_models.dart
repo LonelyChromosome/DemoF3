@@ -283,11 +283,8 @@ final class QldtParser {
         attribute: _optionalText(item['THUOCTINH_TEN']),
         room: room,
       ),
-      attendanceStatus: _optionalText(item['THONGTINCHUYENCAN']),
-      lessonPeriods: switch (_int(item['SOTIET'])) {
-        final int value when value > 0 && value <= 20 => value,
-        _ => null,
-      },
+      attendanceStatus: _attendanceText(item, rawClassName),
+      lessonPeriods: _lessonPeriodCount(item),
     );
   }
 
@@ -377,6 +374,36 @@ final class QldtParser {
     if (value is! String) return null;
     final text = value.trim();
     return text.isEmpty ? null : text;
+  }
+
+  static String? _attendanceText(
+    Map<String, dynamic> item,
+    String originalClass,
+  ) {
+    final direct = _optionalText(item['THONGTINCHUYENCAN']);
+    if (direct != null) return direct;
+    // QLĐT sometimes embeds status in a <br> after the ORIGINAL class
+    // label; it is stripped for class verification but still usable here.
+    final match = RegExp(
+      r'<br\s*/?>\s*(Có mặt|Vắng mặt)\s*(?:<br\s*/?>|$)',
+      caseSensitive: false,
+    ).firstMatch(originalClass);
+    return match?[1];
+  }
+
+  static int? _lessonPeriodCount(Map<String, dynamic> item) {
+    final direct = _int(item['SOTIET']);
+    if (direct != null && direct > 0 && direct <= 20) return direct;
+    final first = _int(item['TIETBATDAU']);
+    final last = _int(item['TIETKETTHUC']);
+    if (first != null && last != null && first > 0 &&
+        last >= first && last - first < 20) return last - first + 1;
+    // Only an explicit confirmed count may be used as a fallback.
+    final text = _optionalText(item['THONGTINCHUYENCAN']);
+    final count = text == null ? null : RegExp(r'\((\d+)\)').firstMatch(text);
+    final result = count == null ? null : int.tryParse(count[1]!);
+    if (result == null || result < 1 || result > 20) return null;
+    return result;
   }
 
   static int? _int(Object? value) {
