@@ -206,6 +206,24 @@ String? _attendanceStatus(Map row) {
   return tag?[1];
 }
 
+/// The summary is per SUBJECT, but the badge must appear only on its
+/// actual LT CLASS card. A subject with LT + ELN must never show this badge on
+/// ELN cards; an ELN-only subject never receives a tag.
+AttendanceSummary? attendanceForStudyCard(
+  ScheduleRecord record,
+  Map<String, AttendanceSummary> bySubject,
+) {
+  if (record.isExam) return null;
+  final kind = AttendanceLessonClassifier.classify(
+    rawSubjectName: record.subjectName,
+    rawClassName: record.className,
+    attribute: record.lessonKind,
+    room: record.room,
+  );
+  if (kind != 'LT') return null;
+  return bySubject[normalizeSubjectName(record.subjectName)];
+}
+
 final class _AttendanceLesson {
   const _AttendanceLesson({
     required this.id,
