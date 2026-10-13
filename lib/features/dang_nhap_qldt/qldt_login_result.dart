@@ -8,6 +8,7 @@ final class QldtLoginResult {
     this.registrationRoute,
     this.termStartedAt,
     this.attendanceEnvelope,
+    this.attendanceProgramId,
   });
 
   final ImportedScheduleData schedule;
@@ -17,4 +18,5 @@ final class QldtLoginResult {
   // Optional raw QLĐT schedule for the independent 1.7 attendance filter.
   // No authoritative parser or verifier consumes this value.
   final String? attendanceEnvelope;
+  final String? attendanceProgramId;
 }
