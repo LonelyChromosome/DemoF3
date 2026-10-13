@@ -73,7 +73,7 @@ jobs:
           PY
       - name: Build ARM64 profile APK
         run: |
-          COOC_VERSION_NAME=cooc.1.7 flutter build apk --profile --target-platform android-arm64 --build-number=55 --build-name=1.7.3 --dart-define=BPA_RECAP_TEST_PANEL=true
+          COOC_VERSION_NAME=cooc.1.7 flutter build apk --profile --target-platform android-arm64 --build-number=55 --build-name=1.7.3
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Recap-Session-v55.apk
           sha256sum dist/BPA-1.7-Recap-Session-v55.apk > dist/SHA256SUMS

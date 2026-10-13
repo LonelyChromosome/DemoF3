@@ -50,5 +50,26 @@ void main() {
     await tester.tapAt(const Offset(45, 540));
     await tester.pumpAndSettle();
     expect(find.text('MỘT KỲ HỌC'), findsOneWidget);
+
+    // Busy-day card must include the actual day, not just the meeting count.
+    for (var i = 0; i < 3; i++) {
+      await tester.tapAt(const Offset(355, 540));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('NGÀY BẬN NHẤT'), findsOneWidget);
+    final busy = facts.busiest!;
+    final when = '${busy.day.toString().padLeft(2, '0')}/${busy.month.toString().padLeft(2, '0')}/${busy.year}';
+    expect(find.text(when), findsOneWidget);
+
+    // On slide eight, the zero-absence course names are restored.
+    for (var i = 0; i < 3; i++) {
+      await tester.tapAt(const Offset(355, 540));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('NHỮNG MÔN KHÔNG VẮNG'), findsOneWidget);
+    for (final subject in facts.clearSubjects) {
+      expect(find.text(subject), findsOneWidget);
+    }
+    expect(find.text('Kiểm thử Recap'), findsNothing);
   });
 }

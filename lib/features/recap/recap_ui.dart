@@ -489,6 +489,10 @@ class _StoryBody extends StatelessWidget {
               _SubjectBento(facts: facts)
             else if (index == 6)
               _AttendanceBento(facts: facts)
+            else if (index == 4)
+              _BusyDayCard(facts: facts)
+            else if (index == 7 && facts.clearSubjects.isNotEmpty)
+              _NoAbsencesCard(facts: facts)
             else _RecapSectionCard(facts: facts, story: story, index: index),
 
           ],
@@ -613,6 +617,120 @@ class _MiniStatistic extends StatelessWidget {
       ],
     ),
   );
+}
+
+
+class _BusyDayCard extends StatelessWidget {
+  const _BusyDayCard({required this.facts});
+  final RecapFacts facts;
+
+  @override
+  Widget build(BuildContext context) {
+    const violet = Color(0xFFC5A7FF);
+    final date = facts.busiest;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(23, 23, 23, 24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: violet.withValues(alpha: .67), width: 1.3),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF35426B), Color(0xFF1C2B4A)],
+        ),
+        boxShadow: const [BoxShadow(
+          color: Color(0x61050B1D), blurRadius: 20, offset: Offset(0, 12))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Row(children: [
+          Icon(Icons.calendar_month_outlined, color: violet, size: 19),
+          SizedBox(width: 10),
+          Text('NGÀY BẬN NHẤT', style: TextStyle(
+            color: violet, fontSize: 12, letterSpacing: 1.4,
+            fontWeight: FontWeight.w900)),
+        ]),
+        const SizedBox(height: 20),
+        Text('${facts.busiestCount} buổi', style: const TextStyle(
+          color: violet, fontSize: 57, height: 1.08,
+          fontWeight: FontWeight.w900)),
+        const SizedBox(height: 21),
+        Container(height: 1, color: violet.withValues(alpha: .33)),
+        const SizedBox(height: 19),
+        Row(children: [
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(13),
+              color: const Color(0xFF554878),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            child: const Icon(Icons.event_rounded, color: violet, size: 23),
+          ),
+          const SizedBox(width: 13),
+          Expanded(child: Text(date == null ? 'Chưa có ngày học'
+            : _d(date),
+            style: const TextStyle(color: Colors.white,
+              fontSize: 23, fontWeight: FontWeight.w800))),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _NoAbsencesCard extends StatelessWidget {
+  const _NoAbsencesCard({required this.facts});
+  final RecapFacts facts;
+
+  @override
+  Widget build(BuildContext context) {
+    const mint = Color(0xFFB7E7C8);
+    final subjects = facts.clearSubjects.toList()..sort();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 23, 22, 24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(23),
+        border: Border.all(color: mint.withValues(alpha: .55), width: 1.2),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFF2B5264), Color(0xFF1A3048)],
+        ),
+        boxShadow: const [BoxShadow(
+          color: Color(0x64060B1D), blurRadius: 20, offset: Offset(0, 12))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [
+            Icon(Icons.favorite_border_rounded, color: mint, size: 21),
+            SizedBox(width: 10),
+            Expanded(child: Text('NHỮNG MÔN KHÔNG VẮNG',
+              style: TextStyle(color: mint, letterSpacing: 1.2,
+                fontWeight: FontWeight.w900, fontSize: 12))),
+          ]),
+          const SizedBox(height: 21),
+          Text('${subjects.length}', style: const TextStyle(
+            color: mint, fontWeight: FontWeight.w900,
+            fontSize: 68, height: 1.0)),
+          const SizedBox(height: 24),
+          for (var i = 0; i < subjects.length; i++) ...[
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.check_circle_outline_rounded,
+                color: mint, size: 19),
+              const SizedBox(width: 12),
+              Expanded(child: Text(subjects[i], style: const TextStyle(
+                color: Colors.white, fontSize: 15,
+                fontWeight: FontWeight.w700, height: 1.4))),
+            ]),
+            if (i < subjects.length - 1)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 13),
+                child: Divider(height: 1,
+                  color: mint.withValues(alpha: .20))),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _DayPartBento extends StatelessWidget {
@@ -770,98 +888,3 @@ class _AttendanceBento extends StatelessWidget {
   }
 }
 
-class RecapTestPanel extends StatelessWidget {
-  const RecapTestPanel({
-    required this.memoryVisible,
-    required this.hasRealAccount,
-    required this.onToggleMemory,
-    required this.onOpenActual,
-    required this.onTestPull,
-    required this.onOpenScenario,
-    super.key,
-  });
-  final bool memoryVisible;
-  final bool hasRealAccount;
-  final VoidCallback onToggleMemory, onOpenActual, onTestPull;
-  final ValueChanged<RecapScenario> onOpenScenario;
-
-  @override
-  Widget build(BuildContext context) => SafeArea(
-    child: Padding(
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
-      child: ListView(
-        shrinkWrap: true,
-        children: [
-          const Text('RECAP · BỘ ĐIỀU KHIỂN',
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 7),
-
-          const SizedBox(height: 17),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: .55),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: .25)),
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Row(children: [
-                  Icon(Icons.verified_user_rounded, size: 21),
-                  SizedBox(width: 9),
-                  Text('01  ·  RECAP',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-                ]),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: hasRealAccount ? onOpenActual : null,
-                    icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Xem Recap'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: hasRealAccount ? onTestPull : null,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Thử đồng bộ'),
-                  ),
-                ),
-
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          SwitchListTile(
-            title: const Text('Hiện nút Memory'),
-
-            value: memoryVisible,
-            onChanged: (_) => onToggleMemory(),
-          ),
-          const SizedBox(height: 10),
-          const Divider(),
-          ExpansionTile(
-            initiallyExpanded: false,
-            leading: const Icon(Icons.science_outlined),
-            title: const Text('02  ·  KỊCH BẢN GIẢ LẬP',
-              style: TextStyle(fontWeight: FontWeight.w800)),
-
-            children: [
-              for (final scenario in RecapScenario.values)
-                ListTile(
-                  dense: true,
-                  leading: const Icon(Icons.bug_report_outlined, size: 18),
-                  title: Text(scenario.label),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => onOpenScenario(scenario),
-                ),
-            ],
-          ),
-        ],
-      ),
-    ),
-  );
-}

@@ -99,9 +99,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _booting = true;
   bool _syncing = false;
   bool _panelOpen = false;
-  bool _recapForcedVisible = false;
   bool _hasRegisteredSemester = false;
-  static const bool _recapTestPanelEnabled = bool.fromEnvironment('BPA_RECAP_TEST_PANEL');
   static const _attendanceStorageKey = 'better_phenikaa_attendance_v17';
   static const _inlineSyncChannel = MethodChannel('better_phenikaa/inline_sync');
   Map<String, AttendanceSummary> _attendance = const {};
@@ -381,7 +379,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   bool get _recapButtonVisible {
-    if (_recapForcedVisible) return true;
     if (!_hasRegisteredSemester) return false;
     final data = _data;
     if (data == null) return false;
@@ -394,13 +391,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     return !DateTime.now().isBefore(end.subtract(const Duration(days: 7)));
   }
 
-  Future<RecapFacts> _loadRecap(RecapScenario? scenario) async {
-    // The control panel's fake cases never touch QLDT or persistence.
-    if (scenario != null) {
-      await Future<void>.delayed(const Duration(milliseconds: 2800));
-      return RecapFixtures.build(scenario, DateTime.now());
-    }
-
+  Future<RecapFacts> _loadRecap() async {
     // Snapshot the latest VERIFIED current semester before triggering the
     // native request. _data may also include a previous retained semester,
     // which must never be counted in this term's Recap.
@@ -436,45 +427,16 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _openRecap([RecapScenario? scenario]) async {
+  Future<void> _openRecap() async {
     if (!mounted) return;
     await Navigator.of(context).push<void>(
       PageRouteBuilder<void>(
         opaque: true,
         transitionDuration: const Duration(milliseconds: 300),
         pageBuilder: (_, animation, secondary) =>
-            SemesterRecapPage(load: () => _loadRecap(scenario)),
+            SemesterRecapPage(load: _loadRecap),
         transitionsBuilder: (_, animation, secondary, child) =>
             FadeTransition(opacity: animation, child: child),
-      ),
-    );
-  }
-
-  Future<void> _openRecapTestPanel() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (sheetContext) => RecapTestPanel(
-        memoryVisible: _recapForcedVisible,
-        hasRealAccount: _hasRegisteredSemester && _data != null,
-        onToggleMemory: () {
-          Navigator.of(sheetContext).pop();
-          setState(() => _recapForcedVisible = !_recapForcedVisible);
-        },
-        onOpenActual: () {
-          Navigator.of(sheetContext).pop();
-          unawaited(_openRecap());
-        },
-        onTestPull: () {
-          Navigator.of(sheetContext).pop();
-          // Same pull-reload entrypoint as 1.7 timetable gesture.
-          unawaited(_runPullSync());
-        },
-        onOpenScenario: (scenario) {
-          Navigator.of(sheetContext).pop();
-          unawaited(_openRecap(scenario));
-        },
       ),
     );
   }
@@ -1341,22 +1303,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 child: SizedBox.expand(),
                               )
                             : displayData == null || displayData.displayName.isEmpty
-                            ? Stack(children: [
-                                _LoginScreen(
-                                  onLogin: _loginOrSync,
-                                  supportsLive: supportsLiveQldtLogin,
-                                ),
-                                if (_recapTestPanelEnabled)
-                                  Positioned(
-                                    right: 14, bottom: 18,
-                                    child: FloatingActionButton.small(
-                                      heroTag: 'recap-test-login',
-                                      tooltip: 'Kiểm thử Recap',
-                                      onPressed: () => unawaited(_openRecapTestPanel()),
-                                      child: const Icon(Icons.tune_rounded),
-                                    ),
-                                  ),
-                              ])
+                            ? _LoginScreen(
+                                onLogin: _loginOrSync,
+                                supportsLive: supportsLiveQldtLogin,
+                              )
                             : Stack(children: [
                                 _MainShell(
                                 data: displayData!,
@@ -1424,16 +1374,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                     left: 14, bottom: 16,
                                     child: RecapMemoryButton(
                                       onPressed: () => unawaited(_openRecap()),
-                                    ),
-                                  ),
-                                if (_recapTestPanelEnabled)
-                                  Positioned(
-                                    right: 14, bottom: 16,
-                                    child: FloatingActionButton.small(
-                                      heroTag: 'recap-test-timetable',
-                                      tooltip: 'Kiểm thử Recap',
-                                      onPressed: () => unawaited(_openRecapTestPanel()),
-                                      child: const Icon(Icons.tune_rounded),
                                     ),
                                   ),
                               ]),
