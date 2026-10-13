@@ -287,7 +287,7 @@ class QldtDailySyncWorker(
     }
 }
 
-private class HeadlessQldtSync(private val context: Context, cachedRoute: String?) {
+internal class HeadlessQldtSync(private val context: Context, cachedRoute: String?) {
     private val routeLiteral: String = runCatching {
         val route = JSONObject(cachedRoute ?: "")
         if (listOf("userId", "semesterId", "semesterName", "planId")
