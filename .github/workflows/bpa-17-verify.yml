@@ -29,7 +29,7 @@ jobs:
       - name: Validate attendance and existing app UI
         run: |
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/app/app.dart lib/features/lich_hoc/attendance_tag.dart lib/features/lich_hoc/pull_sync_indicator.dart lib/features/lich_hoc/week_timetable.dart
-          flutter test test/attendance_tag_test.dart test/week_timetable_test.dart
+          flutter test test/attendance_tag_test.dart test/attendance_card_ui_test.dart test/week_timetable_test.dart
           flutter test test/app_smoke_test.dart --plain-name 'stored schedule opens day and week views without changing navigation'
       - name: Isolate package from installed production BPA
         run: |
