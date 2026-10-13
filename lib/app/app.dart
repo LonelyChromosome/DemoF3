@@ -100,6 +100,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _syncing = false;
   bool _panelOpen = false;
   bool _recapForcedVisible = false;
+  bool _hasRegisteredSemester = false;
   static const bool _recapTestPanelEnabled = bool.fromEnvironment('BPA_RECAP_TEST_PANEL');
   static const _attendanceStorageKey = 'better_phenikaa_attendance_v17';
   static const _inlineSyncChannel = MethodChannel('better_phenikaa/inline_sync');
@@ -323,7 +324,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       await prefs.remove(SemesterRetention.previousKey);
       await WidgetPublisher.clear();
       _semesterExpiryTimer?.cancel();
-      if (mounted) setState(() => _data = null);
+      if (mounted) setState(() {
+        _data = null;
+        _hasRegisteredSemester = false;
+      });
       return;
     }
     final previous = SemesterRetention.readPrevious(prefs, now);
@@ -378,6 +382,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
 
   bool get _recapButtonVisible {
     if (_recapForcedVisible) return true;
+    if (!_hasRegisteredSemester) return false;
     final data = _data;
     if (data == null) return false;
     final classes = data.classes.toList();
@@ -591,6 +596,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         semester = null;
         raw = null;
       }
+      _hasRegisteredSemester = semester != null;
       if (semester != null || (raw != null && raw.isNotEmpty)) {
         final previous = semester == null
             ? null
@@ -915,6 +921,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           final practiceIds = practiceCardIdsFromVerifiedSchedule(imported.schedule);
           setState(() {
             _data = displayed;
+            _hasRegisteredSemester = imported.semester != null;
             _attendance = verifiedAttendance;
             _practiceIds = practiceIds;
             _accountDisplayName = accountDisplayName;
@@ -1024,6 +1031,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() {
         _data = displayed;
+        _hasRegisteredSemester = true;
         _attendance = attendance;
         _practiceIds = practiceIds;
         _lastSuccessfulSync = displayed.syncedAt;
@@ -1145,6 +1153,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     if (mounted) {
       setState(() {
         _data = null;
+        _hasRegisteredSemester = false;
         _panelOpen = false;
         _page = _AppPage.timetable;
         _errorMessage = null;
