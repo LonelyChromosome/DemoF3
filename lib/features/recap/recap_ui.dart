@@ -315,6 +315,7 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                       story: stories[_index],
                       index: _index,
                       preview: facts!.preview,
+                      facts: facts,
                     ),
                   ),
                 )),
@@ -442,17 +443,16 @@ List<_Story> _stories(RecapFacts f) {
   final last = f.lastClass;
   final perfect = f.attendanceConfirmed && f.absence == 0;
   final attendanceSlide = f.absence == null
-      ? const _Story('ĐIỂM DANH', 'Còn một chút chưa rõ', '—',
-          'Không đủ dữ liệu chuyên cần để kết luận. Vậy nên mình sẽ không đoán.')
+      ? const _Story('ĐIỂM DANH', 'Chưa đủ thông tin chuyên cần', '—',
+          'QLĐT chưa cung cấp số buổi vắng. Không suy ra đã có mặt.')
       : perfect
-      ? const _Story('ĐIỂM DANH', 'Trọn vẹn từng buổi học', '0',
-          'Tất cả buổi học đã được xác nhận. Một lời khen dành cho bạn!')
-      : f.absence == 0
+      ? const _Story('ĐIỂM DANH', 'Một học kỳ trọn vẹn', '0',
+          'Các buổi đã được xác nhận có mặt.')
+      : f.mostAbsentCount == null
       ? const _Story('ĐIỂM DANH', 'Chưa ghi nhận buổi vắng', '0',
-          'Đây là số buổi vắng đã ghi nhận, không phải xác nhận có mặt toàn bộ.')
-      : _Story('ĐIỂM DANH', 'Có những buổi mình lỡ hẹn',
-          '${f.absence}',
-          'Môn ghi nhận nhiều buổi vắng nhất: ${f.mostAbsent ?? 'chưa xác định'}. Những ngày mới vẫn còn ở phía trước.');
+          'Chỉ tính những môn có dữ liệu chuyên cần, không phải xác nhận đã có mặt đầy đủ.')
+      : _Story('ĐIỂM DANH', 'Từng môn, từng buổi', '${f.mostAbsentCount}',
+          'Riêng ${f.mostAbsent ?? 'môn chưa xác định'} ghi nhận ${f.mostAbsentCount} buổi vắng. Các môn khác nằm trong bảng phía dưới.');
   final encouragement = perfect
       ? const _Story('ĐÁNG TỰ HÀO', 'Một lời khen dành cho bạn', '✦',
           'Không phải ngày nào cũng dễ dàng. Bạn đã có mặt trong từng buổi học.')
@@ -470,8 +470,8 @@ List<_Story> _stories(RecapFacts f) {
     _Story('MỘT KỲ HỌC', 'Những con số biết kể chuyện',
       '${f.days} ngày',
       '${f.subjects} môn · ${f.periods} tiết có dữ liệu${f.unknownPeriods > 0 ? ' · ${f.unknownPeriods} buổi chưa rõ số tiết' : ''}.'),
-    _Story('SÁNG & CHIỀU', 'Lịch học của bạn thường bắt đầu lúc nào?',
-      '${f.morning} / ${f.afternoon}', 'Số buổi sáng / số buổi chiều.'),
+    _Story('SÁNG & CHIỀU', 'Hai nhịp học khác nhau',
+      '${f.morning + f.afternoon} buổi', 'Tách ca học theo giờ bắt đầu của lịch QLĐT.'),
     _Story('6 GIỜ 45', 'Những buổi sáng thật sớm',
       '${f.early}', f.early == 0
         ? 'Học kỳ này không có lớp bắt đầu đúng 6:45.'
@@ -480,9 +480,8 @@ List<_Story> _stories(RecapFacts f) {
       '${f.busiestCount} buổi', f.busiest == null
         ? 'Chưa có lịch học để xác định.'
         : 'Ngày ${_d(f.busiest!)} đã chứa nhiều buổi học hơn mọi ngày khác.'),
-    _Story('MÔN GẮN BÓ', f.favorite,
-      '${f.favoriteCount} buổi',
-      'Có những môn xuất hiện trên lịch nhiều đến mức trở nên quen thuộc.'),
+    _Story('THEO TỪNG MÔN', 'Mỗi môn có một lịch trình riêng',
+      '${f.favoriteCount} buổi', 'Đếm riêng bản ghi QLĐT từng môn, không tự gán hai môn bằng nhau.'),
     attendanceSlide,
     encouragement,
     _Story('BUỔI HỌC CUỐI',
@@ -500,10 +499,11 @@ List<_Story> _stories(RecapFacts f) {
 
 class _StoryBody extends StatelessWidget {
   const _StoryBody({required this.story, required this.index,
-    required this.preview, super.key});
+    required this.preview, required this.facts, super.key});
   final _Story story;
   final int index;
   final bool preview;
+  final RecapFacts facts;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -538,7 +538,13 @@ class _StoryBody extends StatelessWidget {
               height: 1.16, fontWeight: FontWeight.w800,
             )),
             const SizedBox(height: 24),
-            _RecapPanel(
+            if (index == 2)
+              _DayPartBento(facts: facts)
+            else if (index == 5)
+              _SubjectBento(facts: facts)
+            else if (index == 6)
+              _AttendanceBento(facts: facts)
+            else _RecapPanel(
               highlight: true,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -608,6 +614,183 @@ class _StoryBody extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _DayPartBento extends StatelessWidget {
+  const _DayPartBento({required this.facts});
+  final RecapFacts facts;
+  @override
+  Widget build(BuildContext context) {
+    final total = facts.morning + facts.afternoon;
+    return Column(children: [
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: _DayTile(
+          title: 'BUỔI SÁNG', value: facts.morning,
+          icon: Icons.wb_sunny_outlined,
+          accent: const Color(0xFFFFCE83),
+          top: const Color(0xFF69492C), bottom: const Color(0xFF293E52),
+          ratio: total == 0 ? 0 : facts.morning / total,
+        )),
+        const SizedBox(width: 12),
+        Expanded(child: _DayTile(
+          title: 'BUỔI CHIỀU', value: facts.afternoon,
+          icon: Icons.nights_stay_outlined,
+          accent: const Color(0xFFB1D3FF),
+          top: const Color(0xFF31476E), bottom: const Color(0xFF1A2B4A),
+          ratio: total == 0 ? 0 : facts.afternoon / total,
+        )),
+      ]),
+      const SizedBox(height: 13),
+      _RecapPanel(child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('CÁCH PHÂN LOẠI', style: TextStyle(
+            color: Color(0xFFFFD58B), fontWeight: FontWeight.w900,
+            fontSize: 11, letterSpacing: 1.3)),
+          SizedBox(height: 8),
+          Text('Mỗi ca học QLĐT được đếm một lần. Trước 12:00 là sáng; từ 12:00 là chiều.',
+            style: TextStyle(color: Color(0xFFD7E4F2), fontSize: 13, height: 1.5)),
+        ],
+      )),
+    ]);
+  }
+}
+
+class _DayTile extends StatelessWidget {
+  const _DayTile({required this.title, required this.value,
+    required this.icon, required this.accent, required this.top,
+    required this.bottom, required this.ratio});
+  final String title;
+  final int value;
+  final IconData icon;
+  final Color accent, top, bottom;
+  final double ratio;
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minHeight: 215),
+    padding: const EdgeInsets.fromLTRB(14, 18, 14, 18),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(begin: Alignment.topLeft,
+        end: Alignment.bottomRight, colors: [top, bottom]),
+      borderRadius: BorderRadius.circular(20),
+      border: Border.all(color: accent.withValues(alpha: .65), width: 1.2),
+      boxShadow: const [BoxShadow(
+        color: Color(0x66091429), blurRadius: 18, offset: Offset(0, 10))],
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Icon(icon, size: 25, color: accent),
+      const SizedBox(height: 13),
+      Text(title, style: TextStyle(color: accent, fontSize: 10,
+        letterSpacing: .6, fontWeight: FontWeight.w900)),
+      const SizedBox(height: 13),
+      FittedBox(fit: BoxFit.scaleDown, child: Text('$value',
+        style: const TextStyle(fontSize: 58, height: 1,
+          fontWeight: FontWeight.w900, color: Colors.white))),
+      const SizedBox(height: 5),
+      const Text('buổi học', style: TextStyle(
+        color: Color(0xFFDCE7F1), fontSize: 12)),
+      const SizedBox(height: 19),
+      ClipRRect(borderRadius: BorderRadius.circular(10),
+        child: LinearProgressIndicator(
+          value: ratio, minHeight: 6, color: accent,
+          backgroundColor: Colors.white.withValues(alpha: .16),
+        )),
+      const SizedBox(height: 8),
+      Text('${(ratio * 100).round()}% lịch học', style: const TextStyle(
+        color: Color(0xFFD6E2EE), fontSize: 11)),
+    ]),
+  );
+}
+
+class _SubjectBento extends StatelessWidget {
+  const _SubjectBento({required this.facts});
+  final RecapFacts facts;
+  @override
+  Widget build(BuildContext context) {
+    final rows = facts.subjectCounts;
+    final maximum = rows.isEmpty ? 1 : rows.first.scheduleCount;
+    return _RecapPanel(highlight: true, child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('TẦN SUẤT THEO TỪNG MÔN', style: TextStyle(
+          color: Color(0xFFFFD58B), fontSize: 11,
+          fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+        const SizedBox(height: 9),
+        const Text('Một hàng tương ứng một môn học. Không đếm lịch thi.',
+          style: TextStyle(color: Color(0xFFD9E6F3),
+            fontSize: 12, height: 1.5)),
+        const SizedBox(height: 18),
+        for (final item in rows) ...[
+          Row(children: [
+            Expanded(child: Text(item.name, maxLines: 2,
+              overflow: TextOverflow.ellipsis, style: const TextStyle(
+                color: Colors.white, fontSize: 13,
+                fontWeight: FontWeight.w600))),
+            const SizedBox(width: 9),
+            Text('${item.scheduleCount} buổi', style: const TextStyle(
+              color: Color(0xFFFFD58B), fontSize: 13,
+              fontWeight: FontWeight.w900)),
+          ]),
+          const SizedBox(height: 7),
+          ClipRRect(borderRadius: BorderRadius.circular(9),
+            child: LinearProgressIndicator(
+              value: item.scheduleCount / maximum, minHeight: 5,
+              color: const Color(0xFFFFCE83),
+              backgroundColor: const Color(0xFF3B526F),
+            )),
+          const SizedBox(height: 15),
+        ],
+        if (rows.isEmpty) const Text('Chưa có dữ liệu môn học.',
+            style: TextStyle(color: Colors.white70)),
+        if (facts.mostFrequentSubjects.length > 1)
+          Text('Có ${facts.mostFrequentSubjects.length} môn cùng có ${facts.favoriteCount} buổi. Recap không tự chọn một môn đứng đầu.',
+            style: const TextStyle(color: Color(0xFFF0D9AC),
+              fontSize: 12, height: 1.5)),
+      ],
+    ));
+  }
+}
+
+class _AttendanceBento extends StatelessWidget {
+  const _AttendanceBento({required this.facts});
+  final RecapFacts facts;
+  @override
+  Widget build(BuildContext context) {
+    final rows = facts.subjectCounts
+        .where((e) => e.absentSessions != null).toList();
+    return _RecapPanel(highlight: true, child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('ĐIỂM DANH TỪNG MÔN', style: TextStyle(
+          color: Color(0xFFFFD58B),
+          fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.2)),
+        const SizedBox(height: 10),
+        const Text('Số buổi vắng ghi nhận từ QLĐT theo từng môn LT. Không lấy tổng toàn kỳ gán cho một môn.',
+          style: TextStyle(color: Color(0xFFD9E6F3), fontSize: 12, height: 1.5)),
+        const SizedBox(height: 17),
+        for (final item in rows) ...[
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Text(item.name, style: const TextStyle(
+              color: Colors.white, fontSize: 12,
+              fontWeight: FontWeight.w600), maxLines: 2)),
+            const SizedBox(width: 8),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('${item.absentSessions} buổi vắng',
+                style: TextStyle(color: item.absentSessions == 0
+                  ? const Color(0xFFB6E5D0) : const Color(0xFFFFCF91),
+                  fontSize: 12, fontWeight: FontWeight.w900)),
+              Text('${item.theorySessionCount} buổi LT có dữ liệu',
+                style: const TextStyle(color: Color(0xFFB7C8D8), fontSize: 10)),
+            ]),
+          ]),
+          const SizedBox(height: 14),
+          Divider(color: Colors.white.withValues(alpha: .13), height: 1),
+          const SizedBox(height: 14),
+        ],
+        if (rows.isEmpty) const Text('QLĐT chưa cung cấp số buổi vắng của môn nào.',
+          style: TextStyle(color: Colors.white70, fontSize: 13)),
+        Text('Môn có dữ liệu điểm danh: ${facts.attendanceCoveredSubjects}/${facts.subjectCounts.length}.',
+          style: const TextStyle(color: Color(0xFFC7D5E4), fontSize: 11)),
+      ],
+    ));
+  }
 }
 
 class RecapTestPanel extends StatelessWidget {
