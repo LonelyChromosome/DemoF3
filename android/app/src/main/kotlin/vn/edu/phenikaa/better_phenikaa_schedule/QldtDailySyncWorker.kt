@@ -392,6 +392,8 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
                             "INVALID_DATE" -> "INVALID_DATE: Ngày lớp đăng ký không hợp lệ."
                             "INVALID_SUBJECT" -> "INVALID_SUBJECT: Thông tin môn đăng ký không nhất quán."
                             "INVALID_RESPONSE" -> "INVALID_RESPONSE: QLĐT không trả danh sách hợp lệ."
+                            "SCHEDULE_CHUNK_TIMEOUT" ->
+                                "SCHEDULE_CHUNK_TIMEOUT: Một đợt tải lịch không phản hồi sau khi thử lại."
                             else -> "REQUEST: QLĐT trả dữ liệu thiếu hoặc không hợp lệ."
                         }
                         complete(Result.Failure(message))
@@ -659,6 +661,7 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
                 var active = 0;
                 var completed = 0;
                 var failed = false;
+                var delivered = false;
                 var merged = [];
                 var retryQueue = [];
                 var attempts = new Array(chunks.length).fill(0);
@@ -675,7 +678,8 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
                 }
 
                 function finishIfDone() {
-                  if (failed || completed !== chunks.length) return;
+                  if (failed || delivered || completed !== chunks.length) return;
+                  delivered = true;
                   var nameNode = document.querySelector('#lblHoTenNguoiDangNhap');
                   var name = nameNode ? (nameNode.textContent || '').trim() : '';
                   if (!name) {

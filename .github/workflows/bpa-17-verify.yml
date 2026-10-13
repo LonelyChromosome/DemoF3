@@ -41,6 +41,8 @@ jobs:
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/features/dang_nhap_qldt/attendance_lesson_classifier.dart lib/app/app.dart lib/features/dang_nhap_qldt/qldt_models.dart lib/features/dang_nhap_qldt/semester_data.dart lib/features/dang_nhap_qldt/tracuu_api.dart lib/features/dang_nhap_qldt/qldt_login_mobile.dart lib/features/lich_hoc/attendance_tag.dart lib/features/lich_hoc/pull_sync_indicator.dart lib/features/lich_hoc/week_timetable.dart
           flutter test test/attendance_lesson_classifier_test.dart test/attendance_tag_test.dart test/attendance_card_ui_test.dart test/week_timetable_test.dart test/qldt_parser_test.dart test/tracuu_api_test.dart test/semester_data_test.dart test/semester_sync_test.dart test/semester_changes_test.dart test/semester_retention_test.dart
           flutter test test/app_smoke_test.dart --plain-name 'stored schedule opens day and week views without changing navigation'
+      - name: Exercise reload JS cached-route fallback and per-chunk retry
+        run: node tool/inline_sync_js_regression.cjs
       - name: Verify native attendance whitelist and existing semester verifier
         run: |
           cd android

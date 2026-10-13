@@ -965,6 +965,18 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         ..showSnackBar(SnackBar(
           content: Text(AssistantText.of(event, _assistantPack)),
         ));
+    } on PlatformException catch (error) {
+      if (!mounted || epoch != _inlineSyncEpoch) return;
+      setState(() => _inlineSyncPhase = PullSyncPhase.failure);
+      // The 1.7 gesture must reveal the native phase when a verified QLĐT
+      // request fails; 1.6 login/sync error handling is unchanged.
+      final reason = error.message?.trim() ?? '';
+      final display = reason.isEmpty
+          ? AssistantText.of(AssistantEvent.syncFailed, _assistantPack)
+          : 'Đồng bộ thất bại: $reason';
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(display)));
     } on Object {
       if (!mounted || epoch != _inlineSyncEpoch) return;
       setState(() => _inlineSyncPhase = PullSyncPhase.failure);
