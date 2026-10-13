@@ -454,6 +454,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       showDragHandle: true,
       builder: (sheetContext) => RecapTestPanel(
         memoryVisible: _recapForcedVisible,
+        hasRealAccount: _hasRegisteredSemester && _data != null,
         onToggleMemory: () {
           Navigator.of(sheetContext).pop();
           setState(() => _recapForcedVisible = !_recapForcedVisible);
