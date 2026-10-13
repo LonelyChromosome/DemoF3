@@ -104,6 +104,11 @@ internal object BpaVerifiedAttendanceFilter {
         RegexOption.IGNORE_CASE,
     )
 
+    private val onlineCode = Regex(
+        """(?:^|[\s.\-_/()])(?:ELN|ELEARNING|E-LEARNING)[0-9]*(?=$|[\s.\-_/()])""",
+        RegexOption.IGNORE_CASE,
+    )
+
     private fun classifyOriginal(
         rawSubject: String,
         rawClass: String,
@@ -112,10 +117,12 @@ internal object BpaVerifiedAttendanceFilter {
     ): String {
         val attr = attribute.lowercase(Locale.ROOT)
         val location = room.lowercase(Locale.ROOT)
-        if (listOf(attr, location).any {
+        if (listOf(attr, location, rawSubject.lowercase(Locale.ROOT),
+                rawClass.lowercase(Locale.ROOT)).any {
                 it.contains("elearning") || it.contains("e-learning") ||
                     it.contains("e learning")
-            }) return "ELEARNING"
+            } || onlineCode.containsMatchIn(rawSubject) ||
+            onlineCode.containsMatchIn(rawClass)) return "ELEARNING"
         if (practiceCode.containsMatchIn(rawSubject) ||
             practiceCode.containsMatchIn(rawClass) ||
             attr == "th" ||
