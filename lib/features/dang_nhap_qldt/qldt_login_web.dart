@@ -10,6 +10,7 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dar
 import 'package:flutter/material.dart';
 
 const bool supportsLiveQldtLogin = true;
+const bool hasRetainedQldtLivePortal = false;
 
 Future<void> clearQldtSession() async {}
 

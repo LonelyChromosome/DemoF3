@@ -6,6 +6,8 @@ import 'package:flutter/widgets.dart';
 
 bool get supportsLiveQldtLogin => implementation.supportsLiveQldtLogin;
 
+bool get hasRetainedQldtLivePortal => implementation.hasRetainedQldtLivePortal;
+
 Future<QldtLoginResult?> openQldtLogin(BuildContext context, {
   bool inlinePull = false,
 }) => implementation.openQldtLogin(context, inlinePull: inlinePull);

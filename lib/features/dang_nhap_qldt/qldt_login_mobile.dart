@@ -195,6 +195,13 @@ Future<void> _saveQldtAccountDisplayName(String name) async {
  * newly loaded QLDT page. The OS can still reclaim it after process death. */
 InAppWebViewKeepAlive? _retainedQldtView;
 bool _retainedQldtPortalReady = false;
+
+/// True only while the authenticated WebView is still alive in this process.
+/// After an Android process restart, saved cookies are NOT proof that the
+/// WebView's QLDT JS environment/window.edu is still available.
+bool get hasRetainedQldtLivePortal =>
+    _retainedQldtView != null && _retainedQldtPortalReady;
+
 String? _inlineQldtFailure;
 VoidCallback? _abortActiveInlineSync;
 
@@ -246,16 +253,23 @@ Future<QldtLoginResult?> openQldtLogin(
   if (!context.mounted) return null;
   final cached = prefs.getBool(_sessionKey) ?? false;
   final portalPath = prefs.getString(_portalPathKey);
+
+  // Never mount an invisible 2px WebView against an uninitialized session.
+  // A process restart invalidates keepAlive even if cached QLDT credentials
+  // exist. In that case, recover through the ORIGINAL foreground login,
+  // with its existing auto-login and authentication controls. All following
+  // pulls in the same process can reuse the verified portal silently.
+  final silentPull = inlinePull && hasRetainedQldtLivePortal;
   if (testHtml == null) _retainedQldtView ??= InAppWebViewKeepAlive();
   final page = _QldtWebLoginScreen(
-    cachedSession: cached || inlinePull,
+    cachedSession: cached || silentPull,
     portalPath: portalPath,
     testHtml: testHtml,
-    inlinePull: inlinePull,
+    inlinePull: silentPull,
   );
   if (inlinePull) _inlineQldtFailure = null;
   return Navigator.of(context).push<QldtLoginResult>(
-    inlinePull
+    silentPull
         ? PageRouteBuilder<QldtLoginResult>(
             opaque: false,
             transitionDuration: Duration.zero,
@@ -263,7 +277,6 @@ Future<QldtLoginResult?> openQldtLogin(
             pageBuilder: (_, animation, secondaryAnimation) => page,
           )
         : MaterialPageRoute<QldtLoginResult>(
-            fullscreenDialog: true,
             builder: (_) => page,
           ),
   );

@@ -405,7 +405,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     final initialAttendance = Map<String, AttendanceSummary>.of(_attendance);
 
     // Existing native QLDT transport; a session timeout must not stop the VFX.
-    unawaited(_runPullSync(silent: true));
+    if (hasRetainedQldtLivePortal) {
+      unawaited(_runPullSync(silent: true));
+    }
     await Future<void>.delayed(const Duration(milliseconds: 2800));
 
     // Use the newly VERIFIED, atomically committed semester + attendance

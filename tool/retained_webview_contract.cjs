@@ -14,6 +14,14 @@ assert(pull.includes('_save(imported)'), 'Commit fully verified source data');
 assert(pull.includes('AttendanceSummary.fromVerifiedSchedule(imported.schedule)'));
 assert(pull.includes('practiceCardIdsFromVerifiedSchedule(imported.schedule)'));
 assert(mobile.includes('InAppWebViewKeepAlive()'), 'Keep-alive token required');
+assert(mobile.includes('final silentPull = inlinePull && hasRetainedQldtLivePortal;'),
+  'A cold-start pull must use foreground original QLDT login instead of a hidden dead session');
+assert(mobile.includes('inlinePull: silentPull,'),
+  'The hidden QLDT UI must only be used for a verified live portal');
+assert(mobile.includes('cachedSession: cached || silentPull,'),
+  'Cold reauthorization must not falsely claim an authenticated portal');
+assert(root.includes('if (hasRetainedQldtLivePortal)'),
+  'Recap background sync must not unexpectedly navigate to QLDT after process restart');
 assert(mobile.includes('keepAlive: widget.testHtml == null ? _retainedQldtView : null'));
 assert(mobile.includes('PageRouteBuilder<QldtLoginResult>'), 'Pull must not cover timetable UI');
 assert(mobile.includes("void _abortInlineSync(String reason)"));
