@@ -65,9 +65,9 @@ final class ScheduleRecord {
     'examForm': examForm,
     'periodStart': periodStart,
     'periodEnd': periodEnd,
-    if (lessonKind != null) 'lessonKind': lessonKind,
-    if (attendanceStatus != null) 'attendanceStatus': attendanceStatus,
-    if (lessonPeriods != null) 'lessonPeriods': lessonPeriods,
+    // Privacy + compatibility: optional per-lesson attendance stays in memory
+    // only. The legacy 1.6 timetable snapshot schema is unchanged; only
+    // validated subject-level totals go into the separate attendance cache.
   };
 }
 
