@@ -3,6 +3,17 @@ import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dar
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/attendance_tag.dart';
 
+class RecapSubjectCount {
+  const RecapSubjectCount({
+    required this.name, required this.scheduleCount,
+    required this.absentSessions, required this.theorySessionCount,
+  });
+  final String name;
+  final int scheduleCount;
+  final int? absentSessions;
+  final int? theorySessionCount;
+}
+
 class RecapFacts {
   const RecapFacts({
     required this.days, required this.subjects, required this.periods,
@@ -15,6 +26,10 @@ class RecapFacts {
     required this.displayName,
     required this.syncedAt,
     required this.preview,
+    required this.subjectCounts,
+    required this.mostFrequentSubjects,
+    required this.mostAbsentCount,
+    required this.attendanceCoveredSubjects,
   });
   final int days, subjects, periods, unknownPeriods, morning, afternoon, early;
   final DateTime? busiest;
@@ -31,6 +46,10 @@ class RecapFacts {
   final DateTime syncedAt;
   final String displayName;
   final bool preview;
+  final List<RecapSubjectCount> subjectCounts;
+  final List<String> mostFrequentSubjects;
+  final int? mostAbsentCount;
+  final int attendanceCoveredSubjects;
   bool get finished => lastClass != null && !now.isBefore(lastClass!.endAt);
 
   static RecapFacts calculate(ImportedScheduleData data, {
@@ -44,8 +63,14 @@ class RecapFacts {
     final byDay = <DateTime, int>{};
     final bySubject = <String, int>{};
     final names = <String, String>{};
+    final seenIds = <String>{};
     var periods = 0, unknown = 0, am = 0, pm = 0, early = 0;
     for (final record in classes) {
+      final normalized = normalizeSubjectName(record.subjectName);
+      final identity = record.id.isNotEmpty ? '$normalized|${record.id}'
+          : '$normalized|${record.startAt.toIso8601String()}|${record.className}|${record.room}';
+      // Never count the same native-verified lesson twice.
+      if (!seenIds.add(identity)) continue;
       final date = DateTime(record.startAt.year, record.startAt.month, record.startAt.day);
       byDay[date] = (byDay[date] ?? 0) + 1;
       final key = normalizeSubjectName(record.subjectName);
@@ -68,7 +93,25 @@ class RecapFacts {
       ..sort((a, b) => b.value != a.value ? b.value.compareTo(a.value) : a.key.compareTo(b.key));
     final absentEntries = attendance.entries.toList()
       ..sort((a, b) => b.value.absentSessions.compareTo(a.value.absentSessions));
-    final realMisses = absentEntries.where((e) => e.value.absentSessions > 0).toList();
+    final validAttendance = absentEntries
+        .where((e) => bySubject.containsKey(e.key)).toList();
+    final realMisses = validAttendance
+        .where((e) => e.value.absentSessions > 0).toList();
+    final breakdown = <RecapSubjectCount>[
+      for (final entry in bySubject.entries)
+        RecapSubjectCount(
+          name: names[entry.key] ?? entry.key,
+          scheduleCount: entry.value,
+          absentSessions: attendance[entry.key]?.absentSessions,
+          theorySessionCount: attendance[entry.key]?.totalTheorySessions,
+        ),
+    ]..sort((a, b) {
+      final n = b.scheduleCount.compareTo(a.scheduleCount);
+      return n != 0 ? n : a.name.compareTo(b.name);
+    });
+    final maxCount = frequent.isEmpty ? 0 : frequent.first.value;
+    final leaders = frequent.where((e) => e.value == maxCount)
+        .map((e) => names[e.key] ?? e.key).toList()..sort();
     return RecapFacts(
       days: byDay.length, subjects: registeredSubjects ?? bySubject.length,
       periods: periods, unknownPeriods: unknown, morning: am, afternoon: pm,
@@ -76,21 +119,27 @@ class RecapFacts {
       busiest: busiestDays.isEmpty ? null : busiestDays.first.key,
       busiestCount: busiestDays.isEmpty ? 0 : busiestDays.first.value,
       favorite: frequent.isEmpty ? 'Những môn học của bạn'
-          : names[frequent.first.key] ?? frequent.first.key,
+          : leaders.length == 1 ? leaders.single
+          : '${leaders.length} môn cùng nhiều buổi nhất',
       favoriteCount: frequent.isEmpty ? 0 : frequent.first.value,
       lastClass: classes.isEmpty ? null : (classes.toList()
         ..sort((a, b) => b.endAt.compareTo(a.endAt))).first,
-      absence: absentEntries.isEmpty ? null
-          : absentEntries.fold<int>(0, (sum, e) => sum + e.value.absentSessions),
+      absence: validAttendance.isEmpty ? null
+          : validAttendance.fold<int>(0, (sum, e) => sum + e.value.absentSessions),
       mostAbsent: realMisses.isEmpty ? null
           : names[realMisses.first.key] ?? realMisses.first.key,
-      clearSubjects: absentEntries.where((e) => e.value.absentSessions == 0)
+      clearSubjects: validAttendance.where((e) => e.value.absentSessions == 0)
           .map((e) => names[e.key] ?? e.key).toList(),
       attendanceConfirmed: attendanceConfirmed,
       now: now,
       syncedAt: data.syncedAt,
       displayName: data.displayName,
       preview: data.source == 'recap_fixture',
+      subjectCounts: breakdown,
+      mostFrequentSubjects: leaders,
+      mostAbsentCount: realMisses.isEmpty ? null
+          : realMisses.first.value.absentSessions,
+      attendanceCoveredSubjects: validAttendance.length,
     );
   }
 }
