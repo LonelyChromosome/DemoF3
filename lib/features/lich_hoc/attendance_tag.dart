@@ -9,80 +9,42 @@ import 'package:flutter/material.dart';
 /// identity, verification and the authoritative save transaction.
 final class AttendanceSummary {
   const AttendanceSummary({
-    required this.absentPeriods,
-    required this.theoryPeriods,
+    required this.absentSessions,
+    required this.totalTheorySessions,
   });
 
-  final int absentPeriods;
-  // A registered module can have fractional LT periods (e.g. 22.5).
-  final double theoryPeriods;
+  // Student's actual enrolled LT timetable: one unique class meeting is
+  // one session, regardless of credit-hour or per-meeting period count.
+  final int absentSessions;
+  final int totalTheorySessions;
 
-  int get absentSessions => (absentPeriods / 3).ceil();
-  int get allowanceSessions => (theoryPeriods * .20 / 3).floor();
-  bool get exceeded => absentPeriods > theoryPeriods * .20;
+  // BPA attendance allowance rounds 20% of scheduled LT sessions UP.
+  // 4/5 -> 1, 10 -> 2, 15 -> 3, 20 -> 4.
+  int get allowanceSessions => (totalTheorySessions / 5).ceil();
+  bool get exceeded => absentSessions > allowanceSessions;
 
   Map<String, Object> toJson() => <String, Object>{
-    'absentPeriods': absentPeriods,
-    'theoryPeriods': theoryPeriods,
+    'absentSessions': absentSessions,
+    'totalTheorySessions': totalTheorySessions,
   };
 
   static AttendanceSummary? fromJson(Object? raw) {
     if (raw is! Map) return null;
-    final absent = raw['absentPeriods'];
-    final total = raw['theoryPeriods'];
-    if (absent is! int || total is! num || absent < 0 ||
-        !total.toDouble().isFinite || total <= 0 || absent > total) return null;
+    final absent = raw['absentSessions'];
+    final total = raw['totalTheorySessions'];
+    if (absent is! int || total is! int || total < 1 ||
+        absent < 0 || absent > total) return null;
     return AttendanceSummary(
-      absentPeriods: absent,
-      theoryPeriods: total.toDouble(),
+      absentSessions: absent,
+      totalTheorySessions: total,
     );
   }
 
-  /// Parse only an official LT allocation; do not estimate it from the number
-  /// of downloaded lessons (future lessons may be missing from QLĐT).
-  static double? officialTheoryPeriods(String? allocation) {
-    if (allocation == null) return null;
-    final matches = RegExp(
-      r'\bLT\s*\(\s*(\d+(?:[.,]\d+)?)\s*\)',
-      caseSensitive: false,
-    ).allMatches(allocation).toList();
-    if (matches.length != 1) return null;
-    final value = double.tryParse(matches.single[1]!.replaceAll(',', '.'));
-    if (value == null || !value.isFinite || value <= 0 || value > 1000) {
-      return null;
-    }
-    return value;
-  }
-
-  /// Read optional catalogue metadata from the same source as QLĐT.
-  static Map<String, double> officialAllocations(Iterable<Object?> rows) {
-    final result = <String, double>{};
-    final ambiguous = <String>{};
-    for (final row in rows) {
-      if (row is! Map) continue;
-      final subject = normalizeSubjectName(
-        row['DAOTAO_HOCPHAN_TEN']?.toString() ?? '',
-      );
-      if (subject.isEmpty) continue;
-      final total = officialTheoryPeriods(
-        row['THONGTINPHANBOTIETHOC']?.toString(),
-      );
-      if (total == null) continue;
-      if (result.containsKey(subject) && result[subject] != total) {
-        ambiguous.add(subject);
-      }
-      result[subject] = total;
-    }
-    for (final subject in ambiguous) {
-      result.remove(subject);
-    }
-    return result;
-  }
-
+  /// During login the verified parser retains optional LT markers in memory
+  /// without writing individual attendance into the legacy 1.6 snapshot.
   static Map<String, AttendanceSummary> fromVerifiedSchedule(
-    ImportedScheduleData schedule, {
-    required Map<String, double> theoryPeriodsBySubject,
-  }) => _aggregate(
+    ImportedScheduleData schedule,
+  ) => _aggregate(
     schedule.classes.map(
       (record) => _AttendanceLesson(
         id: record.id,
@@ -92,16 +54,14 @@ final class AttendanceSummary {
         periods: record.lessonPeriods,
       ),
     ),
-    theoryPeriodsBySubject,
   );
 
   /// Native headless QLĐT uses its own VERIFIED timetable parser, so keep a
   /// best-effort adapter for the same original envelope. Failure returns
   /// nothing, never changes the verified schedule or blocks its saving.
   static Map<String, AttendanceSummary> fromRawEnvelope(
-    String envelope, {
-    Map<String, double> theoryPeriodsBySubject = const {},
-  }) {
+    String envelope,
+  ) {
     try {
       final parsed = jsonDecode(envelope);
       if (parsed is! Map) return const {};
@@ -131,7 +91,6 @@ final class AttendanceSummary {
             periods: _lessonPeriodCount(row),
           );
         }),
-        theoryPeriodsBySubject,
       );
     } on Object {
       return const {};
@@ -140,56 +99,57 @@ final class AttendanceSummary {
 
   static Map<String, AttendanceSummary> _aggregate(
     Iterable<_AttendanceLesson> rows,
-    Map<String, double> official,
   ) {
+    final total = <String, int>{};
     final absent = <String, int>{};
     final confirmed = <String>{};
-    final unique = <String, String>{};
+    final seen = <String, String>{};
     final conflicted = <String>{};
+
     for (final row in rows) {
       final kind = row.kind?.trim().toLowerCase() ?? '';
-      // Native and Dart both classify raw TH component codes BEFORE
-      // normalizing the subject name for the authorised subject lookup.
-      if (kind != 'ly thuyet' && kind != 'lý thuyết' && kind != 'lt') {
+      // The raw QLĐT TH/ELN component is filtered BEFORE normalization.
+      if (kind != 'lt' && kind != 'ly thuyet' && kind != 'lý thuyết') {
         continue;
       }
       final subject = normalizeSubjectName(row.name);
-      if (subject.isEmpty || !official.containsKey(subject)) continue;
-      final periods = row.periods;
-      if (periods == null || periods <= 0 || periods > 20) continue;
-      final id = row.id.trim();
-      if (id.isEmpty) continue;
+      if (subject.isEmpty || row.id.trim().isEmpty) continue;
       final status = row.status?.trim().toLowerCase() ?? '';
-      final identity = '$subject|$id';
-      final fingerprint = '$kind|$periods|$status';
-      final previous = unique[identity];
+      final identity = '$subject|'+row.id.trim();
+      final fingerprint = '$kind|'+(row.periods?.toString() ?? '')+'|$status';
+      final previous = seen[identity];
       if (previous != null) {
         if (previous != fingerprint) conflicted.add(subject);
         continue;
       }
-      unique[identity] = fingerprint;
+      seen[identity] = fingerprint;
+      // All verified LT meetings count toward allowance, including upcoming
+      // ones with UNKNOWN attendance status.
+      total[subject] = (total[subject] ?? 0) + 1;
       if (status.startsWith('có mặt')) {
         confirmed.add(subject);
       } else if (status.startsWith('vắng mặt')) {
         final match = RegExp(r'\((\d+)\)').firstMatch(status);
-        final count = match == null ? periods : int.tryParse(match[1]!);
-        if (count == null || count < 0 || count > periods) {
+        final count = match == null ? null : int.tryParse(match[1]!);
+        if (count != null && (count <= 0 || count > 20 ||
+            (row.periods != null && count > row.periods!))) {
           conflicted.add(subject);
           continue;
         }
         confirmed.add(subject);
-        absent[subject] = (absent[subject] ?? 0) + count;
+        // Count absences per verified class MEETING, not period count / 3.
+        absent[subject] = (absent[subject] ?? 0) + 1;
       }
-      // Null / unverified attendance is NOT considered present or absent.
+      // Empty/unverified status is not counted as absence or confirmed 0.
     }
     return {
       for (final subject in confirmed)
         if (!conflicted.contains(subject) &&
-            (official[subject] ?? 0) > 0 &&
-            (absent[subject] ?? 0) <= official[subject]!)
+            (total[subject] ?? 0) > 0 &&
+            (absent[subject] ?? 0) <= total[subject]!)
           subject: AttendanceSummary(
-            absentPeriods: absent[subject] ?? 0,
-            theoryPeriods: official[subject]!,
+            absentSessions: absent[subject] ?? 0,
+            totalTheorySessions: total[subject]!,
           ),
     };
   }
