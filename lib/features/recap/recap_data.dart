@@ -12,6 +12,9 @@ class RecapFacts {
     required this.absence, required this.mostAbsent,
     required this.clearSubjects, required this.attendanceConfirmed,
     required this.now,
+    required this.displayName,
+    required this.syncedAt,
+    required this.preview,
   });
   final int days, subjects, periods, unknownPeriods, morning, afternoon, early;
   final DateTime? busiest;
@@ -25,6 +28,9 @@ class RecapFacts {
   // summary cache alone cannot prove a semester was perfectly attended.
   final bool attendanceConfirmed;
   final DateTime now;
+  final DateTime syncedAt;
+  final String displayName;
+  final bool preview;
   bool get finished => lastClass != null && !now.isBefore(lastClass!.endAt);
 
   static RecapFacts calculate(ImportedScheduleData data, {
@@ -82,6 +88,9 @@ class RecapFacts {
           .map((e) => names[e.key] ?? e.key).toList(),
       attendanceConfirmed: attendanceConfirmed,
       now: now,
+      syncedAt: data.syncedAt,
+      displayName: data.displayName,
+      preview: data.source == 'recap_fixture',
     );
   }
 }
