@@ -225,57 +225,15 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
             Padding(
               padding: const EdgeInsets.fromLTRB(19, 14, 19, 14),
               child: Column(children: [
-                Row(children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: facts!.preview
-                              ? const Color(0xFF5A3127)
-                              : const Color(0xFF143D48),
-                          border: Border.all(
-                            color: facts!.preview
-                                ? const Color(0xFFEFAC7F)
-                                : const Color(0xFF8FE0C6),
-                            width: .8,
-                          ),
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8,
-                          ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(facts!.preview ? Icons.science_outlined :
-                              Icons.verified_user_outlined,
-                              color: facts!.preview ? const Color(0xFFFFCCB0)
-                                : const Color(0xFFA1EDD2), size: 15),
-                            const SizedBox(width: 7),
-                            Flexible(child: Text(
-                              facts!.preview ? 'GIẢ LẬP · KHÔNG PHẢI QLĐT'
-                                : 'QLĐT · DỮ LIỆU THẬT',
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: facts!.preview
-                                  ? const Color(0xFFFFE1CD)
-                                  : const Color(0xFFC2F2DF),
-                                fontSize: 10, letterSpacing: .9,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            )),
-                          ]),
-                        ),
-                      ),
-                    ),
-                  ),
-                  IconButton(
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
                     onPressed: () => Navigator.of(context).pop(),
                     tooltip: 'Đóng Recap',
                     icon: const Icon(Icons.close_rounded,
                       color: Color(0xFFEAF0F6)),
                   ),
-                ]),
+                ),
                 const SizedBox(height: 14),
                 Row(children: List.generate(stories.length, (index) =>
                   Expanded(child: Container(
@@ -288,18 +246,6 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                     ),
                   )),
                 )),
-                const SizedBox(height: 8),
-                if (!facts!.preview)
-                  Padding(
-                    padding: const EdgeInsets.only(left: 2, bottom: 6),
-                    child: Text(
-                      'Tài khoản: ${facts!.displayName}  ·  Lịch lưu: ${_d(facts!.syncedAt)} ${_hour(facts!.syncedAt)}',
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      style: const TextStyle(color: Color(0xFFB6C9DB),
-                        fontSize: 10, letterSpacing: .1),
-                    ),
-                  ),
                 Expanded(child: LayoutBuilder(
                   builder: (context, viewport) => GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -328,40 +274,14 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                   ),
                 ),
                 )),
-                Padding(
-                  padding: const EdgeInsets.only(top: 13, bottom: 4),
-                  child: Row(children: [
-                    const Expanded(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text('‹  TRÁI · LÙI',
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Color(0xFFCDD9E6), fontSize: 11,
-                            fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('${_index + 1} / ${stories.length}',
-                        style: const TextStyle(
-                          color: Color(0xFFFFD28C),
-                          fontWeight: FontWeight.w900, fontSize: 12)),
-                    ),
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          _index == stories.length - 1
-                            ? 'PHẢI · KẾT THÚC  ›' : 'PHẢI · TIẾN  ›',
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.end,
-                          style: const TextStyle(
-                            color: Color(0xFFCDD9E6), fontSize: 11,
-                            fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ]),
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 12, bottom: 5),
+                    child: Text('${_index + 1} / ${stories.length}',
+                      style: const TextStyle(
+                        color: Color(0xFFB4C8DC),
+                        fontWeight: FontWeight.w700, fontSize: 12)),
+                  ),
                 ),
               ]),
             ),
@@ -570,20 +490,7 @@ class _StoryBody extends StatelessWidget {
             else if (index == 6)
               _AttendanceBento(facts: facts)
             else _RecapSectionCard(facts: facts, story: story, index: index),
-            const SizedBox(height: 13),
-            _RecapPanel(
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.menu_book_rounded,
-                    color: Color(0xFFE6C17F), size: 21),
-                  const SizedBox(width: 14),
-                  Expanded(child: Text(story.caption, style: const TextStyle(
-                    color: Color(0xFFDCE7EF), fontSize: 15,
-                    height: 1.55, fontWeight: FontWeight.w400,
-                  ))),
-                ],
-              ),
-            ),
+
           ],
         ),
       ),
@@ -672,20 +579,7 @@ class _RecapSectionCard extends StatelessWidget {
                 )),
               ),
             ),
-          const SizedBox(height: 19),
-          Divider(height: 1, color: accent.withValues(alpha: .24)),
-          const SizedBox(height: 13),
-          Text(switch (index) {
-            1 => 'DỮ LIỆU LỊCH HỌC QLĐT',
-            3 => 'BUỔI BẮT ĐẦU LÚC 06:45',
-            4 => 'ĐẾM THEO NGÀY HỌC',
-            8 => 'THỜI ĐIỂM BUỔI HỌC CUỐI',
-            9 => 'GÓI GHÉM LẠI MỘT HỌC KỲ',
-            _ => 'DẤU ẤN TỪ NHỮNG NGÀY ĐÃ QUA',
-          }, style: const TextStyle(
-            color: Color(0xFFC5D6E5), letterSpacing: .9,
-            fontWeight: FontWeight.w700, fontSize: 10,
-          )),
+
         ],
       ),
     );
@@ -745,17 +639,7 @@ class _DayPartBento extends StatelessWidget {
           ratio: total == 0 ? 0 : facts.afternoon / total,
         )),
       ]),
-      const SizedBox(height: 13),
-      _RecapPanel(child: const Column(
-        crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('CÁCH PHÂN LOẠI', style: TextStyle(
-            color: Color(0xFFFFD58B), fontWeight: FontWeight.w900,
-            fontSize: 11, letterSpacing: 1.3)),
-          SizedBox(height: 8),
-          Text('Mỗi ca học QLĐT được đếm một lần. Trước 12:00 là sáng; từ 12:00 là chiều.',
-            style: TextStyle(color: Color(0xFFD7E4F2), fontSize: 13, height: 1.5)),
-        ],
-      )),
+
     ]);
   }
 }
@@ -818,10 +702,6 @@ class _SubjectBento extends StatelessWidget {
         const Text('TẦN SUẤT THEO TỪNG MÔN', style: TextStyle(
           color: Color(0xFFFFD58B), fontSize: 11,
           fontWeight: FontWeight.w900, letterSpacing: 1.2)),
-        const SizedBox(height: 9),
-        const Text('Một hàng tương ứng một môn học. Không đếm lịch thi.',
-          style: TextStyle(color: Color(0xFFD9E6F3),
-            fontSize: 12, height: 1.5)),
         const SizedBox(height: 18),
         for (final item in rows) ...[
           Row(children: [
@@ -845,10 +725,7 @@ class _SubjectBento extends StatelessWidget {
         ],
         if (rows.isEmpty) const Text('Chưa có dữ liệu môn học.',
             style: TextStyle(color: Colors.white70)),
-        if (facts.mostFrequentSubjects.length > 1)
-          Text('Có ${facts.mostFrequentSubjects.length} môn cùng có ${facts.favoriteCount} buổi. Recap không tự chọn một môn đứng đầu.',
-            style: const TextStyle(color: Color(0xFFF0D9AC),
-              fontSize: 12, height: 1.5)),
+
       ],
     ));
   }
@@ -866,9 +743,6 @@ class _AttendanceBento extends StatelessWidget {
         const Text('ĐIỂM DANH TỪNG MÔN', style: TextStyle(
           color: Color(0xFFFFD58B),
           fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1.2)),
-        const SizedBox(height: 10),
-        const Text('Số buổi vắng ghi nhận từ QLĐT theo từng môn LT. Không lấy tổng toàn kỳ gán cho một môn.',
-          style: TextStyle(color: Color(0xFFD9E6F3), fontSize: 12, height: 1.5)),
         const SizedBox(height: 17),
         for (final item in rows) ...[
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -881,8 +755,7 @@ class _AttendanceBento extends StatelessWidget {
                 style: TextStyle(color: item.absentSessions == 0
                   ? const Color(0xFFB6E5D0) : const Color(0xFFFFCF91),
                   fontSize: 12, fontWeight: FontWeight.w900)),
-              Text('${item.theorySessionCount} buổi LT có dữ liệu',
-                style: const TextStyle(color: Color(0xFFB7C8D8), fontSize: 10)),
+
             ]),
           ]),
           const SizedBox(height: 14),
@@ -891,8 +764,7 @@ class _AttendanceBento extends StatelessWidget {
         ],
         if (rows.isEmpty) const Text('QLĐT chưa cung cấp số buổi vắng của môn nào.',
           style: TextStyle(color: Colors.white70, fontSize: 13)),
-        Text('Môn có dữ liệu điểm danh: ${facts.attendanceCoveredSubjects}/${facts.subjectCounts.length}.',
-          style: const TextStyle(color: Color(0xFFC7D5E4), fontSize: 11)),
+
       ],
     ));
   }
@@ -923,7 +795,7 @@ class RecapTestPanel extends StatelessWidget {
           const Text('RECAP · BỘ ĐIỀU KHIỂN',
             style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
           const SizedBox(height: 7),
-          const Text('Chế độ thật và giả lập hoàn toàn tách biệt.'),
+
           const SizedBox(height: 17),
           Container(
             padding: const EdgeInsets.all(16),
@@ -937,13 +809,9 @@ class RecapTestPanel extends StatelessWidget {
                 const Row(children: [
                   Icon(Icons.verified_user_rounded, size: 21),
                   SizedBox(width: 9),
-                  Text('01  ·  DỮ LIỆU QLĐT THẬT',
+                  Text('01  ·  RECAP',
                     style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
                 ]),
-                const SizedBox(height: 10),
-                Text(hasRealAccount
-                  ? 'Đọc học kỳ đã xác minh của tài khoản trên thiết bị này. Gọi Sync 1.7 trong lúc chạy VFX 2,8 giây.'
-                  : 'Chưa có học kỳ QLĐT đã xác minh trong bản APK thử nghiệm. Cần đăng nhập và đồng bộ tại đây trước.'),
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
@@ -962,16 +830,14 @@ class RecapTestPanel extends StatelessWidget {
                     label: const Text('Thử Pull Reload 1.7'),
                   ),
                 ),
-                const SizedBox(height: 5),
-                const Text('Cùng một lệnh Reload được dùng khi kéo lịch và khi mở Recap. Nếu không có phiên QLĐT trên APK này, hãy đăng nhập trước.',
-                  style: TextStyle(fontSize: 11, height: 1.4)),
+
               ],
             ),
           ),
           const SizedBox(height: 12),
           SwitchListTile(
             title: const Text('Hiện nút Memory'),
-            subtitle: const Text('Chỉ ép hiển thị icon; không giả dữ liệu Recap thật'),
+
             value: memoryVisible,
             onChanged: (_) => onToggleMemory(),
           ),
@@ -982,7 +848,7 @@ class RecapTestPanel extends StatelessWidget {
             leading: const Icon(Icons.science_outlined),
             title: const Text('02  ·  KỊCH BẢN GIẢ LẬP',
               style: TextStyle(fontWeight: FontWeight.w800)),
-            subtitle: const Text('Chỉ để kiểm thử thiết kế và lời dẫn. Không lấy QLĐT.'),
+
             children: [
               for (final scenario in RecapScenario.values)
                 ListTile(
