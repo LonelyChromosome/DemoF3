@@ -195,6 +195,7 @@ final class TracuuApi {
     final rows = _data(payload['registrations']);
     final subjects = <String, String>{};
     final sections = <String, Map<String, RegisteredClassSection>>{};
+    final programmeIds = <String>{};
     for (final row in rows) {
       final rowSemesterId = _string(row['DAOTAO_THOIGIANDAOTAO_ID']);
       if (_string(row['DANGKY_KEHOACHDANGKY_ID']) != planId ||
@@ -228,6 +229,8 @@ final class TracuuApi {
         );
       }
       subjects[subjectId] = name;
+      final programmeId = _string(row['DAOTAO_TOCHUCCHUONGTRINH_ID']);
+      if (programmeId.isNotEmpty) programmeIds.add(programmeId);
       final byClass = sections.putIfAbsent(subjectId, () => {});
       final existing = byClass[classId];
       final section = RegisteredClassSection(
@@ -252,6 +255,7 @@ final class TracuuApi {
           entry.value: sections[entry.key]!.values.toList(),
       },
       confirmedEmpty: rows.isEmpty,
+      programId: programmeIds.length == 1 ? programmeIds.single : null,
     );
   }
 
