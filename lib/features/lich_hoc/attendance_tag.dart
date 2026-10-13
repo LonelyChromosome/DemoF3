@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/attendance_lesson_classifier.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:flutter/material.dart';
 
@@ -108,22 +109,28 @@ final class AttendanceSummary {
       if (response is! Map || response['Success'] != true ||
           response['Data'] is! List) return const {};
       return _aggregate(
-        (response['Data'] as List).whereType<Map>().map(
-          (row) => _AttendanceLesson(
-            id: row['ID']?.toString() ?? '',
-            name: row['TENHOCPHAN']?.toString() ?? '',
+        (response['Data'] as List).whereType<Map>().map((row) {
+          final rawSubject = row['TENHOCPHAN']?.toString() ?? '';
+          final rawClass = row['TENLOPHOCPHAN']?.toString() ?? '';
+          final room = (row['PHONGHOC_TEN'] ?? row['TENPHONGHOC'])
+              ?.toString() ?? '';
+          return _AttendanceLesson(
+            id: _attendanceRowId(row),
+            name: rawSubject,
+            // Read TH from the ORIGINAL component identifiers; QLĐT does
+            // not always provide an explicit "Lý thuyết" field.
             kind: row['PHANLOAI']?.toString().toUpperCase() == 'LICHHOC'
-                ? row['THUOCTINH_TEN']?.toString()
-                : null,
-            status: row['THONGTINCHUYENCAN']?.toString(),
-            periods: switch (row['SOTIET']) {
-              final int n => n,
-              final num n => n.toInt(),
-              final String n => int.tryParse(n),
-              _ => null,
-            },
-          ),
-        ),
+                ? AttendanceLessonClassifier.classify(
+                    rawSubjectName: rawSubject,
+                    rawClassName: rawClass,
+                    attribute: row['THUOCTINH_TEN']?.toString(),
+                    room: room,
+                  )
+                : 'EXAM',
+            status: _attendanceStatus(row),
+            periods: _lessonPeriodCount(row),
+          );
+        }),
         theoryPeriodsBySubject,
       );
     } on Object {
@@ -141,6 +148,8 @@ final class AttendanceSummary {
     final conflicted = <String>{};
     for (final row in rows) {
       final kind = row.kind?.trim().toLowerCase() ?? '';
+      // Native and Dart both classify raw TH component codes BEFORE
+      // normalizing the subject name for the authorised subject lookup.
       if (kind != 'ly thuyet' && kind != 'lý thuyết' && kind != 'lt') {
         continue;
       }
@@ -184,6 +193,57 @@ final class AttendanceSummary {
           ),
     };
   }
+}
+
+// Prefer the native verifier's exact accepted class ID. If QLĐT omits ID
+// during a normal login, reconstruct the stable key from the *unmodified*
+// identifying fields, not a per-course counter or list position.
+String _attendanceRowId(Map row) {
+  final verifiedId = row['ID']?.toString().trim();
+  if (verifiedId != null && verifiedId.isNotEmpty) return verifiedId;
+  final subject = row['TENHOCPHAN']?.toString().trim() ?? '';
+  final section = (row['TENLOPHOCPHAN']?.toString() ?? '')
+      .split(RegExp(r'<br\\s*/?>', caseSensitive: false)).first.trim();
+  final date = row['NGAYHOC']?.toString().trim() ?? '';
+  final hour = int.tryParse(row['GIOBATDAU']?.toString() ?? '');
+  final minute = int.tryParse(row['PHUTBATDAU']?.toString() ?? '');
+  final room = (row['PHONGHOC_TEN'] ?? row['TENPHONGHOC'])
+      ?.toString().trim() ?? '';
+  if (subject.isEmpty || section.isEmpty || date.isEmpty ||
+      hour == null || minute == null || hour < 0 || hour > 23 ||
+      minute < 0 || minute > 59) return '';
+  return '$subject|$section|$date|$hour:$minute|$room';
+}
+
+int? _lessonPeriodCount(Map row) {
+  final raw = row['SOTIET'];
+  final reported = raw is num ? raw.toInt()
+      : int.tryParse(raw?.toString() ?? '');
+  if (reported != null && reported > 0 && reported <= 20) {
+    return reported;
+  }
+  final first = int.tryParse(row['TIETBATDAU']?.toString() ?? '');
+  final last = int.tryParse(row['TIETKETTHUC']?.toString() ?? '');
+  if (first != null && last != null && last >= first &&
+      last - first < 20) return last - first + 1;
+  // An explicit number inside a verified attendance status is a last-resort
+  // source, not the count of rows downloaded from the timetable.
+  final text = _attendanceStatus(row);
+  final match = text == null ? null : RegExp(r'\\((\\d+)\\)').firstMatch(text);
+  final periods = match == null ? null : int.tryParse(match[1]!);
+  if (periods == null || periods <= 0 || periods > 20) return null;
+  return periods;
+}
+
+String? _attendanceStatus(Map row) {
+  final direct = row['THONGTINCHUYENCAN']?.toString().trim();
+  if (direct != null && direct.isNotEmpty && direct != 'null') return direct;
+  final raw = row['TENLOPHOCPHAN']?.toString() ?? '';
+  final tag = RegExp(
+    r'<br\\s*/?>\\s*(Có mặt|Vắng mặt)\\s*(?:<br\\s*/?>|$)',
+    caseSensitive: false,
+  ).firstMatch(raw);
+  return tag?[1];
 }
 
 final class _AttendanceLesson {
