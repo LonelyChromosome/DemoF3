@@ -5,6 +5,12 @@ on:
     branches:
       - feature/1.7-attendance-pull-sync
   workflow_dispatch:
+    inputs:
+      publish_preview:
+        description: "Publish 1.7 preview release only after explicit approval"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -69,6 +75,7 @@ jobs:
             dist/SHA256SUMS
           retention-days: 14
       - name: Publish separate 1.7 preview (not production updater)
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_preview == true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
