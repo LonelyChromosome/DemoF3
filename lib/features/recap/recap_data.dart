@@ -91,7 +91,27 @@ class RecapFacts {
       ..sort((a, b) => b.value != a.value ? b.value.compareTo(a.value) : a.key.compareTo(b.key));
     final frequent = bySubject.entries.toList()
       ..sort((a, b) => b.value != a.value ? b.value.compareTo(a.value) : a.key.compareTo(b.key));
-    final absentEntries = attendance.entries.toList()
+    // QLDT cache keys use the same canonical normalizer as schedule names.
+    // Normalize at this boundary too; imported legacy strings may be NFC
+    // while current subject keys use canonical decomposed Unicode.
+    final attendanceBySubject = <String, AttendanceSummary>{};
+    final ambiguousAttendance = <String>{};
+    for (final entry in attendance.entries) {
+      final key = normalizeSubjectName(entry.key);
+      if (key.isEmpty) continue;
+      final previous = attendanceBySubject[key];
+      if (previous != null &&
+          (previous.absentSessions != entry.value.absentSessions ||
+           previous.totalTheorySessions != entry.value.totalTheorySessions)) {
+        ambiguousAttendance.add(key);
+      } else {
+        attendanceBySubject[key] = entry.value;
+      }
+    }
+    for (final key in ambiguousAttendance) {
+      attendanceBySubject.remove(key);
+    }
+    final absentEntries = attendanceBySubject.entries.toList()
       ..sort((a, b) => b.value.absentSessions.compareTo(a.value.absentSessions));
     final validAttendance = absentEntries
         .where((e) => bySubject.containsKey(e.key)).toList();
@@ -102,8 +122,8 @@ class RecapFacts {
         RecapSubjectCount(
           name: names[entry.key] ?? entry.key,
           scheduleCount: entry.value,
-          absentSessions: attendance[entry.key]?.absentSessions,
-          theorySessionCount: attendance[entry.key]?.totalTheorySessions,
+          absentSessions: attendanceBySubject[entry.key]?.absentSessions,
+          theorySessionCount: attendanceBySubject[entry.key]?.totalTheorySessions,
         ),
     ]..sort((a, b) {
       final n = b.scheduleCount.compareTo(a.scheduleCount);
