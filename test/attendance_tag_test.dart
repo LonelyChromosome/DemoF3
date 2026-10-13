@@ -105,6 +105,15 @@ void main() {
     expect(result[it]!.exceeded, true);
   });
 
+  test('conflicting duplicate lesson statuses do not produce a badge', () {
+    final rows = [
+      row(0, status: 'Có mặt(3)'),
+      row(0, status: 'Vắng mặt(3)'),
+    ];
+    expect(AttendanceSummary.fromRawEnvelope(
+      envelope(rows), theoryPeriodsBySubject: theory30), isEmpty);
+  });
+
   test('22.5 LT periods permit one full 3-period session', () {
     final subject = normalizeSubjectName('Kỹ thuật phần mềm');
     final result = AttendanceSummary.fromRawEnvelope(
