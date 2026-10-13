@@ -466,6 +466,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           Navigator.of(sheetContext).pop();
           unawaited(_openRecap());
         },
+        onTestPull: () {
+          Navigator.of(sheetContext).pop();
+          // Same pull-reload entrypoint as 1.7 timetable gesture.
+          unawaited(_runPullSync());
+        },
         onOpenScenario: (scenario) {
           Navigator.of(sheetContext).pop();
           unawaited(_openRecap(scenario));
