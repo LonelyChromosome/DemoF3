@@ -35,16 +35,12 @@ void main() {
         'better_phenikaa_snapshot_v1': schedule.encode(),
         'better_phenikaa_qldt_registration_route_v1': accountRoute,
         'better_phenikaa_attendance_v17': jsonEncode({
-          'schema': 2,
+          'schema': 3,
           'route': accountRoute,
-          'programId': null,
-          'allocations': {
-            normalizeSubjectName('Lập trình cho thiết bị di động'): 15.0,
-          },
           'counts': {
             normalizeSubjectName('Lập trình cho thiết bị di động'): {
-              'absentPeriods': 6,
-              'theoryPeriods': 15,
+              'absentSessions': 2,
+              'totalTheorySessions': 5,
             },
           },
         }),
@@ -99,15 +95,12 @@ void main() {
         ).encode(),
         'better_phenikaa_qldt_registration_route_v1': 'current-account',
         'better_phenikaa_attendance_v17': jsonEncode({
-          'schema': 2,
+          'schema': 3,
           'route': 'other-account',
-          'allocations': {
-            normalizeSubjectName('Lập trình cho thiết bị di động'): 15.0,
-          },
           'counts': {
             normalizeSubjectName('Lập trình cho thiết bị di động'): {
-              'absentPeriods': 6,
-              'theoryPeriods': 15,
+              'absentSessions': 2,
+              'totalTheorySessions': 5,
             },
           },
         }),
