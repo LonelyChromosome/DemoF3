@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   dispatch:
-    if: github.event.head_commit.message == 'chore(release): trigger cooc.1.7 publish'
+    if: "github.event.head_commit.message == 'chore(release): trigger cooc.1.7 publish'"
     runs-on: ubuntu-latest
     steps:
       - name: Request protected signed 1.7 release
