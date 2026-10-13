@@ -5,15 +5,9 @@ on:
     branches:
       - feature/1.7-session-reuse-pull
   workflow_dispatch:
-    inputs:
-      publish_preview:
-        description: "Publish 1.7 preview release only after explicit approval"
-        type: boolean
-        required: false
-        default: false
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: bpa-17-session-${{ github.ref }}
@@ -72,15 +66,6 @@ jobs:
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Session-Reuse-Test.apk
           sha256sum dist/BPA-1.7-Session-Reuse-Test.apk > dist/SHA256SUMS
-      - name: Assert standalone install package
-        run: |
-          set -euo pipefail
-          APK=dist/BPA-1.7-Session-Reuse-Test.apk
-          aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
-          signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
-          "$signer" verify "$APK"
-          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.bpa17session' versionCode='52' versionName='cooc.1.7.session'"
-          "$aapt_bin" dump badging "$APK" | grep -F "application-label:'BPA 1.7 Session Test'"
       - uses: actions/upload-artifact@v4
         with:
           name: BPA-1.7-Session-Reuse-Test
@@ -88,3 +73,12 @@ jobs:
             dist/BPA-1.7-Session-Reuse-Test.apk
             dist/SHA256SUMS
           retention-days: 14
+      - name: Assert standalone install package
+        run: |
+          set -euo pipefail
+          APK=dist/BPA-1.7-Session-Reuse-Test.apk
+          aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
+          signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
+          "$signer" verify "$APK"
+          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.bpa17session' versionCode='54' versionName='cooc.1.7.session'"
+          "$aapt_bin" dump badging "$APK" | grep -F "application-label:'BPA 1.7 Session Test'"
