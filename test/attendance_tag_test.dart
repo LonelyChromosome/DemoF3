@@ -74,23 +74,28 @@ void main() {
     expect(summary.exceeded, false);
   });
 
-  test('parser metadata survives JSON and feeds the same attendance result', () {
+  test('parser extracts attendance only in memory, not in the 1.6 snapshot', () {
     final raw = envelope([
       row(0, status: 'Vắng mặt(3)'),
       row(1, status: 'Có mặt(3)'),
       row(2, type: 'Thuc hanh', status: 'Vắng mặt(3)'),
     ]);
     final parsed = const QldtParser().parseLiveEnvelope(raw, strict: true);
-    final restored = ImportedScheduleData.decode(parsed.encode());
-    expect(restored.classes.first.lessonKind, 'Ly thuyet');
-    expect(restored.classes.first.attendanceStatus, 'Vắng mặt(3)');
-    expect(restored.classes.first.lessonPeriods, 3);
+    expect(parsed.classes.first.lessonKind, 'Ly thuyet');
+    expect(parsed.classes.first.attendanceStatus, 'Vắng mặt(3)');
+    expect(parsed.classes.first.lessonPeriods, 3);
     final fromParser = AttendanceSummary.fromVerifiedSchedule(
-      restored, theoryPeriodsBySubject: theory30);
+      parsed, theoryPeriodsBySubject: theory30);
     final fromNative = AttendanceSummary.fromRawEnvelope(
       raw, theoryPeriodsBySubject: theory30);
     expect(fromParser[it]!.absentPeriods, fromNative[it]!.absentPeriods);
     expect(fromParser[it]!.allowanceSessions, 2);
+    final saved = parsed.encode();
+    expect(saved, isNot(contains('Vắng mặt(3)')));
+    expect(saved, isNot(contains('attendanceStatus')));
+    final restored = ImportedScheduleData.decode(saved);
+    expect(restored.classes.first.attendanceStatus, isNull);
+    expect(restored.classes.first.subjectName, parsed.classes.first.subjectName);
   });
 
   test('same lesson ID does not count twice', () {
