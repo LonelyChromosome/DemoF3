@@ -106,6 +106,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   String? _attendanceRoute;
   String? _attendanceProgramId;
   int _attendanceLookupEpoch = 0;
+  int _attendanceWriteEpoch = 0;
+  Future<void> _attendanceWriteQueue = Future<void>.value();
   PullSyncPhase _inlineSyncPhase = PullSyncPhase.idle;
   Timer? _inlineSlowTimer;
   Timer? _inlineResultTimer;
@@ -745,20 +747,32 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   Future<void> _persistAttendanceSidecar(
     String route,
     Map<String, AttendanceSummary> summaries,
-  ) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (prefs.getString(_routeKey) != route) return;
-      await prefs.setString(_attendanceStorageKey, jsonEncode({
-        'schema': 2,
-        'route': route,
-        'programId': _attendanceProgramId,
-        'allocations': _officialTheory,
-        'counts': summaries.map((key, value) => MapEntry(key, value.toJson())),
-      }));
-    } on Object {
-      // Bad attendance must never make schedule saving fail.
-    }
+  ) {
+    final token = ++_attendanceWriteEpoch;
+    final programme = _attendanceProgramId;
+    final allocation = Map<String, double>.of(_officialTheory);
+    final counts = summaries.map((key, value) =>
+        MapEntry(key, value.toJson()));
+    // Serialize writes: a late, older save cannot overwrite newer totals.
+    final next = _attendanceWriteQueue.then((_) async {
+      if (token != _attendanceWriteEpoch) return;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        if (token != _attendanceWriteEpoch ||
+            prefs.getString(_routeKey) != route) return;
+        await prefs.setString(_attendanceStorageKey, jsonEncode({
+          'schema': 2,
+          'route': route,
+          'programId': programme,
+          'allocations': allocation,
+          'counts': counts,
+        }));
+      } on Object {
+        // This optional cache must never fail an authoritative schedule sync.
+      }
+    });
+    _attendanceWriteQueue = next;
+    return next;
   }
 
   Future<void> _refreshOfficialTheory({
@@ -1073,6 +1087,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       await Future<void>.delayed(const Duration(milliseconds: 20));
     }
     ++_attendanceLookupEpoch;
+    ++_attendanceWriteEpoch;
+    await _attendanceWriteQueue;
     _attendance = const {};
     _officialTheory = const {};
     _attendanceRoute = null;
