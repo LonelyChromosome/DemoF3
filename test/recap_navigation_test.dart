@@ -23,7 +23,11 @@ void main() {
 
     expect(find.text('BETTER PHENIKAA · FLASHBACK'), findsOneWidget);
     expect(find.text('Tiếp tục'), findsNothing);
-    expect(find.text('‹  TRÁI · LÙI'), findsOneWidget);
+    expect(find.text('‹  TRÁI · LÙI'), findsNothing);
+    expect(find.text('PHẢI · TIẾN  ›'), findsNothing);
+    expect(find.textContaining('Tài khoản:'), findsNothing);
+    expect(find.textContaining('DỮ LIỆU THẬT'), findsNothing);
+    expect(find.text('CÁCH PHÂN LOẠI'), findsNothing);
 
     // Tapping left on the first page is a no-op, not a dismiss.
     await tester.tapAt(const Offset(45, 540));
@@ -40,6 +44,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('BUỔI SÁNG'), findsOneWidget);
     expect(find.text('BUỔI CHIỀU'), findsOneWidget);
+    expect(find.text('CÁCH PHÂN LOẠI'), findsNothing);
+    expect(find.textContaining('Trước 12:00'), findsNothing);
 
     await tester.tapAt(const Offset(45, 540));
     await tester.pumpAndSettle();
