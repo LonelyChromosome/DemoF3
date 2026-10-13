@@ -58,6 +58,7 @@ final class RegisteredSemester {
     required this.subjectNames,
     this.classSections = const <String, List<RegisteredClassSection>>{},
     this.confirmedEmpty = false,
+    this.programId,
   });
 
   final String id;
@@ -65,6 +66,8 @@ final class RegisteredSemester {
   final List<String> subjectNames;
   final Map<String, List<RegisteredClassSection>> classSections;
   final bool confirmedEmpty;
+  // Optional QLĐT programme identity for asynchronous LT metadata only.
+  final String? programId;
 }
 
 final class RegisteredClassSection {
