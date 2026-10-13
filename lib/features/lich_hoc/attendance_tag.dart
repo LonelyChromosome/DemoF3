@@ -137,7 +137,7 @@ final class AttendanceSummary {
   ) {
     final absent = <String, int>{};
     final confirmed = <String>{};
-    final unique = <String>{};
+    final unique = <String, String>{};
     final conflicted = <String>{};
     for (final row in rows) {
       final kind = row.kind?.trim().toLowerCase() ?? '';
@@ -150,8 +150,15 @@ final class AttendanceSummary {
       if (periods == null || periods <= 0 || periods > 20) continue;
       final id = row.id.trim();
       if (id.isEmpty) continue;
-      if (!unique.add('$subject|$id')) continue;
       final status = row.status?.trim().toLowerCase() ?? '';
+      final identity = '$subject|$id';
+      final fingerprint = '$kind|$periods|$status';
+      final previous = unique[identity];
+      if (previous != null) {
+        if (previous != fingerprint) conflicted.add(subject);
+        continue;
+      }
+      unique[identity] = fingerprint;
       if (status.startsWith('có mặt')) {
         confirmed.add(subject);
       } else if (status.startsWith('vắng mặt')) {
