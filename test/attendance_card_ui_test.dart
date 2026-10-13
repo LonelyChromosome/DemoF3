@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/app/app.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -36,7 +37,7 @@ void main() {
         'better_phenikaa_attendance_v17': jsonEncode({
           'route': accountRoute,
           'counts': {
-            'lập trình cho thiết bị di động': {
+            normalizeSubjectName('Lập trình cho thiết bị di động'): {
               'absentPeriods': 6,
               'theoryPeriods': 15,
             },
@@ -95,7 +96,7 @@ void main() {
         'better_phenikaa_attendance_v17': jsonEncode({
           'route': 'other-account',
           'counts': {
-            'lập trình cho thiết bị di động': {
+            normalizeSubjectName('Lập trình cho thiết bị di động'): {
               'absentPeriods': 6,
               'theoryPeriods': 15,
             },
