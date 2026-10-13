@@ -15,6 +15,9 @@ final class ScheduleRecord {
     this.examForm = '',
     this.periodStart,
     this.periodEnd,
+    this.lessonKind,
+    this.attendanceStatus,
+    this.lessonPeriods,
   });
 
   factory fromJson(Map<String, Object?> json) {
@@ -29,6 +32,9 @@ final class ScheduleRecord {
       examForm: json['examForm'] as String? ?? '',
       periodStart: json['periodStart'] as int?,
       periodEnd: json['periodEnd'] as int?,
+      lessonKind: json['lessonKind'] as String?,
+      attendanceStatus: json['attendanceStatus'] as String?,
+      lessonPeriods: json['lessonPeriods'] as int?,
     );
   }
 
@@ -42,6 +48,11 @@ final class ScheduleRecord {
   final String examForm;
   final int? periodStart;
   final int? periodEnd;
+  // Optional non-authoritative QLĐT metadata. Never participates in
+  // class identity, exam classification or schedule difference matching.
+  final String? lessonKind;
+  final String? attendanceStatus;
+  final int? lessonPeriods;
 
   Map<String, Object?> toJson() => <String, Object?>{
     'id': id,
@@ -54,6 +65,9 @@ final class ScheduleRecord {
     'examForm': examForm,
     'periodStart': periodStart,
     'periodEnd': periodEnd,
+    if (lessonKind != null) 'lessonKind': lessonKind,
+    if (attendanceStatus != null) 'attendanceStatus': attendanceStatus,
+    if (lessonPeriods != null) 'lessonPeriods': lessonPeriods,
   };
 }
 
@@ -256,6 +270,14 @@ final class QldtParser {
       examForm: examForm,
       periodStart: _int(item['TIETBATDAU']),
       periodEnd: _int(item['TIETKETTHUC']),
+      // Extraction is optional: a missing/malformed attendance field must
+      // never invalidate an otherwise verified timetable row.
+      lessonKind: _optionalText(item['THUOCTINH_TEN']),
+      attendanceStatus: _optionalText(item['THONGTINCHUYENCAN']),
+      lessonPeriods: switch (_int(item['SOTIET'])) {
+        final int value when value > 0 && value <= 20 => value,
+        _ => null,
+      },
     );
   }
 
@@ -340,6 +362,12 @@ final class QldtParser {
   }
 
   static String _string(Object? value) => value?.toString().trim() ?? '';
+
+  static String? _optionalText(Object? value) {
+    if (value is! String) return null;
+    final text = value.trim();
+    return text.isEmpty ? null : text;
+  }
 
   static int? _int(Object? value) {
     if (value is int) {
