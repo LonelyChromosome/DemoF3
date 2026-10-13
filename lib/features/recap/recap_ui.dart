@@ -226,7 +226,7 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                               ? const Color(0xFF5A3127)
                               : const Color(0xFF143D48),
                           border: Border.all(
-                            color: facts.preview
+                            color: facts!.preview
                                 ? const Color(0xFFEFAC7F)
                                 : const Color(0xFF8FE0C6),
                             width: .8,
@@ -238,17 +238,17 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                             horizontal: 12, vertical: 8,
                           ),
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(facts.preview ? Icons.science_outlined :
+                            Icon(facts!.preview ? Icons.science_outlined :
                               Icons.verified_user_outlined,
-                              color: facts.preview ? const Color(0xFFFFCCB0)
+                              color: facts!.preview ? const Color(0xFFFFCCB0)
                                 : const Color(0xFFA1EDD2), size: 15),
                             const SizedBox(width: 7),
                             Flexible(child: Text(
-                              facts.preview ? 'GIẢ LẬP · KHÔNG PHẢI QLĐT'
+                              facts!.preview ? 'GIẢ LẬP · KHÔNG PHẢI QLĐT'
                                 : 'QLĐT · DỮ LIỆU THẬT',
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: facts.preview
+                                color: facts!.preview
                                   ? const Color(0xFFFFE1CD)
                                   : const Color(0xFFC2F2DF),
                                 fontSize: 10, letterSpacing: .9,
@@ -300,7 +300,7 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                       key: ValueKey<int>(_index),
                       story: stories[_index],
                       index: _index,
-                      preview: facts.preview,
+                      preview: facts!.preview,
                     ),
                   ),
                 )),
