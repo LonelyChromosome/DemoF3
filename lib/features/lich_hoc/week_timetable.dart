@@ -104,6 +104,11 @@ class WeekTimetable extends StatelessWidget {
                           row.startAt.day == date.day,
                     )
                     .toList();
+                // Preserve 1.6 height for untagged rows; avoid clipping
+                // the fourth line on only the rows with attendance badges.
+                final containsBadge = records.any((record) =>
+                    attendance.containsKey(normalizeSubjectName(record.subjectName)));
+                final rowHeight = containsBadge ? 106.0 : 86.0;
                 final rowContent = Row(
                   children: <Widget>[
                     SizedBox(
@@ -256,7 +261,7 @@ class WeekTimetable extends StatelessWidget {
                 );
                 if (premium) {
                   return SizedBox(
-                    height: 86,
+                    height: rowHeight,
                     child: TienMonEdgeSurface(
                       compact: true,
                       scene: scene,
@@ -265,7 +270,7 @@ class WeekTimetable extends StatelessWidget {
                   );
                 }
                 return Container(
-                  height: 86,
+                  height: rowHeight,
                   decoration: BoxDecoration(
                     color: palette.cardAlt,
                     borderRadius: BorderRadius.circular(15),
