@@ -30,7 +30,7 @@ final class AttendanceSummary {
     final absent = raw['absentPeriods'];
     final total = raw['theoryPeriods'];
     if (absent is! int || total is! num || absent < 0 ||
-        !total.toDouble().isFinite || total <= 0) return null;
+        !total.toDouble().isFinite || total <= 0 || absent > total) return null;
     return AttendanceSummary(
       absentPeriods: absent,
       theoryPeriods: total.toDouble(),
@@ -150,7 +150,7 @@ final class AttendanceSummary {
       if (periods == null || periods <= 0 || periods > 20) continue;
       final id = row.id.trim();
       if (id.isEmpty) continue;
-      if (!unique.add(id)) continue;
+      if (!unique.add('$subject|$id')) continue;
       final status = row.status?.trim().toLowerCase() ?? '';
       if (status.startsWith('có mặt')) {
         confirmed.add(subject);
@@ -169,7 +169,8 @@ final class AttendanceSummary {
     return {
       for (final subject in confirmed)
         if (!conflicted.contains(subject) &&
-            (official[subject] ?? 0) > 0)
+            (official[subject] ?? 0) > 0 &&
+            (absent[subject] ?? 0) <= official[subject]!)
           subject: AttendanceSummary(
             absentPeriods: absent[subject] ?? 0,
             theoryPeriods: official[subject]!,
@@ -203,7 +204,9 @@ class AttendanceTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final max = summary.allowanceSessions;
     if (max < 1) return const SizedBox.shrink();
-    final used = summary.absentPeriods / (summary.theoryPeriods * .20);
+    // The badge is measured in allowed 3-period SESSIONS, not raw periods.
+    // LT(22.5) permits one full absence: 1/1 must be orange.
+    final used = summary.absentSessions / max;
     final color = summary.exceeded
         ? const Color(0xFFEF4444)
         : used >= 1
