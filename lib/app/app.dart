@@ -99,7 +99,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _panelOpen = false;
   static const _attendanceStorageKey = 'better_phenikaa_attendance_v17';
   static const _inlineSyncChannel = MethodChannel('better_phenikaa/inline_sync');
+  static const _catalogueChannel =
+      MethodChannel('better_phenikaa/attendance_catalogue');
   Map<String, AttendanceSummary> _attendance = const {};
+  Map<String, double> _officialTheory = const {};
+  String? _attendanceRoute;
+  String? _attendanceProgramId;
+  int _attendanceLookupEpoch = 0;
   PullSyncPhase _inlineSyncPhase = PullSyncPhase.idle;
   Timer? _inlineSlowTimer;
   Timer? _inlineResultTimer;
@@ -463,16 +469,32 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         try {
           final cached = jsonDecode(attendanceRaw) as Map<String, dynamic>;
           final currentRoute = prefs.getString(_routeKey);
-          if (currentRoute != null &&
+          // Reject pre-fix badges based on the number of downloaded lessons.
+          if (cached['schema'] == 2 &&
+              currentRoute != null &&
               currentRoute.isNotEmpty &&
               cached['route'] == currentRoute &&
+              cached['allocations'] is Map &&
               cached['counts'] is Map) {
+            final stored = cached['allocations'] as Map;
+            _officialTheory = {
+              for (final entry in stored.entries)
+                if (entry.value is num &&
+                    (entry.value as num).toDouble().isFinite &&
+                    (entry.value as num) > 0)
+                  entry.key.toString(): (entry.value as num).toDouble(),
+            };
             final counts = cached['counts'] as Map;
             _attendance = {
               for (final entry in counts.entries)
-                if (AttendanceSummary.fromJson(entry.value) != null)
+                if (_officialTheory.containsKey(entry.key.toString()) &&
+                    AttendanceSummary.fromJson(entry.value) != null &&
+                    AttendanceSummary.fromJson(entry.value)!.theoryPeriods ==
+                        _officialTheory[entry.key.toString()])
                   entry.key.toString(): AttendanceSummary.fromJson(entry.value)!,
             };
+            _attendanceRoute = currentRoute;
+            _attendanceProgramId = cached['programId'] as String?;
           }
         } on Object {
           // The independent badge cache never affects timetable restoration.
@@ -718,28 +740,65 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
-  /// Attendance is a best-effort cache of the SAME verified QLĐT data.
-  /// It never participates in _save's validation/rollback transaction.
-  Future<Map<String, AttendanceSummary>> _saveAttendanceSidecar(
-    String? envelope,
+  // Attendance is OPTIONAL. These sidecar writes never join _save's
+  // authoritative transaction or delay navigation after a successful sync.
+  Future<void> _persistAttendanceSidecar(
+    String route,
+    Map<String, AttendanceSummary> summaries,
   ) async {
-    if (envelope == null || envelope.isEmpty) return const {};
-    final values = AttendanceSummary.fromRawEnvelope(envelope);
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _attendanceStorageKey,
-        jsonEncode(<String, Object?>{
-          'route': prefs.getString(_routeKey),
-          'counts': values.map(
-            (subject, count) => MapEntry(subject, count.toJson()),
-          ),
-        }),
-      );
+      if (prefs.getString(_routeKey) != route) return;
+      await prefs.setString(_attendanceStorageKey, jsonEncode({
+        'schema': 2,
+        'route': route,
+        'programId': _attendanceProgramId,
+        'allocations': _officialTheory,
+        'counts': summaries.map((key, value) => MapEntry(key, value.toJson())),
+      }));
     } on Object {
-      // Invalid/unsaved optional attendance must not fail a schedule sync.
+      // Bad attendance must never make schedule saving fail.
     }
-    return values;
+  }
+
+  Future<void> _refreshOfficialTheory({
+    required String route,
+    required String? programId,
+    required ImportedScheduleData schedule,
+    String? rawEnvelope,
+  }) async {
+    final generation = ++_attendanceLookupEpoch;
+    if (kIsWeb || programId == null ||
+        !RegExp(r'^[A-Fa-f0-9]{32}$').hasMatch(programId)) return;
+    try {
+      // Optional request starts ONLY AFTER the original schedule is saved
+      // and shown. It has its own native executor + bounded I/O timeout.
+      final rows = await _catalogueChannel.invokeListMethod<Object?>(
+        'load',
+        <String, String>{'programId': programId},
+      );
+      if (rows == null || rows.isEmpty || !mounted ||
+          generation != _attendanceLookupEpoch) return;
+      final official = AttendanceSummary.officialAllocations(rows);
+      if (official.isEmpty) return;
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted || generation != _attendanceLookupEpoch ||
+          prefs.getString(_routeKey) != route ||
+          _attendanceRoute != route ||
+          _data?.syncedAt != schedule.syncedAt) return;
+      final counts = rawEnvelope == null
+          ? AttendanceSummary.fromVerifiedSchedule(
+              schedule, theoryPeriodsBySubject: official)
+          : AttendanceSummary.fromRawEnvelope(
+              rawEnvelope, theoryPeriodsBySubject: official);
+      setState(() {
+        _officialTheory = official;
+        _attendance = counts;
+      });
+      unawaited(_persistAttendanceSidecar(route, counts));
+    } on Object {
+      // Catalogue is best-effort; the verified schedule is still valid.
+    }
   }
 
   Future<void> _loginOrSync() async {
@@ -770,15 +829,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       final imported = await openQldtLogin(context);
       if (imported != null) {
         final saveStarted = DateTime.now();
-        var verifiedAttendance = _attendance;
         SemesterDifference? difference;
         try {
           difference = await _save(imported);
-          // Initial QLĐT sync has already verified the original schedule.
-          // Do not force a second (unreliable) network sync just for badges.
-          verifiedAttendance = await _saveAttendanceSidecar(
-            imported.attendanceEnvelope,
-          );
+          // The original parser has already retained the attendance fields.
+          // No extra parsing/network request is allowed on this critical path.
           // The first-login mini-game is considered complete only after the
           // verified semester has been committed by the app. A chosen name
           // left by an interrupted login must not skip this mandatory step.
@@ -809,6 +864,18 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
               ? imported.schedule
               : ImportedScheduleData.decode(saved);
           if (!mounted) return;
+          final route = prefs.getString(_routeKey);
+          if (_attendanceRoute != route) {
+            _officialTheory = const {};
+            _attendanceProgramId = null;
+          }
+          _attendanceRoute = route;
+          _attendanceProgramId =
+              imported.attendanceProgramId ?? _attendanceProgramId;
+          final verifiedAttendance = AttendanceSummary.fromVerifiedSchedule(
+            imported.schedule,
+            theoryPeriodsBySubject: _officialTheory,
+          );
           setState(() {
             _data = displayed;
             _attendance = verifiedAttendance;
@@ -819,6 +886,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           });
           _syncStaleTimer?.cancel();
           _scheduleExamClock();
+          if (route != null && route.isNotEmpty) {
+            unawaited(_persistAttendanceSidecar(route, verifiedAttendance));
+            unawaited(_refreshOfficialTheory(
+              route: route,
+              programId: _attendanceProgramId,
+              schedule: imported.schedule,
+            ));
+          }
           if (difference != null) {
             unawaited(_refreshDifference());
             ScaffoldMessenger.of(context).showSnackBar(
@@ -890,9 +965,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           semester.semesterId.isEmpty) {
         throw const FormatException('Không xác minh được dữ liệu QLĐT.');
       }
-      final attendance = AttendanceSummary.fromRawEnvelope(
-        reply['attendanceEnvelope'] ?? '',
-      );
       // After this line original _save() either commits or rolls back.
       // Cancellation never interrupts that transaction.
       _inlineCommitting = true;
@@ -907,14 +979,16 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       final snapshot = prefs.getString(_storageKey);
       if (snapshot == null) throw const FormatException('Thiếu snapshot sau sync.');
       final displayed = ImportedScheduleData.decode(snapshot);
-      try {
-        await prefs.setString(_attendanceStorageKey, jsonEncode({
-          'route': prefs.getString(_routeKey),
-          'counts': attendance.map((k, v) => MapEntry(k, v.toJson())),
-        }));
-      } on Object {
-        // Attendance is optional, NEVER fail a successful schedule sync.
+      final route = prefs.getString(_routeKey);
+      if (_attendanceRoute != route) {
+        _officialTheory = const {};
+        _attendanceProgramId = null;
       }
+      _attendanceRoute = route;
+      final attendance = AttendanceSummary.fromRawEnvelope(
+        reply['attendanceEnvelope'] ?? '',
+        theoryPeriodsBySubject: _officialTheory,
+      );
       if (!mounted) return;
       setState(() {
         _data = displayed;
@@ -924,6 +998,15 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       });
       _scheduleExamClock();
       unawaited(_refreshDifference());
+      if (route != null && route.isNotEmpty) {
+        unawaited(_persistAttendanceSidecar(route, attendance));
+        unawaited(_refreshOfficialTheory(
+          route: route,
+          programId: _attendanceProgramId,
+          schedule: displayed,
+          rawEnvelope: reply['attendanceEnvelope'],
+        ));
+      }
       final event = difference != null && difference.study.hasChanges &&
               difference.exams.hasChanges
           ? AssistantEvent.studyAndExamChanged
@@ -989,7 +1072,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     while (_inlineCommitting) {
       await Future<void>.delayed(const Duration(milliseconds: 20));
     }
+    ++_attendanceLookupEpoch;
     _attendance = const {};
+    _officialTheory = const {};
+    _attendanceRoute = null;
+    _attendanceProgramId = null;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_attendanceStorageKey);
