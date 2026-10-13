@@ -57,7 +57,6 @@ class MainActivity : FlutterActivity() {
         SyncStaleReminderScheduler.reconcile(applicationContext)
         configureDailySyncChannel(flutterEngine)
         BpaInlineSyncBridge(applicationContext, flutterEngine)
-        BpaAttendanceCatalogueBridge(applicationContext, flutterEngine)
         configureQldtCredentialChannel(flutterEngine)
         configureWidgetSessionChannel(flutterEngine)
         configureLocalFileChannel(flutterEngine)
