@@ -1,0 +1,29 @@
+name: Publish cooc.1.7 notification log hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/cooc-17-notification-hotfix-once.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: "github.event.head_commit.message == 'chore(release): publish cooc.1.7 notification changelog hotfix'"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request protected signed cooc.1.7 build 57
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run build-apk.yml \
+            --repo LonelyChromosome/DemoF3 \
+            --ref main \
+            --raw-field version_name=cooc.1.7 \
+            --raw-field version_code=57 \
+            --raw-field notes='cooc.1.7: Bổ sung Update Log 1.7 trong mục Thông báo, gồm Recap, tag chuyên cần và bản vá Pull Reload khôi phục phiên QLĐT. Không thay đổi bố cục lịch học.' \
+            --raw-field publish=true \
+            --raw-field publish_confirmation=PUBLISH
