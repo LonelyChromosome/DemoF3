@@ -253,6 +253,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       : null;
   QldtSyncPhase? _currentPhase;
   ImportedScheduleData? _pendingSchedule;
+  String? _pendingAttendanceEnvelope;
   QldtNativeSession? _nativeSession;
   String _resolvedDisplayName = '';
   String? _pendingRegistrationRaw;
@@ -716,6 +717,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     _portalSyncStarted = false;
     _sessionBootstrapRunning = false;
     _pendingSchedule = null;
+    _pendingAttendanceEnvelope = null;
     _nativeSession = null;
     _pendingRegistrationRaw = null;
     _currentPhase = null;
@@ -970,6 +972,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
             return null;
           }
           _pendingSchedule = data;
+          // Best-effort sidecar only; QldtParser has already validated the same
+          // envelope and continues to own the original schedule result.
+          _pendingAttendanceEnvelope = raw;
           final registrationRaw = _pendingRegistrationRaw;
           _pendingRegistrationRaw = null;
           setState(() {
@@ -1209,6 +1214,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         registrationRoute: const TracuuApi().routeForVerifiedResult(raw),
         termStartedAt: SemesterScheduleRange.fromRegistration(registration)
             ?.start,
+        attendanceEnvelope: _pendingAttendanceEnvelope,
       );
 
       _registrationCompletionSucceeded = true;
@@ -1516,6 +1522,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       _status = 'Đang lấy học kỳ và môn đăng ký từ QLĐT...';
     });
     _pendingSchedule = null;
+    _pendingAttendanceEnvelope = null;
     _pendingRegistrationRaw = null;
     _failureDiagnosticsJson = null;
     _scheduleStages.clear();
@@ -1809,6 +1816,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       });
     }
     _pendingSchedule = null;
+    _pendingAttendanceEnvelope = null;
     _pendingRegistrationRaw = null;
     setState(() {
       _syncing = false;
