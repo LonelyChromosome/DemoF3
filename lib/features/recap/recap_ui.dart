@@ -891,12 +891,13 @@ class RecapTestPanel extends StatelessWidget {
     required this.hasRealAccount,
     required this.onToggleMemory,
     required this.onOpenActual,
+    required this.onTestPull,
     required this.onOpenScenario,
     super.key,
   });
   final bool memoryVisible;
   final bool hasRealAccount;
-  final VoidCallback onToggleMemory, onOpenActual;
+  final VoidCallback onToggleMemory, onOpenActual, onTestPull;
   final ValueChanged<RecapScenario> onOpenScenario;
 
   @override
@@ -939,6 +940,18 @@ class RecapTestPanel extends StatelessWidget {
                     label: const Text('Mở Recap thật'),
                   ),
                 ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: hasRealAccount ? onTestPull : null,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Thử Pull Reload 1.7'),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                const Text('Cùng một lệnh Reload được dùng khi kéo lịch và khi mở Recap. Nếu không có phiên QLĐT trên APK này, hãy đăng nhập trước.',
+                  style: TextStyle(fontSize: 11, height: 1.4)),
               ],
             ),
           ),
