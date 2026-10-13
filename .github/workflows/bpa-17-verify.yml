@@ -45,7 +45,7 @@ jobs:
       - name: Analyze and test Recap module
         run: |
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/features/recap/recap_data.dart lib/features/recap/recap_ui.dart lib/app/app.dart
-          flutter test test/semester_recap_test.dart
+          flutter test test/semester_recap_test.dart test/recap_navigation_test.dart
       - name: Exercise reload JS cached-route fallback and per-chunk retry
         run: node tool/inline_sync_js_regression.cjs
       - name: Verify native attendance whitelist and existing semester verifier
@@ -71,7 +71,7 @@ jobs:
           PY
       - name: Build ARM64 profile APK
         run: |
-          COOC_VERSION_NAME=cooc.1.7 flutter build apk --profile --target-platform android-arm64 --build-number=53 --build-name=1.7.1 --dart-define=BPA_RECAP_TEST_PANEL=true
+          COOC_VERSION_NAME=cooc.1.7 flutter build apk --profile --target-platform android-arm64 --build-number=54 --build-name=1.7.2 --dart-define=BPA_RECAP_TEST_PANEL=true
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Recap-Test.apk
           sha256sum dist/BPA-1.7-Recap-Test.apk > dist/SHA256SUMS
@@ -82,7 +82,7 @@ jobs:
           aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
           signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
           "$signer" verify "$APK"
-          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.recaptest' versionCode='53' versionName='cooc.1.7'"
+          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.recaptest' versionCode='54' versionName='cooc.1.7'"
           "$aapt_bin" dump badging "$APK" | grep -F "application-label:'BPA Recap Test'"
       - uses: actions/upload-artifact@v4
         with:
