@@ -6,9 +6,13 @@ import 'package:flutter/widgets.dart';
 
 bool get supportsLiveQldtLogin => implementation.supportsLiveQldtLogin;
 
-Future<QldtLoginResult?> openQldtLogin(BuildContext context) {
-  return implementation.openQldtLogin(context);
-}
+Future<QldtLoginResult?> openQldtLogin(BuildContext context, {
+  bool inlinePull = false,
+}) => implementation.openQldtLogin(context, inlinePull: inlinePull);
+
+bool cancelQldtInlineSync() => implementation.cancelQldtInlineSync();
+
+String? takeQldtInlineSyncError() => implementation.takeQldtInlineSyncError();
 
 Future<void> clearQldtSession() => implementation.clearQldtSession();
 

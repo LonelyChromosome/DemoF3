@@ -189,7 +189,40 @@ Future<void> _saveQldtAccountDisplayName(String name) async {
   await prefs.setString(_accountDisplayNameKey, value);
 }
 
+
+/* 1.7: the native WebView authenticated by the real login route survives
+ * route disposal. A later pull attaches this SAME platform WebView, not a
+ * newly loaded QLDT page. The OS can still reclaim it after process death. */
+InAppWebViewKeepAlive? _retainedQldtView;
+String? _inlineQldtFailure;
+VoidCallback? _abortActiveInlineSync;
+
+/// Called only by 1.7's pull indicator; never clears the login account.
+bool cancelQldtInlineSync() {
+  final abort = _abortActiveInlineSync;
+  if (abort == null) return false;
+  abort();
+  return true;
+}
+
+String? takeQldtInlineSyncError() {
+  final value = _inlineQldtFailure;
+  _inlineQldtFailure = null;
+  return value;
+}
+
 Future<void> clearQldtSession() async {
+  cancelQldtInlineSync();
+  final retained = _retainedQldtView;
+  _retainedQldtView = null;
+  if (retained != null) {
+    try {
+      await InAppWebViewController.disposeKeepAlive(retained);
+    } on Object {
+      // OS may already have reclaimed the native WebView.
+    }
+  }
+
   await CookieManager.instance().deleteAllCookies();
   await _credentialChannel.invokeMethod<void>('clear');
   final prefs = await SharedPreferences.getInstance();
@@ -205,20 +238,32 @@ Future<void> clearQldtSession() async {
 Future<QldtLoginResult?> openQldtLogin(
   BuildContext context, {
   String? testHtml,
+  bool inlinePull = false,
 }) async {
   final prefs = await SharedPreferences.getInstance();
   if (!context.mounted) return null;
   final cached = prefs.getBool(_sessionKey) ?? false;
   final portalPath = prefs.getString(_portalPathKey);
-  return await Navigator.of(context).push<QldtLoginResult>(
-    MaterialPageRoute<QldtLoginResult>(
-      fullscreenDialog: true,
-      builder: (_) => _QldtWebLoginScreen(
-        cachedSession: cached,
-        portalPath: portalPath,
-        testHtml: testHtml,
-      ),
-    ),
+  if (testHtml == null) _retainedQldtView ??= InAppWebViewKeepAlive();
+  final page = _QldtWebLoginScreen(
+    cachedSession: cached || inlinePull,
+    portalPath: portalPath,
+    testHtml: testHtml,
+    inlinePull: inlinePull,
+  );
+  if (inlinePull) _inlineQldtFailure = null;
+  return Navigator.of(context).push<QldtLoginResult>(
+    inlinePull
+        ? PageRouteBuilder<QldtLoginResult>(
+            opaque: false,
+            transitionDuration: Duration.zero,
+            reverseTransitionDuration: Duration.zero,
+            pageBuilder: (_, animation, secondaryAnimation) => page,
+          )
+        : MaterialPageRoute<QldtLoginResult>(
+            fullscreenDialog: true,
+            builder: (_) => page,
+          ),
   );
 }
 
@@ -227,11 +272,13 @@ class _QldtWebLoginScreen extends StatefulWidget {
     required this.cachedSession,
     required this.portalPath,
     this.testHtml,
+    this.inlinePull = false,
   });
 
   final bool cachedSession;
   final String? portalPath;
   final String? testHtml;
+  final bool inlinePull;
 
   @override
   State<_QldtWebLoginScreen> createState() => _QldtWebLoginScreenState();
@@ -248,6 +295,9 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   Timer? _syncWatchdog;
   Timer? _phaseTimer;
   Timer? _sessionTimer;
+  Timer? _inlineOverallTimer;
+  bool _inlineRouteClosing = false;
+  VoidCallback? _ownedInlineAbort;
   final QldtSyncDiagnostics? _diagnostics = qldtDiagnosticsEnabled
       ? QldtSyncDiagnostics()
       : null;
@@ -304,6 +354,29 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     if (widget.cachedSession) {
       _status = 'Đang kiểm tra phiên QLĐT và đồng bộ...';
     }
+    if (widget.inlinePull) {
+      _ownedInlineAbort = () => _abortInlineSync('Đã hủy đồng bộ.');
+      _abortActiveInlineSync = _ownedInlineAbort;
+      // One upper bound for a dropped renderer or a missing JS callback.
+      _inlineOverallTimer = Timer(const Duration(seconds: 40),
+          () => _abortInlineSync('QLĐT không phản hồi trong 40 giây.'));
+    }
+  }
+
+  void _abortInlineSync(String reason) {
+    if (!widget.inlinePull || _inlineRouteClosing || !mounted) return;
+    _inlineRouteClosing = true;
+    _inlineQldtFailure = reason;
+    ++_syncEpoch; // Reject late results from the old JS registration/schedule.
+    _syncing = false;
+    _readinessTimer?.cancel();
+    _syncWatchdog?.cancel();
+    _phaseTimer?.cancel();
+    _sessionTimer?.cancel();
+    _inlineOverallTimer?.cancel();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) Navigator.of(context).pop<QldtLoginResult>();
+    });
   }
 
   Future<void> _loadAssistantPack() async {
@@ -317,78 +390,18 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
     _sessionTimer?.cancel();
+    _inlineOverallTimer?.cancel();
+    if (_ownedInlineAbort != null &&
+        identical(_abortActiveInlineSync, _ownedInlineAbort)) {
+      _abortActiveInlineSync = null;
+    }
     _reloadSpinController.dispose();
     _controller = null;
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return PopScope<QldtLoginResult>(
-      canPop: !_portalInputLocked && (_allowRoutePop || !_webCanGoBack),
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && !_portalInputLocked) {
-          unawaited(_handleBack());
-        }
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        children: <Widget>[
-          Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          leading: BackButton(onPressed: _handleBack),
-          title: const Text('Đăng nhập QLĐT'),
-          actions: <Widget>[
-            IconButton(
-              tooltip: 'Tải lại',
-              onPressed: _reload,
-              icon: const Icon(Icons.refresh_rounded),
-            ),
-          ],
-        ),
-        body: Column(
-          children: <Widget>[
-            Material(
-              color: const Color(0xFFF2F6FF),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                child: Row(
-                  children: <Widget>[
-                    Icon(
-                      _pageReady
-                          ? Icons.verified_user_outlined
-                          : Icons.info_outline,
-                      color: const Color(0xFF1747B5),
-                      size: 20,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _status,
-                        style: const TextStyle(fontSize: 13, height: 1.35),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            if (_syncing) const LinearProgressIndicator(minHeight: 3),
-            Expanded(
-              child: _rendererGone
-                  ? Center(
-                      child: FilledButton.icon(
-                        onPressed: _reload,
-                        icon: const Icon(Icons.refresh_rounded),
-                        label: const Text('Khởi tạo lại trang đăng nhập'),
-                      ),
-                    )
-                  : Stack(
-                      children: <Widget>[
-                        Positioned.fill(
-                          child: ColoredBox(
-                            color: Colors.white,
-                            child: InAppWebView(
+  Widget _buildPortalWebView() => InAppWebView(
+                              keepAlive: widget.testHtml == null ? _retainedQldtView : null,
                               key: ValueKey<int>(_webViewGeneration),
                               initialUrlRequest: widget.testHtml == null
                                   ? URLRequest(url: WebUri(_initialUrl))
@@ -477,6 +490,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                                 }
                               },
                               onRenderProcessGone: (_, detail) {
+                                if (widget.inlinePull) {
+                                  _abortInlineSync('Tiến trình QLĐT đã bị hệ thống dừng.');
+                                  return;
+                                }
                                 if (_finalizingVerifiedResult) {
                                   return;
                                 }
@@ -500,7 +517,90 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                                   });
                                 }
                               },
-                            ),
+                            ),;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.inlinePull) {
+      // Transparent route: the original timetable/pull indicator stays on
+      // screen. Mount just enough of the retained WebView for its JS bridge.
+      // No QLDT or Microsoft screen is exposed by this background pull.
+      return IgnorePointer(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: 2,
+            height: 2,
+            child: _buildPortalWebView(),
+          ),
+        ),
+      );
+    }
+    return PopScope<QldtLoginResult>(
+      canPop: !_portalInputLocked && (_allowRoutePop || !_webCanGoBack),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_portalInputLocked) {
+          unawaited(_handleBack());
+        }
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leading: BackButton(onPressed: _handleBack),
+          title: const Text('Đăng nhập QLĐT'),
+          actions: <Widget>[
+            IconButton(
+              tooltip: 'Tải lại',
+              onPressed: _reload,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+        ),
+        body: Column(
+          children: <Widget>[
+            Material(
+              color: const Color(0xFFF2F6FF),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                child: Row(
+                  children: <Widget>[
+                    Icon(
+                      _pageReady
+                          ? Icons.verified_user_outlined
+                          : Icons.info_outline,
+                      color: const Color(0xFF1747B5),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _status,
+                        style: const TextStyle(fontSize: 13, height: 1.35),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (_syncing) const LinearProgressIndicator(minHeight: 3),
+            Expanded(
+              child: _rendererGone
+                  ? Center(
+                      child: FilledButton.icon(
+                        onPressed: _reload,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Khởi tạo lại trang đăng nhập'),
+                      ),
+                    )
+                  : Stack(
+                      children: <Widget>[
+                        Positioned.fill(
+                          child: ColoredBox(
+                            color: Colors.white,
+                            child: _buildPortalWebView(),
                           ),
                         ),
                         if (!_portalInputLocked && !_showWebPage)
@@ -750,6 +850,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   void _trackAuthNavigation(String? url) {
     if (widget.testHtml != null) return;
     if (_isIdentityProvider(url)) {
+      if (widget.inlinePull) {
+        _abortInlineSync('Phiên QLĐT đã hết hạn. Hãy đăng nhập lại trong app.');
+        return;
+      }
       _sawMicrosoftAuth = true;
       if (mounted && _portalInputLocked) {
         setState(() {
@@ -1105,6 +1209,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         return null;
       },
     );
+    if (widget.inlinePull) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_inlineRouteClosing) _beginReadinessChecks();
+      });
+    }
   }
 
   Future<void> _completeRegistration(int epoch, String raw) async {
@@ -1235,6 +1344,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted || epoch != _syncEpoch) return;
       _finalizingVerifiedResult = false;
+      if (widget.inlinePull) {
+        _inlineRouteClosing = true;
+        _inlineOverallTimer?.cancel();
+      }
       Navigator.of(context).pop<QldtLoginResult>(result);
     } on Object catch (error) {
       _finalizingVerifiedResult = false;
@@ -1485,6 +1598,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
     if (_portalSyncStarted || _syncing || _autoSyncStarted) return;
     _readinessAttempt += 1;
     if (_readinessAttempt >= 50) {
+      if (widget.inlinePull) {
+        _abortInlineSync('Phiên QLĐT không sẵn sàng. Hãy đăng nhập lại trong app.');
+        return;
+      }
       _readinessTimer?.cancel();
       _sessionBootstrapRunning = false;
       if (mounted) {
@@ -1801,6 +1918,10 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
 
   void _stopSync(int epoch, String status, {String code = 'FAILED'}) {
     if (!mounted || epoch != _syncEpoch) return;
+    if (widget.inlinePull) {
+      _abortInlineSync(status);
+      return;
+    }
     _syncWatchdog?.cancel();
     _phaseTimer?.cancel();
     _diagnostics?.finish(code);
