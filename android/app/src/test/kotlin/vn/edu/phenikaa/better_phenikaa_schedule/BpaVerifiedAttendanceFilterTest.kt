@@ -80,12 +80,11 @@ class BpaVerifiedAttendanceFilterTest {
                     "class|23/09/2026|Thiết kế web nâng cao|7:0|B1|WEB-2026")
                     .put("isExam", false),
             )).toString()
-        val raw = envelope(JSONArray().put(
-            row("LT5", "B1")
-                .put("TENHOCPHAN", "Thiết kế web nâng cao")
-                .put("TENLOPHOCPHAN", "WEB-2026")
-                .remove("THUOCTINH_TEN"),
-        ))
+        val lesson = row("LT5", "B1")
+            .put("TENHOCPHAN", "Thiết kế web nâng cao")
+            .put("TENLOPHOCPHAN", "WEB-2026")
+        lesson.remove("THUOCTINH_TEN")
+        val raw = envelope(JSONArray().put(lesson))
         val filtered = JSONObject(BpaVerifiedAttendanceFilter.fromVerifiedEnvelope(
             raw, json,
         )).getJSONObject("response").getJSONArray("Data")
