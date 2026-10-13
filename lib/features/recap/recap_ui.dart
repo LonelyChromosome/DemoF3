@@ -556,57 +556,7 @@ class _StoryBody extends StatelessWidget {
               _SubjectBento(facts: facts)
             else if (index == 6)
               _AttendanceBento(facts: facts)
-            else _RecapPanel(
-              highlight: true,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    const Icon(Icons.auto_awesome_rounded,
-                      size: 17, color: Color(0xFFFFD68C)),
-                    const SizedBox(width: 9),
-                    const Text('DẤU ẤN HỌC KỲ',
-                      style: TextStyle(
-                        color: Color(0xFFE1C996), letterSpacing: 1.25,
-                        fontSize: 11, fontWeight: FontWeight.w800)),
-                    const Spacer(),
-                    Text('${(index + 1).toString().padLeft(2, '0')}',
-                      style: const TextStyle(color: Color(0xFFB6C8D9),
-                        fontSize: 13, fontWeight: FontWeight.w700)),
-                  ]),
-                  const SizedBox(height: 22),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(story.number,
-                        style: const TextStyle(
-                          fontSize: 66, height: 1.08,
-                          color: Color(0xFFFFDEA0),
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  Container(height: 1,
-                    color: const Color(0xFF8096A8).withValues(alpha: .35)),
-                  const SizedBox(height: 13),
-                  Row(children: [
-                    const Icon(Icons.stars_rounded,
-                      size: 15, color: Color(0xFFCFB88A)),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(
-                      preview ? 'DỮ LIỆU GIẢ LẬP · KIỂM THỬ' : 'TỪ LỊCH QLĐT ĐÃ XÁC MINH',
-                      style: const TextStyle(color: Color(0xFFCCD8E6),
-                        fontSize: 10, letterSpacing: 1.2,
-                        fontWeight: FontWeight.w700),
-                    )),
-                  ]),
-                ],
-              ),
-            ),
+            else _RecapSectionCard(facts: facts, story: story, index: index),
             const SizedBox(height: 13),
             _RecapPanel(
               child: Row(crossAxisAlignment: CrossAxisAlignment.start,
@@ -624,6 +574,136 @@ class _StoryBody extends StatelessWidget {
           ],
         ),
       ),
+    ),
+  );
+}
+
+/// Distinct metric panel for each chapter, rather than the same generic card.
+class _RecapSectionCard extends StatelessWidget {
+  const _RecapSectionCard({
+    required this.facts, required this.story, required this.index,
+  });
+  final RecapFacts facts;
+  final _Story story;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, header, accent) = switch (index) {
+      0 => (Icons.auto_awesome_rounded, 'MỞ LẠI KÝ ỨC',
+        const Color(0xFFFFD998)),
+      1 => (Icons.menu_book_outlined, 'HỌC KỲ QUA NHỮNG CON SỐ',
+        const Color(0xFF8CCADB)),
+      3 => (Icons.alarm_rounded, 'BÌNH MINH TRÊN GIẢNG ĐƯỜNG',
+        const Color(0xFFFFCC89)),
+      4 => (Icons.event_note_rounded, 'NGÀY ĐÁNG NHỚ NHẤT',
+        const Color(0xFFC2A9FF)),
+      7 => (Icons.favorite_border_rounded, 'MỘT ĐIỀU ĐÁNG GIỮ LẠI',
+        const Color(0xFFB9E6C8)),
+      8 => (Icons.flag_outlined, 'DẤU MỐC CUỐI CÙNG',
+        const Color(0xFFFFCDA6)),
+      9 => (Icons.mark_email_unread_outlined, 'BƯU THIẾP HỌC KỲ',
+        const Color(0xFFB4D1FA)),
+      _ => (Icons.auto_awesome_outlined, 'HẸN MỘT NGÀY GẶP LẠI',
+        const Color(0xFFFFD998)),
+    };
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(21, 21, 21, 23),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(23),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [
+            Color.lerp(const Color(0xFF294866), accent, .11)!,
+            const Color(0xFF14283F),
+          ],
+        ),
+        border: Border.all(color: accent.withValues(alpha: .48),
+          width: 1.2),
+        boxShadow: const [BoxShadow(
+          color: Color(0x66040C1A), blurRadius: 20, offset: Offset(0, 13))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon, size: 19, color: accent),
+            const SizedBox(width: 10),
+            Expanded(child: Text(header, style: TextStyle(
+              color: accent, fontSize: 11, letterSpacing: 1.0,
+              fontWeight: FontWeight.w900))),
+            Text('${(index + 1).toString().padLeft(2, '0')}',
+              style: const TextStyle(color: Color(0xFFBDCAD8),
+                fontSize: 12, fontWeight: FontWeight.w700)),
+          ]),
+          const SizedBox(height: 20),
+          if (index == 1)
+            Row(children: [
+              Expanded(child: _MiniStatistic(
+                label: 'NGÀY ĐẾN TRƯỜNG', number: '${facts.days}', accent: accent)),
+              const SizedBox(width: 9),
+              Expanded(child: _MiniStatistic(
+                label: 'MÔN HỌC', number: '${facts.subjects}', accent: accent)),
+            ])
+          else
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FittedBox(
+                alignment: Alignment.centerLeft,
+                fit: BoxFit.scaleDown,
+                child: Text(story.number, style: TextStyle(
+                  color: accent, fontWeight: FontWeight.w900,
+                  fontSize: index == 0 || index == 10 ? 77 : 66,
+                  height: 1.06,
+                )),
+              ),
+            ),
+          const SizedBox(height: 19),
+          Divider(height: 1, color: accent.withValues(alpha: .24)),
+          const SizedBox(height: 13),
+          Text(switch (index) {
+            1 => 'DỮ LIỆU LỊCH HỌC QLĐT',
+            3 => 'BUỔI BẮT ĐẦU LÚC 06:45',
+            4 => 'ĐẾM THEO NGÀY HỌC',
+            8 => 'THỜI ĐIỂM BUỔI HỌC CUỐI',
+            9 => 'GÓI GHÉM LẠI MỘT HỌC KỲ',
+            _ => 'DẤU ẤN TỪ NHỮNG NGÀY ĐÃ QUA',
+          }, style: const TextStyle(
+            color: Color(0xFFC5D6E5), letterSpacing: .9,
+            fontWeight: FontWeight.w700, fontSize: 10,
+          )),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStatistic extends StatelessWidget {
+  const _MiniStatistic({
+    required this.label, required this.number, required this.accent,
+  });
+  final String label, number;
+  final Color accent;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.fromLTRB(12, 14, 10, 13),
+    decoration: BoxDecoration(
+      color: const Color(0xFF12263E),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: accent.withValues(alpha: .26)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FittedBox(fit: BoxFit.scaleDown, child: Text(number,
+          style: TextStyle(fontSize: 42, fontWeight: FontWeight.w900,
+            color: accent, height: 1.08))),
+        const SizedBox(height: 9),
+        Text(label, maxLines: 2, style: const TextStyle(
+          fontSize: 10, color: Color(0xFFD2E0EA),
+          fontWeight: FontWeight.w800, letterSpacing: .25)),
+      ],
     ),
   );
 }
