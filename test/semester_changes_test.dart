@@ -58,6 +58,26 @@ void main() {
     },
   );
 
+  test('attendance-only changes never trigger a schedule difference', () {
+    ScheduleRecord lesson(String status) => ScheduleRecord(
+      id: 'class-2026-09-23-web',
+      isExam: false,
+      subjectName: 'Thiết kế web nâng cao',
+      room: 'A1',
+      className: 'C-2026',
+      startAt: DateTime(2026, 9, 23, 7),
+      endAt: DateTime(2026, 9, 23, 9),
+      lessonKind: 'Ly thuyet',
+      attendanceStatus: status,
+      lessonPeriods: 3,
+    );
+    final before = state(study: [lesson('Có mặt(3)')]);
+    final after = state(study: [lesson('Vắng mặt(3)')]);
+    expect(detector.compare(before, after).hasChanges, isFalse);
+    expect(after.subjects.single.studySchedules.single.toJson(),
+        isNot(contains('attendanceStatus')));
+  });
+
   test('detects added and cancelled subjects and schedules', () {
     final before = state(
       study: <ScheduleRecord>[row(subject: 'Thiết kế web nâng cao')],
