@@ -17,7 +17,7 @@ assert(mobile.includes('InAppWebViewKeepAlive()'), 'Keep-alive token required');
 assert(mobile.includes('keepAlive: widget.testHtml == null ? _retainedQldtView : null'));
 assert(mobile.includes('PageRouteBuilder<QldtLoginResult>'), 'Pull must not cover timetable UI');
 assert(mobile.includes("void _abortInlineSync(String reason)"));
-assert(mobile.includes('if (widget.inlinePull) _inlineQldtFailure = null;'));
+assert(mobile.includes('if (inlinePull) _inlineQldtFailure = null;'));
 assert(mobile.includes('InAppWebViewController.disposeKeepAlive(retained)'), 'Logout must discard QLDT WebView');
 assert(mobile.includes('const TracuuApi().scriptForAttempt(epoch)'));
 assert(mobile.includes('const SemesterScheduleVerifier().verify('));
