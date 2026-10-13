@@ -9,6 +9,11 @@ abstract final class AttendanceLessonClassifier {
     caseSensitive: false,
   );
 
+  static final RegExp _onlineCode = RegExp(
+    r'(?:^|[\s.\-_/()])(?:ELN|ELEARNING|E-LEARNING)[0-9]*(?=$|[\s.\-_/()])',
+    caseSensitive: false,
+  );
+
   static String classify({
     required String rawSubjectName,
     required String rawClassName,
@@ -18,7 +23,11 @@ abstract final class AttendanceLessonClassifier {
     final attr = (attribute ?? '').trim().toLowerCase();
     final rawRoom = (room ?? '').toLowerCase();
     // E-learning is a separate mode and is never counted as an LT absence.
-    if (_isOnline(attr) || _isOnline(rawRoom)) return 'ELEARNING';
+    if (_isOnline(attr) || _isOnline(rawRoom) ||
+        _onlineCode.hasMatch(rawSubjectName) ||
+        _onlineCode.hasMatch(rawClassName) ||
+        _isOnline(rawSubjectName.toLowerCase()) ||
+        _isOnline(rawClassName.toLowerCase())) return 'ELEARNING';
 
     if (_practiceCode.hasMatch(rawSubjectName) ||
         _practiceCode.hasMatch(rawClassName) ||
