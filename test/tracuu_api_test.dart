@@ -71,6 +71,25 @@ void main() {
     },
   );
 
+  test('programme metadata is optional and never changes registration validation', () {
+    const programmeId = '5B225B4E54A647F9B066CADC7F063150';
+    final first = {
+      ...row(),
+      'DAOTAO_TOCHUCCHUONGTRINH_ID': programmeId,
+    };
+    final second = {
+      ...row(section: 'web-th', className: 'WEB-2026-TH'),
+      'DAOTAO_TOCHUCCHUONGTRINH_ID': programmeId,
+    };
+    expect(api.parse(sample(registrations: [first, second])).programId,
+        programmeId);
+    expect(api.parse(sample()).programId, isNull);
+    final other = {...second, 'DAOTAO_TOCHUCCHUONGTRINH_ID': 'other'};
+    final mixed = api.parse(sample(registrations: [first, other]));
+    expect(mixed.subjectNames, ['Thiết kế web nâng cao']);
+    expect(mixed.programId, isNull);
+  });
+
   test('deduplicates one plan ID despite different auxiliary metadata', () {
     final parsed = api.parse(
       sample(
