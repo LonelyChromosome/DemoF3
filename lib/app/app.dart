@@ -22,6 +22,8 @@ import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/sch
 import 'package:better_phenikaa_schedule/features/giao_dien/tien_mon_premium/tien_mon_premium_contract.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/attendance_tag.dart';
+import 'package:better_phenikaa_schedule/features/recap/recap_data.dart';
+import 'package:better_phenikaa_schedule/features/recap/recap_ui.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/pull_sync_indicator.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/study_alarm_card.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/alarm_test_fixture.dart';
@@ -97,6 +99,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _booting = true;
   bool _syncing = false;
   bool _panelOpen = false;
+  bool _recapForcedVisible = false;
+  static const bool _recapTestPanelEnabled = bool.fromEnvironment('BPA_RECAP_TEST_PANEL');
   static const _attendanceStorageKey = 'better_phenikaa_attendance_v17';
   static const _inlineSyncChannel = MethodChannel('better_phenikaa/inline_sync');
   Map<String, AttendanceSummary> _attendance = const {};
@@ -368,6 +372,85 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         displayName: _accountDisplayName.isEmpty
             ? (_data?.displayName ?? '')
             : _accountDisplayName,
+      ),
+    );
+  }
+
+  bool get _recapButtonVisible {
+    if (_recapForcedVisible) return true;
+    final data = _data;
+    if (data == null) return false;
+    final classes = data.classes.toList();
+    if (classes.isEmpty) return false;
+    final end = classes.map((e) => e.endAt).reduce(
+      (a, b) => a.isAfter(b) ? a : b,
+    );
+    // A discreet opt-in from the final week until the next semester starts.
+    return !DateTime.now().isBefore(end.subtract(const Duration(days: 7)));
+  }
+
+  Future<RecapFacts> _loadRecap(RecapScenario? scenario) async {
+    // Start exactly one existing 1.7 pull-sync transaction in the background.
+    // Do not await it, mutate its state, or introduce a second QLĐT session.
+    if (scenario == null && _data != null) {
+      unawaited(_runPullSync());
+    }
+    // This deliberately visible loading VFX is independent of network speed.
+    await Future<void>.delayed(const Duration(milliseconds: 2800));
+    if (scenario != null) return RecapFixtures.build(scenario, DateTime.now());
+    final semester = await CurrentSemesterStore().read();
+    final data = semester?.toImportedScheduleData() ?? _data;
+    if (data == null) {
+      return RecapFacts.calculate(
+        ImportedScheduleData(
+          displayName: '', records: const [], syncedAt: DateTime.now(),
+        ),
+        attendance: const {}, now: DateTime.now(),
+        registeredSubjects: 0,
+      );
+    }
+    // Attendance in the 1.7 cache is verified for reported absence counts,
+    // but a 0 does not prove every past class was attended.
+    return RecapFacts.calculate(
+      data, attendance: Map<String, AttendanceSummary>.of(_attendance),
+      now: DateTime.now(),
+      registeredSubjects: semester?.subjects.length,
+    );
+  }
+
+  Future<void> _openRecap([RecapScenario? scenario]) async {
+    if (!mounted) return;
+    await Navigator.of(context).push<void>(
+      PageRouteBuilder<void>(
+        opaque: true,
+        transitionDuration: const Duration(milliseconds: 300),
+        pageBuilder: (_, animation, secondary) =>
+            SemesterRecapPage(load: () => _loadRecap(scenario)),
+        transitionsBuilder: (_, animation, secondary, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    );
+  }
+
+  Future<void> _openRecapTestPanel() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => RecapTestPanel(
+        memoryVisible: _recapForcedVisible,
+        onToggleMemory: () {
+          Navigator.of(sheetContext).pop();
+          setState(() => _recapForcedVisible = !_recapForcedVisible);
+        },
+        onOpenActual: () {
+          Navigator.of(sheetContext).pop();
+          unawaited(_openRecap());
+        },
+        onOpenScenario: (scenario) {
+          Navigator.of(sheetContext).pop();
+          unawaited(_openRecap(scenario));
+        },
       ),
     );
   }
@@ -1226,11 +1309,24 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 child: SizedBox.expand(),
                               )
                             : displayData == null || displayData.displayName.isEmpty
-                            ? _LoginScreen(
-                                onLogin: _loginOrSync,
-                                supportsLive: supportsLiveQldtLogin,
-                              )
-                            : _MainShell(
+                            ? Stack(children: [
+                                _LoginScreen(
+                                  onLogin: _loginOrSync,
+                                  supportsLive: supportsLiveQldtLogin,
+                                ),
+                                if (_recapTestPanelEnabled)
+                                  Positioned(
+                                    right: 14, bottom: 18,
+                                    child: FloatingActionButton.small(
+                                      heroTag: 'recap-test-login',
+                                      tooltip: 'Kiểm thử Recap',
+                                      onPressed: () => unawaited(_openRecapTestPanel()),
+                                      child: const Icon(Icons.tune_rounded),
+                                    ),
+                                  ),
+                              ])
+                            : Stack(children: [
+                                _MainShell(
                                 data: displayData!,
                                 attendance: _attendance,
                                 practiceIds: _practiceIds,
@@ -1291,6 +1387,24 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                                 onDismissError: () =>
                                     setState(() => _errorMessage = null),
                               ),
+                                if (_page == _AppPage.timetable && _recapButtonVisible)
+                                  Positioned(
+                                    left: 14, bottom: 16,
+                                    child: RecapMemoryButton(
+                                      onPressed: () => unawaited(_openRecap()),
+                                    ),
+                                  ),
+                                if (_recapTestPanelEnabled)
+                                  Positioned(
+                                    right: 14, bottom: 16,
+                                    child: FloatingActionButton.small(
+                                      heroTag: 'recap-test-timetable',
+                                      tooltip: 'Kiểm thử Recap',
+                                      onPressed: () => unawaited(_openRecapTestPanel()),
+                                      child: const Icon(Icons.tune_rounded),
+                                    ),
+                                  ),
+                              ]),
                       ),
                     ),
                   ),
