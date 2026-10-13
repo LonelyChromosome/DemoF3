@@ -81,7 +81,7 @@ void main() {
       row(2, type: 'Thuc hanh', status: 'Vắng mặt(3)'),
     ]);
     final parsed = const QldtParser().parseLiveEnvelope(raw, strict: true);
-    expect(parsed.classes.first.lessonKind, 'Ly thuyet');
+    expect(parsed.classes.first.lessonKind, 'LT');
     expect(parsed.classes.first.attendanceStatus, 'Vắng mặt(3)');
     expect(parsed.classes.first.lessonPeriods, 3);
     final fromParser = AttendanceSummary.fromVerifiedSchedule(
@@ -138,6 +138,48 @@ void main() {
       envelope([row(0, status: 'Có mặt(3)')]),
       theoryPeriodsBySubject: theory30);
     expect(present[it]!.absentSessions, 0);
+  });
+
+  test('raw class TH marker is removed from absentee LT totals before matching', () {
+    final rows = [
+      row(0,
+        subject: 'Môn Kỹ thuật phần mềm-1-1-26(COUR02.LT5)',
+        status: 'Vắng mặt(3)',
+      )..['TENLOPHOCPHAN'] = 'Kỹ thuật phần mềm-1-1-26(COUR02.LT5)',
+      row(1,
+        subject: 'Môn Kỹ thuật phần mềm-1-1-26(COUR02.TH5)',
+        status: 'Vắng mặt(3)',
+      )..['TENLOPHOCPHAN'] = 'Kỹ thuật phần mềm-1-1-26(COUR02.TH5)',
+    ];
+    final subject = normalizeSubjectName('Kỹ thuật phần mềm');
+    final summary = AttendanceSummary.fromRawEnvelope(
+      envelope(rows),
+      theoryPeriodsBySubject: {subject: 22.5},
+    )[subject]!;
+    expect(summary.absentSessions, 1);
+    expect(summary.allowanceSessions, 1);
+  });
+
+  test('LT without a type label still counts and TH without one does not', () {
+    final rows = [
+      row(0, status: 'Vắng mặt(3)', type: '')..['THUOCTINH_TEN'] = null,
+      row(1, status: 'Vắng mặt(3)', type: '')
+        ..['THUOCTINH_TEN'] = null
+        ..['TENLOPHOCPHAN'] = 'CLASS.TH2',
+    ];
+    final result = AttendanceSummary.fromRawEnvelope(
+      envelope(rows),
+      theoryPeriodsBySubject: theory30,
+    );
+    expect(result[it]!.absentSessions, 1);
+  });
+
+  test('missing QLDT row ID does not silently drop verified attendance', () {
+    final source = row(0, status: 'Vắng mặt(3)');
+    source.remove('ID');
+    expect(AttendanceSummary.fromRawEnvelope(
+      envelope([source]), theoryPeriodsBySubject: theory30,
+    )[it]!.absentSessions, 1);
   });
 
   test('pure e-learning does not create an absence tag', () {
