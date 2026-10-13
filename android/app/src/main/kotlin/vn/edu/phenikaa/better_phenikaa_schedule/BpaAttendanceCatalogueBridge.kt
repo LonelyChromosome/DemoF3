@@ -62,17 +62,16 @@ internal class BpaAttendanceCatalogueBridge(context: Context, engine: FlutterEng
             .put("action", ACTION)
             .put("func", FUNC)
             .put("iM", iM)
-            .put("strQLSV_NguoiHoc_Id", userId)
-            .put("strNguoiThucHien_Id", userId)
-            .put("strChucNang_Id", session.optString("strChucNangId"))
-            .put("strVaiTroDangNhap_Id", session.optString("appId"))
-            .put("strChucNangHeThong_Id", session.optString("strChucNangId"))
+            // Use the EXACT catalogue request fields seen in QLĐT's
+            // edu.makeRequest. Other auth fields belong to the session,
+            // not to this endpoint's request body.
             .put("pageIndex", 1)
             .put("pageSize", 100000000)
             .put("strDaoTao_ChuongTrinh_Id", programId)
             .put("strDaoTao_HocPhan_Id", "")
             .put("strDaoTao_ThoiGian_KH_Id", "")
             .put("strDaoTao_ThoiGian_TT_Id", "")
+            .put("strNguoiThucHien_Id", userId)
             .put("strPhanCongPhamViDamNhiem_Id", "")
             .put("strThuocTinhHocPhan_Id", "")
             .put("strTuKhoa", "")
