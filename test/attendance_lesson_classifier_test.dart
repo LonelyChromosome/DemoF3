@@ -32,6 +32,10 @@ void main() {
         'ELEARNING');
     expect(type('Học phần trực tuyến', 'ONLINE-01', room: 'ONLINE- Elearning'),
         'ELEARNING');
+    expect(type('Lịch sử Đảng-1-1-26(N02).ELN', 'N02.ELN'),
+        'ELEARNING');
+    expect(type('Kỹ thuật phần mềm-1-1-26(COUR02)', 'COUR02.ELN'),
+        'ELEARNING');
   });
 
   test('QLDT HTML status and period range remain separate from clean class identity', () {
