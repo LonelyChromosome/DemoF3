@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   testWidgets('notification bell shows 1.7 release notes, never stale cooc1.6', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
     final now = DateTime.now();
     final data = ImportedScheduleData(
       displayName: 'Sinh viên',
@@ -40,5 +40,6 @@ void main() {
     expect(find.text('Sửa lỗi Pull Reload timeout và cải thiện khôi phục phiên QLĐT.'), findsOneWidget);
     expect(find.text('cooc1.6'), findsNothing);
     expect(find.text('Bổ sung VFX'), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
   });
 }
