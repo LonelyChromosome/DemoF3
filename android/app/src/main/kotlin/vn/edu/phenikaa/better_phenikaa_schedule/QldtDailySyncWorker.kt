@@ -399,6 +399,7 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
                     onAuthStep = { step ->
                         if (step == "email") authEmailSubmitted = true
                         if (step == "password") authPasswordSubmitted = true
+                        if (step.startsWith("SCHEDULE_")) stage.set(step.take(64))
                     },
                 ),
                 JAVASCRIPT_BRIDGE,
@@ -659,6 +660,19 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
                 var completed = 0;
                 var failed = false;
                 var merged = [];
+                var retryQueue = [];
+                var attempts = new Array(chunks.length).fill(0);
+
+                function progress() {
+                  window.$JAVASCRIPT_BRIDGE.onAuthStep(
+                    'SCHEDULE_' + completed + '_OF_' + chunks.length);
+                }
+
+                function fail(code) {
+                  if (failed) return;
+                  failed = true;
+                  window.$JAVASCRIPT_BRIDGE.onError(code);
+                }
 
                 function finishIfDone() {
                   if (failed || completed !== chunks.length) return;
@@ -687,11 +701,24 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
 
                 function launchMore() {
                   if (failed) return;
-                  while (active < concurrency && nextIndex < chunks.length) {
+                  while (active < concurrency &&
+                         (retryQueue.length > 0 || nextIndex < chunks.length)) {
                     (function (index) {
                       var chunk = chunks[index];
-                      nextIndex += 1;
                       active += 1;
+                      var settled = false;
+                      var watchdog = setTimeout(function () {
+                        if (settled || failed) return;
+                        settled = true;
+                        active -= 1;
+                        if (attempts[index] < 1) {
+                          attempts[index] += 1;
+                          retryQueue.push(index);
+                          launchMore();
+                        } else {
+                          fail('SCHEDULE_CHUNK_TIMEOUT');
+                        }
+                      }, 10000);
                       var requestData = {
                         action: 'SV_ThongTin_MH/DSA4BRINKCIpAiAPKSAv',
                         func: 'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan',
@@ -700,40 +727,58 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
                         strNgayBatDau: chunk.start,
                         strNgayKetThuc: chunk.end
                       };
-                      edu.system.makeRequest({
-                        success: function (response) {
-                          if (failed) return;
-                          active -= 1;
-                          completed += 1;
-                          if (!response || response.Success !== true ||
-                              !Array.isArray(response.Data)) {
-                            failed = true;
-                            window.$JAVASCRIPT_BRIDGE.onError('INVALID_RESPONSE');
-                            return;
-                          }
-                          for (var i = 0; i < response.Data.length; i++) {
-                            merged.push(response.Data[i]);
-                          }
-                          launchMore();
-                          finishIfDone();
-                        },
-                        error: function () {
-                          if (failed) return;
-                          failed = true;
-                          active -= 1;
-                          window.$JAVASCRIPT_BRIDGE.onError('NETWORK_ERROR');
-                        },
-                        type: 'POST',
-                        action: requestData.action,
-                        contentType: true,
-                        data: requestData,
-                        fakedb: []
-                      }, false, false, false, null);
-                    })(nextIndex);
+                      try {
+                        edu.system.makeRequest({
+                          success: function (response) {
+                            if (settled || failed) return;
+                            settled = true;
+                            clearTimeout(watchdog);
+                            active -= 1;
+                            if (!response || response.Success !== true ||
+                                !Array.isArray(response.Data)) {
+                              fail('INVALID_RESPONSE');
+                              return;
+                            }
+                            for (var i = 0; i < response.Data.length; i++) {
+                              merged.push(response.Data[i]);
+                            }
+                            completed += 1;
+                            progress();
+                            launchMore();
+                            finishIfDone();
+                          },
+                          error: function () {
+                            if (settled || failed) return;
+                            settled = true;
+                            clearTimeout(watchdog);
+                            active -= 1;
+                            if (attempts[index] < 1) {
+                              attempts[index] += 1;
+                              retryQueue.push(index);
+                              launchMore();
+                            } else {
+                              fail('NETWORK_ERROR');
+                            }
+                          },
+                          type: 'POST',
+                          action: requestData.action,
+                          contentType: true,
+                          data: requestData,
+                          fakedb: []
+                        }, false, false, false, null);
+                      } catch (error) {
+                        if (settled || failed) return;
+                        settled = true;
+                        clearTimeout(watchdog);
+                        active -= 1;
+                        fail('REQUEST_ERROR');
+                      }
+                    })(retryQueue.length > 0 ? retryQueue.shift() : nextIndex++);
                   }
                   finishIfDone();
                 }
 
+                progress();
                 launchMore();
               } catch (error) {
                 window.$JAVASCRIPT_BRIDGE.onError('REQUEST_ERROR');
@@ -869,19 +914,35 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
               const call = (action, func, fields, next, onFailure = fail) => {
                 const payload = Object.assign({action, func, iM: system.iM,
                   strQLSV_NguoiHoc_Id: system.userId}, fields);
+                let settled = false;
+                // A callback can be lost without triggering makeRequest.error.
+                // Never let a lost registration call hold the whole pull for 50s.
+                const watchdog = setTimeout(() => {
+                  if (settled || finished) return;
+                  settled = true;
+                  onFailure('NETWORK_ERROR');
+                }, 14000);
+                const finishError = code => {
+                  if (settled || finished) return;
+                  settled = true;
+                  clearTimeout(watchdog);
+                  onFailure(code);
+                };
                 try {
                   system.makeRequest({
                     success: response => {
-                      if (finished) return;
+                      if (settled || finished) return;
                       if (!response || response.Success !== true || !Array.isArray(response.Data)) {
-                        onFailure('INVALID_RESPONSE'); return;
+                        finishError('INVALID_RESPONSE'); return;
                       }
+                      settled = true;
+                      clearTimeout(watchdog);
                       try { next(response.Data); } catch (_) { onFailure('INVALID_RESPONSE'); }
                     },
-                    error: () => onFailure('NETWORK_ERROR'),
+                    error: () => finishError('NETWORK_ERROR'),
                     type: 'POST', action, contentType: true, data: payload, fakedb: []
                   }, false, false, false, null);
-                } catch (_) { onFailure('REQUEST_ERROR'); }
+                } catch (_) { finishError('REQUEST_ERROR'); }
               };
               const requestRows = (semesterId, planId, next, onFailure = fail) =>
                 call('DKH_Chung_MH/DSA4CiQ1EDQgBSAvJgo4DS4xCS4iESkgLwPP',
@@ -894,6 +955,8 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
                 ? storedRoute : null;
               let cachedReady = false, cachedRows = null, cachedError = false;
               let validated = null;
+              let cachedDeadlinePassed = !cached;
+              let directRequested = false;
               const finishRows = (latest, planId, planSemesterId, rows) => {
                 const subjects = new Map();
                 for (const row of rows) {
@@ -934,11 +997,17 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
               const resolveRows = () => {
                 if (!validated || finished) return;
                 const {latest, planId, planSemesterId} = validated;
-                if (cached && cached.semesterId === String(latest.id) &&
-                    cached.semesterName === latest.name && cached.planId === planId) {
-                  if (!cachedReady) return;
-                  if (!cachedError) { finishRows(latest, planId, planSemesterId, cachedRows); return; }
+                const matching = cached && cached.semesterId === String(latest.id) &&
+                  cached.semesterName === latest.name && cached.planId === planId;
+                if (matching && cachedReady && !cachedError && !directRequested) {
+                  finishRows(latest, planId, planSemesterId, cachedRows);
+                  return;
                 }
+                // Cached-route lookup is ONLY an optimization. A silent request
+                // must never block authoritative registration indefinitely.
+                if (matching && !cachedReady && !cachedDeadlinePassed) return;
+                if (directRequested) return;
+                directRequested = true;
                 requestRows(latest.id, planId, rows =>
                   finishRows(latest, planId, planSemesterId, rows));
               };
@@ -951,9 +1020,23 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
                     parsed.getDate() !== Number(match[1])) throw Error('DATE_INVALID');
                 return match[3] + '-' + match[2] + '-' + match[1];
               };
-              if (cached) requestRows(cached.semesterId, cached.planId, rows => {
-                cachedRows = rows; cachedReady = true; resolveRows();
-              }, () => { cachedError = true; cachedReady = true; resolveRows(); });
+              if (cached) {
+                setTimeout(() => {
+                  cachedDeadlinePassed = true;
+                  resolveRows();
+                }, 1800);
+                requestRows(cached.semesterId, cached.planId, rows => {
+                  if (finished || directRequested) return;
+                  cachedRows = rows;
+                  cachedReady = true;
+                  resolveRows();
+                }, () => {
+                  if (finished || directRequested) return;
+                  cachedError = true;
+                  cachedReady = true;
+                  resolveRows();
+                });
+              }
               call('DKH_ThongTin_MH/DSA4FSkuKAYoIC8FIC8mCjgCIA8pIC8P',
                 'pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan',
                 {strDaoTao_ThoiGianDaoTao_Id: null}, semesters => {
