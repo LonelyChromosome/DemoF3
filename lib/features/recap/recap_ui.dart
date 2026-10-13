@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:better_phenikaa_schedule/features/recap/recap_data.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Final memory icon: fixed calendar, perfectly centered four-point star.
 /// No sweeping arcs; angular velocity slows progressively and accelerates.
@@ -169,7 +170,9 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
       Color(0xFF283549), Color(0xFF102A42),
     ];
     final base = colors[_index.clamp(0, colors.length - 1)];
-    return Scaffold(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
       backgroundColor: const Color(0xFF08172D),
       body: AnimatedContainer(
         duration: const Duration(milliseconds: 420),
@@ -279,7 +282,18 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                     ),
                   )),
                 )),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
+                if (!facts.preview)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2, bottom: 6),
+                    child: Text(
+                      'Tài khoản: ${facts.displayName}  ·  Lịch lưu: ${_d(facts.syncedAt)} ${_hour(facts.syncedAt)}',
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      style: const TextStyle(color: Color(0xFFB6C9DB),
+                        fontSize: 10, letterSpacing: .1),
+                    ),
+                  ),
                 Expanded(child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () => _next(stories.length),
@@ -326,6 +340,7 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
               ]),
             ),
         ])),
+      ),
       ),
     );
   }
