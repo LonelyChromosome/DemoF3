@@ -300,6 +300,7 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                       key: ValueKey<int>(_index),
                       story: stories[_index],
                       index: _index,
+                      preview: facts.preview,
                     ),
                   ),
                 )),
@@ -483,9 +484,11 @@ List<_Story> _stories(RecapFacts f) {
 }
 
 class _StoryBody extends StatelessWidget {
-  const _StoryBody({required this.story, required this.index, super.key});
+  const _StoryBody({required this.story, required this.index,
+    required this.preview, super.key});
   final _Story story;
   final int index;
+  final bool preview;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -561,9 +564,9 @@ class _StoryBody extends StatelessWidget {
                     const Icon(Icons.stars_rounded,
                       size: 15, color: Color(0xFFCFB88A)),
                     const SizedBox(width: 8),
-                    const Expanded(child: Text(
-                      'TỪ LỊCH HỌC CỦA BẠN',
-                      style: TextStyle(color: Color(0xFFCCD8E6),
+                    Expanded(child: Text(
+                      preview ? 'DỮ LIỆU GIẢ LẬP · KIỂM THỬ' : 'TỪ LỊCH QLĐT ĐÃ XÁC MINH',
+                      style: const TextStyle(color: Color(0xFFCCD8E6),
                         fontSize: 10, letterSpacing: 1.2,
                         fontWeight: FontWeight.w700),
                     )),
@@ -595,48 +598,86 @@ class _StoryBody extends StatelessWidget {
 class RecapTestPanel extends StatelessWidget {
   const RecapTestPanel({
     required this.memoryVisible,
+    required this.hasRealAccount,
     required this.onToggleMemory,
     required this.onOpenActual,
     required this.onOpenScenario,
     super.key,
   });
   final bool memoryVisible;
+  final bool hasRealAccount;
   final VoidCallback onToggleMemory, onOpenActual;
   final ValueChanged<RecapScenario> onOpenScenario;
 
   @override
   Widget build(BuildContext context) => SafeArea(
     child: Padding(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
       child: ListView(
         shrinkWrap: true,
         children: [
-          const Text('RECAP · PANEL KIỂM THỬ',
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          const Text('Các tình huống dùng dữ liệu giả, không ghi đè dữ liệu học tập.'),
-          const SizedBox(height: 14),
-          FilledButton.icon(
-            onPressed: onOpenActual,
-            icon: const Icon(Icons.play_arrow_rounded),
-            label: const Text('Recap thật + đồng bộ nền'),
+          const Text('RECAP · BỘ ĐIỀU KHIỂN',
+            style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 7),
+          const Text('Chế độ thật và giả lập hoàn toàn tách biệt.'),
+          const SizedBox(height: 17),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: .55),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: .25)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(children: [
+                  Icon(Icons.verified_user_rounded, size: 21),
+                  SizedBox(width: 9),
+                  Text('01  ·  DỮ LIỆU QLĐT THẬT',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                ]),
+                const SizedBox(height: 10),
+                Text(hasRealAccount
+                  ? 'Đọc học kỳ đã xác minh của tài khoản trên thiết bị này. Gọi Sync 1.7 trong lúc chạy VFX 2,8 giây.'
+                  : 'Chưa có học kỳ QLĐT đã xác minh trong bản APK thử nghiệm. Cần đăng nhập và đồng bộ tại đây trước.'),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: hasRealAccount ? onOpenActual : null,
+                    icon: const Icon(Icons.play_arrow_rounded),
+                    label: const Text('Mở Recap thật'),
+                  ),
+                ),
+              ],
+            ),
           ),
+          const SizedBox(height: 12),
           SwitchListTile(
-            value: memoryVisible,
             title: const Text('Hiện nút Memory'),
-            subtitle: const Text('Bật/tắt biểu tượng góc trái'),
+            subtitle: const Text('Chỉ ép hiển thị icon; không giả dữ liệu Recap thật'),
+            value: memoryVisible,
             onChanged: (_) => onToggleMemory(),
           ),
+          const SizedBox(height: 10),
           const Divider(),
-          const Text('KỊCH BẢN THỬ NGHIỆM',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-          for (final scenario in RecapScenario.values)
-            ListTile(
-              dense: true,
-              title: Text(scenario.label),
-              trailing: const Icon(Icons.chevron_right_rounded),
-              onTap: () => onOpenScenario(scenario),
-            ),
+          ExpansionTile(
+            initiallyExpanded: false,
+            leading: const Icon(Icons.science_outlined),
+            title: const Text('02  ·  KỊCH BẢN GIẢ LẬP',
+              style: TextStyle(fontWeight: FontWeight.w800)),
+            subtitle: const Text('Chỉ để kiểm thử thiết kế và lời dẫn. Không lấy QLĐT.'),
+            children: [
+              for (final scenario in RecapScenario.values)
+                ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.bug_report_outlined, size: 18),
+                  title: Text(scenario.label),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => onOpenScenario(scenario),
+                ),
+            ],
+          ),
         ],
       ),
     ),
