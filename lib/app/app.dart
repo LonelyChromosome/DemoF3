@@ -3941,7 +3941,9 @@ class _ScheduleCard extends StatelessWidget {
                   Row(
                     children: <Widget>[
                       Expanded(child: _MetaLine(
-                        icon: Icons.location_on_outlined, text: item.room,
+                        icon: Icons.location_on_outlined,
+                        text: item.room,
+                        maxLines: attendance == null ? null : 1,
                       )),
                       if (attendance != null) ...<Widget>[
                         const SizedBox(width: 5),
@@ -5106,10 +5108,11 @@ Color _contrastForeground(Color background) =>
     : Colors.white;
 
 class _MetaLine extends StatelessWidget {
-  const new({required this.icon, required this.text});
+  const new({required this.icon, required this.text, this.maxLines});
 
   final IconData icon;
   final String text;
+  final int? maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -5128,6 +5131,8 @@ class _MetaLine extends StatelessWidget {
         Expanded(
           child: Text(
             text,
+            maxLines: maxLines,
+            overflow: maxLines == null ? null : TextOverflow.ellipsis,
             style: TextStyle(color: palette.textSecondary, fontSize: 12),
           ),
         ),
