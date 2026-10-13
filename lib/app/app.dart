@@ -395,41 +395,44 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   Future<RecapFacts> _loadRecap(RecapScenario? scenario) async {
-    // Explicit test scenarios are isolated: no QLDT read, no account writes.
+    // The control panel's fake cases never touch QLDT or persistence.
     if (scenario != null) {
       await Future<void>.delayed(const Duration(milliseconds: 2800));
       return RecapFixtures.build(scenario, DateTime.now());
     }
 
-    // A real Recap must NEVER fall back to fabricated fixture data.
+    // Snapshot the latest VERIFIED current semester before triggering the
+    // native request. _data may also include a previous retained semester,
+    // which must never be counted in this term's Recap.
     final initial = await CurrentSemesterStore().read();
     if (initial == null || _data == null ||
         _data!.displayName.trim().isEmpty) {
-      throw StateError('Đăng nhập QLĐT và đồng bộ lịch học trước khi xem Recap thật.');
+      throw StateError(
+        'Đăng nhập QLĐT và đồng bộ học kỳ trong bản APK này để xem Recap thật.',
+      );
     }
+    final initialAttendance = Map<String, AttendanceSummary>.of(_attendance);
 
-    // Native 1.7 pull reads the verified QLDT session. Start during VFX;
-    // never block slides on network/session-ready timeout.
+    // Existing native QLDT transport; a session timeout must not stop the VFX.
     unawaited(_runPullSync(silent: true));
     await Future<void>.delayed(const Duration(milliseconds: 2800));
 
-    // Take ONE consistent local snapshot, after any sync completed in time.
-    // _data and _attendance change only when 1.7 fully commits a verified
-    // response. A still-running sync can update the next Recap, not this one.
-    final data = _data;
-    if (data == null || data.displayName.trim().isEmpty) {
-      throw StateError('Không có lịch học QLĐT đã xác minh trên thiết bị.');
-    }
-    final attendance = Map<String, AttendanceSummary>.of(_attendance);
-    final semester = await CurrentSemesterStore().read();
-    final sameSnapshot = semester != null &&
-        semester.syncedAt == data.syncedAt &&
-        semester.displayName.trim() == data.displayName.trim();
+    // Use the newly VERIFIED, atomically committed semester + attendance
+    // only if the native 1.7 transaction completed during the intro.
+    // Otherwise freeze the initial known-good real QLDT snapshot. No fake.
+    final latest = await CurrentSemesterStore().read();
+    final updated = latest != null &&
+        latest.syncedAt.isAfter(initial.syncedAt) &&
+        !_inlineCommitting;
+    final semester = updated ? latest : initial;
+    final attendance = updated
+        ? Map<String, AttendanceSummary>.of(_attendance)
+        : initialAttendance;
     return RecapFacts.calculate(
-      data,
+      semester!.toImportedScheduleData(),
       attendance: attendance,
       now: DateTime.now(),
-      registeredSubjects: sameSnapshot ? semester.subjects.length : null,
+      registeredSubjects: semester.subjects.length,
     );
   }
 
