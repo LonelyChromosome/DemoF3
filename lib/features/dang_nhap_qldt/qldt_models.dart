@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
+import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/attendance_lesson_classifier.dart';
 import 'package:html/parser.dart' as html_parser;
 
 final class ScheduleRecord {
@@ -198,7 +199,11 @@ final class QldtParser {
   }
 
   ScheduleRecord? _parseRecord(Map<String, dynamic> item) {
-    final subjectName = subjectDisplayName(_string(item['TENHOCPHAN']));
+    // Capture original component codes BEFORE subjectDisplayName removes its
+    // QLĐT suffix. This metadata never changes timetable matching/identity.
+    final rawSubjectName = _string(item['TENHOCPHAN']);
+    final rawClassName = _string(item['TENLOPHOCPHAN']);
+    final subjectName = subjectDisplayName(rawSubjectName);
     final dateText = _string(item['NGAYHOC']);
     if (subjectName.isEmpty || dateText.isEmpty) {
       return null;
@@ -234,7 +239,7 @@ final class QldtParser {
     final room = isExam
         ? _firstNonEmpty(<Object?>[item['PHONGHOC_TEN'], item['PHONGTHI']])
         : _firstNonEmpty(<Object?>[item['PHONGHOC_TEN'], item['TENPHONGHOC']]);
-    final className = _string(item['TENLOPHOCPHAN'])
+    final className = rawClassName
         .split(RegExp(r'<br\s*/?>', caseSensitive: false))
         .first
         .trim();
@@ -272,7 +277,12 @@ final class QldtParser {
       periodEnd: _int(item['TIETKETTHUC']),
       // Extraction is optional: a missing/malformed attendance field must
       // never invalidate an otherwise verified timetable row.
-      lessonKind: _optionalText(item['THUOCTINH_TEN']),
+      lessonKind: isExam ? null : AttendanceLessonClassifier.classify(
+        rawSubjectName: rawSubjectName,
+        rawClassName: rawClassName,
+        attribute: _optionalText(item['THUOCTINH_TEN']),
+        room: room,
+      ),
       attendanceStatus: _optionalText(item['THONGTINCHUYENCAN']),
       lessonPeriods: switch (_int(item['SOTIET'])) {
         final int value when value > 0 && value <= 20 => value,
