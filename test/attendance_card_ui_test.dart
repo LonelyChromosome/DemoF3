@@ -72,6 +72,81 @@ void main() {
     }
   });
 
+  testWidgets('day view tags only LT card when a subject has LT and ELN', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      final now = DateTime.now();
+      ScheduleRecord lesson(String label, String section, int hour) =>
+          ScheduleRecord(
+            id: section,
+            isExam: false,
+            subjectName: label,
+            className: section,
+            room: 'A6',
+            startAt: DateTime(now.year, now.month, now.day, hour),
+            endAt: DateTime(now.year, now.month, now.day, hour + 1),
+          );
+      const route = 'verified-mixed-lesson-account';
+      final schedule = ImportedScheduleData(
+        displayName: 'Sinh viên',
+        syncedAt: now,
+        records: [
+          lesson('Kỹ thuật phần mềm',
+              'Kỹ thuật phần mềm-1-1-26(COUR02.LT5)', 7),
+          lesson('Kỹ thuật phần mềm',
+              'Kỹ thuật phần mềm-1-1-26(COUR02).ELN', 9),
+          lesson('Lịch sử Đảng cộng sản Việt Nam',
+              'Lịch sử Đảng cộng sản Việt Nam-1-1-26(N02).ELN', 11),
+        ],
+      );
+      SharedPreferences.setMockInitialValues({
+        'better_phenikaa_snapshot_v1': schedule.encode(),
+        'better_phenikaa_qldt_registration_route_v1': route,
+        'better_phenikaa_attendance_v17': jsonEncode({
+          'schema': 3,
+          'route': route,
+          'counts': {
+            normalizeSubjectName('Kỹ thuật phần mềm'): {
+              'absentSessions': 1,
+              'totalTheorySessions': 5,
+            },
+            // Even if an older cache had an ELN-only badge, UI must reject it.
+            normalizeSubjectName('Lịch sử Đảng cộng sản Việt Nam'): {
+              'absentSessions': 0,
+              'totalTheorySessions': 15,
+            },
+          },
+        }),
+      });
+      await tester.pumpWidget(const BetterPhenikaaScheduleApp());
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+      expect(find.text('Đã nghỉ 1/1'), findsOneWidget);
+      expect(find.text('Đã nghỉ 0/3'), findsNothing);
+      await tester.tap(find.text('Theo tuần'));
+      await tester.pumpAndSettle();
+      final week = find.byType(WeekTimetable);
+      expect(week, findsOneWidget);
+      final tag = find.descendant(of: week, matching: find.text('Đã nghỉ 1/1'));
+      await tester.scrollUntilVisible(
+        tag,
+        100,
+        scrollable: find.descendant(
+          of: week,
+          matching: find.byType(Scrollable),
+        ).first,
+      );
+      expect(tag, findsOneWidget);
+      expect(find.descendant(of: week,
+        matching: find.text('Đã nghỉ 0/3')), findsNothing);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('unrelated account attendance never appears on a card', (
     tester,
   ) async {
