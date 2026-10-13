@@ -462,7 +462,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       if (attendanceRaw != null) {
         try {
           final cached = jsonDecode(attendanceRaw) as Map<String, dynamic>;
-          if (cached['route'] == prefs.getString(_routeKey) &&
+          final currentRoute = prefs.getString(_routeKey);
+          if (currentRoute != null &&
+              currentRoute.isNotEmpty &&
+              cached['route'] == currentRoute &&
               cached['counts'] is Map) {
             final counts = cached['counts'] as Map;
             _attendance = {
