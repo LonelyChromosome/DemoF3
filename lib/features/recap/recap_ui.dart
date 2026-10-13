@@ -128,7 +128,7 @@ class SemesterRecapPage extends StatefulWidget {
 
 class _SemesterRecapPageState extends State<SemesterRecapPage> {
   RecapFacts? _facts;
-  bool _failed = false;
+  String? _failure;
   int _index = 0;
 
   @override
@@ -141,72 +141,156 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
     try {
       final facts = await widget.load();
       if (mounted) setState(() => _facts = facts);
-    } on Object {
-      if (mounted) setState(() => _failed = true);
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() => _failure = error is StateError
+            ? error.message.toString()
+            : 'Không thể đọc dữ liệu QLĐT đã xác minh. Hãy đăng nhập và đồng bộ trong ứng dụng thử nghiệm.');
+      }
+    }
+  }
+
+  void _next(int count) {
+    if (_index >= count - 1) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() => _index++);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final facts = _facts;
-    final slides = facts == null ? <_Story>[] : _stories(facts);
-    const tones = <Color>[
-      Color(0xFF142354), Color(0xFF14425A), Color(0xFF203968),
-      Color(0xFF4A2B5F), Color(0xFF27415C), Color(0xFF39335A),
-      Color(0xFF244854), Color(0xFF2C375B), Color(0xFF52324A),
-      Color(0xFF2C3D5A), Color(0xFF162344),
+    final stories = facts == null ? const <_Story>[] : _stories(facts);
+    const colors = <Color>[
+      Color(0xFF0F2949), Color(0xFF122D47), Color(0xFF18354A),
+      Color(0xFF24304C), Color(0xFF17384A), Color(0xFF283650),
+      Color(0xFF273247), Color(0xFF1E3B48), Color(0xFF17314A),
+      Color(0xFF283549), Color(0xFF102A42),
     ];
-    final tone = tones[_index.clamp(0, tones.length - 1)];
+    final base = colors[_index.clamp(0, colors.length - 1)];
     return Scaffold(
-      backgroundColor: const Color(0xFF0A193A),
+      backgroundColor: const Color(0xFF08172D),
       body: AnimatedContainer(
         duration: const Duration(milliseconds: 420),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [tone, const Color(0xFF07132B)],
+            colors: [base, const Color(0xFF07142B)],
           ),
         ),
-        child: SafeArea(
-          child: Stack(children: [
-            Positioned.fill(child: IgnorePointer(
-              child: CustomPaint(painter: const _AmbientPainter()),
-            )),
-            if (facts == null && !_failed)
-              const Center(child: _LoadingMemory())
-            else if (_failed)
-              Center(child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Chưa thể mở hồi tưởng lúc này.',
-                    style: TextStyle(color: Colors.white, fontSize: 20)),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Đóng'),
+        child: SafeArea(child: Stack(children: [
+          Positioned.fill(child: IgnorePointer(
+            child: CustomPaint(painter: const _AmbientPainter()),
+          )),
+          if (facts == null && _failure == null)
+            const Center(child: _LoadingMemory())
+          else if (_failure != null)
+            Center(child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: _RecapPanel(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.lock_outline_rounded,
+                      color: Color(0xFFFFD58B), size: 32),
+                    const SizedBox(height: 17),
+                    const Text('Cần dữ liệu QLĐT thật',
+                      style: TextStyle(color: Colors.white,
+                        fontSize: 24, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 12),
+                    Text(_failure!, style: const TextStyle(
+                      color: Color(0xFFD4E0ED), fontSize: 15, height: 1.5)),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Trở về ứng dụng'),
+                    ),
+                  ],
+                ),
+              ),
+            ))
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(19, 14, 19, 14),
+              child: Column(children: [
+                Row(children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: facts!.preview
+                              ? const Color(0xFF5A3127)
+                              : const Color(0xFF143D48),
+                          border: Border.all(
+                            color: facts.preview
+                                ? const Color(0xFFEFAC7F)
+                                : const Color(0xFF8FE0C6),
+                            width: .8,
+                          ),
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8,
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(facts.preview ? Icons.science_outlined :
+                              Icons.verified_user_outlined,
+                              color: facts.preview ? const Color(0xFFFFCCB0)
+                                : const Color(0xFFA1EDD2), size: 15),
+                            const SizedBox(width: 7),
+                            Flexible(child: Text(
+                              facts.preview ? 'GIẢ LẬP · KHÔNG PHẢI QLĐT'
+                                : 'QLĐT · DỮ LIỆU THẬT',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: facts.preview
+                                  ? const Color(0xFFFFE1CD)
+                                  : const Color(0xFFC2F2DF),
+                                fontSize: 10, letterSpacing: .9,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            )),
+                          ]),
+                        ),
+                      ),
+                    ),
                   ),
-                ],
-              ))
-            else
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (_index == slides.length - 1) {
-                    Navigator.of(context).pop();
-                  } else {
-                    setState(() => _index++);
-                  }
-                },
-                child: SizedBox.expand(child: Padding(
-                  padding: const EdgeInsets.fromLTRB(28, 74, 28, 58),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    tooltip: 'Đóng Recap',
+                    icon: const Icon(Icons.close_rounded,
+                      color: Color(0xFFEAF0F6)),
+                  ),
+                ]),
+                const SizedBox(height: 14),
+                Row(children: List.generate(stories.length, (index) =>
+                  Expanded(child: Container(
+                    height: 4,
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: BoxDecoration(
+                      color: index <= _index ? const Color(0xFFFFD68C)
+                        : const Color(0xFF496078),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  )),
+                )),
+                const SizedBox(height: 12),
+                Expanded(child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _next(stories.length),
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 410),
+                    duration: const Duration(milliseconds: 380),
                     switchInCurve: Curves.easeOutCubic,
                     transitionBuilder: (child, animation) => FadeTransition(
                       opacity: animation,
                       child: SlideTransition(
                         position: Tween<Offset>(
-                          begin: const Offset(.06, .1),
+                          begin: const Offset(.045, .055),
                           end: Offset.zero,
                         ).animate(animation),
                         child: child,
@@ -214,68 +298,98 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                     ),
                     child: _StoryBody(
                       key: ValueKey<int>(_index),
-                      story: slides[_index],
+                      story: stories[_index],
+                      index: _index,
                     ),
                   ),
                 )),
-              ),
-            if (facts != null)
-              Positioned(
-                left: 22, right: 65, top: 27,
-                child: Row(
-                  children: List.generate(slides.length, (i) => Expanded(
-                    child: Container(
-                      height: 3,
-                      margin: const EdgeInsets.only(right: 4),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(4),
-                        color: i <= _index ? const Color(0xFFFFD888)
-                            : Colors.white.withValues(alpha: .2),
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Row(children: [
+                    Text('${_index + 1} / ${stories.length}',
+                      style: const TextStyle(color: Color(0xFFAFBCD0),
+                        fontWeight: FontWeight.w700, fontSize: 13)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => _next(stories.length),
+                      iconAlignment: IconAlignment.end,
+                      icon: const Icon(Icons.arrow_forward_rounded, size: 19),
+                      label: Text(_index == stories.length - 1
+                        ? 'Hoàn tất' : 'Tiếp tục'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFFFDEA0),
                       ),
                     ),
-                  )),
+                  ]),
                 ),
-              ),
-            Positioned(
-              top: 10, right: 11,
-              child: IconButton(
-                tooltip: 'Đóng Recap',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close_rounded, color: Colors.white70),
-              ),
+              ]),
             ),
-            if (facts != null)
-              Positioned(
-                left: 24, right: 24, bottom: 18,
-                child: Row(children: [
-                  Text('${_index + 1}/${slides.length}',
-                    style: const TextStyle(color: Colors.white60, fontSize: 12)),
-                  const Spacer(),
-                  Text(_index == slides.length - 1
-                      ? 'Chạm để hoàn tất' : 'Chạm để tiếp tục',
-                    style: const TextStyle(color: Colors.white60, fontSize: 12)),
-                ]),
-              ),
-          ]),
-        ),
+        ])),
       ),
     );
   }
 }
 
+/// Quiet architecture lines instead of large, inexpensive-looking circles.
 class _AmbientPainter extends CustomPainter {
   const _AmbientPainter();
   @override
   void paint(Canvas canvas, Size size) {
-    final p = Paint()..color = const Color(0xFFFFDF9F).withValues(alpha: .08);
-    canvas.drawCircle(Offset(size.width * .98, size.height * .22),
-      size.width * .5, p);
-    final q = Paint()..color = Colors.white.withValues(alpha: .025);
-    canvas.drawCircle(Offset(size.width * .04, size.height * .85),
-      size.width * .44, q);
+    final hairline = Paint()
+      ..color = const Color(0xFFB6CEE9).withValues(alpha: .035)
+      ..strokeWidth = 1;
+    for (var i = 0; i < 9; i++) {
+      final x = size.width * i / 8;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), hairline);
+    }
+    for (var i = 0; i < 15; i++) {
+      final y = size.height * i / 14;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), hairline);
+    }
+    final ornament = Paint()
+      ..color = const Color(0xFFFFD68C).withValues(alpha: .38);
+    for (final point in <Offset>[
+      Offset(size.width * .13, size.height * .10),
+      Offset(size.width * .87, size.height * .22),
+      Offset(size.width * .91, size.height * .78),
+    ]) {
+      canvas.drawCircle(point, 1.7, ornament);
+    }
   }
   @override
   bool shouldRepaint(_AmbientPainter old) => false;
+}
+
+class _RecapPanel extends StatelessWidget {
+  const _RecapPanel({required this.child, this.highlight = false});
+  final Widget child;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(23, 24, 23, 25),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: highlight
+          ? const [Color(0xFF254865), Color(0xFF172B49)]
+          : const [Color(0xED1B3451), Color(0xF214253F)],
+      ),
+      borderRadius: BorderRadius.circular(25),
+      border: Border.all(
+        color: highlight ? const Color(0xFFAD9365)
+          : const Color(0xFF486077),
+        width: highlight ? 1.3 : 1,
+      ),
+      boxShadow: const [
+        BoxShadow(color: Color(0x66040C1A),
+          blurRadius: 22, offset: Offset(0, 14)),
+      ],
+    ),
+    child: child,
+  );
 }
 
 class _LoadingMemory extends StatelessWidget {
@@ -369,33 +483,112 @@ List<_Story> _stories(RecapFacts f) {
 }
 
 class _StoryBody extends StatelessWidget {
-  const _StoryBody({required this.story, super.key});
+  const _StoryBody({required this.story, required this.index, super.key});
   final _Story story;
+  final int index;
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisAlignment: MainAxisAlignment.center,
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(story.eyebrow, style: const TextStyle(
-        letterSpacing: 2, fontSize: 12,
-        color: Color(0xFFFFD888), fontWeight: FontWeight.bold)),
-      const SizedBox(height: 27),
-      Text(story.heading, style: const TextStyle(
-        color: Colors.white, fontSize: 33, height: 1.15,
-        fontWeight: FontWeight.w800)),
-      const SizedBox(height: 32),
-      FittedBox(
-        alignment: Alignment.centerLeft,
-        fit: BoxFit.scaleDown,
-        child: Text(story.number, style: const TextStyle(
-          fontSize: 65, height: 1.05, fontWeight: FontWeight.w900,
-          color: Color(0xFFFFDF9F))),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: constraints.maxHeight),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Container(
+                width: 5, height: 31,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFD68C),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(child: Text(story.eyebrow,
+                style: const TextStyle(
+                  color: Color(0xFFFFD68C),
+                  fontSize: 12, letterSpacing: 2,
+                  fontWeight: FontWeight.w800,
+                ),
+              )),
+            ]),
+            const SizedBox(height: 18),
+            Text(story.heading, style: const TextStyle(
+              color: Color(0xFFF5F8FC), fontSize: 28,
+              height: 1.16, fontWeight: FontWeight.w800,
+            )),
+            const SizedBox(height: 24),
+            _RecapPanel(
+              highlight: true,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const Icon(Icons.auto_awesome_rounded,
+                      size: 17, color: Color(0xFFFFD68C)),
+                    const SizedBox(width: 9),
+                    const Text('DẤU ẤN HỌC KỲ',
+                      style: TextStyle(
+                        color: Color(0xFFE1C996), letterSpacing: 1.25,
+                        fontSize: 11, fontWeight: FontWeight.w800)),
+                    const Spacer(),
+                    Text('${(index + 1).toString().padLeft(2, '0')}',
+                      style: const TextStyle(color: Color(0xFFB6C8D9),
+                        fontSize: 13, fontWeight: FontWeight.w700)),
+                  ]),
+                  const SizedBox(height: 22),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(story.number,
+                        style: const TextStyle(
+                          fontSize: 66, height: 1.08,
+                          color: Color(0xFFFFDEA0),
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  Container(height: 1,
+                    color: const Color(0xFF8096A8).withValues(alpha: .35)),
+                  const SizedBox(height: 13),
+                  Row(children: [
+                    const Icon(Icons.stars_rounded,
+                      size: 15, color: Color(0xFFCFB88A)),
+                    const SizedBox(width: 8),
+                    const Expanded(child: Text(
+                      'TỪ LỊCH HỌC CỦA BẠN',
+                      style: TextStyle(color: Color(0xFFCCD8E6),
+                        fontSize: 10, letterSpacing: 1.2,
+                        fontWeight: FontWeight.w700),
+                    )),
+                  ]),
+                ],
+              ),
+            ),
+            const SizedBox(height: 13),
+            _RecapPanel(
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.menu_book_rounded,
+                    color: Color(0xFFE6C17F), size: 21),
+                  const SizedBox(width: 14),
+                  Expanded(child: Text(story.caption, style: const TextStyle(
+                    color: Color(0xFFDCE7EF), fontSize: 15,
+                    height: 1.55, fontWeight: FontWeight.w400,
+                  ))),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      const SizedBox(height: 25),
-      Text(story.caption, style: const TextStyle(
-        color: Colors.white70, fontSize: 17, height: 1.5)),
-    ],
+    ),
   );
 }
 
