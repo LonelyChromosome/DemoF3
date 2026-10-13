@@ -5,6 +5,7 @@ on:
     branches:
       - feature/1.7-attendance-pull-sync
       - feature/recap-1.7-vfx-panel
+      - fix/17-pull-session-coldstart
   workflow_dispatch:
     inputs:
       publish_preview:
@@ -69,28 +70,28 @@ jobs:
           src = manifest.read_text()
           original = 'android:label="Better Phenikaa App"'
           assert src.count(original) == 1
-          manifest.write_text(src.replace(original, 'android:label="BPA Recap Test"'))
+          manifest.write_text(src.replace(original, 'android:label="BPA Pull Test"'))
           PY
       - name: Build ARM64 profile APK
         run: |
-          COOC_VERSION_NAME=cooc.1.7 flutter build apk --profile --target-platform android-arm64 --build-number=55 --build-name=1.7.3
+          COOC_VERSION_NAME=cooc.1.7 flutter build apk --profile --target-platform android-arm64 --build-number=56 --build-name=1.7.4
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Recap-Session-v55.apk
-          sha256sum dist/BPA-1.7-Recap-Session-v55.apk > dist/SHA256SUMS
+          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Pull-Coldstart-v56.apk
+          sha256sum dist/BPA-1.7-Pull-Coldstart-v56.apk > dist/SHA256SUMS
       - name: Assert standalone install package
         run: |
           set -euo pipefail
-          APK=dist/BPA-1.7-Recap-Session-v55.apk
+          APK=dist/BPA-1.7-Pull-Coldstart-v56.apk
           aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
           signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
           "$signer" verify "$APK"
-          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.recaptest' versionCode='55' versionName='cooc.1.7'"
-          "$aapt_bin" dump badging "$APK" | grep -F "application-label:'BPA Recap Test'"
+          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.recaptest' versionCode='56' versionName='cooc.1.7'"
+          "$aapt_bin" dump badging "$APK" | grep -F "application-label:'BPA Pull Test'"
       - uses: actions/upload-artifact@v4
         with:
-          name: BPA-1.7-Recap-Session-v55
+          name: BPA-1.7-Pull-Coldstart-v56
           path: |
-            dist/BPA-1.7-Recap-Session-v55.apk
+            dist/BPA-1.7-Pull-Coldstart-v56.apk
             dist/SHA256SUMS
           retention-days: 14
       - name: Publish separate 1.7 preview (not production updater)
@@ -107,12 +108,12 @@ jobs:
           - Số buổi nghỉ
           - Fix lỗi
 
-          Tên ứng dụng: BPA Recap Test.
+          Tên ứng dụng: BPA Pull Test.
           Package riêng: vn.edu.phenikaa.better_phenikaa_schedule.recaptest.
           KHÔNG ghi đè BPA 1.6. Không thuộc kênh cập nhật chính.
           NOTES
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release already exists for exactly this commit: $tag"
           else
-            gh release create "$tag"               dist/BPA-1.7-Recap-Session-v55.apk dist/SHA256SUMS               --target "$GITHUB_SHA"               --title "BPA 1.7 Parallel Preview (${GITHUB_SHA:0:7})"               --notes-file dist/RELEASE_NOTES.md               --prerelease --latest=false
+            gh release create "$tag"               dist/BPA-1.7-Pull-Coldstart-v56.apk dist/SHA256SUMS               --target "$GITHUB_SHA"               --title "BPA 1.7 Parallel Preview (${GITHUB_SHA:0:7})"               --notes-file dist/RELEASE_NOTES.md               --prerelease --latest=false
           fi
