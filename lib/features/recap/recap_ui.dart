@@ -146,7 +146,7 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
       if (mounted) {
         setState(() => _failure = error is StateError
             ? error.message.toString()
-            : 'Không thể đọc dữ liệu QLĐT đã xác minh. Hãy đăng nhập và đồng bộ trong ứng dụng thử nghiệm.');
+            : 'Chưa thể mở Recap. Vui lòng thử đồng bộ lại.');
       }
     }
   }
@@ -206,7 +206,7 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                     const Icon(Icons.lock_outline_rounded,
                       color: Color(0xFFFFD58B), size: 32),
                     const SizedBox(height: 17),
-                    const Text('Cần dữ liệu QLĐT thật',
+                    const Text('Chưa có lịch học',
                       style: TextStyle(color: Colors.white,
                         fontSize: 24, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 12),
@@ -818,7 +818,7 @@ class RecapTestPanel extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: hasRealAccount ? onOpenActual : null,
                     icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Mở Recap thật'),
+                    label: const Text('Xem Recap'),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -827,7 +827,7 @@ class RecapTestPanel extends StatelessWidget {
                   child: OutlinedButton.icon(
                     onPressed: hasRealAccount ? onTestPull : null,
                     icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Thử Pull Reload 1.7'),
+                    label: const Text('Thử đồng bộ'),
                   ),
                 ),
 

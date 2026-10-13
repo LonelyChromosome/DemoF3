@@ -73,24 +73,24 @@ jobs:
           PY
       - name: Build ARM64 profile APK
         run: |
-          COOC_VERSION_NAME=cooc.1.7 flutter build apk --profile --target-platform android-arm64 --build-number=54 --build-name=1.7.2 --dart-define=BPA_RECAP_TEST_PANEL=true
+          COOC_VERSION_NAME=cooc.1.7 flutter build apk --profile --target-platform android-arm64 --build-number=55 --build-name=1.7.3 --dart-define=BPA_RECAP_TEST_PANEL=true
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Recap-Test.apk
-          sha256sum dist/BPA-1.7-Recap-Test.apk > dist/SHA256SUMS
+          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Recap-Session-v55.apk
+          sha256sum dist/BPA-1.7-Recap-Session-v55.apk > dist/SHA256SUMS
       - name: Assert standalone install package
         run: |
           set -euo pipefail
-          APK=dist/BPA-1.7-Recap-Test.apk
+          APK=dist/BPA-1.7-Recap-Session-v55.apk
           aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
           signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
           "$signer" verify "$APK"
-          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.recaptest' versionCode='54' versionName='cooc.1.7'"
+          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.recaptest' versionCode='55' versionName='cooc.1.7'"
           "$aapt_bin" dump badging "$APK" | grep -F "application-label:'BPA Recap Test'"
       - uses: actions/upload-artifact@v4
         with:
-          name: BPA-1.7-Recap-Test
+          name: BPA-1.7-Recap-Session-v55
           path: |
-            dist/BPA-1.7-Recap-Test.apk
+            dist/BPA-1.7-Recap-Session-v55.apk
             dist/SHA256SUMS
           retention-days: 14
       - name: Publish separate 1.7 preview (not production updater)
@@ -114,5 +114,5 @@ jobs:
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release already exists for exactly this commit: $tag"
           else
-            gh release create "$tag"               dist/BPA-1.7-Recap-Test.apk dist/SHA256SUMS               --target "$GITHUB_SHA"               --title "BPA 1.7 Parallel Preview (${GITHUB_SHA:0:7})"               --notes-file dist/RELEASE_NOTES.md               --prerelease --latest=false
+            gh release create "$tag"               dist/BPA-1.7-Recap-Session-v55.apk dist/SHA256SUMS               --target "$GITHUB_SHA"               --title "BPA 1.7 Parallel Preview (${GITHUB_SHA:0:7})"               --notes-file dist/RELEASE_NOTES.md               --prerelease --latest=false
           fi
