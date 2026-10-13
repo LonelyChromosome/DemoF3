@@ -3865,6 +3865,11 @@ class _ScheduleCard extends StatelessWidget {
                         const SizedBox(width: 5),
                         AttendanceTag(summary: attendance!),
                       ],
+                      // 1.6 keeps its 44px alarm button overlaid at right: 21.
+                      // Reserve that hit area on this row without moving the
+                      // button or shrinking the other study-card metadata.
+                      if (attendance != null)
+                        const SizedBox(width: 64),
                     ],
                   ),
                 ],

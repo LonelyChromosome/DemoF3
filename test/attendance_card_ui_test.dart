@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:better_phenikaa_schedule/app/app.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/attendance_tag.dart';
+import 'package:better_phenikaa_schedule/features/lich_hoc/study_alarm_card.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/week_timetable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -49,6 +51,19 @@ void main() {
       await tester.pump(const Duration(milliseconds: 700));
       await tester.pumpAndSettle();
       expect(find.text('Đã nghỉ 2/1'), findsWidgets);
+      // Regression: in day mode the badge must stay left of the original
+      // overlay alarm button (right: 21, size: 44), with at least 8px gap.
+      final dayCard = find.byType(StudyAlarmCard).first;
+      final dayBadge = find.descendant(
+        of: dayCard,
+        matching: find.byType(AttendanceTag),
+      );
+      expect(dayBadge, findsOneWidget);
+      expect(
+        tester.getRect(dayBadge).right,
+        lessThanOrEqualTo(tester.getRect(dayCard).right - 21 - 44 - 8),
+        reason: 'The attendance badge must not cover the 1.6 alarm control.',
+      );
       await tester.tap(find.text('Theo tuần'));
       await tester.pumpAndSettle();
       final week = find.byType(WeekTimetable);
