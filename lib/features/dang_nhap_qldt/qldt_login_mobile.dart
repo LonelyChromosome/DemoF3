@@ -194,6 +194,7 @@ Future<void> _saveQldtAccountDisplayName(String name) async {
  * route disposal. A later pull attaches this SAME platform WebView, not a
  * newly loaded QLDT page. The OS can still reclaim it after process death. */
 InAppWebViewKeepAlive? _retainedQldtView;
+bool _retainedQldtPortalReady = false;
 String? _inlineQldtFailure;
 VoidCallback? _abortActiveInlineSync;
 
@@ -215,6 +216,7 @@ Future<void> clearQldtSession() async {
   cancelQldtInlineSync();
   final retained = _retainedQldtView;
   _retainedQldtView = null;
+  _retainedQldtPortalReady = false;
   if (retained != null) {
     try {
       await InAppWebViewController.disposeKeepAlive(retained);
@@ -403,7 +405,11 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
   Widget _buildPortalWebView() => InAppWebView(
                               keepAlive: widget.testHtml == null ? _retainedQldtView : null,
                               key: ValueKey<int>(_webViewGeneration),
-                              initialUrlRequest: widget.testHtml == null
+                              // With an authenticated keep-alive view, do
+                              // NOT navigate again: preserve window.edu and
+                              // the loaded QLDT JavaScript runtime.
+                              initialUrlRequest: widget.testHtml == null &&
+                                      (!widget.inlinePull || !_retainedQldtPortalReady)
                                   ? URLRequest(url: WebUri(_initialUrl))
                                   : null,
                               initialData: widget.testHtml == null
@@ -490,6 +496,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                                 }
                               },
                               onRenderProcessGone: (_, detail) {
+                                _retainedQldtPortalReady = false;
                                 if (widget.inlinePull) {
                                   _abortInlineSync('Tiến trình QLĐT đã bị hệ thống dừng.');
                                   return;
@@ -1344,6 +1351,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
       await WidgetsBinding.instance.endOfFrame;
       if (!mounted || epoch != _syncEpoch) return;
       _finalizingVerifiedResult = false;
+      if (widget.testHtml == null) _retainedQldtPortalReady = true;
       if (widget.inlinePull) {
         _inlineRouteClosing = true;
         _inlineOverallTimer?.cancel();
