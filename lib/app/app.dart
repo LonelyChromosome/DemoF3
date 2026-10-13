@@ -395,31 +395,41 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   Future<RecapFacts> _loadRecap(RecapScenario? scenario) async {
-    // Start exactly one existing 1.7 pull-sync transaction in the background.
-    // Do not await it, mutate its state, or introduce a second QLĐT session.
-    if (scenario == null && _data != null) {
-      unawaited(_runPullSync());
+    // Explicit test scenarios are isolated: no QLDT read, no account writes.
+    if (scenario != null) {
+      await Future<void>.delayed(const Duration(milliseconds: 2800));
+      return RecapFixtures.build(scenario, DateTime.now());
     }
-    // This deliberately visible loading VFX is independent of network speed.
+
+    // A real Recap must NEVER fall back to fabricated fixture data.
+    final initial = await CurrentSemesterStore().read();
+    if (initial == null || _data == null ||
+        _data!.displayName.trim().isEmpty) {
+      throw StateError('Đăng nhập QLĐT và đồng bộ lịch học trước khi xem Recap thật.');
+    }
+
+    // Native 1.7 pull reads the verified QLDT session. Start during VFX;
+    // never block slides on network/session-ready timeout.
+    unawaited(_runPullSync(silent: true));
     await Future<void>.delayed(const Duration(milliseconds: 2800));
-    if (scenario != null) return RecapFixtures.build(scenario, DateTime.now());
-    final semester = await CurrentSemesterStore().read();
-    final data = semester?.toImportedScheduleData() ?? _data;
-    if (data == null) {
-      return RecapFacts.calculate(
-        ImportedScheduleData(
-          displayName: '', records: const [], syncedAt: DateTime.now(),
-        ),
-        attendance: const {}, now: DateTime.now(),
-        registeredSubjects: 0,
-      );
+
+    // Take ONE consistent local snapshot, after any sync completed in time.
+    // _data and _attendance change only when 1.7 fully commits a verified
+    // response. A still-running sync can update the next Recap, not this one.
+    final data = _data;
+    if (data == null || data.displayName.trim().isEmpty) {
+      throw StateError('Không có lịch học QLĐT đã xác minh trên thiết bị.');
     }
-    // Attendance in the 1.7 cache is verified for reported absence counts,
-    // but a 0 does not prove every past class was attended.
+    final attendance = Map<String, AttendanceSummary>.of(_attendance);
+    final semester = await CurrentSemesterStore().read();
+    final sameSnapshot = semester != null &&
+        semester.syncedAt == data.syncedAt &&
+        semester.displayName.trim() == data.displayName.trim();
     return RecapFacts.calculate(
-      data, attendance: Map<String, AttendanceSummary>.of(_attendance),
+      data,
+      attendance: attendance,
       now: DateTime.now(),
-      registeredSubjects: semester?.subjects.length,
+      registeredSubjects: sameSnapshot ? semester.subjects.length : null,
     );
   }
 
@@ -975,7 +985,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _runPullSync() async {
+  Future<void> _runPullSync({bool silent = false}) async {
     if (!mounted || _data == null || _syncing || _inlineCommitting ||
         _inlineSyncPhase == PullSyncPhase.running ||
         _inlineSyncPhase == PullSyncPhase.cancellable) return;
@@ -1051,11 +1061,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
               : difference != null && difference.exams.hasChanges
                   ? AssistantEvent.examChanged
                   : AssistantEvent.syncSuccessNoChange;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text(AssistantText.of(event, _assistantPack)),
-        ));
+      if (!silent) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(
+            content: Text(AssistantText.of(event, _assistantPack)),
+          ));
+      }
     } on PlatformException catch (error) {
       if (!mounted || epoch != _inlineSyncEpoch) return;
       setState(() => _inlineSyncPhase = PullSyncPhase.failure);
@@ -1065,16 +1077,20 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       final display = reason.isEmpty
           ? AssistantText.of(AssistantEvent.syncFailed, _assistantPack)
           : 'Đồng bộ thất bại: $reason';
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(display)));
+      if (!silent) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(display)));
+      }
     } on Object {
       if (!mounted || epoch != _inlineSyncEpoch) return;
       setState(() => _inlineSyncPhase = PullSyncPhase.failure);
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content:
-            Text(AssistantText.of(AssistantEvent.syncFailed, _assistantPack))));
+      if (!silent) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content:
+              Text(AssistantText.of(AssistantEvent.syncFailed, _assistantPack))));
+      }
     } finally {
       _inlineSlowTimer?.cancel();
       _inlineCommitting = false;
