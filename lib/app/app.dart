@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:better_phenikaa_schedule/app/bpa_pen_trace_splash.dart';
 import 'package:better_phenikaa_schedule/features/app_update/update_controller.dart';
+import 'package:better_phenikaa_schedule/features/app_update/notification_changelog.dart';
 import 'package:better_phenikaa_schedule/features/app_update/update_ui.dart';
 
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/diagnostics/qldt_sync_diagnostics.dart';
@@ -1799,6 +1800,7 @@ class _MainShellState extends State<_MainShell>
                         onDetails: onShowDifferences,
                         assistantPack: assistantPack,
                         difference: latestDifference,
+                        appVersionName: appVersionName,
                       ),
                     ),
                   ),
@@ -2414,8 +2416,10 @@ class _NotificationCenterScreen extends StatelessWidget {
     required this.onDetails,
     required this.assistantPack,
     required this.difference,
+    required this.appVersionName,
   });
 
+  final String appVersionName;
   final bool hasActiveExamPeriod;
   final VoidCallback onBack;
   final VoidCallback onOpenExam;
@@ -2466,7 +2470,10 @@ class _NotificationCenterScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.only(bottom: 20),
               children: <Widget>[
-                _NotificationUpdateLogCard(palette: palette),
+                _NotificationUpdateLogCard(
+                  palette: palette,
+                  changelog: NotificationChangelog.forInstalledVersion(appVersionName),
+                ),
                 const SizedBox(height: 24),
                 if (hasActiveExamPeriod)
                   _NotificationExamCard(
@@ -2555,8 +2562,12 @@ class _NotificationCenterScreen extends StatelessWidget {
 
 /// Update reports occupy their own block, separate from exam reminders.
 class _NotificationUpdateLogCard extends StatelessWidget {
-  const _NotificationUpdateLogCard({required this.palette});
+  const _NotificationUpdateLogCard({
+    required this.palette,
+    required this.changelog,
+  });
   final AppThemePalette palette;
+  final NotificationChangelog changelog;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -2584,7 +2595,7 @@ class _NotificationUpdateLogCard extends StatelessWidget {
               ),
             ),
             Text(
-              'cooc1.6',
+              changelog.versionName,
               style: TextStyle(
                 color: palette.primary,
                 fontWeight: FontWeight.w800,
@@ -2593,7 +2604,7 @@ class _NotificationUpdateLogCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 14),
-        for (final line in const ['Bổ sung VFX', 'Báo thức', 'Fix lỗi vặt'])
+        for (final line in changelog.entries)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
             child: Row(

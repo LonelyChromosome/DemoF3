@@ -6,6 +6,7 @@ on:
       - feature/1.7-attendance-pull-sync
       - feature/recap-1.7-vfx-panel
       - fix/17-pull-session-coldstart
+      - fix/17-notification-update-log
   workflow_dispatch:
     inputs:
       publish_preview:
@@ -46,7 +47,8 @@ jobs:
       - name: Analyze and test Recap module
         run: |
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/features/recap/recap_data.dart lib/features/recap/recap_ui.dart lib/app/app.dart
-          flutter test test/semester_recap_test.dart test/recap_navigation_test.dart
+          flutter test test/semester_recap_test.dart test/recap_navigation_test.dart test/notification_changelog_test.dart
+          node tool/notification_changelog_contract.cjs
       - name: Exercise reload JS cached-route fallback and per-chunk retry
         run: node tool/inline_sync_js_regression.cjs
       - name: Verify retained authenticated QLDT WebView reattachment
