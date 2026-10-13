@@ -86,6 +86,53 @@ void main() {
     expect(counts[atbm]!.absentSessions, 0);
   });
 
+  test('ELN-only has no badge; mixed LT and ELN show tag on LT only', () {
+    final course = normalizeSubjectName('Kỹ thuật phần mềm');
+    final all = <String, AttendanceSummary>{
+      course: const AttendanceSummary(
+        absentSessions: 1, totalTheorySessions: 5,
+      ),
+      normalizeSubjectName('Lịch sử Đảng cộng sản Việt Nam'):
+          const AttendanceSummary(
+            absentSessions: 0, totalTheorySessions: 15,
+          ),
+    };
+    ScheduleRecord card(String subject, String className, String room) =>
+        ScheduleRecord(
+          id: className,
+          isExam: false,
+          subjectName: subject,
+          className: className,
+          room: room,
+          startAt: DateTime(2026, 10, 13, 7),
+          endAt: DateTime(2026, 10, 13, 9),
+        );
+    final lt = card(
+      'Kỹ thuật phần mềm',
+      'Kỹ thuật phần mềm-1-1-26(COUR02.LT5)',
+      'A6',
+    );
+    final eLearning = card(
+      'Kỹ thuật phần mềm',
+      'Kỹ thuật phần mềm-1-1-26(COUR02).ELN',
+      'Elearning',
+    );
+    final onlyEln = card(
+      'Lịch sử Đảng cộng sản Việt Nam',
+      'Lịch sử Đảng cộng sản Việt Nam-1-1-26(N02).ELN',
+      'Elearning',
+    );
+    final th = card(
+      'An toàn và bảo mật thông tin',
+      'An toàn và bảo mật thông tin-1-1-26(N05.TH1)',
+      'A6',
+    );
+    expect(attendanceForStudyCard(lt, all), same(all[course]));
+    expect(attendanceForStudyCard(eLearning, all), isNull);
+    expect(attendanceForStudyCard(onlyEln, all), isNull);
+    expect(attendanceForStudyCard(th, all), isNull);
+  });
+
   test('20 percent is rounded UP per distinct enrolled LT class session', () {
     expect(const AttendanceSummary(absentSessions: 0,
       totalTheorySessions: 4).allowanceSessions, 1);
