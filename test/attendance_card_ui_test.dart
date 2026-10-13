@@ -36,7 +36,7 @@ void main() {
         'better_phenikaa_attendance_v17': jsonEncode({
           'route': accountRoute,
           'counts': {
-            'Lập trình cho thiết bị di động': {
+            'lập trình cho thiết bị di động': {
               'absentPeriods': 6,
               'theoryPeriods': 15,
             },
@@ -95,7 +95,7 @@ void main() {
         'better_phenikaa_attendance_v17': jsonEncode({
           'route': 'other-account',
           'counts': {
-            'Lập trình cho thiết bị di động': {
+            'lập trình cho thiết bị di động': {
               'absentPeriods': 6,
               'theoryPeriods': 15,
             },
