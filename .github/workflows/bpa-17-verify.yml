@@ -48,6 +48,8 @@ jobs:
           flutter test test/semester_recap_test.dart test/recap_navigation_test.dart
       - name: Exercise reload JS cached-route fallback and per-chunk retry
         run: node tool/inline_sync_js_regression.cjs
+      - name: Verify retained authenticated QLDT WebView reattachment
+        run: node tool/retained_webview_contract.cjs
       - name: Verify native attendance whitelist and existing semester verifier
         run: |
           cd android

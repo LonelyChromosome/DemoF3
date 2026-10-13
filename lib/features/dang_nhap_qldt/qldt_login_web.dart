@@ -21,7 +21,12 @@ Future<bool> isQldtFirstLoginSetupComplete() async => true;
 
 Future<void> markQldtFirstLoginSetupComplete() async {}
 
-Future<QldtLoginResult?> openQldtLogin(BuildContext context) {
+bool cancelQldtInlineSync() => false;
+String? takeQldtInlineSyncError() => null;
+
+Future<QldtLoginResult?> openQldtLogin(BuildContext context, {
+  bool inlinePull = false,
+}) {
   return showDialog<QldtLoginResult>(
     context: context,
     barrierDismissible: false,
