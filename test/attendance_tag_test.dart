@@ -33,7 +33,7 @@ void main() {
   });
 
   final it = normalizeSubjectName('An toàn và bảo mật thông tin');
-  const theory30 = {'an toàn và bảo mật thông tin': 30.0};
+  final theory30 = <String, double>{it: 30.0};
 
   test('official allocations parse LT only, including fraction and order', () {
     expect(AttendanceSummary.officialTheoryPeriods('LT(22.5),TH(15)'), 22.5);
