@@ -74,6 +74,112 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
   }
 }
 
+/// Standalone BPA 1.7 screenshot/overlap check.
+/// Reuses the production timetable and card, with no QLDT or Clock actions.
+class BpaFakeAttendanceAlarmApp extends StatefulWidget {
+  const BpaFakeAttendanceAlarmApp({super.key});
+
+  @override
+  State<BpaFakeAttendanceAlarmApp> createState() =>
+      _BpaFakeAttendanceAlarmAppState();
+}
+
+class _BpaFakeAttendanceAlarmAppState
+    extends State<BpaFakeAttendanceAlarmApp> {
+  late final DateTime _lessonStart;
+  late final ImportedScheduleData _fixture;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    // Remains within 24 hours even across midnight, so the untouched
+    // production StudyAlarmCard always paints its original alarm icon.
+    _lessonStart = now.add(const Duration(hours: 2));
+    _fixture = ImportedScheduleData(
+      displayName: 'BPA 1.7 UI',
+      syncedAt: now,
+      source: 'fake_layout_only',
+      records: <ScheduleRecord>[
+        ScheduleRecord(
+          id: 'bpa17-layout-only-study-card',
+          isExam: false,
+          subjectName: 'Thiết kế web nâng cao',
+          className: 'Thiết kế web nâng cao-1-1-26(N07)',
+          lessonKind: 'LT',
+          room: 'A6-203',
+          startAt: _lessonStart,
+          endAt: _lessonStart.add(const Duration(hours: 2)),
+          periodStart: 1,
+          periodEnd: 3,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = appThemePalette;
+    return MaterialApp(
+      title: 'BPA 1.7 Layout Test',
+      debugShowCheckedModeBanner: false,
+      theme: buildBetterTheme(palette),
+      home: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: AppThemeBackdrop(
+          child: SafeArea(
+            child: _PhoneSurface(
+              // This APK is a visual check only. Even alarm taps, pull sync,
+              // day/week tabs and navigation are intentionally disabled.
+              child: IgnorePointer(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    _TimetableScreen(
+                      data: _fixture,
+                      attendance: <String, AttendanceSummary>{
+                        normalizeSubjectName('Thiết kế web nâng cao'):
+                            const AttendanceSummary(
+                          absentSessions: 0,
+                          totalTheorySessions: 15,
+                        ),
+                      },
+                      pullSyncPhase: PullSyncPhase.idle,
+                      onPullSync: () {},
+                      onCancelPullSync: () {},
+                      assistantPack: AssistantPack.normal,
+                      selectedDate: _lessonStart,
+                      onDateChanged: (_) {},
+                      unreadDifference: false,
+                      hasActiveExamPeriod: false,
+                      onOpenDifferences: () {},
+                      hasUpdateAvailable: false,
+                      onOpenUpdateAccount: () {},
+                    ),
+                    Positioned(
+                      right: 22,
+                      bottom: 28,
+                      child: FloatingActionButton(
+                        heroTag: 'fake-control-panel',
+                        onPressed: () {},
+                        backgroundColor: palette.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 8,
+                        shape: themeButtonShape(palette),
+                        child: const Icon(Icons.grid_view_rounded),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 enum _AppPage { timetable, exam, account, notifications }
 
 class _AppRoot extends StatefulWidget {
