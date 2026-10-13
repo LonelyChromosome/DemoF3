@@ -331,23 +331,36 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                 Padding(
                   padding: const EdgeInsets.only(top: 13, bottom: 4),
                   child: Row(children: [
-                    const Icon(Icons.chevron_left_rounded,
-                      color: Color(0xFFFFDEA0), size: 21),
-                    const Text('Chạm trái · Lùi', style: TextStyle(
-                      color: Color(0xFFCDD9E6), fontSize: 11,
-                      fontWeight: FontWeight.w600)),
-                    const Spacer(),
-                    Text('${_index + 1} / ${stories.length}',
-                      style: const TextStyle(color: Color(0xFFFFD28C),
-                        fontWeight: FontWeight.w900, fontSize: 12)),
-                    const Spacer(),
-                    Text(_index == stories.length - 1
-                        ? 'Phải · Kết thúc' : 'Phải · Tiến',
-                      style: const TextStyle(
-                        color: Color(0xFFCDD9E6), fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-                    const Icon(Icons.chevron_right_rounded,
-                      color: Color(0xFFFFDEA0), size: 21),
+                    const Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text('‹  TRÁI · LÙI',
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Color(0xFFCDD9E6), fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('${_index + 1} / ${stories.length}',
+                        style: const TextStyle(
+                          color: Color(0xFFFFD28C),
+                          fontWeight: FontWeight.w900, fontSize: 12)),
+                    ),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          _index == stories.length - 1
+                            ? 'PHẢI · KẾT THÚC  ›' : 'PHẢI · TIẾN  ›',
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.end,
+                          style: const TextStyle(
+                            color: Color(0xFFCDD9E6), fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                      ),
+                    ),
                   ]),
                 ),
               ]),
