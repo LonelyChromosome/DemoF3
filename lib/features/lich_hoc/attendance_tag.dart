@@ -203,7 +203,7 @@ String _attendanceRowId(Map row) {
   if (verifiedId != null && verifiedId.isNotEmpty) return verifiedId;
   final subject = row['TENHOCPHAN']?.toString().trim() ?? '';
   final section = (row['TENLOPHOCPHAN']?.toString() ?? '')
-      .split(RegExp(r'<br\\s*/?>', caseSensitive: false)).first.trim();
+      .split(RegExp(r'<br\s*/?>', caseSensitive: false)).first.trim();
   final date = row['NGAYHOC']?.toString().trim() ?? '';
   final hour = int.tryParse(row['GIOBATDAU']?.toString() ?? '');
   final minute = int.tryParse(row['PHUTBATDAU']?.toString() ?? '');
@@ -229,7 +229,7 @@ int? _lessonPeriodCount(Map row) {
   // An explicit number inside a verified attendance status is a last-resort
   // source, not the count of rows downloaded from the timetable.
   final text = _attendanceStatus(row);
-  final match = text == null ? null : RegExp(r'\\((\\d+)\\)').firstMatch(text);
+  final match = text == null ? null : RegExp(r'\((\d+)\)').firstMatch(text);
   final periods = match == null ? null : int.tryParse(match[1]!);
   if (periods == null || periods <= 0 || periods > 20) return null;
   return periods;
@@ -240,7 +240,7 @@ String? _attendanceStatus(Map row) {
   if (direct != null && direct.isNotEmpty && direct != 'null') return direct;
   final raw = row['TENLOPHOCPHAN']?.toString() ?? '';
   final tag = RegExp(
-    r'<br\\s*/?>\\s*(Có mặt|Vắng mặt)\\s*(?:<br\\s*/?>|$)',
+    r'<br\s*/?>\s*(Có mặt|Vắng mặt)\s*(?:<br\s*/?>|$)',
     caseSensitive: false,
   ).firstMatch(raw);
   return tag?[1];
