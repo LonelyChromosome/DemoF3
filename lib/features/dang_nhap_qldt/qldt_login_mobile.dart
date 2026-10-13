@@ -517,7 +517,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
                                   });
                                 }
                               },
-                            ),;
+                            );
 
   @override
   Widget build(BuildContext context) {

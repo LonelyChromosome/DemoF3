@@ -98,7 +98,6 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _syncing = false;
   bool _panelOpen = false;
   static const _attendanceStorageKey = 'better_phenikaa_attendance_v17';
-  static const _inlineSyncChannel = MethodChannel('better_phenikaa/inline_sync');
   Map<String, AttendanceSummary> _attendance = const {};
   Set<String> _practiceIds = const <String>{};
   String? _attendanceRoute;
@@ -898,15 +897,19 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       }
     });
     try {
-      final reply = await _inlineSyncChannel.invokeMapMethod<String, String>('run');
+      // 1.7 now reattaches the native login WebView instead of creating a
+      // HeadlessQldtSync. Use original TracuuApi / QldtParser / verifier.
+      final imported = await openQldtLogin(context, inlinePull: true);
       if (!mounted || epoch != _inlineSyncEpoch) return;
-      if (reply == null || reply['schedule'] == null || reply['semester'] == null) {
-        throw const FormatException('QLĐT chưa trả lịch đã xác minh.');
+      if (imported == null) {
+        throw StateError(takeQldtInlineSyncError() ??
+            'Phiên QLĐT không sẵn sàng, hãy đồng bộ lại qua Tài khoản.');
       }
-      final semester = CurrentSemester.fromJson(
-        Map<String, dynamic>.from(jsonDecode(reply['semester']!) as Map),
-      );
-      final schedule = ImportedScheduleData.decode(reply['schedule']!);
+      final semester = imported.semester;
+      if (semester == null) {
+        throw const FormatException('QLĐT chưa xác minh học kỳ.');
+      }
+      final schedule = imported.schedule;
       // A truncated empty response must NEVER replace a known-good semester.
       if (_data != null && _data!.records.isNotEmpty &&
           schedule.records.isEmpty) {
@@ -920,11 +923,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       // Cancellation never interrupts that transaction.
       _inlineCommitting = true;
       _inlineSlowTimer?.cancel();
-      final difference = await _save(QldtLoginResult(
-        schedule: schedule,
-        semester: semester,
-        registrationRoute: reply['registrationRoute'],
-      ));
+      final difference = await _save(imported);
       if (!mounted) return;
       final prefs = await SharedPreferences.getInstance();
       final snapshot = prefs.getString(_storageKey);
@@ -932,12 +931,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       final displayed = ImportedScheduleData.decode(snapshot);
       final route = prefs.getString(_routeKey);
       _attendanceRoute = route;
-      final attendance = AttendanceSummary.fromRawEnvelope(
-        reply['attendanceEnvelope'] ?? '',
-      );
-      final practiceIds = practiceCardIdsFromVerifiedEnvelope(
-        reply['attendanceEnvelope'] ?? '',
-      );
+      final attendance = AttendanceSummary.fromVerifiedSchedule(imported.schedule);
+      final practiceIds = practiceCardIdsFromVerifiedSchedule(imported.schedule);
       if (!mounted) return;
       setState(() {
         _data = displayed;
@@ -977,13 +972,18 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(display)));
-    } on Object {
+    } on Object catch (error) {
       if (!mounted || epoch != _inlineSyncEpoch) return;
       setState(() => _inlineSyncPhase = PullSyncPhase.failure);
+      // Never reveal QLDT session values in user-visible errors.
+      final details = error is StateError ? error.message?.toString() : null;
+      final message = details != null && details.isNotEmpty
+          ? details
+          : (takeQldtInlineSyncError() ??
+              AssistantText.of(AssistantEvent.syncFailed, _assistantPack));
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content:
-            Text(AssistantText.of(AssistantEvent.syncFailed, _assistantPack))));
+        ..showSnackBar(SnackBar(content: Text(message)));
     } finally {
       _inlineSlowTimer?.cancel();
       _inlineCommitting = false;
@@ -1010,11 +1010,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   Future<void> _sendPullCancellation() async {
-    try {
-      await _inlineSyncChannel.invokeMethod<void>('cancel');
-    } on Object {
-      // The epoch guard already rejects a late response.
-    }
+    // Cancel the active original-login sync without allocating a native worker.
+    cancelQldtInlineSync();
   }
 
   Future<void> _logout() async {

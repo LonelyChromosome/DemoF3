@@ -1,0 +1,90 @@
+name: BPA 1.7 - retained session test (no publish)
+
+on:
+  push:
+    branches:
+      - feature/1.7-session-reuse-pull
+  workflow_dispatch:
+    inputs:
+      publish_preview:
+        description: "Publish 1.7 preview release only after explicit approval"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bpa-17-session-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - name: Bootstrap Android
+        run: bash tool/bootstrap.sh
+      - name: Validate attendance and existing app UI
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/features/dang_nhap_qldt/attendance_lesson_classifier.dart lib/app/app.dart lib/features/dang_nhap_qldt/qldt_models.dart lib/features/dang_nhap_qldt/semester_data.dart lib/features/dang_nhap_qldt/tracuu_api.dart lib/features/dang_nhap_qldt/qldt_login_mobile.dart lib/features/lich_hoc/attendance_tag.dart lib/features/lich_hoc/pull_sync_indicator.dart lib/features/lich_hoc/week_timetable.dart
+          flutter test test/attendance_lesson_classifier_test.dart test/attendance_tag_test.dart test/attendance_card_ui_test.dart test/week_timetable_test.dart test/qldt_parser_test.dart test/tracuu_api_test.dart test/semester_data_test.dart test/semester_sync_test.dart test/semester_changes_test.dart test/semester_retention_test.dart
+          flutter test test/app_smoke_test.dart --plain-name 'stored schedule opens day and week views without changing navigation'
+      - name: Exercise reload JS cached-route fallback and per-chunk retry
+        run: node tool/inline_sync_js_regression.cjs
+      - name: Verify retained WebView sync contract
+        run: node tool/retained_webview_contract.cjs
+      - name: Verify native attendance whitelist and existing semester verifier
+        run: |
+          cd android
+          ./gradlew --no-daemon :app:testDebugUnitTest \
+            --tests 'vn.edu.phenikaa.better_phenikaa_schedule.BpaVerifiedAttendanceFilterTest' \
+            --tests 'vn.edu.phenikaa.better_phenikaa_schedule.NativeSemesterVerifierTest'
+      - name: Isolate package from installed production BPA
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/build.gradle.kts')
+          src = p.read_text()
+          original = 'applicationId = "vn.edu.phenikaa.better_phenikaa_schedule"'
+          assert src.count(original) == 1
+          p.write_text(src.replace(original, 'applicationId = "vn.edu.phenikaa.better_phenikaa_schedule.bpa17session"'))
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          src = manifest.read_text()
+          original = 'android:label="Better Phenikaa App"'
+          assert src.count(original) == 1
+          manifest.write_text(src.replace(original, 'android:label="BPA 1.7 Session Test"'))
+          PY
+      - name: Build ARM64 profile APK
+        run: |
+          COOC_VERSION_NAME=cooc.1.7.session flutter build apk --profile --target-platform android-arm64 --build-number=54 --build-name=1.7.0
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Session-Reuse-Test.apk
+          sha256sum dist/BPA-1.7-Session-Reuse-Test.apk > dist/SHA256SUMS
+      - name: Assert standalone install package
+        run: |
+          set -euo pipefail
+          APK=dist/BPA-1.7-Session-Reuse-Test.apk
+          aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
+          signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
+          "$signer" verify "$APK"
+          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.bpa17session' versionCode='52' versionName='cooc.1.7.session'"
+          "$aapt_bin" dump badging "$APK" | grep -F "application-label:'BPA 1.7 Session Test'"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BPA-1.7-Session-Reuse-Test
+          path: |
+            dist/BPA-1.7-Session-Reuse-Test.apk
+            dist/SHA256SUMS
+          retention-days: 14
