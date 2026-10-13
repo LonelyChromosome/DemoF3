@@ -107,7 +107,7 @@ class WeekTimetable extends StatelessWidget {
                 // Preserve 1.6 height for untagged rows; avoid clipping
                 // the fourth line on only the rows with attendance badges.
                 final containsBadge = records.any((record) =>
-                    attendance.containsKey(normalizeSubjectName(record.subjectName)));
+                    attendanceForStudyCard(record, attendance) != null);
                 final rowHeight = containsBadge ? 106.0 : 86.0;
                 final rowContent = Row(
                   children: <Widget>[
@@ -175,6 +175,7 @@ class WeekTimetable extends StatelessWidget {
                                   const SizedBox(width: 6),
                               itemBuilder: (context, index) {
                                 final row = records[index];
+                                final tag = attendanceForStudyCard(row, attendance);
                                 final content = Padding(
                                   padding: const EdgeInsets.fromLTRB(
                                     10,
@@ -221,10 +222,10 @@ class WeekTimetable extends StatelessWidget {
                                               : null,
                                         ),
                                       ),
-                                      if (attendance[normalizeSubjectName(row.subjectName)] != null) ...[
+                                      if (tag != null) ...[
                                         const SizedBox(height: 3),
                                         AttendanceTag(
-                                          summary: attendance[normalizeSubjectName(row.subjectName)]!,
+                                          summary: tag,
                                           compact: true,
                                         ),
                                       ],
