@@ -75,7 +75,7 @@ class RecapFacts {
       lastClass: classes.isEmpty ? null : (classes.toList()
         ..sort((a, b) => b.endAt.compareTo(a.endAt))).first,
       absence: absentEntries.isEmpty ? null
-          : absentEntries.fold(0, (int sum, e) => sum + e.value.absentSessions),
+          : absentEntries.fold<int>(0, (sum, e) => sum + e.value.absentSessions),
       mostAbsent: realMisses.isEmpty ? null
           : names[realMisses.first.key] ?? realMisses.first.key,
       clearSubjects: absentEntries.where((e) => e.value.absentSessions == 0)
