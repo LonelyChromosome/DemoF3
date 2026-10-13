@@ -34,6 +34,32 @@ void main() {
         'ELEARNING');
   });
 
+  test('QLDT HTML status and period range remain separate from clean class identity', () {
+    final item = <String, Object?>{
+      'PHANLOAI': 'LICHHOC',
+      'TENHOCPHAN': 'Môn Kỹ thuật phần mềm-1-1-26(COUR02)',
+      'TENLOPHOCPHAN': 'Kỹ thuật phần mềm-1-1-26(COUR02)<br>Vắng mặt<br>',
+      'NGAYHOC': '23/09/2026',
+      'GIOBATDAU': 7,
+      'PHUTBATDAU': 0,
+      'GIOKETTHUC': 9,
+      'PHUTKETTHUC': 0,
+      'TIETBATDAU': 1,
+      'TIETKETTHUC': 3,
+      'PHONGHOC_TEN': 'A1',
+    };
+    final parsed = const QldtParser().parseApiResponse({
+      'Success': true,
+      'Data': [item],
+    }, displayName: 'Sinh viên', strict: true).classes.single;
+    expect(parsed.subjectName, 'Kỹ thuật phần mềm');
+    expect(parsed.className, 'Kỹ thuật phần mềm-1-1-26(COUR02)');
+    expect(parsed.lessonKind, 'LT');
+    expect(parsed.attendanceStatus, 'Vắng mặt');
+    expect(parsed.lessonPeriods, 3);
+    expect(parsed.toJson().containsKey('attendanceStatus'), false);
+  });
+
   test('normal timetable identity stays byte-identical despite TH marker', () {
     Map<String, Object?> course(String rawName) => {
       'PHANLOAI': 'LICHHOC',
