@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/1.7-attendance-pull-sync
+      - feature/recap-1.7-vfx-panel
   workflow_dispatch:
     inputs:
       publish_preview:
@@ -41,6 +42,10 @@ jobs:
           flutter analyze --no-fatal-infos --no-fatal-warnings lib/features/dang_nhap_qldt/attendance_lesson_classifier.dart lib/app/app.dart lib/features/dang_nhap_qldt/qldt_models.dart lib/features/dang_nhap_qldt/semester_data.dart lib/features/dang_nhap_qldt/tracuu_api.dart lib/features/dang_nhap_qldt/qldt_login_mobile.dart lib/features/lich_hoc/attendance_tag.dart lib/features/lich_hoc/pull_sync_indicator.dart lib/features/lich_hoc/week_timetable.dart
           flutter test test/attendance_lesson_classifier_test.dart test/attendance_tag_test.dart test/attendance_card_ui_test.dart test/week_timetable_test.dart test/qldt_parser_test.dart test/tracuu_api_test.dart test/semester_data_test.dart test/semester_sync_test.dart test/semester_changes_test.dart test/semester_retention_test.dart
           flutter test test/app_smoke_test.dart --plain-name 'stored schedule opens day and week views without changing navigation'
+      - name: Analyze and test Recap module
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings lib/features/recap/recap_data.dart lib/features/recap/recap_ui.dart lib/app/app.dart
+          flutter test test/semester_recap_test.dart
       - name: Exercise reload JS cached-route fallback and per-chunk retry
         run: node tool/inline_sync_js_regression.cjs
       - name: Verify native attendance whitelist and existing semester verifier
@@ -57,33 +62,33 @@ jobs:
           src = p.read_text()
           original = 'applicationId = "vn.edu.phenikaa.better_phenikaa_schedule"'
           assert src.count(original) == 1
-          p.write_text(src.replace(original, 'applicationId = "vn.edu.phenikaa.better_phenikaa_schedule.bpa17test"'))
+          p.write_text(src.replace(original, 'applicationId = "vn.edu.phenikaa.better_phenikaa_schedule.recaptest"'))
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           src = manifest.read_text()
           original = 'android:label="Better Phenikaa App"'
           assert src.count(original) == 1
-          manifest.write_text(src.replace(original, 'android:label="BPA 1.7 Test"'))
+          manifest.write_text(src.replace(original, 'android:label="BPA Recap Test"'))
           PY
       - name: Build ARM64 profile APK
         run: |
-          COOC_VERSION_NAME=cooc.1.7 flutter build apk --profile --target-platform android-arm64 --build-number=52 --build-name=1.7.0
+          COOC_VERSION_NAME=cooc.1.7 flutter build apk --profile --target-platform android-arm64 --build-number=53 --build-name=1.7.1 --dart-define=BPA_RECAP_TEST_PANEL=true
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Pull-Test.apk
-          sha256sum dist/BPA-1.7-Pull-Test.apk > dist/SHA256SUMS
+          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-1.7-Recap-Test.apk
+          sha256sum dist/BPA-1.7-Recap-Test.apk > dist/SHA256SUMS
       - name: Assert standalone install package
         run: |
           set -euo pipefail
-          APK=dist/BPA-1.7-Pull-Test.apk
+          APK=dist/BPA-1.7-Recap-Test.apk
           aapt_bin="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -n 1)"
           signer="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -n 1)"
           "$signer" verify "$APK"
-          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.bpa17test' versionCode='52' versionName='cooc.1.7'"
-          "$aapt_bin" dump badging "$APK" | grep -F "application-label:'BPA 1.7 Test'"
+          "$aapt_bin" dump badging "$APK" | grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.recaptest' versionCode='53' versionName='cooc.1.7'"
+          "$aapt_bin" dump badging "$APK" | grep -F "application-label:'BPA Recap Test'"
       - uses: actions/upload-artifact@v4
         with:
-          name: BPA-1.7-Pull-Test
+          name: BPA-1.7-Recap-Test
           path: |
-            dist/BPA-1.7-Pull-Test.apk
+            dist/BPA-1.7-Recap-Test.apk
             dist/SHA256SUMS
           retention-days: 14
       - name: Publish separate 1.7 preview (not production updater)
@@ -100,12 +105,12 @@ jobs:
           - Số buổi nghỉ
           - Fix lỗi
 
-          Tên ứng dụng: BPA 1.7 Test.
-          Package riêng: vn.edu.phenikaa.better_phenikaa_schedule.bpa17test.
+          Tên ứng dụng: BPA Recap Test.
+          Package riêng: vn.edu.phenikaa.better_phenikaa_schedule.recaptest.
           KHÔNG ghi đè BPA 1.6. Không thuộc kênh cập nhật chính.
           NOTES
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release already exists for exactly this commit: $tag"
           else
-            gh release create "$tag"               dist/BPA-1.7-Pull-Test.apk dist/SHA256SUMS               --target "$GITHUB_SHA"               --title "BPA 1.7 Parallel Preview (${GITHUB_SHA:0:7})"               --notes-file dist/RELEASE_NOTES.md               --prerelease --latest=false
+            gh release create "$tag"               dist/BPA-1.7-Recap-Test.apk dist/SHA256SUMS               --target "$GITHUB_SHA"               --title "BPA 1.7 Parallel Preview (${GITHUB_SHA:0:7})"               --notes-file dist/RELEASE_NOTES.md               --prerelease --latest=false
           fi
