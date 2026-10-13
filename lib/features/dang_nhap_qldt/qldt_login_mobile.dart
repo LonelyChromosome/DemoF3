@@ -1215,6 +1215,7 @@ class _QldtWebLoginScreenState extends State<_QldtWebLoginScreen>
         termStartedAt: SemesterScheduleRange.fromRegistration(registration)
             ?.start,
         attendanceEnvelope: _pendingAttendanceEnvelope,
+        attendanceProgramId: registration.programId,
       );
 
       _registrationCompletionSucceeded = true;
