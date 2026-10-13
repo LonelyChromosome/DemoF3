@@ -2140,7 +2140,10 @@ class _TimetableScreenState extends State<_TimetableScreen> {
                                                   _ScheduleCard(
                                                     item: items[index],
                                                     accent: _accentFor(index),
-                                                    attendance: widget.attendance[normalizeSubjectName(items[index].subjectName)],
+                                                    attendance: attendanceForStudyCard(
+                                                      items[index],
+                                                      widget.attendance,
+                                                    ),
                                                   ),
                                             ),
                                     ),
