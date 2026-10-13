@@ -715,6 +715,30 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     }
   }
 
+  /// Attendance is a best-effort cache of the SAME verified QLĐT data.
+  /// It never participates in _save's validation/rollback transaction.
+  Future<Map<String, AttendanceSummary>> _saveAttendanceSidecar(
+    String? envelope,
+  ) async {
+    if (envelope == null || envelope.isEmpty) return const {};
+    final values = AttendanceSummary.fromRawEnvelope(envelope);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _attendanceStorageKey,
+        jsonEncode(<String, Object?>{
+          'route': prefs.getString(_routeKey),
+          'counts': values.map(
+            (subject, count) => MapEntry(subject, count.toJson()),
+          ),
+        }),
+      );
+    } on Object {
+      // Invalid/unsaved optional attendance must not fail a schedule sync.
+    }
+    return values;
+  }
+
   Future<void> _loginOrSync() async {
     // Prevent original WebView sync from racing the new read-only pull sync.
     if (_inlineCommitting ||
@@ -743,9 +767,15 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       final imported = await openQldtLogin(context);
       if (imported != null) {
         final saveStarted = DateTime.now();
+        var verifiedAttendance = _attendance;
         SemesterDifference? difference;
         try {
           difference = await _save(imported);
+          // Initial QLĐT sync has already verified the original schedule.
+          // Do not force a second (unreliable) network sync just for badges.
+          verifiedAttendance = await _saveAttendanceSidecar(
+            imported.attendanceEnvelope,
+          );
           // The first-login mini-game is considered complete only after the
           // verified semester has been committed by the app. A chosen name
           // left by an interrupted login must not skip this mandatory step.
@@ -778,6 +808,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           if (!mounted) return;
           setState(() {
             _data = displayed;
+            _attendance = verifiedAttendance;
             _accountDisplayName = accountDisplayName;
             _lastSuccessfulSync = displayed.syncedAt;
             _selectedDate = _initialDateFor(displayed);
