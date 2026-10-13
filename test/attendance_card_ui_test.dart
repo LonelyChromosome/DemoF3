@@ -162,6 +162,64 @@ void main() {
     }
   });
 
+  testWidgets('Thiết kế web nâng cao shows Đã nghỉ 0/3 on day and week', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    try {
+      final now = DateTime.now();
+      final schedule = ImportedScheduleData(
+        displayName: 'Sinh viên',
+        syncedAt: now,
+        records: [
+          ScheduleRecord(
+            id: 'web-lt-today',
+            isExam: false,
+            subjectName: 'Thiết kế web nâng cao',
+            className: 'Thiết kế web nâng cao-1-1-26(N07)',
+            room: 'A6',
+            startAt: DateTime(now.year, now.month, now.day, 8),
+            endAt: DateTime(now.year, now.month, now.day, 11),
+          ),
+        ],
+      );
+      const route = 'verified-web-lt-account';
+      SharedPreferences.setMockInitialValues({
+        'better_phenikaa_snapshot_v1': schedule.encode(),
+        'better_phenikaa_qldt_registration_route_v1': route,
+        'better_phenikaa_attendance_v17': jsonEncode({
+          'schema': 3,
+          'route': route,
+          'counts': {
+            normalizeSubjectName('Thiết kế web nâng cao'): {
+              'absentSessions': 0,
+              'totalTheorySessions': 15,
+            },
+          },
+        }),
+      });
+      await tester.pumpWidget(const BetterPhenikaaScheduleApp());
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+      expect(find.text('Đã nghỉ 0/3'), findsOneWidget);
+      await tester.tap(find.text('Theo tuần'));
+      await tester.pumpAndSettle();
+      final week = find.byType(WeekTimetable);
+      expect(week, findsOneWidget);
+      final badge = find.descendant(of: week, matching: find.text('Đã nghỉ 0/3'));
+      await tester.scrollUntilVisible(
+        badge, 100,
+        scrollable: find.descendant(
+          of: week, matching: find.byType(Scrollable),
+        ).first,
+      );
+      expect(badge, findsOneWidget);
+    } finally {
+      await tester.pumpWidget(const SizedBox.shrink());
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
   testWidgets('unrelated account attendance never appears on a card', (
     tester,
   ) async {

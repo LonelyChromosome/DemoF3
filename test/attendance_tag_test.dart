@@ -174,14 +174,49 @@ void main() {
     ])), isEmpty);
   });
 
-  test('unknown attendance is not assumed confirmed present or absent', () {
-    expect(AttendanceSummary.fromRawEnvelope(envelope([row(0)])), isEmpty);
-    final result = AttendanceSummary.fromRawEnvelope(envelope([
+  test('no absence status still displays 0/N for verified LT schedule', () {
+    // Thiết kế web nâng cao has 15 enrolled LT sessions (20% => 3).
+    // Unmarked sessions count toward LT total, but not toward absences.
+    final webSchedule = [
+      for (var i = 0; i < 15; i++) row(
+        i,
+        subject: 'Thiết kế web nâng cao',
+        section: 'Thiết kế web nâng cao-1-1-26(N07)',
+      ),
+      // Actual TH and ELN sections must never inflate the LT denominator.
+      for (var i = 0; i < 10; i++) row(
+        i,
+        subject: 'Thiết kế web nâng cao',
+        section: 'Thiết kế web nâng cao-1-1-26(N07.TH1)',
+      ),
+      for (var i = 0; i < 10; i++) row(
+        i,
+        subject: 'Thiết kế web nâng cao',
+        section: 'Thiết kế web nâng cao-1-1-26(N07).ELN',
+      ),
+    ];
+    final fromRaw = AttendanceSummary.fromRawEnvelope(envelope(webSchedule));
+    expect(fromRaw[web]!.absentSessions, 0);
+    expect(fromRaw[web]!.totalTheorySessions, 15);
+    expect(fromRaw[web]!.allowanceSessions, 3);
+
+    final parsed = const QldtParser().parseLiveEnvelope(
+      envelope(webSchedule), strict: true,
+    );
+    final fromVerified = AttendanceSummary.fromVerifiedSchedule(parsed);
+    expect(fromVerified[web]!.absentSessions, 0);
+    expect(fromVerified[web]!.allowanceSessions, 3);
+
+    // No attendance status must not be reclassified as confirmed "Có mặt".
+    final unknown = AttendanceSummary.fromRawEnvelope(envelope([row(0)]));
+    expect(unknown[atbm]!.absentSessions, 0);
+    expect(unknown[atbm]!.totalTheorySessions, 1);
+    final mixed = AttendanceSummary.fromRawEnvelope(envelope([
       row(0, status: 'Có mặt(3)'),
       row(1), row(2), row(3), row(4),
     ]));
-    expect(result[atbm]!.absentSessions, 0);
-    expect(result[atbm]!.totalTheorySessions, 5);
+    expect(mixed[atbm]!.absentSessions, 0);
+    expect(mixed[atbm]!.totalTheorySessions, 5);
   });
 
   test('no ID fallback uses original class/date/time, not enrollment count', () {

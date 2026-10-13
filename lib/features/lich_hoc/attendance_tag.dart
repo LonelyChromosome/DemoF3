@@ -102,7 +102,6 @@ final class AttendanceSummary {
   ) {
     final total = <String, int>{};
     final absent = <String, int>{};
-    final confirmed = <String>{};
     final seen = <String, String>{};
     final conflicted = <String>{};
 
@@ -126,9 +125,7 @@ final class AttendanceSummary {
       // All verified LT meetings count toward allowance, including upcoming
       // ones with UNKNOWN attendance status.
       total[subject] = (total[subject] ?? 0) + 1;
-      if (status.startsWith('có mặt')) {
-        confirmed.add(subject);
-      } else if (status.startsWith('vắng mặt')) {
+      if (status.startsWith('vắng mặt')) {
         final match = RegExp(r'\((\d+)\)').firstMatch(status);
         final count = match == null ? null : int.tryParse(match[1]!);
         if (count != null && (count <= 0 || count > 20 ||
@@ -136,14 +133,16 @@ final class AttendanceSummary {
           conflicted.add(subject);
           continue;
         }
-        confirmed.add(subject);
         // Count absences per verified class MEETING, not period count / 3.
         absent[subject] = (absent[subject] ?? 0) + 1;
       }
-      // Empty/unverified status is not counted as absence or confirmed 0.
+      // Empty/unverified status is not counted as a recorded absence;
+      // this is a count of reported absences, not proof of attendance.
     }
     return {
-      for (final subject in confirmed)
+      // A verified LT schedule with no recorded absence still displays 0/N.
+      // Keep conflicted or invalid evidence hidden rather than fabricating totals.
+      for (final subject in total.keys)
         if (!conflicted.contains(subject) &&
             (total[subject] ?? 0) > 0 &&
             (absent[subject] ?? 0) <= total[subject]!)
