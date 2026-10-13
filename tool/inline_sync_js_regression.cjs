@@ -10,11 +10,11 @@ const src = fs.readFileSync(
   'android/app/src/main/kotlin/vn/edu/phenikaa/better_phenikaa_schedule/QldtDailySyncWorker.kt',
   'utf8'
 );
-const pattern = /const val REGISTRATION_SCRIPT = """([\s\S]*?)"""/;
+const pattern = /const val INLINE_REGISTRATION_SCRIPT = """([\s\S]*?)"""/;
 const registration = src.match(pattern)?.[1];
 assert(registration, 'Kotlin registration script missing');
 const scheduleSection = src.slice(src.indexOf('private fun requestSchedule('));
-const schedule = scheduleSection.match(/val script = """([\s\S]*?)"""\.trimIndent\(\)/)?.[1];
+const schedule = scheduleSection.match(/val script = if \(inlinePull\) """([\s\S]*?)"""\.trimIndent\(\) else/)?.[1];
 assert(schedule, 'Kotlin weekly-chunk script missing');
 
 function fakeClock() {

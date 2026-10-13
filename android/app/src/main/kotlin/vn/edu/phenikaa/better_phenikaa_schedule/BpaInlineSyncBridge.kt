@@ -70,7 +70,7 @@ internal class BpaInlineSyncBridge(context: Context, engine: FlutterEngine) {
             // authentication and works with the user's established session.
             // Reuse ONLY its read result; this bridge never calls the worker
             // or the worker's storage code.
-            val sync = HeadlessQldtSync(app, cachedRoute)
+            val sync = HeadlessQldtSync(app, cachedRoute, inlinePull = true)
             active = sync
             val remote = sync.run()
             if (ticket != epoch.get()) return cancelled(reply)

@@ -287,7 +287,11 @@ class QldtDailySyncWorker(
     }
 }
 
-internal class HeadlessQldtSync(private val context: Context, cachedRoute: String?) {
+internal class HeadlessQldtSync(
+    private val context: Context,
+    cachedRoute: String?,
+    private val inlinePull: Boolean = false,
+) {
     private val routeLiteral: String = runCatching {
         val route = JSONObject(cachedRoute ?: "")
         if (listOf("userId", "semesterId", "semesterName", "planId")
@@ -646,7 +650,7 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
             cursor.add(Calendar.DAY_OF_MONTH, 1)
         }
 
-        val script = """
+        val script = if (inlinePull) """
             (function () {
               try {
                 if (!(window.edu && edu.system && edu.system.userId &&
@@ -788,6 +792,102 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
                 window.$JAVASCRIPT_BRIDGE.onError('REQUEST_ERROR');
               }
             })();
+        """.trimIndent() else """
+            (function () {
+              try {
+                if (!(window.edu && edu.system && edu.system.userId &&
+                      edu.system.iM != null && typeof edu.system.makeRequest === 'function')) {
+                  window.$JAVASCRIPT_BRIDGE.onError('SESSION_EXPIRED');
+                  return;
+                }
+
+                var chunks = $chunks;
+                var concurrency = 8;
+                var nextIndex = 0;
+                var active = 0;
+                var completed = 0;
+                var failed = false;
+                var merged = [];
+
+                function finishIfDone() {
+                  if (failed || completed !== chunks.length) return;
+                  var nameNode = document.querySelector('#lblHoTenNguoiDangNhap');
+                  var name = nameNode ? (nameNode.textContent || '').trim() : '';
+                  if (!name) {
+                    var spans = document.querySelectorAll('.nav-account button > span');
+                    for (var i = 0; i < spans.length; i++) {
+                      var candidate = (spans[i].textContent || '').trim();
+                      if (candidate) { name = candidate; break; }
+                    }
+                  }
+                  window.$JAVASCRIPT_BRIDGE.onSchedule(
+                    JSON.stringify({
+                      name: name,
+                      response: {
+                        Success: true,
+                        Data: merged,
+                        Message: '',
+                        Pager: null,
+                        Id: null
+                      }
+                    })
+                  );
+                }
+
+                function launchMore() {
+                  if (failed) return;
+                  while (active < concurrency && nextIndex < chunks.length) {
+                    (function (index) {
+                      var chunk = chunks[index];
+                      nextIndex += 1;
+                      active += 1;
+                      var requestData = {
+                        action: 'SV_ThongTin_MH/DSA4BRINKCIpAiAPKSAv',
+                        func: 'pkg_congthongtin_hssv_thongtin.LayDSLichCaNhan',
+                        iM: edu.system.iM,
+                        strQLSV_NguoiHoc_Id: edu.system.userId,
+                        strNgayBatDau: chunk.start,
+                        strNgayKetThuc: chunk.end
+                      };
+                      edu.system.makeRequest({
+                        success: function (response) {
+                          if (failed) return;
+                          active -= 1;
+                          completed += 1;
+                          if (!response || response.Success !== true ||
+                              !Array.isArray(response.Data)) {
+                            failed = true;
+                            window.$JAVASCRIPT_BRIDGE.onError('INVALID_RESPONSE');
+                            return;
+                          }
+                          for (var i = 0; i < response.Data.length; i++) {
+                            merged.push(response.Data[i]);
+                          }
+                          launchMore();
+                          finishIfDone();
+                        },
+                        error: function () {
+                          if (failed) return;
+                          failed = true;
+                          active -= 1;
+                          window.$JAVASCRIPT_BRIDGE.onError('NETWORK_ERROR');
+                        },
+                        type: 'POST',
+                        action: requestData.action,
+                        contentType: true,
+                        data: requestData,
+                        fakedb: []
+                      }, false, false, false, null);
+                    })(nextIndex);
+                  }
+                  finishIfDone();
+                }
+
+                launchMore();
+              } catch (error) {
+                window.$JAVASCRIPT_BRIDGE.onError('REQUEST_ERROR');
+              }
+            })();
         """.trimIndent()
         webView.evaluateJavascript(script, null)
     }
@@ -795,7 +895,8 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
     private fun requestRegistration(webView: WebView) {
         if (completed.get() || !registrationRequested.compareAndSet(false, true)) return
         stage.set("REGISTRATION")
-        webView.evaluateJavascript(REGISTRATION_SCRIPT.replace("__ROUTE__", routeLiteral), null)
+        val script = if (inlinePull) INLINE_REGISTRATION_SCRIPT else REGISTRATION_SCRIPT
+        webView.evaluateJavascript(script.replace("__ROUTE__", routeLiteral), null)
     }
 
     private fun completeWhenBothReady() {
@@ -901,6 +1002,141 @@ internal class HeadlessQldtSync(private val context: Context, cachedRoute: Strin
             );
         """
         const val REGISTRATION_SCRIPT = """
+            (function () {
+              const bridge = window.BetterPhenikaaNative;
+              const system = window.edu && edu.system;
+              const storedRoute = __ROUTE__;
+              let finished = false;
+              const fail = code => {
+                if (finished) return;
+                finished = true;
+                bridge.onError(code);
+              };
+              if (!system || !system.userId || system.iM == null ||
+                  typeof system.makeRequest !== 'function') {
+                fail('SESSION_EXPIRED'); return;
+              }
+              const call = (action, func, fields, next, onFailure = fail) => {
+                const payload = Object.assign({action, func, iM: system.iM,
+                  strQLSV_NguoiHoc_Id: system.userId}, fields);
+                try {
+                  system.makeRequest({
+                    success: response => {
+                      if (finished) return;
+                      if (!response || response.Success !== true || !Array.isArray(response.Data)) {
+                        onFailure('INVALID_RESPONSE'); return;
+                      }
+                      try { next(response.Data); } catch (_) { onFailure('INVALID_RESPONSE'); }
+                    },
+                    error: () => onFailure('NETWORK_ERROR'),
+                    type: 'POST', action, contentType: true, data: payload, fakedb: []
+                  }, false, false, false, null);
+                } catch (_) { onFailure('REQUEST_ERROR'); }
+              };
+              const requestRows = (semesterId, planId, next, onFailure = fail) =>
+                call('DKH_Chung_MH/DSA4CiQ1EDQgBSAvJgo4DS4xCS4iESkgLwPP',
+                  'pkg_dangkyhoc_chung.LayKetQuaDangKyLopHocPhan',
+                  {strDaoTao_ChuongTrinh_Id: '',
+                    strDangKy_KeHoachDangKy_Id: planId,
+                    strNguoiThucHien_Id: system.userId,
+                    strDaoTao_ThoiGianDaoTao_Id: semesterId}, next, onFailure);
+              const cached = storedRoute && storedRoute.userId === String(system.userId)
+                ? storedRoute : null;
+              let cachedReady = false, cachedRows = null, cachedError = false;
+              let validated = null;
+              const finishRows = (latest, planId, planSemesterId, rows) => {
+                const subjects = new Map();
+                for (const row of rows) {
+                  if (row.DANGKY_KEHOACHDANGKY_ID !== planId ||
+                      (row.DAOTAO_THOIGIANDAOTAO_ID !== latest.id &&
+                        row.DAOTAO_THOIGIANDAOTAO_ID !== planSemesterId) ||
+                      !row.DAOTAO_HOCPHAN_ID || !row.DAOTAO_HOCPHAN_TEN ||
+                      !row.DANGKY_LOPHOCPHAN_ID || !row.DANGKY_LOPHOCPHAN_TEN) {
+                    fail('INVALID_REGISTRATION'); return;
+                  }
+                  const key = row.DAOTAO_HOCPHAN_ID;
+                  const start = date(row.NGAYBATDAU);
+                  const end = date(row.NGAYKETTHUC);
+                  if (end < start) { fail('INVALID_DATE'); return; }
+                  if (!subjects.has(key)) subjects.set(key, {
+                    name: row.DAOTAO_HOCPHAN_TEN, classes: []
+                  });
+                  const subject = subjects.get(key);
+                  if (subject.name !== row.DAOTAO_HOCPHAN_TEN) {
+                    fail('INVALID_SUBJECT'); return;
+                  }
+                  if (!subject.classes.some(item => item.id === row.DANGKY_LOPHOCPHAN_ID)) {
+                    subject.classes.push({id: row.DANGKY_LOPHOCPHAN_ID,
+                      name: row.DANGKY_LOPHOCPHAN_TEN, startsOn: start, endsOn: end});
+                  }
+                }
+                finished = true;
+                bridge.onRegistration(JSON.stringify({id: latest.name,
+                  name: latest.name, confirmedEmpty: rows.length === 0,
+                  route: {userId: String(system.userId), semesterId: String(latest.id),
+                    semesterName: latest.name, planId: String(planId)},
+                  subjects: [...subjects.values()].map(subject => ({
+                    name: subject.name,
+                    classes: subject.classes.map(({name, startsOn, endsOn}) =>
+                      ({name, startsOn, endsOn}))
+                  }))}));
+              };
+              const resolveRows = () => {
+                if (!validated || finished) return;
+                const {latest, planId, planSemesterId} = validated;
+                if (cached && cached.semesterId === String(latest.id) &&
+                    cached.semesterName === latest.name && cached.planId === planId) {
+                  if (!cachedReady) return;
+                  if (!cachedError) { finishRows(latest, planId, planSemesterId, cachedRows); return; }
+                }
+                requestRows(latest.id, planId, rows =>
+                  finishRows(latest, planId, planSemesterId, rows));
+              };
+              const date = value => {
+                const match = /^(\d{2})\/(\d{2})\/(\d{4})${'$'}/.exec(value);
+                if (!match) throw Error('DATE_INVALID');
+                const parsed = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+                if (parsed.getFullYear() !== Number(match[3]) ||
+                    parsed.getMonth() + 1 !== Number(match[2]) ||
+                    parsed.getDate() !== Number(match[1])) throw Error('DATE_INVALID');
+                return match[3] + '-' + match[2] + '-' + match[1];
+              };
+              if (cached) requestRows(cached.semesterId, cached.planId, rows => {
+                cachedRows = rows; cachedReady = true; resolveRows();
+              }, () => { cachedError = true; cachedReady = true; resolveRows(); });
+              call('DKH_ThongTin_MH/DSA4FSkuKAYoIC8FIC8mCjgCIA8pIC8P',
+                'pkg_dangkyhoc_thongtin.LayThoiGianDangKyCaNhan',
+                {strDaoTao_ThoiGianDaoTao_Id: null}, semesters => {
+                  const choices = semesters.map(row => {
+                    const match = /^(\d{4})_(\d{4})_(\d+)${'$'}/.exec(row.THOIGIAN);
+                    return match && Number(match[2]) === Number(match[1]) + 1 && row.ID
+                      ? {id: row.ID, name: row.THOIGIAN, year: Number(match[1]), term: Number(match[3])}
+                      : null;
+                  }).filter(Boolean).sort((a, b) => b.year - a.year || b.term - a.term);
+                  if (!choices.length) { fail('NO_SEMESTER'); return; }
+                  const latest = choices[0];
+                  call('DKH_ThongTin_MH/DSA4BRIKJAkuICIpBSAvJgo4AiAPKSAv',
+                    'pkg_dangkyhoc_thongtin.LayDSKeHoachDangKyCaNhan',
+                    {strDaoTao_ThoiGianDaoTao_Id: latest.id}, plans => {
+                      const matchingPlans = plans.filter(row => row && row.ID &&
+                        (String(row.MAKEHOACH || '').trim() === latest.name ||
+                          String(row.MAKEHOACH || '').trim().startsWith(latest.name + ',')));
+                      const planIds = [...new Set(matchingPlans
+                        .map(row => String(row.ID || '').trim())
+                        .filter(Boolean))];
+                      const planSemesterIds = [...new Set(matchingPlans
+                        .map(row => String(row.DAOTAO_THOIGIANDAOTAO_ID || '').trim())
+                        .filter(Boolean))];
+                      if (planIds.length !== 1 || planSemesterIds.length !== 1) {
+                        fail('PLAN_AMBIGUOUS'); return;
+                      }
+                      validated = {latest, planId: planIds[0], planSemesterId: planSemesterIds[0]};
+                      resolveRows();
+                    });
+                });
+            })();
+        """
+        const val INLINE_REGISTRATION_SCRIPT = """
             (function () {
               const bridge = window.BetterPhenikaaNative;
               const system = window.edu && edu.system;
