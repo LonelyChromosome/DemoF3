@@ -283,11 +283,11 @@ class _SemesterRecapPageState extends State<SemesterRecapPage> {
                   )),
                 )),
                 const SizedBox(height: 8),
-                if (!facts.preview)
+                if (!facts!.preview)
                   Padding(
                     padding: const EdgeInsets.only(left: 2, bottom: 6),
                     child: Text(
-                      'Tài khoản: ${facts.displayName}  ·  Lịch lưu: ${_d(facts.syncedAt)} ${_hour(facts.syncedAt)}',
+                      'Tài khoản: ${facts!.displayName}  ·  Lịch lưu: ${_d(facts!.syncedAt)} ${_hour(facts!.syncedAt)}',
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
                       style: const TextStyle(color: Color(0xFFB6C9DB),
