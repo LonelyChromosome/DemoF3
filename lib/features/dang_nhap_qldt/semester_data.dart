@@ -165,6 +165,9 @@ final class CurrentSemester {
             examForm: schedule.examForm,
             periodStart: schedule.periodStart,
             periodEnd: schedule.periodEnd,
+            lessonKind: schedule.lessonKind,
+            attendanceStatus: schedule.attendanceStatus,
+            lessonPeriods: schedule.lessonPeriods,
           ),
         );
       }
