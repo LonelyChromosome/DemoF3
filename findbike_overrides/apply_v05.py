@@ -7,7 +7,7 @@ s=main.read_text()
 old="            routing = router.route(user,bike);\n            route = routing.points;"
 assert old in s, "0.5 mismatch route init"
 s=s.replace(old,"            routing = router.route(user, bike);\n            if(routing.adjustedStart)user.set(routing.safeStart.x,routing.safeStart.y);\n            route = routing.points;")
-old="            if (arrived || route.size() < 2 || pathTotal <= 1f) { arrived = true; refreshUi(); return; }"
+old="            if (arrived || route.size() < 2 || pathTotal <= 1f) {\n                arrived = true; refreshUi(); return;\n            }"
 assert old in s,"0.5 mismatch step"
 s=s.replace(old,"            if(route.size()<2){refreshUi();return;}\n            if(arrived || pathTotal<=1f){arrived=true;refreshUi();return;}")
 # Surface the routing error, rather than drawing an unsafe straight fallback.
