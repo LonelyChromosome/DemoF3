@@ -25,6 +25,63 @@ class LiquidPhysics {
   var _pairWeight = Float64List(capacity * 16);
   final _curl = Float64List(capacity);
   final _weight = Float64List(capacity);
+  final _wallX = Float64List(capacity), _wallY = Float64List(capacity);
+  // Static solid samples supply the kernel support missing outside acrylic.
+  // Clamping positions alone lets liquid overpack the boundary and turns a
+  // pressure correction into an upward jet. Integrate three virtual rows once;
+  // interpolate their density and normal gradient in spacing units at runtime.
+  // These samples exert pressure only: they neither add water nor attract it.
+  static final _wallKernel = _makeWallKernel();
+  static List<Float64List> _makeWallKernel() {
+    final density = Float64List(129), gradient = Float64List(129);
+    for (var i = 0; i <= 128; i++) {
+      final d = i / 128 * 2.8;
+      for (var row = 0; row < 3; row++) {
+        final dx = d + row + .5;
+        for (var t = -12; t <= 12; t++) {
+          final dy = t * .25, r = math.sqrt(dx * dx + dy * dy), q = 1 - r / 2.8;
+          if (q > 0) {
+            density[i] += q * q * q * .25;
+            gradient[i] += -3 * q * q / 2.8 * dx / r * .25;
+          }
+        }
+      }
+    }
+    return [density, gradient];
+  }
+
+  void _wallDensity(double invRest) {
+    for (var i = 0; i < count; i++) {
+      var dx = 0.0, dy = 0.0;
+      for (var wall = 0; wall < 4; wall++) {
+        final distance = wall == 0
+            ? x[i]
+            : wall == 1
+            ? aspect - x[i]
+            : wall == 2
+            ? y[i]
+            : 1 - y[i];
+        if (distance >= support) continue;
+        final index = (distance / support * 128).clamp(0.0, 127.999),
+            a = index.floor(),
+            f = index - a;
+        _density[i] += _wallKernel[0][a] * (1 - f) + _wallKernel[0][a + 1] * f;
+        final gradient =
+            (_wallKernel[1][a] * (1 - f) + _wallKernel[1][a + 1] * f) /
+            spacing *
+            invRest;
+        if (wall < 2)
+          dx += wall == 0 ? gradient : -gradient;
+        else
+          dy += wall == 2 ? gradient : -gradient;
+      }
+      _wallX[i] = dx;
+      _wallY[i] = dy;
+      _gradientX[i] += dx;
+      _gradientY[i] += dy;
+    }
+  }
+
   int _pairCount = 0;
   int count = 0, _cols = 1, _rows = 1;
   double aspect = .5, spacing = .015, support = .04, restDensity = 1;
@@ -211,6 +268,7 @@ class LiquidPhysics {
         }
       }
     }
+    _wallDensity(invRest);
   }
 
   void step(
@@ -252,8 +310,8 @@ class LiquidPhysics {
       for (var i = 0; i < count; i++) {
         _oldX[i] = x[i];
         _oldY[i] = y[i];
-        vx[i] = (vx[i] + (gx * .42 - _ax * .40) * h) * damping;
-        vy[i] = (vy[i] + (gy * .42 - _ay * .40) * h) * damping;
+        vx[i] = (vx[i] + (gx * 0.42 - _ax * .40) * h) * damping;
+        vy[i] = (vy[i] + (gy * 0.42 - _ay * .40) * h) * damping;
         final speed = math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]);
         if (speed > 3.5) {
           vx[i] *= 3.5 / speed;
@@ -287,7 +345,8 @@ class LiquidPhysics {
           _dy[j] -= dy;
         }
         for (var i = 0; i < count; i++) {
-          final dx = _dx[i], dy = _dy[i];
+          final dx = _dx[i] + _lambda[i] * _wallX[i],
+              dy = _dy[i] + _lambda[i] * _wallY[i];
           final distance = math.sqrt(dx * dx + dy * dy), limit = spacing * .35;
           final scale = distance > limit ? limit / distance : 1.0;
           _dx[i] = dx * scale;
@@ -385,6 +444,30 @@ class LiquidPhysics {
       for (var i = 0; i < count; i++) {
         vx[i] += _dx[i] * gain;
         vy[i] += _dy[i] * gain;
+      }
+      // Acrylic contact dissipates tangential impact energy; a frictionless
+      // one-sample strip must not keep climbing the wall like a viscous rope.
+      // This affects velocity only: mass and free-surface geometry stay intact.
+      final boundaryLayer = spacing * 2;
+      final tangentLoss = 1 - math.exp(-h * (4 + viscosity * 4));
+      for (var i = 0; i < count; i++) {
+        final wallX = (1 - math.min(x[i], aspect - x[i]) / boundaryLayer).clamp(
+          0.0,
+          1.0,
+        );
+        final wallY = (1 - math.min(y[i], 1 - y[i]) / boundaryLayer).clamp(
+          0.0,
+          1.0,
+        );
+        vx[i] *= 1 - wallY * tangentLoss;
+        vy[i] *= 1 - wallX * tangentLoss;
+        // Pressure projection also changes velocity. Bound the final velocity,
+        // not just the pre-projection estimate used in advection.
+        final speed = math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]);
+        if (speed > 3.5) {
+          vx[i] *= 3.5 / speed;
+          vy[i] *= 3.5 / speed;
+        }
       }
       _ax *= math.exp(-h * 9);
       _ay *= math.exp(-h * 9);
