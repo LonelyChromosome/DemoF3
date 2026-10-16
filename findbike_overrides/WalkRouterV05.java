@@ -25,6 +25,7 @@ final class WalkRouter {
     private static final int[] DY={-1,-1,-1,0,1,1,1,0};
     private int width,height,gw,gh;
     private boolean[] blocked=new boolean[0];
+    private int[] cellRoadHead=new int[0],roadNext=new int[0];
     private int[] xs=new int[0], ys=new int[0], grid=new int[0];
     private static final class Node {
         final int id;
@@ -48,6 +49,14 @@ final class WalkRouter {
             blocked=new boolean[gw*gh];
             for(int i=0;i<blocked.length;i++)blocked[i]=(bits[i/8]&(1<<(i%8)))!=0;
         }catch(Exception e){gw=0;gh=0;blocked=new boolean[0];}
+        cellRoadHead=new int[gw*gh];Arrays.fill(cellRoadHead,-1);
+        roadNext=new int[xs.length];Arrays.fill(roadNext,-1);
+        for(int i=0;i<xs.length;i++){
+            int cx=xs[i]/2,cy=ys[i]/2;
+            if(!pass(cx,cy))continue;
+            int index=cy*gw+cx;
+            roadNext[i]=cellRoadHead[index];cellRoadHead[index]=i;
+        }
     }
     private PointF at(int id){return new PointF(xs[id]*2f,ys[id]*2f);}
     private static float distance(PointF a,PointF b) {
@@ -154,10 +163,9 @@ final class WalkRouter {
             seen[cell]=true;
             PointF cp=center(cell);
             // Search existing road nodes within the current 4x4 free cell.
-            for(int r=0;r<n;r++){
+            for(int r=cellRoadHead[cell];r!=-1;r=roadNext[r]){
                 if(!Float.isFinite(score[r]))continue;
                 PointF point=at(r);
-                if(Math.abs(point.x-cp.x)>4f||Math.abs(point.y-cp.y)>4f)continue;
                 if(!clear(cp,point))continue;
                 float proposed=q.cost+distance(cp,point)*1.25f+score[r];
                 if(proposed<backup){backup=proposed;backupEntry=r;backupCell=cell;}
