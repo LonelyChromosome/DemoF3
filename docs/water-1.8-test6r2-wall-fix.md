@@ -21,6 +21,14 @@ Giữ nguyên sensor/lifecycle Test6R, sóng/tách giọt, lượng nước/nằ
 
 ## Bản thử
 
-VersionCode 67, versionName dự kiến `cooc.1.8-test6r2`, label `BPA Water Cooling Test6R2`. **Giữ package `.waterrecovery.test6r` và khóa Test6R**, để cập nhật đè Test6R mà giữ dữ liệu. Production signing/updater không thay đổi. Kết quả build và SHA-256 sẽ ghi sau khi kiểm tra artifact.
+Đã build profile arm64 từ cây runtime `d8fc9672f0a0cf105704e74980a52dde9a40c63e` (commit GitHub `ebab1cd1e090aa2f4ed9a7a00773a4461e7513d4`; local build commit `dc7fa1b` có cùng tree).
+
+VersionCode 67, versionName `cooc.1.8-test6r2`, label `BPA Water Cooling Test6R2`. **Giữ package `.waterrecovery.test6r` và khóa Test6R**, để cập nhật đè Test6R mà giữ dữ liệu. Production signing/updater không thay đổi.
+
+- APK `BPA-1.8-Water-Cooling-Test6R2-arm64.apk`, 124,013,091 bytes.
+- SHA-256 `a5882861e4d0f71a3e68ce32f9ad399467e5b6e32801d20c091d01e268f6d436`.
+- Signer SHA-256 `f9e54276086c2920cfad8edb76498ca9bfae6fa658525cbce859b46aa96ba9a1`, khớp Test6R.
+- Đã kiểm CRC mọi entry APK, libapp/libflutter arm64, shader, chữ ký v2, zipalign 16 KB và package/version thực bằng aapt.
+- Scoped Dart analyze không có error/warning; còn 53 lint info theo style hiện có. Không gọi đó là lint-clean.
 
 Cần thử máy thật: nghiêng sang từng bên rồi dựng lại, lắc nhẹ/mạnh, lật 180°, đặt ngang/phẳng ở lượng 8%/32%, khóa màn hình hoặc đổi hướng khi app ở nền rồi trở lại. Kiểm xem cột sát thành còn đứng lâu khi máy đã ổn định, đồng thời đánh giá độ mượt/nhiệt/pin.
