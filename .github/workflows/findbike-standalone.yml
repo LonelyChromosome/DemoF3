@@ -42,10 +42,12 @@ jobs:
           (assets/"map.webp").unlink(missing_ok=True)
           print("Generated", (assets/"map_hires.webp").stat().st_size,"bytes")
           PY
+      - name: Apply v0.3 adaptive walking route
+        run: python findbike_overrides/apply_v03.py
       - name: Build debug APK
         run: gradle -p findbike-build --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: FindMyBike-v0.2-Debug-APK
+          name: FindMyBike-v0.3-Debug-APK
           path: findbike-build/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
