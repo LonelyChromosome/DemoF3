@@ -52,3 +52,7 @@ assert router.is_file()
 target=source.with_name("WalkRouter.java")
 target.write_bytes(router.read_bytes())
 print("v0.3 soft-lane router inserted",len(s),len(target.read_bytes()))
+
+cfg=Path("findbike-build/app/build.gradle")
+gradle=cfg.read_text().replace("versionCode 2", "versionCode 3").replace("versionName '0.2-test'", "versionName '0.3-test'")
+cfg.write_text(gradle)
