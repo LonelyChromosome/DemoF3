@@ -8,6 +8,7 @@ import java.util.Calendar
 /** Bundled photos affect Widget 2 only. User-selected photos take precedence. */
 internal object Widget2ThemeImage {
     fun assetName(key: String, now: Calendar = Calendar.getInstance()): String? = when (key) {
+        "water_cooling" -> "water-cooling-v2.png"
         "classic" -> "macdinh.png"
         "lol" -> "lol.jpg"
         "valorant" -> "vlr.jpg"

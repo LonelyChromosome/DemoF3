@@ -88,7 +88,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         paletteOverride: NativeWidgetPalette? = null,
     ): Int {
         val theme = paletteOverride?.toThemeColors() ?: readThemeColors(context)
-        if (theme.key == "custom" || theme.key.startsWith("custom:")) {
+        if (theme.key == "water_cooling" || theme.key == "custom" || theme.key.startsWith("custom:")) {
             return paletteOverride?.text ?: WidgetThemeV14.read(context).largeTextColor
                 ?: theme.textColor
         }
@@ -175,6 +175,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         index: Int,
         active: Boolean,
         paletteOverride: NativeWidgetPalette? = null,
+        configOverride: WidgetThemeV14? = null,
     ): Bitmap {
         val theme = paletteOverride?.toThemeColors() ?: readThemeColors(context)
         val palette = WidgetVisualPalette(theme.startColor, theme.endColor,
@@ -185,6 +186,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val radius = 12f * density
+        if(theme.key=="water_cooling"){
+            val rect=RectF(0f,0f,width.toFloat(),height.toFloat());canvas.drawRoundRect(rect,radius,radius,Paint(Paint.ANTI_ALIAS_FLAG).apply{shader=LinearGradient(0f,0f,width.toFloat(),height.toFloat(),0x843C2058.toInt(),0x783B1835,Shader.TileMode.CLAMP)})
+            WaterWidgetRenderer.card(canvas,rect,configOverride ?: WidgetThemeV14.read(context),density,RectF(0f,0f,1f,1f));return bitmap
+        }
         if (theme.key == "tien_mon_premium") {
             // RemoteViews cannot BackdropFilter the scenic wallpaper. Keep the
             // bitmap itself translucent instead: the artwork remains visible
@@ -782,11 +787,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
 
         val theme = readThemeColors(context)
         val widgetConfig = WidgetThemeV14.read(context)
-        val smallColor = if (theme.key == "custom" || theme.key.startsWith("custom:"))
+        val smallColor = if (theme.key == "water_cooling" || theme.key == "custom" || theme.key.startsWith("custom:"))
             widgetConfig.smallTextColor else null
         val density = context.resources.displayMetrics.density
-        if ((theme.key == "custom" || theme.key.startsWith("custom:")) &&
-            widgetConfig.smallBorder.enabled) {
+        if (theme.key=="water_cooling" || ((theme.key == "custom" || theme.key.startsWith("custom:")) && widgetConfig.smallBorder.enabled)) {
             views.setImageViewBitmap(R.id.widget_custom_border,
                 WidgetStaticLayerRenderer.renderBorderOverlay(context, WidgetSurface.SMALL,
                     (renderWidthDp * density).roundToInt().coerceAtLeast(1),
@@ -1122,6 +1126,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         "ben10" -> ThemeColors(key, 0xFF101510.toInt(), 0xFF1D5F22.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
         "youtube" -> ThemeColors(key, 0xFF181818.toInt(), 0xFF2B0E14.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
         "steam" -> ThemeColors(key, 0xFF171D25.toInt(), 0xFF1B3D55.toInt(), 0xFFD6E9F8.toInt(), 0xFFD6E9F8.toInt())
+        "water_cooling" -> ThemeColors(key,0xFF10091A.toInt(),0xFF462145.toInt(),0xFFF6EDFF.toInt(),0xFFF6EDFF.toInt())
         "tien_mon_premium" -> ThemeColors(key, 0xFF082D2B.toInt(), 0xFF667E7B.toInt(), 0xFFFFD66B.toInt(), 0xFFFFD66B.toInt())
         else -> ThemeColors("classic", 0xFF173A8E.toInt(), 0xFF315AB5.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
         }

@@ -1,3 +1,7 @@
+import '../features/giao_dien/water_cooling/water_config.dart';
+import '../features/giao_dien/water_cooling/water_engine.dart';
+import '../features/giao_dien/water_cooling/water_surface.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -26,14 +30,18 @@ enum AppThemeId {
   youtube,
   steam,
   tienMonPremium,
+  waterCooling,
   custom,
 }
 
 enum AppThemeGeometry { rounded, square, valorant, lol, pixel }
 
 extension AppThemeIdUi on AppThemeId {
-  String get storageKey =>
-      this == AppThemeId.tienMonPremium ? 'tien_mon_premium' : name;
+  String get storageKey => this == AppThemeId.tienMonPremium
+      ? 'tien_mon_premium'
+      : this == AppThemeId.waterCooling
+      ? 'water_cooling'
+      : name;
 
   String get label => switch (this) {
     AppThemeId.classic => 'Better mặc định',
@@ -47,6 +55,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.youtube => 'YouTube',
     AppThemeId.steam => 'Steam',
     AppThemeId.tienMonPremium => 'Tiên Môn Premium',
+    AppThemeId.waterCooling => 'Water Cooling Premium',
     AppThemeId.custom => 'Tùy chỉnh',
   };
 
@@ -62,6 +71,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.youtube => 'Dark feed • đỏ video',
     AppThemeId.steam => 'Store dark • xanh Steam',
     AppThemeId.tienMonPremium => 'Cổ trang • live wallpaper • kim ngọc',
+    AppThemeId.waterCooling => 'Ống acrylic • Nước • Ánh sáng ARGB',
     AppThemeId.custom => 'Màu và font do bạn tạo',
   };
 
@@ -77,6 +87,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.youtube => Icons.play_circle_fill_rounded,
     AppThemeId.steam => Icons.sports_esports_rounded,
     AppThemeId.tienMonPremium => Icons.auto_awesome_rounded,
+    AppThemeId.waterCooling => Icons.water_drop_outlined,
     AppThemeId.custom => Icons.tune_rounded,
   };
 }
@@ -445,6 +456,27 @@ const Map<AppThemeId, AppThemePalette> appThemePalettes =
         geometry: AppThemeGeometry.square,
         dark: true,
       ),
+      AppThemeId.waterCooling: AppThemePalette(
+        id: AppThemeId.waterCooling,
+        pageStart: Color(0xFF08040D),
+        pageEnd: Color(0xFF100819),
+        surface: Color(0xFF180E23),
+        card: Color(0xCC1B1028),
+        cardAlt: Color(0xC8261638),
+        primary: Color(0xFFC594FF),
+        accent: Color(0xFFFF559C),
+        textPrimary: Color(0xFFF6EDFF),
+        textSecondary: Color(0xFFC6B4D2),
+        border: Color(0xFF563461),
+        shadow: Color(0x66000000),
+        widgetStart: Color(0xFF10091A),
+        widgetEnd: Color(0xFF462145),
+        widgetText: Color(0xFFF6EDFF),
+        widgetSubtext: Color(0xFFC6B4D2),
+        radius: 14,
+        geometry: AppThemeGeometry.rounded,
+        dark: true,
+      ),
       AppThemeId.tienMonPremium: AppThemePalette(
         id: AppThemeId.tienMonPremium,
         pageStart: Color(0xFF071713),
@@ -495,6 +527,48 @@ class AppThemeController extends ChangeNotifier {
     'better_phenikaa/widget_theme',
   );
 
+  static const _waterCustomKey = 'bpa_water_cooling_custom_v1',
+      _waterAppliedKey = 'bpa_water_cooling_applied_v1';
+  WaterConfig _waterCustom = const WaterConfig(),
+      _waterApplied = const WaterConfig();
+  WaterConfig? _waterPreview;
+  Object? _waterPreviewOwner;
+  WaterConfig get waterCustom => _waterCustom;
+  WaterConfig get waterConfig => _waterPreview ?? _waterApplied;
+  bool get waterVisible =>
+      _waterPreview != null || _theme == AppThemeId.waterCooling;
+  void previewWater(WaterConfig? value, {Object? owner}) {
+    if (value == null && _waterPreviewOwner != owner) return;
+    _waterPreviewOwner = value == null ? null : owner;
+    _waterPreview = value;
+    notifyListeners();
+  }
+
+  Future<void> saveWater(WaterConfig value, {bool apply = false}) async {
+    final p = await SharedPreferences.getInstance();
+    if (!await p.setString(_waterCustomKey, jsonEncode(value.toJson())))
+      throw StateError('Không lưu được Water Cooling');
+    _waterCustom = value;
+    if (apply) await applyWater(value);
+    notifyListeners();
+  }
+
+  Future<void> applyWater(WaterConfig value) async {
+    final p = await SharedPreferences.getInstance();
+    if (!await p.setString(_waterAppliedKey, jsonEncode(value.toJson())))
+      throw StateError('Không lưu được Water Cooling');
+    _waterApplied = value;
+    _waterPreview = null;
+    _waterPreviewOwner = null;
+    if (_theme != AppThemeId.waterCooling) {
+      await _transitionTo(themeId: AppThemeId.waterCooling);
+    } else {
+      notifyListeners();
+      await _commitSelection(palette);
+    }
+    WaterEngine.feedback(WaterEvent.illumination);
+  }
+
   AppThemeId _theme = AppThemeId.classic;
   CustomThemeDefinition? _activeCustomTheme;
   String? _activeCustomFontFamily;
@@ -516,18 +590,24 @@ class AppThemeController extends ChangeNotifier {
   Color get tienMonTextSecondary => _tienMonTextSecondary;
   AppFontChoice get tienMonFont => _tienMonFont;
   String? get tienMonFontFamily => _tienMonFontFamily;
-  AppThemePalette get palette =>
-      _transitionPalette ?? _resolvedPalette(_theme, _activeCustomTheme);
+  AppThemePalette get palette => _waterPreview != null
+      ? appThemePalettes[AppThemeId.waterCooling]!.withFontFamily(
+          waterConfig.font.family,
+        )
+      : _transitionPalette ?? _resolvedPalette(_theme, _activeCustomTheme);
   List<CustomThemeDefinition> get customThemes =>
       List<CustomThemeDefinition>.unmodifiable(_customThemes);
   CustomThemeDefinition? get activeCustomTheme => _activeCustomTheme;
   // Presets always expose their own immutable widget configuration.
-  WidgetThemeConfiguration get widgetConfiguration => _theme == AppThemeId.custom
+  WidgetThemeConfiguration get widgetConfiguration =>
+      _theme == AppThemeId.custom
       ? _widgetConfiguration
       : const WidgetThemeConfiguration();
   bool get isTransitioning => _transitionPalette != null;
 
   void resetAfterLogout() {
+    _waterPreview = null;
+    _waterPreviewOwner = null;
     _transitionTimer?.cancel();
     _transitionTimer = null;
     final pending = _transitionCompletion;
@@ -555,6 +635,8 @@ class AppThemeController extends ChangeNotifier {
       );
     }
     final base = appThemePalettes[id] ?? appThemePalettes[AppThemeId.classic]!;
+    if (id == AppThemeId.waterCooling)
+      return base.withFontFamily(waterConfig.font.family);
     if (id == AppThemeId.tienMonPremium) {
       return base
           .withTextColors(_tienMonTextPrimary, _tienMonTextSecondary)
@@ -567,6 +649,21 @@ class AppThemeController extends ChangeNotifier {
     if (_loaded) return;
     _loaded = true;
     final prefs = await SharedPreferences.getInstance();
+    WaterConfig restoreWater(String key) {
+      try {
+        final raw = prefs.getString(key);
+        return raw == null
+            ? const WaterConfig()
+            : WaterConfig.fromJson(
+                Map<String, dynamic>.from(jsonDecode(raw) as Map),
+              );
+      } on Object {
+        return const WaterConfig();
+      }
+    }
+
+    _waterCustom = restoreWater(_waterCustomKey);
+    _waterApplied = restoreWater(_waterAppliedKey);
     final widgetConfigurationRaw = prefs.getString(_widgetConfigurationKey);
     if (widgetConfigurationRaw != null) {
       try {
@@ -694,6 +791,10 @@ class AppThemeController extends ChangeNotifier {
   }
 
   Future<void> select(AppThemeId value) async {
+    if (value == AppThemeId.waterCooling) {
+      await applyWater(const WaterConfig());
+      return;
+    }
     if (value == AppThemeId.custom ||
         (_theme == value && _activeCustomTheme == null)) {
       return;
@@ -797,6 +898,8 @@ class AppThemeController extends ChangeNotifier {
     final completion = Completer<void>();
     _transitionCompletion = completion;
     final premiumHandoff =
+        from.id == AppThemeId.waterCooling ||
+        themeId == AppThemeId.waterCooling ||
         from.id == AppThemeId.tienMonPremium ||
         themeId == AppThemeId.tienMonPremium;
 
@@ -935,16 +1038,21 @@ class AppThemeController extends ChangeNotifier {
           'widgetText': target.widgetText.toARGB32(),
           'widgetSubtext': target.widgetSubtext.toARGB32(),
           'widgetIcon': target.widgetText.toARGB32(),
+          'waterConfig': jsonEncode(_waterApplied.toJson()),
           'fontFamily': target.fontFamily ?? '',
           'fontPath': _theme == AppThemeId.custom
               ? _activeCustomTheme?.font.path ?? ''
               : _theme == AppThemeId.tienMonPremium
               ? _tienMonFont.path ?? ''
               : '',
-          'widgetConfig': jsonEncode((themeKey == 'custom'
-                  ? _widgetConfiguration
-                  : const WidgetThemeConfiguration())
-              .toJson()),
+          'widgetConfig': jsonEncode(
+            (themeKey == 'water_cooling'
+                    ? _waterApplied.widgets
+                    : themeKey == 'custom'
+                    ? _widgetConfiguration
+                    : const WidgetThemeConfiguration())
+                .toJson(),
+          ),
         },
       );
       return true;
@@ -1001,6 +1109,31 @@ TextTheme _withTienMonTextShadows(TextTheme theme) {
   );
 }
 
+// Some Material roles inherit their font size. Scale only resolved sizes;
+// TextStyle.apply asserts when a factor is applied to an inherited null size.
+TextTheme _scaleResolvedTextTheme(TextTheme theme, double factor) {
+  TextStyle? scale(TextStyle? style) => style?.fontSize == null
+      ? style
+      : style!.copyWith(fontSize: style.fontSize! * factor);
+  return theme.copyWith(
+    displayLarge: scale(theme.displayLarge),
+    displayMedium: scale(theme.displayMedium),
+    displaySmall: scale(theme.displaySmall),
+    headlineLarge: scale(theme.headlineLarge),
+    headlineMedium: scale(theme.headlineMedium),
+    headlineSmall: scale(theme.headlineSmall),
+    titleLarge: scale(theme.titleLarge),
+    titleMedium: scale(theme.titleMedium),
+    titleSmall: scale(theme.titleSmall),
+    bodyLarge: scale(theme.bodyLarge),
+    bodyMedium: scale(theme.bodyMedium),
+    bodySmall: scale(theme.bodySmall),
+    labelLarge: scale(theme.labelLarge),
+    labelMedium: scale(theme.labelMedium),
+    labelSmall: scale(theme.labelSmall),
+  );
+}
+
 ThemeData buildBetterTheme(AppThemePalette palette) {
   final brightness = palette.dark ? Brightness.dark : Brightness.light;
   final fontScale = themeFontSizeFactor(palette.fontFamily);
@@ -1010,16 +1143,16 @@ ThemeData buildBetterTheme(AppThemePalette palette) {
     fontFamily: palette.fontFamily ?? 'Roboto',
   );
   final shape = themeButtonShape(palette);
-  final appliedTextTheme = base.textTheme.apply(
-    fontFamily: palette.fontFamily ?? 'Roboto',
-    fontSizeFactor: fontScale,
-    bodyColor: palette.textPrimary,
-    displayColor: palette.textPrimary,
-  );
-  final appliedPrimaryTextTheme = base.primaryTextTheme.apply(
-    fontFamily: palette.fontFamily ?? 'Roboto',
-    fontSizeFactor: fontScale,
-  );
+  final appliedTextTheme = _scaleResolvedTextTheme(base.textTheme, fontScale)
+      .apply(
+        fontFamily: palette.fontFamily ?? 'Roboto',
+        bodyColor: palette.textPrimary,
+        displayColor: palette.textPrimary,
+      );
+  final appliedPrimaryTextTheme = _scaleResolvedTextTheme(
+    base.primaryTextTheme,
+    fontScale,
+  ).apply(fontFamily: palette.fontFamily ?? 'Roboto');
   final textTheme = palette.id == AppThemeId.tienMonPremium
       ? _withTienMonTextShadows(appliedTextTheme)
       : appliedTextTheme;
@@ -1114,7 +1247,9 @@ double themeFontSizeFactor(String? family) {
       textDirection: TextDirection.ltr,
       maxLines: 1,
     )..layout();
-    return painter.size;
+    final size = painter.size;
+    painter.dispose();
+    return size;
   }
 
   final standard = measure('Roboto');
@@ -1190,21 +1325,25 @@ class _AppThemeBackdropState extends State<AppThemeBackdrop>
     super.dispose();
   }
 
+  final _contentKey = GlobalKey();
   @override
   Widget build(BuildContext context) {
+    final content = KeyedSubtree(key: _contentKey, child: widget.child);
+    if (appThemePalette.id == AppThemeId.waterCooling)
+      return SizedBox.expand(child: content);
     if (appThemePalette.id == AppThemeId.tienMonPremium) {
       return Stack(
         fit: StackFit.expand,
         children: <Widget>[
           TienMonPersistentBackground(controller: _tienMonScenes),
           TienMonPersistentAmbient(controller: _tienMonScenes),
-          widget.child,
+          content,
         ],
       );
     }
     return CustomPaint(
       painter: _ThemeBackdropPainter(appThemePalette),
-      child: SizedBox.expand(child: widget.child),
+      child: SizedBox.expand(child: content),
     );
   }
 }
@@ -1324,6 +1463,8 @@ class _ThemeBackdropPainter extends CustomPainter {
         );
       case AppThemeId.facebook:
       case AppThemeId.classic:
+      case AppThemeId.waterCooling:
+        break;
       case AppThemeId.tienMonPremium:
       case AppThemeId.custom:
         break;
@@ -1360,6 +1501,13 @@ class AppThemePanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = appThemePalette;
+    if (palette.id == AppThemeId.waterCooling)
+      return WaterBlock(
+        padding: padding,
+        width: width,
+        constraints: constraints,
+        child: child,
+      );
     final decoration = BoxDecoration(
       color: alt ? palette.cardAlt : palette.card,
       border: Border.all(

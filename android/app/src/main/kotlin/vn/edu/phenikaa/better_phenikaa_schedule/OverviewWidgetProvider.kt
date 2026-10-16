@@ -547,7 +547,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         // The frame is drawn over the cards in the same bitmap bounds as the background.
         val frameConfig = WidgetThemeV14.read(context)
         val framePalette = NativeWidgetPalette.read(context)
-        if (framePalette.key == "custom" && frameConfig.largeBorder.enabled) {
+        if ((framePalette.key == "custom" && frameConfig.largeBorder.enabled) || framePalette.key=="water_cooling") {
             val density = context.resources.displayMetrics.density
             views.setImageViewBitmap(R.id.overview_border_layer,
                 WidgetStaticLayerRenderer.renderBorderOverlay(context,

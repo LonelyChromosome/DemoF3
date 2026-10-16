@@ -67,6 +67,7 @@ internal data class NativeWidgetPalette(
                 Color.WHITE, 0xFFFF8A9F.toInt(), Color.WHITE)
             "steam" -> NativeWidgetPalette(key, 0xFF171D25.toInt(), 0xFF1B3D55.toInt(),
                 0xFFD6E9F8.toInt(), 0xFF66C0F4.toInt(), 0xFFD6E9F8.toInt())
+            "water_cooling" -> NativeWidgetPalette(key,0xFF10091A.toInt(),0xFF462145.toInt(),0xFFF6EDFF.toInt(),0xFFC6B4D2.toInt(),0xFFF6EDFF.toInt())
             "tien_mon_premium" -> NativeWidgetPalette(key, 0xFF12372E.toInt(),
                 0xFF477B68.toInt(), 0xFFFFD66B.toInt(), 0xFFFFE7A6.toInt(),
                 0xFFFFD66B.toInt())
@@ -97,7 +98,7 @@ internal object WidgetStaticLayerRenderer {
         config: WidgetThemeV14 = WidgetThemeV14.read(context),
         palette: NativeWidgetPalette = NativeWidgetPalette.read(context),
     ): Bitmap {
-        val effectiveConfig = if (palette.key == "custom") config else WidgetThemeV14()
+        val effectiveConfig = if (palette.key == "custom" || palette.key == "water_cooling") config else WidgetThemeV14()
         val source = File(effectiveConfig.largeImagePath).takeIf(File::isFile)
         // The supplied base may change with the date/theme; caching by photo
         // alone can return an old card and an old border after a refresh.
@@ -112,6 +113,7 @@ internal object WidgetStaticLayerRenderer {
         )
         resultCanvas.drawBitmap(base, 0f, 0f, null)
         base.recycle()
+        if(palette.key=="water_cooling")WaterWidgetRenderer.background(resultCanvas,result.width,result.height,config)
         val decoded = source?.let {
             decodeForRegion(it, result.width, result.height, effectiveConfig.largeImageCrop)
         }
@@ -137,7 +139,7 @@ internal object WidgetStaticLayerRenderer {
         palette: NativeWidgetPalette = NativeWidgetPalette.read(context),
         useCache: Boolean = true,
     ): Bitmap {
-        val effectiveConfig = if (palette.key == "custom") config else WidgetThemeV14()
+        val effectiveConfig = if (palette.key == "custom" || palette.key == "water_cooling") config else WidgetThemeV14()
         val safeWidth = widthPx.coerceIn(1, 1600)
         val safeHeight = heightPx.coerceIn(1, 1000)
         val imagePath = when (surface) {
@@ -149,10 +151,10 @@ internal object WidgetStaticLayerRenderer {
         val presetImage = if (surface == WidgetSurface.WIDGET2 && source == null)
             Widget2ThemeImage.assetName(palette.key) else null
         val cacheKey = listOf(
-            "v14-system-matched-outer-radius", surface.wireName, safeWidth, safeHeight, palette, presetImage,
+            "water-recovery-r3", surface.wireName, safeWidth, safeHeight, palette, presetImage,
             source?.absolutePath.orEmpty(),
             source?.lastModified() ?: 0L, source?.length() ?: 0L,
-            effectiveConfig.border(surface), effectiveConfig.cornerRadiusDp, effectiveConfig.largeImageCrop,
+            effectiveConfig.waterCooling, effectiveConfig.border(surface), effectiveConfig.cornerRadiusDp, effectiveConfig.largeImageCrop,
             effectiveConfig.widget2ImageCrop,
             effectiveConfig.glassOpacity, effectiveConfig.glowStrength,
         ).joinToString("|")
@@ -171,6 +173,7 @@ internal object WidgetStaticLayerRenderer {
             outerRadius,
         )
         drawThemeBase(canvas, safeWidth, safeHeight, palette, surface, context.resources.displayMetrics.density)
+        if(palette.key=="water_cooling")WaterWidgetRenderer.background(canvas,safeWidth,safeHeight,config)
         val decoded = source?.let {
             if (surface == WidgetSurface.LARGE)
                 decodeForRegion(it, safeWidth, safeHeight, effectiveConfig.largeImageCrop)
@@ -185,7 +188,7 @@ internal object WidgetStaticLayerRenderer {
             }
             WidgetSurface.WIDGET2 -> {
                 decoded?.let {
-                    drawBlurredCover(canvas, it, safeWidth, safeHeight)
+                    if(palette.key=="water_cooling"&&source==null)drawCover(canvas,it,RectF(0f,0f,safeWidth.toFloat(),safeHeight.toFloat()))else drawBlurredCover(canvas,it,safeWidth,safeHeight)
                 }
                 if (decoded != null) {
                     val shade = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -205,7 +208,10 @@ internal object WidgetStaticLayerRenderer {
                 if (decoded != null) {
                     val save = canvas.save()
                     canvas.clipRoundRect(imageRect, imageRadius, imageRadius)
-                    if (source == null) drawCover(canvas, decoded, imageRect)
+                    if(source==null&&palette.key=="water_cooling"){
+                        val cw=(decoded.height*imageRect.width()/imageRect.height()).roundToInt().coerceIn(1,decoded.width)
+                        canvas.drawBitmap(decoded,Rect(decoded.width-cw,0,decoded.width,decoded.height),imageRect,Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+                    }else if (source == null) drawCover(canvas, decoded, imageRect)
                     else drawSelected(canvas, decoded, imageRect, effectiveConfig.widget2ImageCrop)
                     canvas.restoreToCount(save)
                 } else {
@@ -416,6 +422,8 @@ internal object WidgetStaticLayerRenderer {
         palette: NativeWidgetPalette,
         density: Float,
     ) {
+        if(palette.key=="water_cooling"){WaterWidgetRenderer.overlay(canvas,surface,width,height,context.resources.displayMetrics.density,config,cornerRadiusPx(context,config,width,height));return;}
+
         val border = config.border(surface)
         if (!border.enabled) return
 

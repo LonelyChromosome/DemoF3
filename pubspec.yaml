@@ -1,7 +1,7 @@
 name: better_phenikaa_schedule
 description: Better Phenikaa App - lịch học và lịch thi cho sinh viên Phenikaa University.
 publish_to: none
-version: 1.6.0+51
+version: 1.8.0+66
 environment:
   sdk: '>=3.13.0 <4.0.0'
 
@@ -26,6 +26,8 @@ flutter:
 
   shaders:
     - shaders/theme_dust.frag
+    - shaders/water_reservoir.frag
+    - shaders/water_argb.frag
 
   assets:
     - assets/card_vfx/
@@ -39,3 +41,6 @@ flutter:
     - family: FzCoTrang
       fonts:
         - asset: assets/tien_mon_premium/fonts/FzCoTrang.ttf
+    - family: BatmanForever
+      fonts:
+        - asset: assets/fonts/SVN-Batman-Forever-Alternate.otf

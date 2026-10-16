@@ -1,3 +1,6 @@
+import '../giao_dien/water_cooling/water_surface.dart';
+import '../giao_dien/water_cooling/water_fit_text.dart';
+
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
 import 'package:better_phenikaa_schedule/features/lich_hoc/attendance_tag.dart';
@@ -80,6 +83,8 @@ class WeekTimetable extends StatelessWidget {
       children: <Widget>[
         if (premium)
           TienMonEdgeSurface(compact: true, scene: scene, child: header)
+        else if (palette.id == AppThemeId.waterCooling)
+          WaterBlock(child: header)
         else
           header,
         Expanded(
@@ -108,9 +113,11 @@ class WeekTimetable extends StatelessWidget {
                     .toList();
                 // Preserve 1.6 height for untagged rows; avoid clipping
                 // the fourth line on only the rows with attendance badges.
-                final containsBadge = records.any((record) =>
-                    attendanceForStudyCard(record, attendance) != null ||
-                    isPracticeStudyCard(record, practiceIds));
+                final containsBadge = records.any(
+                  (record) =>
+                      attendanceForStudyCard(record, attendance) != null ||
+                      isPracticeStudyCard(record, practiceIds),
+                );
                 final rowHeight = containsBadge ? 106.0 : 86.0;
                 final rowContent = Row(
                   children: <Widget>[
@@ -178,8 +185,13 @@ class WeekTimetable extends StatelessWidget {
                                   const SizedBox(width: 6),
                               itemBuilder: (context, index) {
                                 final row = records[index];
-                                final practice = isPracticeStudyCard(row, practiceIds);
-                                final tag = practice ? null : attendanceForStudyCard(row, attendance);
+                                final practice = isPracticeStudyCard(
+                                  row,
+                                  practiceIds,
+                                );
+                                final tag = practice
+                                    ? null
+                                    : attendanceForStudyCard(row, attendance);
                                 final content = Padding(
                                   padding: const EdgeInsets.fromLTRB(
                                     10,
@@ -191,7 +203,7 @@ class WeekTimetable extends StatelessWidget {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: <Widget>[
-                                      Text(
+                                      WaterFitText.whenWater(
                                         row.subjectName,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -231,7 +243,10 @@ class WeekTimetable extends StatelessWidget {
                                         if (practice)
                                           const PracticeTag(compact: true)
                                         else
-                                          AttendanceTag(summary: tag!, compact: true),
+                                          AttendanceTag(
+                                            summary: tag!,
+                                            compact: true,
+                                          ),
                                       ],
                                     ],
                                   ),
@@ -274,6 +289,11 @@ class WeekTimetable extends StatelessWidget {
                     ),
                   );
                 }
+                if (palette.id == AppThemeId.waterCooling)
+                  return SizedBox(
+                    height: rowHeight,
+                    child: WaterBlock(child: rowContent),
+                  );
                 return Container(
                   height: rowHeight,
                   decoration: BoxDecoration(

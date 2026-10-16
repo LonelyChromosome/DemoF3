@@ -64,6 +64,7 @@ internal object NativeWidgetPreviewRenderer {
                 paletteOverride = palette,
                 typefaceOverride = previewTypeface,
                 cornerRadiusDpOverride = config.cornerRadiusDp,
+                configOverride = config,
             )
             Canvas(result).drawBitmap(cover, 0f, 0f, null)
             cover.recycle()
@@ -77,7 +78,7 @@ internal object NativeWidgetPreviewRenderer {
             Canvas(result).drawText("Không có lịch học", width * .46f, height * .57f, paint)
         }
         drawControls(context, Canvas(result), width, height, palette, WidgetSurface.SMALL)
-        if (config.smallBorder.enabled) {
+        if (palette.key=="water_cooling" || config.smallBorder.enabled) {
             val border = WidgetStaticLayerRenderer.renderBorderOverlay(context,
                 WidgetSurface.SMALL, width, height, config, palette)
             Canvas(result).drawBitmap(border, 0f, 0f, null)
@@ -135,14 +136,26 @@ internal object NativeWidgetPreviewRenderer {
         val cardTop = headerTop + geometry.headerHeight * density
         val cardBottom = cardTop + geometry.cardHeight * density
         repeat(columns) { index ->
+            if(palette.key=="water_cooling"&&items.getOrNull(index)==null)return@repeat
             val left = contentLeft + index * (cardWidth + gap)
             val rect = RectF(left, cardTop, left + cardWidth, cardBottom)
             val card = ScheduleWidgetProvider().overviewCardBackground(
-                context, index, index == 0, palette,
+                context, index, index == 0, palette, config,
             )
             canvas.drawBitmap(card, null, rect, Paint(Paint.FILTER_BITMAP_FLAG))
             card.recycle()
             val item = items.getOrNull(index) ?: return@repeat
+            if (palette.key == "water_cooling") {
+                val text = OverviewFontBitmap.card(context,
+                    (rect.width()/density).roundToInt(), geometry.cardHeight, null,
+                    item.startAt.drop(11).take(5),
+                    OverviewPager.compactSubject(item.subject, widthDp / columns),
+                    item.room, palette.text, palette.text, geometry.compact, false,
+                    previewTypeface)
+                canvas.drawBitmap(text, null, rect, Paint(Paint.FILTER_BITMAP_FLAG))
+                text.recycle()
+                return@repeat
+            }
             val textLeft = rect.left + 8f * density
             val timePaint = Paint(paint).apply {
                 textSize = (if (geometry.compact) 13f else 17f) *
@@ -165,7 +178,7 @@ internal object NativeWidgetPreviewRenderer {
         canvas.restore()
         drawControls(context, canvas, width, panelHeight, palette, WidgetSurface.LARGE,
             topOffset = panelTop)
-        if (config.largeBorder.enabled) {
+        if (palette.key=="water_cooling" || config.largeBorder.enabled) {
             val frame = WidgetStaticLayerRenderer.renderBorderOverlay(context,
                 WidgetSurface.LARGE, width, panelHeight, config, palette)
             canvas.drawBitmap(frame, 0f, panelTop.toFloat(), null)
@@ -196,7 +209,7 @@ internal object NativeWidgetPreviewRenderer {
         canvas.drawBitmap(dynamic, 0f, 0f, null)
         dynamic.recycle()
         drawControls(context, canvas, width, height, palette, WidgetSurface.WIDGET2)
-        if (config.widget2Border.enabled) {
+        if (palette.key=="water_cooling" || config.widget2Border.enabled) {
             val overlay = WidgetStaticLayerRenderer.renderBorderOverlay(
                 context, WidgetSurface.WIDGET2, width, height, config, palette)
             canvas.drawBitmap(overlay, 0f, 0f, null)

@@ -1,3 +1,8 @@
+import '../features/giao_dien/water_cooling/water_surface.dart';
+import '../features/giao_dien/water_cooling/water_engine.dart';
+import '../features/giao_dien/water_cooling/water_routes.dart';
+import '../features/giao_dien/water_cooling/water_fit_text.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -60,14 +65,22 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
       builder: (context, _) {
         final palette = _themes.palette;
         return MaterialApp(
+          navigatorObservers: [WaterRouteObserver.instance],
           title: 'Better Phenikaa App',
           debugShowCheckedModeBanner: false,
           themeAnimationDuration: Duration.zero,
           theme: buildBetterTheme(palette),
-          builder: (context, child) => ThemeDustSurface(
-            key: ThemeDustSurface.surfaceKey,
-            child: BpaPenTraceSplash(
-              child: child ?? const SizedBox.shrink(),
+          builder: (context, child) => BpaPenTraceSplash(
+            backgroundColor: _themes.waterVisible
+                ? const Color(0xFF08040D)
+                : Colors.white,
+            child: WaterStage(
+              enabled: _themes.waterVisible,
+              config: _themes.waterConfig,
+              child: ThemeDustSurface(
+                key: ThemeDustSurface.surfaceKey,
+                child: child ?? const SizedBox.shrink(),
+              ),
             ),
           ),
           home: const _AppRoot(),
@@ -102,7 +115,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   bool _panelOpen = false;
   bool _hasRegisteredSemester = false;
   static const _attendanceStorageKey = 'better_phenikaa_attendance_v17';
-  static const _inlineSyncChannel = MethodChannel('better_phenikaa/inline_sync');
+  static const _inlineSyncChannel = MethodChannel(
+    'better_phenikaa/inline_sync',
+  );
   Map<String, AttendanceSummary> _attendance = const {};
   Set<String> _practiceIds = const <String>{};
   String? _attendanceRoute;
@@ -323,10 +338,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       await prefs.remove(SemesterRetention.previousKey);
       await WidgetPublisher.clear();
       _semesterExpiryTimer?.cancel();
-      if (mounted) setState(() {
-        _data = null;
-        _hasRegisteredSemester = false;
-      });
+      if (mounted)
+        setState(() {
+          _data = null;
+          _hasRegisteredSemester = false;
+        });
       return;
     }
     final previous = SemesterRetention.readPrevious(prefs, now);
@@ -385,9 +401,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     if (data == null) return false;
     final classes = data.classes.toList();
     if (classes.isEmpty) return false;
-    final end = classes.map((e) => e.endAt).reduce(
-      (a, b) => a.isAfter(b) ? a : b,
-    );
+    final end = classes
+        .map((e) => e.endAt)
+        .reduce((a, b) => a.isAfter(b) ? a : b);
     // A discreet opt-in from the final week until the next semester starts.
     return !DateTime.now().isBefore(end.subtract(const Duration(days: 7)));
   }
@@ -397,8 +413,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     // native request. _data may also include a previous retained semester,
     // which must never be counted in this term's Recap.
     final initial = await CurrentSemesterStore().read();
-    if (initial == null || _data == null ||
-        _data!.displayName.trim().isEmpty) {
+    if (initial == null || _data == null || _data!.displayName.trim().isEmpty) {
       throw StateError(
         'Đăng nhập QLĐT và đồng bộ học kỳ trong bản APK này để xem Recap thật.',
       );
@@ -415,7 +430,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     // only if the native 1.7 transaction completed during the intro.
     // Otherwise freeze the initial known-good real QLDT snapshot. No fake.
     final latest = await CurrentSemesterStore().read();
-    final updated = latest != null &&
+    final updated =
+        latest != null &&
         latest.syncedAt.isAfter(initial.syncedAt) &&
         !_inlineCommitting;
     final semester = updated ? latest : initial;
@@ -550,7 +566,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
             _attendance = {
               for (final entry in counts.entries)
                 if (AttendanceSummary.fromJson(entry.value) != null)
-                  entry.key.toString(): AttendanceSummary.fromJson(entry.value)!,
+                  entry.key.toString(): AttendanceSummary.fromJson(
+                    entry.value,
+                  )!,
             };
             final ids = cached['practiceIds'];
             _practiceIds = ids is List
@@ -811,21 +829,24 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     Set<String> practiceIds = const <String>{},
   }) {
     final token = ++_attendanceWriteEpoch;
-    final counts = summaries.map((key, value) =>
-        MapEntry(key, value.toJson()));
+    final counts = summaries.map((key, value) => MapEntry(key, value.toJson()));
     // Serialize writes: a late, older save cannot overwrite newer totals.
     final next = _attendanceWriteQueue.then((_) async {
       if (token != _attendanceWriteEpoch) return;
       try {
         final prefs = await SharedPreferences.getInstance();
         if (token != _attendanceWriteEpoch ||
-            prefs.getString(_routeKey) != route) return;
-        await prefs.setString(_attendanceStorageKey, jsonEncode({
-          'schema': 3,
-          'route': route,
-          'counts': counts,
-          'practiceIds': practiceIds.toList(growable: false)..sort(),
-        }));
+            prefs.getString(_routeKey) != route)
+          return;
+        await prefs.setString(
+          _attendanceStorageKey,
+          jsonEncode({
+            'schema': 3,
+            'route': route,
+            'counts': counts,
+            'practiceIds': practiceIds.toList(growable: false)..sort(),
+          }),
+        );
       } on Object {
         // This optional cache must never fail an authoritative schedule sync.
       }
@@ -838,7 +859,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     // Prevent original WebView sync from racing the new read-only pull sync.
     if (_inlineCommitting ||
         _inlineSyncPhase == PullSyncPhase.running ||
-        _inlineSyncPhase == PullSyncPhase.cancellable) return;
+        _inlineSyncPhase == PullSyncPhase.cancellable)
+      return;
     if (!supportsLiveQldtLogin) {
       if (!mounted) {
         return;
@@ -899,9 +921,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           if (!mounted) return;
           final route = prefs.getString(_routeKey);
           _attendanceRoute = route;
-          final verifiedAttendance = AttendanceSummary.fromVerifiedSchedule(
-            imported.schedule,
-          );
+          final verifiedAttendance = AttendanceSummary.fromVerifiedSchedule(imported.schedule);
           final practiceIds = practiceCardIdsFromVerifiedSchedule(imported.schedule);
           setState(() {
             _data = displayed;
@@ -916,8 +936,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
           _syncStaleTimer?.cancel();
           _scheduleExamClock();
           if (route != null && route.isNotEmpty) {
-            unawaited(_persistAttendanceSidecar(route, verifiedAttendance,
-                practiceIds: practiceIds));
+            unawaited(
+              _persistAttendanceSidecar(
+                route,
+                verifiedAttendance,
+                practiceIds: practiceIds,
+              ),
+            );
           }
           if (difference != null) {
             unawaited(_refreshDifference());
@@ -960,11 +985,16 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   Future<void> _runPullSync({bool silent = false}) async {
-    if (!mounted || _data == null || _syncing || _inlineCommitting ||
+    if (!mounted ||
+        _data == null ||
+        _syncing ||
+        _inlineCommitting ||
         _inlineSyncPhase == PullSyncPhase.running ||
-        _inlineSyncPhase == PullSyncPhase.cancellable) return;
+        _inlineSyncPhase == PullSyncPhase.cancellable)
+      return;
     _inlineResultTimer?.cancel();
     final epoch = ++_inlineSyncEpoch;
+    WaterEngine.feedback(WaterEvent.pump);
     setState(() => _inlineSyncPhase = PullSyncPhase.running);
     _inlineSlowTimer = Timer(const Duration(seconds: 5), () {
       if (mounted && epoch == _inlineSyncEpoch && !_inlineCommitting) {
@@ -977,8 +1007,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       final imported = await openQldtLogin(context, inlinePull: true);
       if (!mounted || epoch != _inlineSyncEpoch) return;
       if (imported == null) {
-        throw StateError(takeQldtInlineSyncError() ??
-            'Phiên QLĐT không sẵn sàng, hãy đồng bộ lại qua Tài khoản.');
+        throw StateError(
+          takeQldtInlineSyncError() ??
+              'Phiên QLĐT không sẵn sàng, hãy đồng bộ lại qua Tài khoản.',
+        );
       }
       final semester = imported.semester;
       if (semester == null) {
@@ -986,11 +1018,13 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       }
       final schedule = imported.schedule;
       // A truncated empty response must NEVER replace a known-good semester.
-      if (_data != null && _data!.records.isNotEmpty &&
+      if (_data != null &&
+          _data!.records.isNotEmpty &&
           schedule.records.isEmpty) {
         throw const FormatException('QLĐT trả lịch trống bất thường.');
       }
-      if (schedule.displayName.isEmpty || semester.displayName.isEmpty ||
+      if (schedule.displayName.isEmpty ||
+          semester.displayName.isEmpty ||
           semester.semesterId.isEmpty) {
         throw const FormatException('Không xác minh được dữ liệu QLĐT.');
       }
@@ -1002,7 +1036,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       if (!mounted) return;
       final prefs = await SharedPreferences.getInstance();
       final snapshot = prefs.getString(_storageKey);
-      if (snapshot == null) throw const FormatException('Thiếu snapshot sau sync.');
+      if (snapshot == null)
+        throw const FormatException('Thiếu snapshot sau sync.');
       final displayed = ImportedScheduleData.decode(snapshot);
       final route = prefs.getString(_routeKey);
       _attendanceRoute = route;
@@ -1015,31 +1050,40 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         _attendance = attendance;
         _practiceIds = practiceIds;
         _lastSuccessfulSync = displayed.syncedAt;
+        WaterEngine.feedback(WaterEvent.success);
         _inlineSyncPhase = PullSyncPhase.success;
       });
       _scheduleExamClock();
       unawaited(_refreshDifference());
       if (route != null && route.isNotEmpty) {
-        unawaited(_persistAttendanceSidecar(route, attendance,
-          practiceIds: practiceIds));
+        unawaited(
+          _persistAttendanceSidecar(
+            route,
+            attendance,
+            practiceIds: practiceIds,
+          ),
+        );
       }
-      final event = difference != null && difference.study.hasChanges &&
+      final event =
+          difference != null &&
+              difference.study.hasChanges &&
               difference.exams.hasChanges
           ? AssistantEvent.studyAndExamChanged
           : difference != null && difference.study.hasChanges
-              ? AssistantEvent.studyChanged
-              : difference != null && difference.exams.hasChanges
-                  ? AssistantEvent.examChanged
-                  : AssistantEvent.syncSuccessNoChange;
+          ? AssistantEvent.studyChanged
+          : difference != null && difference.exams.hasChanges
+          ? AssistantEvent.examChanged
+          : AssistantEvent.syncSuccessNoChange;
       if (!silent) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(
-            content: Text(AssistantText.of(event, _assistantPack)),
-          ));
+          ..showSnackBar(
+            SnackBar(content: Text(AssistantText.of(event, _assistantPack))),
+          );
       }
     } on PlatformException catch (error) {
       if (!mounted || epoch != _inlineSyncEpoch) return;
+      WaterEngine.feedback(WaterEvent.warning);
       setState(() => _inlineSyncPhase = PullSyncPhase.failure);
       // The 1.7 gesture must reveal the native phase when a verified QLĐT
       // request fails; 1.6 login/sync error handling is unchanged.
@@ -1054,13 +1098,14 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       }
     } on Object catch (error) {
       if (!mounted || epoch != _inlineSyncEpoch) return;
+      WaterEngine.feedback(WaterEvent.warning);
       setState(() => _inlineSyncPhase = PullSyncPhase.failure);
       // Never reveal QLDT session values in user-visible errors.
       final details = error is StateError ? error.message?.toString() : null;
       final message = details != null && details.isNotEmpty
           ? details
           : (takeQldtInlineSyncError() ??
-              AssistantText.of(AssistantEvent.syncFailed, _assistantPack));
+                AssistantText.of(AssistantEvent.syncFailed, _assistantPack));
       if (!silent) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
@@ -1069,9 +1114,10 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     } finally {
       _inlineSlowTimer?.cancel();
       _inlineCommitting = false;
-      if (mounted && epoch == _inlineSyncEpoch &&
+      if (mounted &&
+          epoch == _inlineSyncEpoch &&
           (_inlineSyncPhase == PullSyncPhase.success ||
-           _inlineSyncPhase == PullSyncPhase.failure)) {
+              _inlineSyncPhase == PullSyncPhase.failure)) {
         _inlineResultTimer?.cancel();
         _inlineResultTimer = Timer(const Duration(milliseconds: 1600), () {
           if (mounted && epoch == _inlineSyncEpoch) {
@@ -1083,8 +1129,11 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _cancelPullSync() {
-    if (!mounted || _inlineCommitting ||
-        _inlineSyncPhase != PullSyncPhase.cancellable) return;
+    WaterEngine.active?.pumping = false;
+    if (!mounted ||
+        _inlineCommitting ||
+        _inlineSyncPhase != PullSyncPhase.cancellable)
+      return;
     ++_inlineSyncEpoch;
     _inlineSlowTimer?.cancel();
     setState(() => _inlineSyncPhase = PullSyncPhase.idle);
@@ -1172,6 +1221,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
   }
 
   void _openPage(_AppPage page) {
+    WaterEngine.feedback(WaterEvent.mechanical);
     _exitGestureTimer?.cancel();
     _exitGestureArmed = false;
     setState(() {
@@ -1272,7 +1322,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                             )
                           : EdgeInsets.zero,
                       decoration: BoxDecoration(
-                        color: palette.id == AppThemeId.tienMonPremium
+                        color:
+                            (palette.id == AppThemeId.tienMonPremium ||
+                                palette.id == AppThemeId.waterCooling)
                             ? Colors.transparent
                             : palette.surface.withValues(
                                 alpha: desktop ? .98 : .94,
@@ -1301,85 +1353,99 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                         child: _booting
                             // No second, legacy logo/progress screen under
                             // the 1-second pen-trace startup overlay.
-                            ? const ColoredBox(
-                                color: Colors.white,
+                            ? ColoredBox(
+                                color: palette.id == AppThemeId.waterCooling
+                                    ? const Color(0xFF08040D)
+                                    : Colors.white,
                                 child: SizedBox.expand(),
                               )
-                            : displayData == null || displayData.displayName.isEmpty
+                            : displayData == null ||
+                                  displayData.displayName.isEmpty
                             ? _LoginScreen(
                                 onLogin: _loginOrSync,
                                 supportsLive: supportsLiveQldtLogin,
                               )
-                            : Stack(children: [
-                                _MainShell(
-                                data: displayData!,
-                                attendance: _attendance,
-                                practiceIds: _practiceIds,
-                                pullSyncPhase: _inlineSyncPhase,
-                                onPullSync: () => unawaited(_runPullSync()),
-                                onCancelPullSync: _cancelPullSync,
-                                accountDisplayName: _accountDisplayName,
-                                page: _page,
-                                selectedDate: _selectedDate,
-                                showPastExams: _showPastExams,
-                                panelOpen: _panelOpen,
-                                syncing: _syncing,
-                                errorMessage: _errorMessage,
-                                examNotice: _examNotice,
-                                unreadDifference: _unreadDifference,
-                                hasActiveExamPeriod:
-                                    ExamPeriod.hasActiveExamPeriod(
-                                      displayData.exams,
-                                      DateTime.now(),
+                            : Stack(
+                                children: [
+                                  _MainShell(
+                                    data: displayData!,
+                                    attendance: _attendance,
+                                    practiceIds: _practiceIds,
+                                    pullSyncPhase: _inlineSyncPhase,
+                                    onPullSync: () => unawaited(_runPullSync()),
+                                    onCancelPullSync: _cancelPullSync,
+                                    accountDisplayName: _accountDisplayName,
+                                    page: _page,
+                                    selectedDate: _selectedDate,
+                                    showPastExams: _showPastExams,
+                                    panelOpen: _panelOpen,
+                                    syncing: _syncing,
+                                    errorMessage: _errorMessage,
+                                    examNotice: _examNotice,
+                                    unreadDifference: _unreadDifference,
+                                    hasActiveExamPeriod:
+                                        ExamPeriod.hasActiveExamPeriod(
+                                          displayData.exams,
+                                          DateTime.now(),
+                                        ),
+                                    syncStale: const SyncReminderPolicy()
+                                        .shouldRemind(
+                                          now: DateTime.now(),
+                                          lastSuccessfulSync:
+                                              _lastSuccessfulSync,
+                                          lastReminder: null,
+                                        ),
+                                    onSyncWarning: _showSyncWarning,
+                                    assistantPack: _assistantPack,
+                                    onAssistantPackChanged: (pack) async {
+                                      await AssistantSelection.save(pack);
+                                      if (mounted) {
+                                        setState(() => _assistantPack = pack);
+                                      }
+                                    },
+                                    onOpenDifferences: _onNotificationTap,
+                                    hasUpdateAvailable: _update.notice != null,
+                                    onOpenUpdateAccount: () =>
+                                        _openPage(_AppPage.account),
+                                    onCloseNotificationCenter:
+                                        _closeNotificationCenter,
+                                    onOpenExamFromNotification: () =>
+                                        _openPage(_AppPage.exam),
+                                    onShowDifferences: _showDifferences,
+                                    latestDifference: _latestDifference,
+                                    onOpenUpdate: _openUpdate,
+                                    onOpenCardBinding: _openCardBinding,
+                                    appVersionName: _appVersionName,
+                                    onTogglePanel: () => setState(
+                                      () => _panelOpen = !_panelOpen,
                                     ),
-                                syncStale: const SyncReminderPolicy()
-                                    .shouldRemind(
-                                      now: DateTime.now(),
-                                      lastSuccessfulSync: _lastSuccessfulSync,
-                                      lastReminder: null,
-                                    ),
-                                onSyncWarning: _showSyncWarning,
-                                assistantPack: _assistantPack,
-                                onAssistantPackChanged: (pack) async {
-                                  await AssistantSelection.save(pack);
-                                  if (mounted) {
-                                    setState(() => _assistantPack = pack);
-                                  }
-                                },
-                                onOpenDifferences: _onNotificationTap,
-                                hasUpdateAvailable: _update.notice != null,
-                                onOpenUpdateAccount: () => _openPage(_AppPage.account),
-                                onCloseNotificationCenter:
-                                    _closeNotificationCenter,
-                                onOpenExamFromNotification: () =>
-                                    _openPage(_AppPage.exam),
-                                onShowDifferences: _showDifferences,
-                                latestDifference: _latestDifference,
-                                onOpenUpdate: _openUpdate,
-                                onOpenCardBinding: _openCardBinding,
-                                appVersionName: _appVersionName,
-                                onTogglePanel: () =>
-                                    setState(() => _panelOpen = !_panelOpen),
-                                onOpenPage: _openPage,
-                                onSync: () => unawaited(_loginOrSync()),
-                                onLogout: _logout,
-                                onDateChanged: (date) {
-                                  StudyAlarmCard.dismissExpanded();
-                                  setState(() => _selectedDate = _dateOnly(date));
-                                },
-                                onExamTabChanged: (past) =>
-                                    setState(() => _showPastExams = past),
-                                onDismissError: () =>
-                                    setState(() => _errorMessage = null),
-                              ),
-                                if (_page == _AppPage.timetable && _recapButtonVisible)
-                                  Positioned(
-                                    left: 14, bottom: 16,
-                                    child: RecapMemoryButton(
-                                      onPressed: () => unawaited(_openRecap()),
-                                    ),
+                                    onOpenPage: _openPage,
+                                    onSync: () => unawaited(_loginOrSync()),
+                                    onLogout: _logout,
+                                    onDateChanged: (date) {
+                                      WaterEngine.feedback(WaterEvent.day);
+                                      StudyAlarmCard.dismissExpanded();
+                                      setState(
+                                        () => _selectedDate = _dateOnly(date),
+                                      );
+                                    },
+                                    onExamTabChanged: (past) =>
+                                        setState(() => _showPastExams = past),
+                                    onDismissError: () =>
+                                        setState(() => _errorMessage = null),
                                   ),
-                              ]),
+                                  if (_page == _AppPage.timetable &&
+                                      _recapButtonVisible)
+                                    Positioned(
+                                      left: 14,
+                                      bottom: 16,
+                                      child: RecapMemoryButton(
+                                        onPressed: () =>
+                                            unawaited(_openRecap()),
+                                      ),
+                                    ),
+                                ],
+                              ),
                       ),
                     ),
                   ),
@@ -1942,19 +2008,24 @@ class _TimetableScreenState extends State<_TimetableScreen> {
   bool _trackPull(ScrollNotification notification) {
     if (widget.pullSyncPhase != PullSyncPhase.idle ||
         notification.metrics.axis != Axis.vertical ||
-        notification.metrics.extentBefore > 0) return false;
+        notification.metrics.extentBefore > 0)
+      return false;
     if (notification is OverscrollNotification &&
-        notification.dragDetails != null && notification.overscroll < 0) {
+        notification.dragDetails != null &&
+        notification.overscroll < 0) {
       setState(() {
-        _pullDistance = (_pullDistance - notification.overscroll)
-            .clamp(0.0, _pullThreshold + 24);
+        _pullDistance = (_pullDistance - notification.overscroll).clamp(
+          0.0,
+          _pullThreshold + 24,
+        );
       });
     }
     return false;
   }
 
   void _finishPull() {
-    final ready = _pullDistance >= _pullThreshold &&
+    final ready =
+        _pullDistance >= _pullThreshold &&
         widget.pullSyncPhase == PullSyncPhase.idle;
     if (_pullDistance != 0) setState(() => _pullDistance = 0);
     if (ready) widget.onPullSync();
@@ -2112,171 +2183,223 @@ class _TimetableScreenState extends State<_TimetableScreen> {
         child: Stack(
           children: <Widget>[
             GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onVerticalDragUpdate: (!_weekly && items.isEmpty)
-          ? (details) {
-              final delta = details.primaryDelta ?? 0;
-              if (delta > 0 && widget.pullSyncPhase == PullSyncPhase.idle) {
-                setState(() {
-                  _pullDistance = (_pullDistance + delta)
-                      .clamp(0.0, _pullThreshold + 24);
-                });
-              }
-            }
-          : null,
-      onVerticalDragEnd: (_) => _finishPull(),
-      onHorizontalDragEnd: (details) {
-        final velocity = details.primaryVelocity ?? 0;
-        if (velocity.abs() < 180) {
-          return;
-        }
-        if (!_weekly) {
-          widget.onDateChanged(
-            widget.selectedDate.add(Duration(days: velocity < 0 ? 1 : -1)),
-          );
-        }
-      },
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            _TopTitle(
-              title: 'Lịch học',
-              badge: null,
-              unreadDifference: widget.unreadDifference,
-              hasActiveExamPeriod: widget.hasActiveExamPeriod,
-              onNotificationTap: widget.onOpenDifferences,
-              hasUpdateAvailable: widget.hasUpdateAvailable,
-              onUpdateTap: widget.onOpenUpdateAccount,
-              onCalendarTap: () => _weekly
-                  ? _pickWeek()
-                  : _showCalendarPicker(
-                      context,
-                      widget.selectedDate,
-                      widget.onDateChanged,
-                      studyDays: _studyDayKeys(widget.data.classes),
-                      examDays: _studyDayKeys(widget.data.exams),
+              behavior: HitTestBehavior.opaque,
+              onVerticalDragUpdate: (!_weekly && items.isEmpty)
+                  ? (details) {
+                      final delta = details.primaryDelta ?? 0;
+                      if (delta > 0 &&
+                          widget.pullSyncPhase == PullSyncPhase.idle) {
+                        setState(() {
+                          _pullDistance = (_pullDistance + delta).clamp(
+                            0.0,
+                            _pullThreshold + 24,
+                          );
+                        });
+                      }
+                    }
+                  : null,
+              onVerticalDragEnd: (_) => _finishPull(),
+              onHorizontalDragEnd: (details) {
+                final velocity = details.primaryVelocity ?? 0;
+                if (velocity.abs() < 180) {
+                  return;
+                }
+                if (!_weekly) {
+                  widget.onDateChanged(
+                    widget.selectedDate.add(
+                      Duration(days: velocity < 0 ? 1 : -1),
                     ),
-            ),
-            if (const bool.fromEnvironment('BPA_ALARM_TEST_FIXTURE'))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'TEST 1.6 • lịch giả ngày mai (không lưu vào QLĐT)',
-                  style: TextStyle(color: appThemePalette.primary, fontSize: 11, fontWeight: FontWeight.w700),
-                ),
-              ),
-            const SizedBox(height: 12),
-            ValueListenableBuilder<bool>(
-              valueListenable: _weeklySelection,
-              builder: (context, weekly, _) => _TimetableModeSelector(
-                weekly: weekly,
-                onChanged: (nextWeekly) =>
-                    unawaited(_changeTimetableMode(nextWeekly)),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ValueListenableBuilder<double>(
-                valueListenable: _modeOpacity,
-                builder: (context, opacity, _) => AnimatedOpacity(
-                  opacity: opacity,
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeInOutCubic,
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: _weeklyMode,
-                    builder: (context, weekly, _) => IndexedStack(
-                      index: weekly ? 1 : 0,
-                      sizing: StackFit.expand,
-                      children: <Widget>[
-                        TickerMode(
-                          enabled: !weekly,
-                          child: RepaintBoundary(
-                            child: Column(
+                  );
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _TopTitle(
+                      title: 'Lịch học',
+                      badge: null,
+                      unreadDifference: widget.unreadDifference,
+                      hasActiveExamPeriod: widget.hasActiveExamPeriod,
+                      onNotificationTap: widget.onOpenDifferences,
+                      hasUpdateAvailable: widget.hasUpdateAvailable,
+                      onUpdateTap: widget.onOpenUpdateAccount,
+                      onCalendarTap: () => _weekly
+                          ? _pickWeek()
+                          : _showCalendarPicker(
+                              context,
+                              widget.selectedDate,
+                              widget.onDateChanged,
+                              studyDays: _studyDayKeys(widget.data.classes),
+                              examDays: _studyDayKeys(widget.data.exams),
+                            ),
+                    ),
+                    if (const bool.fromEnvironment('BPA_ALARM_TEST_FIXTURE'))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'TEST 1.6 • lịch giả ngày mai (không lưu vào QLĐT)',
+                          style: TextStyle(
+                            color: appThemePalette.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _weeklySelection,
+                      builder: (context, weekly, _) => _TimetableModeSelector(
+                        weekly: weekly,
+                        onChanged: (nextWeekly) =>
+                            unawaited(_changeTimetableMode(nextWeekly)),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: ValueListenableBuilder<double>(
+                        valueListenable: _modeOpacity,
+                        builder: (context, opacity, _) => AnimatedOpacity(
+                          opacity: opacity,
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeInOutCubic,
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: _weeklyMode,
+                            builder: (context, weekly, _) => IndexedStack(
+                              index: weekly ? 1 : 0,
+                              sizing: StackFit.expand,
                               children: <Widget>[
-                                _DateNavigator(
-                                  date: widget.selectedDate,
-                                  onTap: () => _showCalendarPicker(
-                                    context,
-                                    widget.selectedDate,
-                                    widget.onDateChanged,
-                                    studyDays: _studyDayKeys(
-                                      widget.data.classes,
-                                    ),
-                                    examDays: _studyDayKeys(widget.data.exams),
-                                  ),
-                                  onPrevious: () => widget.onDateChanged(
-                                    widget.selectedDate.subtract(
-                                      const Duration(days: 1),
-                                    ),
-                                  ),
-                                  onNext: () => widget.onDateChanged(
-                                    widget.selectedDate.add(
-                                      const Duration(days: 1),
+                                TickerMode(
+                                  enabled: !weekly,
+                                  child: RepaintBoundary(
+                                    child: Column(
+                                      children: <Widget>[
+                                        _DateNavigator(
+                                          date: widget.selectedDate,
+                                          onTap: () => _showCalendarPicker(
+                                            context,
+                                            widget.selectedDate,
+                                            widget.onDateChanged,
+                                            studyDays: _studyDayKeys(
+                                              widget.data.classes,
+                                            ),
+                                            examDays: _studyDayKeys(
+                                              widget.data.exams,
+                                            ),
+                                          ),
+                                          onPrevious: () =>
+                                              widget.onDateChanged(
+                                                widget.selectedDate.subtract(
+                                                  const Duration(days: 1),
+                                                ),
+                                              ),
+                                          onNext: () => widget.onDateChanged(
+                                            widget.selectedDate.add(
+                                              const Duration(days: 1),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 18),
+                                        Expanded(
+                                          child: AnimatedSwitcher(
+                                            duration: const Duration(
+                                              milliseconds: 210,
+                                            ),
+                                            switchInCurve: Curves.easeOutCubic,
+                                            switchOutCurve: Curves.easeOutCubic,
+                                            layoutBuilder:
+                                                (current, previous) =>
+                                                    current ??
+                                                    const SizedBox.shrink(),
+                                            transitionBuilder:
+                                                (child, animation) {
+                                                  final slide = Tween<Offset>(
+                                                    begin: const Offset(.10, 0),
+                                                    end: Offset.zero,
+                                                  ).animate(animation);
+                                                  return SlideTransition(
+                                                    position: slide,
+                                                    child: child,
+                                                  );
+                                                },
+                                            child: KeyedSubtree(
+                                              key: ValueKey<String>(
+                                                '${widget.selectedDate.year}-${widget.selectedDate.month}-${widget.selectedDate.day}',
+                                              ),
+                                              child: items.isEmpty
+                                                  ? _EmptyState(
+                                                      icon: Icons
+                                                          .event_available_outlined,
+                                                      title:
+                                                          _sameDay(
+                                                            widget.selectedDate,
+                                                            DateTime.now(),
+                                                          )
+                                                          ? AssistantText.of(
+                                                              AssistantEvent
+                                                                  .studyTodayEmpty,
+                                                              widget
+                                                                  .assistantPack,
+                                                            )
+                                                          : 'Không có lịch học',
+                                                      message: 'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
+                                                    )
+                                                  : ListView.separated(
+                                                      physics:
+                                                          const AlwaysScrollableScrollPhysics(),
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            bottom: 82,
+                                                          ),
+                                                      itemCount: items.length,
+                                                      separatorBuilder:
+                                                          (_, _) =>
+                                                              const SizedBox(
+                                                                height: 14,
+                                                              ),
+                                                      itemBuilder:
+                                                          (
+                                                            context,
+                                                            index,
+                                                          ) => _ScheduleCard(
+                                                            item: items[index],
+                                                            accent: _accentFor(
+                                                              index,
+                                                            ),
+                                                            attendance:
+                                                                attendanceForStudyCard(
+                                                                  items[index],
+                                                                  widget
+                                                                      .attendance,
+                                                                ),
+                                                            isPractice:
+                                                                isPracticeStudyCard(
+                                                                  items[index],
+                                                                  widget
+                                                                      .practiceIds,
+                                                                ),
+                                                          ),
+                                                    ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
-                                const SizedBox(height: 18),
-                                Expanded(
-                                  child: AnimatedSwitcher(
-                                    duration: const Duration(milliseconds: 210),
-                                    switchInCurve: Curves.easeOutCubic,
-                                    switchOutCurve: Curves.easeOutCubic,
-                                    layoutBuilder: (current, previous) =>
-                                        current ?? const SizedBox.shrink(),
-                                    transitionBuilder: (child, animation) {
-                                      final slide = Tween<Offset>(
-                                        begin: const Offset(.10, 0),
-                                        end: Offset.zero,
-                                      ).animate(animation);
-                                      return SlideTransition(
-                                        position: slide,
-                                        child: child,
-                                      );
-                                    },
-                                    child: KeyedSubtree(
-                                      key: ValueKey<String>(
-                                        '${widget.selectedDate.year}-${widget.selectedDate.month}-${widget.selectedDate.day}',
+                                TickerMode(
+                                  enabled: weekly,
+                                  child: RepaintBoundary(
+                                    child: WeekTimetable(
+                                      data: widget.data,
+                                      attendance: widget.attendance,
+                                      practiceIds: widget.practiceIds,
+                                      week: _week,
+                                      onWeekChanged: (value) => setState(
+                                        () => _week = weekMonday(value),
                                       ),
-                                      child: items.isEmpty
-                                          ? _EmptyState(
-                                              icon: Icons
-                                                  .event_available_outlined,
-                                              title:
-                                                  _sameDay(
-                                                    widget.selectedDate,
-                                                    DateTime.now(),
-                                                  )
-                                                  ? AssistantText.of(
-                                                      AssistantEvent
-                                                          .studyTodayEmpty,
-                                                      widget.assistantPack,
-                                                    )
-                                                  : 'Không có lịch học',
-                                              message: 'Vuốt sang ngày khác, bấm ngày hoặc biểu tượng lịch để chọn nhanh.',
-                                            )
-                                          : ListView.separated(
-                                              physics: const AlwaysScrollableScrollPhysics(),
-                                              padding: const EdgeInsets.only(
-                                                bottom: 82,
-                                              ),
-                                              itemCount: items.length,
-                                              separatorBuilder: (_, _) =>
-                                                  const SizedBox(height: 14),
-                                              itemBuilder: (context, index) =>
-                                                  _ScheduleCard(
-                                                    item: items[index],
-                                                    accent: _accentFor(index),
-                                                    attendance: attendanceForStudyCard(
-                                                      items[index],
-                                                      widget.attendance,
-                                                    ),
-                                                    isPractice: isPracticeStudyCard(
-                                                      items[index], widget.practiceIds,
-                                                    ),
-                                                  ),
-                                            ),
+                                      onPickWeek: _pickWeek,
                                     ),
                                   ),
                                 ),
@@ -2284,29 +2407,11 @@ class _TimetableScreenState extends State<_TimetableScreen> {
                             ),
                           ),
                         ),
-                        TickerMode(
-                          enabled: weekly,
-                          child: RepaintBoundary(
-                            child: WeekTimetable(
-                              data: widget.data,
-                              attendance: widget.attendance,
-                              practiceIds: widget.practiceIds,
-                              week: _week,
-                              onWeekChanged: (value) =>
-                                  setState(() => _week = weekMonday(value)),
-                              onPickWeek: _pickWeek,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
             ),
             Positioned(
               top: 5,
@@ -2547,8 +2652,7 @@ class _NotificationCenterScreen extends StatelessWidget {
                     child: _EmptyState(
                       icon: Icons.notifications_none_rounded,
                       title: 'Chưa có thông báo lịch mới',
-                      message:
-                          'Các thay đổi lịch học và lịch thi sẽ xuất hiện ở đây.',
+                      message: 'Các thay đổi lịch học và lịch thi sẽ xuất hiện ở đây.',
                     ),
                   ),
               ],
@@ -3259,7 +3363,7 @@ class _TopTitle extends StatelessWidget {
     final palette = appThemePalette;
     final headingStyle = TextStyle(
       color: palette.textPrimary,
-      fontSize: 25,
+      fontSize: palette.id == AppThemeId.waterCooling ? 21 : 25,
       fontWeight: FontWeight.w900,
       letterSpacing: themeLetterSpacing(palette),
       shadows: palette.id == AppThemeId.tienMonPremium
@@ -3408,14 +3512,18 @@ class _TimetableModeSelector extends StatelessWidget {
     final premium = palette.id == AppThemeId.tienMonPremium;
     final radius = premium ? 20.0 : palette.radius;
 
-    return Container(
+    final chamber = Container(
       height: 46,
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
         color: premium ? Colors.transparent : palette.cardAlt,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(
-          color: premium ? const Color(0xCCFFD66B) : palette.border,
+          color: premium
+              ? const Color(0xCCFFD66B)
+              : palette.id == AppThemeId.waterCooling
+              ? Colors.transparent
+              : palette.border,
           width: premium ? 1.15 : 1,
         ),
         boxShadow: premium
@@ -3462,6 +3570,9 @@ class _TimetableModeSelector extends StatelessWidget {
         ),
       ),
     );
+    return palette.id == AppThemeId.waterCooling
+        ? WaterBlock(child: chamber)
+        : chamber;
   }
 }
 
@@ -3543,10 +3654,8 @@ class _DateNavigator extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
                   Flexible(
-                    child: Text(
+                    child: WaterFitText.date(
                       _dateLabel(date),
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
                       style: TextStyle(
                         color: palette.textPrimary,
                         fontWeight: FontWeight.w800,
@@ -3942,8 +4051,12 @@ class _ScheduleCalendarPickerState extends State<_ScheduleCalendarPicker> {
 }
 
 class _ScheduleCard extends StatelessWidget {
-  const new({required this.item, required this.accent, this.attendance,
-    this.isPractice = false});
+  const new({
+    required this.item,
+    required this.accent,
+    this.attendance,
+    this.isPractice = false,
+  });
 
   final ScheduleRecord item;
   final Color accent;
@@ -3961,7 +4074,9 @@ class _ScheduleCard extends StatelessWidget {
         : palette.id == AppThemeId.classic
         ? accent
         : palette.primary;
-    final content = Row(
+    final content = palette.id == AppThemeId.waterCooling
+      ? _WaterStudyContent(item: item, attendance: attendance, isPractice: isPractice)
+      : Row(
       children: <Widget>[
         Container(
           width: palette.geometry == AppThemeGeometry.pixel ? 6 : 4,
@@ -3969,7 +4084,7 @@ class _ScheduleCard extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
-          child: Text(
+          child: WaterFitText.time(
             _time(item.startAt),
             style: TextStyle(
               color: palette.primary,
@@ -3986,7 +4101,7 @@ class _ScheduleCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: <Widget>[
-                Text(
+                WaterFitText.whenWater(
                   item.subjectName,
                   style: TextStyle(
                     color: palette.textPrimary,
@@ -3999,11 +4114,15 @@ class _ScheduleCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   Row(
                     children: <Widget>[
-                      Expanded(child: _MetaLine(
-                        icon: Icons.location_on_outlined,
-                        text: item.room,
-                        maxLines: attendance == null && !isPractice ? null : 1,
-                      )),
+                      Expanded(
+                        child: _MetaLine(
+                          icon: Icons.location_on_outlined,
+                          text: item.room,
+                          maxLines: attendance == null && !isPractice
+                              ? null
+                              : 1,
+                        ),
+                      ),
                       if (isPractice) ...<Widget>[
                         const SizedBox(width: 5),
                         const PracticeTag(),
@@ -4014,7 +4133,7 @@ class _ScheduleCard extends StatelessWidget {
                       // 1.6 keeps its 44px alarm button overlaid at right: 21.
                       // Reserve that hit area on this row without moving the
                       // button or shrinking the other study-card metadata.
-                      if (attendance != null || isPractice)
+                      if (attendance != null || isPractice || palette.id == AppThemeId.waterCooling)
                         const SizedBox(width: 64),
                     ],
                   ),
@@ -4057,6 +4176,57 @@ class _ScheduleCard extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 106),
       child: alarmContent,
     );
+  }
+}
+
+class _WaterStudyContent extends StatelessWidget {
+  const _WaterStudyContent({required this.item, required this.attendance,
+      required this.isPractice});
+  final ScheduleRecord item;
+  final AttendanceSummary? attendance;
+  final bool isPractice;
+  @override
+  Widget build(BuildContext context) {
+    final palette = appThemePalette;
+    // Numeric and supporting information use a reading face. The chosen display
+    // font remains on the subject/headings, where it has room to breathe.
+    const reading = TextStyle(fontFamily: 'Roboto', fontSize: 13, height: 1.25);
+    Widget line(IconData icon, String value) => Row(children: [
+      Icon(icon, size: 15, color: palette.textSecondary),
+      const SizedBox(width: 6), Expanded(child: Text(value,
+        style: reading.copyWith(color: palette.textSecondary),
+        maxLines: 2, overflow: TextOverflow.ellipsis)),
+    ]);
+    return Padding(padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        WaterFitText(item.subjectName, minSize: 11, maxSize: 14,
+          style: TextStyle(fontFamily: palette.fontFamily,
+            color: palette.textPrimary, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        Padding(padding: const EdgeInsets.only(right: 61),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            SizedBox(width: 57, child: FittedBox(fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft, child: Text(_time(item.startAt),
+                maxLines: 1, softWrap: false,
+                style: reading.copyWith(fontSize: 17, fontWeight: FontWeight.w800,
+                  color: palette.primary)))),
+            const SizedBox(width: 10),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (item.room.isNotEmpty) line(Icons.location_on_outlined, item.room),
+              const SizedBox(height: 5),
+              line(Icons.access_time_rounded, '${_time(item.startAt)} – ${_time(item.endAt)}'),
+              if (item.periodStart != null && item.periodEnd != null) ...[
+                const SizedBox(height: 5),
+                line(Icons.menu_book_outlined, 'Tiết ${item.periodStart} – ${item.periodEnd}'),
+              ],
+              if (isPractice || attendance != null) ...[
+                const SizedBox(height: 6),
+                DefaultTextStyle.merge(style: reading, child:
+                  isPractice ? const PracticeTag() : AttendanceTag(summary: attendance!)),
+              ],
+            ])),
+          ])),
+      ]));
   }
 }
 
@@ -4114,7 +4284,7 @@ class _ExamCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
+                WaterFitText.whenWater(
                   item.subjectName,
                   style: TextStyle(
                     color: palette.textPrimary,
@@ -4473,7 +4643,7 @@ class _WidgetPreview extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                Text(
+                WaterFitText.whenWater(
                   item.subjectName,
                   style: TextStyle(
                     color: palette.widgetText,
@@ -5087,6 +5257,12 @@ class _PanelAction extends StatelessWidget {
     final palette = appThemePalette;
     return Material(
       color: Colors.transparent,
+      borderRadius: palette.id == AppThemeId.waterCooling
+          ? BorderRadius.circular(14)
+          : null,
+      clipBehavior: palette.id == AppThemeId.waterCooling
+          ? Clip.antiAlias
+          : Clip.none,
       child: InkWell(
         onTap: onTap,
         child: AppThemePanel(
@@ -5151,6 +5327,7 @@ Color _panelSecondaryColor(AppThemePalette palette) => switch (palette.id) {
   AppThemeId.youtube => const Color(0xFF3EA6FF),
   AppThemeId.steam => const Color(0xFFA4D007),
   AppThemeId.tienMonPremium => const Color(0xFF74D8B1),
+  AppThemeId.waterCooling => palette.accent,
   AppThemeId.custom => palette.primary,
 };
 
@@ -5166,6 +5343,7 @@ Color _panelTertiaryColor(AppThemePalette palette) => switch (palette.id) {
   AppThemeId.youtube => const Color(0xFF8B5CF6),
   AppThemeId.steam => const Color(0xFF66C0F4),
   AppThemeId.tienMonPremium => const Color(0xFFFFD66B),
+  AppThemeId.waterCooling => const Color(0xFFB580F4),
   AppThemeId.custom => palette.accent,
 };
 
@@ -5196,7 +5374,7 @@ class _MetaLine extends StatelessWidget {
         ),
         const SizedBox(width: 5),
         Expanded(
-          child: Text(
+          child: WaterFitText.whenWater(
             text,
             maxLines: maxLines,
             overflow: maxLines == null ? null : TextOverflow.ellipsis,
@@ -5296,7 +5474,9 @@ class _PhoneSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = appThemePalette;
     return ColoredBox(
-      color: palette.id == AppThemeId.tienMonPremium
+      color:
+          (palette.id == AppThemeId.tienMonPremium ||
+              palette.id == AppThemeId.waterCooling)
           ? Colors.transparent
           : palette.surface.withValues(alpha: palette.dark ? .94 : .985),
       child: SizedBox.expand(child: child),

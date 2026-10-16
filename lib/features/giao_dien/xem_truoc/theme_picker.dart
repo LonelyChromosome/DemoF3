@@ -1,3 +1,5 @@
+import '../water_cooling/water_page.dart';
+
 import 'dart:async';
 
 import 'package:better_phenikaa_schedule/features/giao_dien/bo_may/theme_source.dart';
@@ -32,10 +34,7 @@ Future<void> showAppThemePicker(BuildContext context) async {
     barrierColor: const Color(0x99000000),
     builder: (context) => ValueListenableBuilder<bool>(
       valueListenable: ThemeDustSurface.busy,
-      builder: (context, busy, child) => PopScope(
-        canPop: !busy,
-        child: child!,
-      ),
+      builder: (context, busy, child) => PopScope(canPop: !busy, child: child!),
       child: AnimatedBuilder(
         animation: controller,
         builder: (context, _) => _ThemePickerSheet(controller: controller),
@@ -44,16 +43,21 @@ Future<void> showAppThemePicker(BuildContext context) async {
   );
 }
 
-class _ThemePickerSheet extends StatelessWidget {
+class _ThemePickerSheet extends StatefulWidget {
   const new({required this.controller});
 
   final AppThemeController controller;
+  @override
+  State<_ThemePickerSheet> createState() => _ThemePickerSheetState();
+}
 
+class _ThemePickerSheetState extends State<_ThemePickerSheet> {
+  AppThemeController get controller => widget.controller;
   @override
   Widget build(BuildContext context) {
     final palette = controller.palette;
     final radius = palette.geometry == AppThemeGeometry.rounded ? 28.0 : 0.0;
-    return SafeArea(
+    final sheet = SafeArea(
       top: false,
       child: Container(
         height: MediaQuery.sizeOf(context).height * 0.86,
@@ -115,6 +119,10 @@ class _ThemePickerSheet extends StatelessWidget {
                 label: const Text('Tạo theme từ ảnh hoặc phối màu'),
               ),
             ),
+            if (controller.theme == AppThemeId.waterCooling) ...[
+              const SizedBox(height: 8),
+              _waterEditButton(context),
+            ],
             const SizedBox(height: 14),
             Expanded(
               child: CustomScrollView(
@@ -157,7 +165,23 @@ class _ThemePickerSheet extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (controller.theme == AppThemeId.tienMonPremium) ...<Widget>[
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: SizedBox(
+                        height: 142,
+                        child: _PresetCard(
+                          id: AppThemeId.waterCooling,
+                          key: const ValueKey('water-cooling-theme-tile'),
+                          selected: controller.theme == AppThemeId.waterCooling,
+                          onTap: () =>
+                              _selectPreset(context, AppThemeId.waterCooling),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (controller.theme ==
+                      AppThemeId.tienMonPremium) ...<Widget>[
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.only(bottom: 10),
@@ -249,7 +273,30 @@ class _ThemePickerSheet extends StatelessWidget {
         ),
       ),
     );
+    return palette.id == AppThemeId.waterCooling
+        ? Theme(
+            data: buildBetterTheme(palette.withFontFamily('Roboto')),
+            child: DefaultTextStyle(
+              style: const TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: 14,
+                color: Color(0xFFF6EDFF),
+              ),
+              child: sheet,
+            ),
+          )
+        : sheet;
   }
+
+  Widget _waterEditButton(BuildContext context) => SizedBox(
+    width: double.infinity,
+    child: OutlinedButton.icon(
+      key: const ValueKey('edit-water-cooling'),
+      onPressed: () => showWaterCoolingEditor(context),
+      icon: const Icon(Icons.tune_rounded),
+      label: const Text('Chỉnh Water Cooling'),
+    ),
+  );
 
   Future<void> _showTienMonFontPicker(BuildContext context) async {
     const presets = <AppFontChoice>[
@@ -646,10 +693,7 @@ class _ThemePickerSheet extends StatelessWidget {
 
     if (controller.theme == AppThemeId.tienMonPremium &&
         id != AppThemeId.tienMonPremium) {
-      await _leaveTienMon(
-        context,
-        () => controller.select(id),
-      );
+      await _leaveTienMon(context, () => controller.select(id));
       return;
     }
 
@@ -708,10 +752,7 @@ class _ThemePickerSheet extends StatelessWidget {
     CustomThemeDefinition theme,
   ) async {
     if (controller.theme == AppThemeId.tienMonPremium) {
-      await _leaveTienMon(
-        context,
-        () => controller.applyCustomTheme(theme),
-      );
+      await _leaveTienMon(context, () => controller.applyCustomTheme(theme));
       return;
     }
     await controller.applyCustomTheme(theme);
@@ -879,18 +920,12 @@ class _RgbColorPickerState extends State<_RgbColorPicker> {
                     final size = Size(constraints.maxWidth, 190);
                     return GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTapDown: (details) => _setFromOffset(
-                        details.localPosition,
-                        size,
-                      ),
-                      onPanDown: (details) => _setFromOffset(
-                        details.localPosition,
-                        size,
-                      ),
-                      onPanUpdate: (details) => _setFromOffset(
-                        details.localPosition,
-                        size,
-                      ),
+                      onTapDown: (details) =>
+                          _setFromOffset(details.localPosition, size),
+                      onPanDown: (details) =>
+                          _setFromOffset(details.localPosition, size),
+                      onPanUpdate: (details) =>
+                          _setFromOffset(details.localPosition, size),
                       child: CustomPaint(
                         painter: _RgbSpectrumPainter(hueColor),
                         foregroundPainter: _RgbSelectionPainter(
@@ -939,7 +974,8 @@ class _RgbColorPickerState extends State<_RgbColorPicker> {
                 child: Text(
                   _colorHex(rgb),
                   style: TextStyle(
-                    color: ThemeData.estimateBrightnessForColor(rgb) ==
+                    color:
+                        ThemeData.estimateBrightnessForColor(rgb) ==
                             Brightness.dark
                         ? Colors.white
                         : Colors.black,
@@ -992,9 +1028,8 @@ class _RgbSpectrumPainter extends CustomPainter {
     canvas.drawRect(
       rect,
       Paint()
-        ..shader = LinearGradient(
-          colors: <Color>[Colors.white, hue],
-        ).createShader(rect),
+        ..shader = LinearGradient(colors: <Color>[Colors.white, hue])
+            .createShader(rect),
     );
     canvas.drawRect(
       rect,
@@ -1084,15 +1119,9 @@ class _HueBar extends StatelessWidget {
                 inactiveTrackColor: Colors.transparent,
                 overlayColor: Colors.white24,
                 thumbColor: Colors.white,
-                thumbShape: const RoundSliderThumbShape(
-                  enabledThumbRadius: 8,
-                ),
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
               ),
-              child: Slider(
-                value: hue,
-                max: 360,
-                onChanged: onChanged,
-              ),
+              child: Slider(value: hue, max: 360, onChanged: onChanged),
             ),
           ],
         );
@@ -1189,8 +1218,7 @@ class _DefaultThemeLoading extends StatefulWidget {
 }
 
 class _DefaultThemeLoadingState extends State<_DefaultThemeLoading> {
-  static final AppThemePalette _palette =
-      appThemePalettes[AppThemeId.classic]!;
+  static final AppThemePalette _palette = appThemePalettes[AppThemeId.classic]!;
 
   @override
   void initState() {
@@ -1214,10 +1242,7 @@ class _DefaultThemeLoadingState extends State<_DefaultThemeLoading> {
               decoration: BoxDecoration(
                 color: _palette.card,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _palette.primary,
-                  width: 6,
-                ),
+                border: Border.all(color: _palette.primary, width: 6),
               ),
               child: Icon(
                 AppThemeId.classic.icon,
@@ -1237,10 +1262,7 @@ class _DefaultThemeLoadingState extends State<_DefaultThemeLoading> {
             const SizedBox(height: 7),
             Text(
               '2.1.2 • Lịch học & Lịch thi',
-              style: TextStyle(
-                color: _palette.textSecondary,
-                fontSize: 15,
-              ),
+              style: TextStyle(color: _palette.textSecondary, fontSize: 15),
             ),
             const SizedBox(height: 120),
             SizedBox(
@@ -1255,10 +1277,7 @@ class _DefaultThemeLoadingState extends State<_DefaultThemeLoading> {
             const SizedBox(height: 12),
             Text(
               'Đang khởi động...',
-              style: TextStyle(
-                color: _palette.textSecondary,
-                fontSize: 12,
-              ),
+              style: TextStyle(color: _palette.textSecondary, fontSize: 12),
             ),
           ],
         ),
@@ -1334,7 +1353,12 @@ class _TienMonThemeLoadingState extends State<_TienMonThemeLoading> {
 }
 
 class _PresetCard extends StatelessWidget {
-  const new({required this.id, required this.selected, required this.onTap});
+  const new({
+    required this.id,
+    required this.selected,
+    required this.onTap,
+    super.key,
+  });
 
   final AppThemeId id;
   final bool selected;

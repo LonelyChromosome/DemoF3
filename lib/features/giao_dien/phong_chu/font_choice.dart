@@ -37,6 +37,7 @@ final class AppFontChoice {
 
   static const builtIns = <AppFontChoice>[
     system,
+    AppFontChoice(id:'batman_forever',label:'SVN Batman Forever',kind:AppFontKind.builtIn,family:'BatmanForever'),
     AppFontChoice(
       id: 'minecraft',
       label: 'Minecraft',

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -6,25 +7,42 @@ import 'package:flutter/material.dart';
 /// Flutter integration of experiments/vfx/bpa_pen_trace_splash.html.
 /// The six source paths and 850 ms timing are intentionally kept unchanged.
 class BpaPenTraceSplash extends StatefulWidget {
-  const new({required this.child, super.key});
+  const new({
+    required this.child,
+    this.backgroundColor = Colors.white,
+    super.key,
+  });
 
   final Widget child;
+  final Color backgroundColor;
 
   @override
   State<BpaPenTraceSplash> createState() => _BpaPenTraceSplashState();
 }
 
 class _BpaPenTraceSplashState extends State<BpaPenTraceSplash>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1000),
   );
   bool _visible = true;
+  Timer? _deadline;
+  void _finish() {
+    _deadline?.cancel();
+    if (mounted && _visible) setState(() => _visible = false);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) _finish();
+  }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _deadline = Timer(const Duration(milliseconds: 1200), _finish);
     // Start the 1-second stroke animation after the first painted frame.
     // A slow cold-start frame must not consume the animation before it shows.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -39,6 +57,8 @@ class _BpaPenTraceSplashState extends State<BpaPenTraceSplash>
 
   @override
   void dispose() {
+    _deadline?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }
@@ -62,7 +82,7 @@ class _BpaPenTraceSplashState extends State<BpaPenTraceSplash>
                 return Opacity(
                   opacity: opacity,
                   child: ColoredBox(
-                    color: Colors.white,
+                    color: widget.backgroundColor,
                     child: Center(
                       child: SizedBox.square(
                         dimension: math.min(
