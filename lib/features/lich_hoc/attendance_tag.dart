@@ -280,9 +280,10 @@ bool isPracticeStudyCard(ScheduleRecord record, Set<String> practiceIds) {
 
 /// A small non-interactive tag in the same visual family as AttendanceTag.
 class PracticeTag extends StatelessWidget {
-  const PracticeTag({this.compact = false, super.key});
+  const PracticeTag({this.compact = false, this.maxLabelWidth, super.key});
 
   final bool compact;
+  final double? maxLabelWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -298,15 +299,18 @@ class PracticeTag extends StatelessWidget {
           horizontal: compact ? 4 : 7,
           vertical: compact ? 2 : 3,
         ),
-        child: Text(
-          'Thực Hành',
-          maxLines: 1,
-          softWrap: false,
-          style: TextStyle(
-            fontSize: compact ? 9 : 11,
-            height: 1.1,
-            color: accent,
-            fontWeight: FontWeight.w800,
+        child: _fitTagLabel(
+          maxLabelWidth,
+          Text(
+            'Thực Hành',
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: compact ? 9 : 11,
+              height: 1.1,
+              color: accent,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ),
@@ -330,10 +334,16 @@ final class _AttendanceLesson {
 }
 
 class AttendanceTag extends StatelessWidget {
-  const AttendanceTag({required this.summary, this.compact = false, super.key});
+  const AttendanceTag({
+    required this.summary,
+    this.compact = false,
+    this.maxLabelWidth,
+    super.key,
+  });
 
   final AttendanceSummary summary;
   final bool compact;
+  final double? maxLabelWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -345,10 +355,10 @@ class AttendanceTag extends StatelessWidget {
     final color = summary.exceeded
         ? const Color(0xFFEF4444)
         : used >= 1
-            ? const Color(0xFFF59E0B)
-            : used >= .5
-                ? const Color(0xFF3B82F6)
-                : const Color(0xFF22C55E);
+        ? const Color(0xFFF59E0B)
+        : used >= .5
+        ? const Color(0xFF3B82F6)
+        : const Color(0xFF22C55E);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: color.withValues(alpha: .12),
@@ -360,18 +370,30 @@ class AttendanceTag extends StatelessWidget {
           horizontal: compact ? 4 : 7,
           vertical: compact ? 2 : 3,
         ),
-        child: Text(
-          'Đã nghỉ ${summary.absentSessions}/$max',
-          maxLines: 1,
-          softWrap: false,
-          style: TextStyle(
-            fontSize: compact ? 9 : 11,
-            height: 1.1,
-            color: color,
-            fontWeight: FontWeight.w800,
+        child: _fitTagLabel(
+          maxLabelWidth,
+          Text(
+            'Đã nghỉ ${summary.absentSessions}/$max',
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: compact ? 9 : 11,
+              height: 1.1,
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
       ),
     );
   }
 }
+
+// Only the selected font's glyphs shrink when a caller supplies a label bound.
+// The tag's padding, border and original row remain in place.
+Widget _fitTagLabel(double? maxWidth, Widget text) => maxWidth == null
+    ? text
+    : ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: FittedBox(fit: BoxFit.scaleDown, child: text),
+      );

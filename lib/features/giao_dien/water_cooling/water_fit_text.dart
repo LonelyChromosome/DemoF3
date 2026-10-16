@@ -11,7 +11,7 @@ class WaterFitText extends StatelessWidget {
     this.maxLines = 2,
     this.overflow,
     this.minSize = 10,
-    this.maxSize = 14,
+    this.maxSize,
     this.heightLimit = 42,
     super.key,
   });
@@ -19,19 +19,24 @@ class WaterFitText extends StatelessWidget {
   final TextStyle? style;
   final int? maxLines;
   final TextOverflow? overflow;
-  final double minSize, maxSize, heightLimit;
+  final double minSize, heightLimit;
+  final double? maxSize;
   static Widget whenWater(
     String text, {
     TextStyle? style,
     int? maxLines,
     TextOverflow? overflow,
+    double minSize = 10,
+    double? heightLimit,
   }) => appThemePalette.id == AppThemeId.waterCooling
       ? WaterFitText(
           text,
           style: style,
           maxLines: maxLines ?? 2,
-          maxSize: (style?.fontSize ?? 14).clamp(10, 14),
-          heightLimit: (maxLines ?? 2) == 1 ? 22 : 42,
+          maxSize: style?.fontSize,
+          overflow: overflow,
+          minSize: minSize,
+          heightLimit: heightLimit ?? ((maxLines ?? 2) == 1 ? 22 : 42),
         )
       : Text(text, style: style, maxLines: maxLines, overflow: overflow);
   static Widget date(String text, {required TextStyle style}) {
@@ -74,43 +79,56 @@ class WaterFitText extends StatelessWidget {
           height = c.maxHeight.isFinite
               ? c.maxHeight.clamp(0.0, heightLimit)
               : heightLimit;
-      var lo = minSize, hi = maxSize;
-      var lines = allowedLines;
-      final probe = TextPainter(
-        textDirection: direction,
-        textScaler: scaler,
-        maxLines: 1,
-        text: TextSpan(
-          text: text,
-          style: inherited.copyWith(fontSize: minSize, height: 1.2),
-        ),
-      )..layout(maxWidth: width);
-      if (!probe.didExceedMaxLines && probe.height <= height) lines = 1;
-      probe.dispose();
-      final p = TextPainter(
-        textDirection: direction,
-        textScaler: scaler,
-        maxLines: lines,
-      );
-      for (var i = 0; i < 12; i++) {
-        final size = (lo + hi) / 2;
-        p.text = TextSpan(
-          text: text,
-          style: inherited.copyWith(fontSize: size, height: 1.14),
+      final nominal = maxSize ?? inherited.fontSize ?? 14;
+      final minimum = minSize.clamp(0.0, nominal);
+      var chosen = minimum, lines = 1;
+      // Compare one/two lines using the selected face's actual metrics. A
+      // slightly long system label may fit one line at 15; a wide display face
+      // can use two at 11. Never force every font to a shared smaller size.
+      for (
+        var candidateLines = 1;
+        candidateLines <= allowedLines;
+        candidateLines++
+      ) {
+        final p = TextPainter(
+          textDirection: direction,
+          textScaler: scaler,
+          maxLines: candidateLines,
         );
-        p.layout(maxWidth: width);
-        if (p.didExceedMaxLines || p.height > height) {
-          hi = size;
-        } else {
-          lo = size;
+        bool fits(double size) {
+          p.text = TextSpan(
+            text: text,
+            style: inherited.copyWith(fontSize: size),
+          );
+          p.layout(maxWidth: width);
+          return !p.didExceedMaxLines && p.height <= height;
         }
+
+        var lo = minimum, hi = nominal;
+        final minimumFits = fits(minimum);
+        if (fits(nominal)) {
+          lo = nominal;
+        } else {
+          for (var i = 0; i < 12; i++) {
+            final size = (lo + hi) / 2;
+            if (fits(size))
+              lo = size;
+            else
+              hi = size;
+          }
+        }
+        if ((candidateLines == 1 || lo > chosen + .01) && minimumFits) {
+          chosen = lo;
+          lines = candidateLines;
+        }
+        p.dispose();
+        if (chosen == nominal) break;
       }
-      p.dispose();
       return Text(
         text,
-        style: inherited.copyWith(fontSize: lo, height: 1.14),
+        style: inherited.copyWith(fontSize: chosen),
         maxLines: lines,
-        overflow: TextOverflow.ellipsis,
+        overflow: overflow ?? TextOverflow.ellipsis,
       );
     },
   );

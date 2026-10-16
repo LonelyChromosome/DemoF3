@@ -63,7 +63,7 @@ android {
         configureEach {
             if(name!="release" && providers.gradleProperty("bpaWaterRecovery").orNull=="true") {
                 applicationIdSuffix=".waterrecovery.test6r"
-                manifestPlaceholders["appLabel"]="BPA Water Cooling Test6R2"
+                manifestPlaceholders["appLabel"]="BPA Water Cooling Test6R3"
             }
         }
         release {

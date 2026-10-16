@@ -4074,9 +4074,7 @@ class _ScheduleCard extends StatelessWidget {
         : palette.id == AppThemeId.classic
         ? accent
         : palette.primary;
-    final content = palette.id == AppThemeId.waterCooling
-      ? _WaterStudyContent(item: item, attendance: attendance, isPractice: isPractice)
-      : Row(
+    final content = Row(
       children: <Widget>[
         Container(
           width: palette.geometry == AppThemeGeometry.pixel ? 6 : 4,
@@ -4103,6 +4101,8 @@ class _ScheduleCard extends StatelessWidget {
               children: <Widget>[
                 WaterFitText.whenWater(
                   item.subjectName,
+                  minSize: 8,
+                  heightLimit: 28,
                   style: TextStyle(
                     color: palette.textPrimary,
                     fontWeight: FontWeight.w900,
@@ -4112,30 +4112,43 @@ class _ScheduleCard extends StatelessWidget {
                 ),
                 if (item.room.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 8),
-                  Row(
-                    children: <Widget>[
-                      Expanded(
-                        child: _MetaLine(
-                          icon: Icons.location_on_outlined,
-                          text: item.room,
-                          maxLines: attendance == null && !isPractice
-                              ? null
-                              : 1,
-                        ),
-                      ),
-                      if (isPractice) ...<Widget>[
-                        const SizedBox(width: 5),
-                        const PracticeTag(),
-                      ] else if (attendance != null) ...<Widget>[
-                        const SizedBox(width: 5),
-                        AttendanceTag(summary: attendance!),
-                      ],
-                      // 1.6 keeps its 44px alarm button overlaid at right: 21.
-                      // Reserve that hit area on this row without moving the
-                      // button or shrinking the other study-card metadata.
-                      if (attendance != null || isPractice || palette.id == AppThemeId.waterCooling)
-                        const SizedBox(width: 64),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final water = palette.id == AppThemeId.waterCooling;
+                      // Keep the original inline row. Reserve the unchanged alarm
+                      // and a room fragment, then fit only an overflowing tag label.
+                      final tagLabelWidth = water
+                          ? (constraints.maxWidth - 64 - 5 - 40 - 14).clamp(
+                              1.0,
+                              double.infinity,
+                            )
+                          : null;
+                      return Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _MetaLine(
+                              icon: Icons.location_on_outlined,
+                              text: item.room,
+                              maxLines: attendance == null && !isPractice
+                                  ? null
+                                  : 1,
+                            ),
+                          ),
+                          if (isPractice) ...<Widget>[
+                            const SizedBox(width: 5),
+                            PracticeTag(maxLabelWidth: tagLabelWidth),
+                          ] else if (attendance != null) ...<Widget>[
+                            const SizedBox(width: 5),
+                            AttendanceTag(
+                              summary: attendance!,
+                              maxLabelWidth: tagLabelWidth,
+                            ),
+                          ],
+                          if (attendance != null || isPractice || water)
+                            const SizedBox(width: 64),
+                        ],
+                      );
+                    },
                   ),
                 ],
                 const SizedBox(height: 5),
@@ -4178,58 +4191,6 @@ class _ScheduleCard extends StatelessWidget {
     );
   }
 }
-
-class _WaterStudyContent extends StatelessWidget {
-  const _WaterStudyContent({required this.item, required this.attendance,
-      required this.isPractice});
-  final ScheduleRecord item;
-  final AttendanceSummary? attendance;
-  final bool isPractice;
-  @override
-  Widget build(BuildContext context) {
-    final palette = appThemePalette;
-    // Numeric and supporting information use a reading face. The chosen display
-    // font remains on the subject/headings, where it has room to breathe.
-    const reading = TextStyle(fontFamily: 'Roboto', fontSize: 13, height: 1.25);
-    Widget line(IconData icon, String value) => Row(children: [
-      Icon(icon, size: 15, color: palette.textSecondary),
-      const SizedBox(width: 6), Expanded(child: Text(value,
-        style: reading.copyWith(color: palette.textSecondary),
-        maxLines: 2, overflow: TextOverflow.ellipsis)),
-    ]);
-    return Padding(padding: const EdgeInsets.fromLTRB(16, 13, 16, 13),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        WaterFitText(item.subjectName, minSize: 11, maxSize: 14,
-          style: TextStyle(fontFamily: palette.fontFamily,
-            color: palette.textPrimary, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 10),
-        Padding(padding: const EdgeInsets.only(right: 61),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(width: 57, child: FittedBox(fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft, child: Text(_time(item.startAt),
-                maxLines: 1, softWrap: false,
-                style: reading.copyWith(fontSize: 17, fontWeight: FontWeight.w800,
-                  color: palette.primary)))),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (item.room.isNotEmpty) line(Icons.location_on_outlined, item.room),
-              const SizedBox(height: 5),
-              line(Icons.access_time_rounded, '${_time(item.startAt)} – ${_time(item.endAt)}'),
-              if (item.periodStart != null && item.periodEnd != null) ...[
-                const SizedBox(height: 5),
-                line(Icons.menu_book_outlined, 'Tiết ${item.periodStart} – ${item.periodEnd}'),
-              ],
-              if (isPractice || attendance != null) ...[
-                const SizedBox(height: 6),
-                DefaultTextStyle.merge(style: reading, child:
-                  isPractice ? const PracticeTag() : AttendanceTag(summary: attendance!)),
-              ],
-            ])),
-          ])),
-      ]));
-  }
-}
-
 class _ExamCard extends StatelessWidget {
   const new({required this.item});
 
