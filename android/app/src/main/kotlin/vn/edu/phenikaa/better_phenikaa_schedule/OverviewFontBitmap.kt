@@ -24,9 +24,11 @@ internal object OverviewFontBitmap {
             (height.coerceAtLeast(1) * d).roundToInt().coerceAtLeast(1), Bitmap.Config.ARGB_8888)
     }
 
-    private fun paint(context: Context, sp: Float, color: Int, bold: Boolean = false) =
+    private fun paint(context: Context, sp: Float, color: Int, bold: Boolean = false,
+        typefaceOverride: Typeface? = null) =
         TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-            typeface = WidgetFont.typeface(context, if (bold) Typeface.BOLD else Typeface.NORMAL)
+            typeface = typefaceOverride?.let { Typeface.create(it, if(bold) Typeface.BOLD else Typeface.NORMAL) }
+                ?: WidgetFont.typeface(context, if (bold) Typeface.BOLD else Typeface.NORMAL)
             textSize = sp * context.resources.displayMetrics.scaledDensity
             this.color = color
             textSize *= WidgetFont.scaleLikeSystem(this,
@@ -72,15 +74,15 @@ internal object OverviewFontBitmap {
 
     fun card(context: Context, width: Int, cardHeight: Int, date: String?, time: String,
         subject: String, room: String, textColor: Int, timeColor: Int, compact: Boolean,
-        classic: Boolean): Bitmap {
+        classic: Boolean, typefaceOverride: Typeface? = null): Bitmap {
         val result = bitmap(context, width, cardHeight)
         val canvas = Canvas(result)
         val d = context.resources.displayMetrics.density
         val secondaryColor = if (classic) textColor else WidgetVisualPalette.withAlpha(textColor, 210)
-        val datePaint = paint(context, if (compact) 9f else 10f, secondaryColor)
-        val timePaint = paint(context, if (compact) 13f else 17f, timeColor, true)
-        val subjectPaint = paint(context, if (compact) 10f else 11f, textColor, true)
-        val roomPaint = paint(context, if (compact) 9f else 10f, secondaryColor)
+        val datePaint = paint(context, if (compact) 9f else 10f, secondaryColor, typefaceOverride = typefaceOverride)
+        val timePaint = paint(context, if (compact) 13f else 17f, timeColor, true, typefaceOverride)
+        val subjectPaint = paint(context, if (compact) 10f else 11f, textColor, true, typefaceOverride)
+        val roomPaint = paint(context, if (compact) 9f else 10f, secondaryColor, typefaceOverride = typefaceOverride)
         val contentWidth = result.width - 13f * d
         val x = 8f * d
         val lines = listOfNotNull(if (date != null) date to datePaint else null,

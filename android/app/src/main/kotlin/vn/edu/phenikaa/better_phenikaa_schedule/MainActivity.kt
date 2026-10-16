@@ -49,9 +49,11 @@ class MainActivity : FlutterActivity() {
     private var pendingWidgetApply: Runnable? = null
     private var pendingFileResult: MethodChannel.Result? = null
     private var pendingFileKind: String? = null
+    private var waterGravity:WaterGravityBridge?=null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        waterGravity=WaterGravityBridge(this,flutterEngine.dartExecutor.binaryMessenger)
         updateBridge = UpdateBridge(this, flutterEngine)
         ExamChangeNotifier.recoverExisting(applicationContext)
         SyncStaleReminderScheduler.reconcile(applicationContext)
@@ -164,6 +166,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        waterGravity?.resume()
         UpdateConfirmation.visible = true
         UpdateConfirmation.take()?.let { startActivity(it) }
         updateBridge?.onResume()
@@ -177,12 +180,15 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onPause() {
+        waterGravity?.pause()
         UpdateConfirmation.visible = false
         updateBridge?.onPause()
         super.onPause()
     }
 
     override fun onDestroy() {
+        waterGravity?.close()
+        waterGravity=null
         updateBridge?.close()
         updateBridge = null
         pendingWidgetApply?.let(widgetHandler::removeCallbacks)
@@ -279,7 +285,7 @@ class MainActivity : FlutterActivity() {
             val surface = WidgetSurface.fromWireName(values["surface"] as? String)
             val width = ((values["widthDp"] as? Number)?.toInt() ?: 320).coerceIn(180, 640)
             val height = ((values["heightDp"] as? Number)?.toInt() ?: 150).coerceIn(56, 320)
-            val config = WidgetThemeV14.fromJson(values["widgetConfig"] as? String)
+            val config = waterWidgetConfig(values)
             val palette = NativeWidgetPalette(
                 key = values["theme"] as? String ?: "custom",
                 start = (values["widgetStart"] as? Number)?.toInt() ?: DEFAULT_START,
@@ -388,7 +394,7 @@ class MainActivity : FlutterActivity() {
             .putString(WIDGET_FONT_PATH_KEY, request.fontPath)
             .commit()
         WidgetThemeV14.save(this,
-            if (request.theme == "custom") request.widgetConfig else WidgetThemeV14())
+            if (request.theme == "custom" || request.theme == "water_cooling") request.widgetConfig else WidgetThemeV14())
         if (refreshOverview) WidgetRefreshCoordinator.refreshOverview(this)
     }
 
@@ -674,7 +680,7 @@ class MainActivity : FlutterActivity() {
                 val icon = (values["widgetIcon"] as? Number)?.toInt() ?: text
                 val fontFamily = values["fontFamily"] as? String ?: ""
                 val fontPath = values["fontPath"] as? String ?: ""
-                val widgetConfig = WidgetThemeV14.fromJson(values["widgetConfig"] as? String)
+                val widgetConfig = waterWidgetConfig(values)
                 val token = if (theme == "custom") {
                     listOf(theme, start, end, text, subtext, icon,
                         fontFamily.hashCode(), fontPath.hashCode(),
@@ -689,6 +695,12 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        private fun waterWidgetConfig(values:Map<*,*>):WidgetThemeV14 {
+            val base=WidgetThemeV14.fromJson(values["widgetConfig"] as? String)
+            val raw=values["waterConfig"] as? String
+            return if(values["theme"]=="water_cooling"&&raw!=null)base.copy(waterCooling=raw)else base
+        }
+
         private const val DAILY_SYNC_CHANNEL = "better_phenikaa/daily_sync"
         private const val QLDT_CREDENTIAL_CHANNEL = "better_phenikaa/qldt_credentials"
         private const val WIDGET_THEME_CHANNEL = "better_phenikaa/widget_theme"

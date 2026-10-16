@@ -35,6 +35,7 @@ internal data class WidgetImageCrop(
 }
 
 internal data class WidgetThemeV14(
+    val waterCooling:String="{}",
     val largeImagePath: String = "",
     val largeImageCrop: WidgetImageCrop = WidgetImageCrop(),
     val widget2ImagePath: String = "",
@@ -62,13 +63,14 @@ internal data class WidgetThemeV14(
     }
 
     fun textPalette(surface: WidgetSurface, palette: NativeWidgetPalette): NativeWidgetPalette {
-        if (palette.key != "custom") return palette
+        if (palette.key != "custom" && palette.key != "water_cooling") return palette
         val chosen = textColor(surface) ?: return palette
         return palette.copy(text = chosen, subtext = (chosen and 0x00FFFFFF) or (0xD8 shl 24))
     }
 
     fun toJson(): JSONObject = JSONObject()
         .put("schema", 1)
+        .put("waterCooling",JSONObject(waterCooling))
         .put("largeImagePath", largeImagePath)
         .put("largeImageCrop", largeImageCrop.toJson())
         .put("widget2ImagePath", widget2ImagePath)
@@ -89,7 +91,7 @@ internal data class WidgetThemeV14(
             val activeTheme = context.getSharedPreferences(
                 "FlutterSharedPreferences", Context.MODE_PRIVATE,
             ).getString("flutter.appTheme", "classic")
-            if (activeTheme != "custom") return WidgetThemeV14()
+            if (activeTheme != "custom" && activeTheme != "water_cooling") return WidgetThemeV14()
             val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getString(KEY, null) ?: return WidgetThemeV14()
             return fromJson(raw)
@@ -103,6 +105,7 @@ internal data class WidgetThemeV14(
         fun fromJson(raw: String?): WidgetThemeV14 = runCatching {
             val json = JSONObject(raw ?: "{}")
             WidgetThemeV14(
+                waterCooling=json.optJSONObject("waterCooling")?.toString()?:"{}",
                 largeImagePath = json.optString("largeImagePath"),
                 largeImageCrop = WidgetImageCrop.fromJson(json.optJSONObject("largeImageCrop")),
                 widget2ImagePath = json.optString("widget2ImagePath"),

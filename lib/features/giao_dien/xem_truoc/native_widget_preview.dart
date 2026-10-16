@@ -15,6 +15,8 @@ final class NativeWidgetPreview {
     required WidgetSurfaceKind surface,
     required ThemeTokens tokens,
     required WidgetThemeConfiguration configuration,
+    String themeKey = 'custom',
+    Map<String, Object?>? waterConfig,
     String fontFamily = '',
     String fontPath = '',
   }) async {
@@ -31,7 +33,8 @@ final class NativeWidgetPreview {
           'surface': surface.name,
           'widthDp': width,
           'heightDp': height,
-          'theme': 'custom',
+          'theme': themeKey,
+          if (waterConfig != null) 'waterConfig': jsonEncode(waterConfig),
           'widgetStart': tokens.widgetStart.toARGB32(),
           'widgetEnd': tokens.widgetEnd.toARGB32(),
           'widgetText': tokens.widgetText.toARGB32(),

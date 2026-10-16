@@ -91,6 +91,7 @@ internal object Widget2BitmapRenderer {
         repeat(5) { index ->
             val cardTop = cardsTop + index * (cardHeight + gap)
             val rect = RectF(left, cardTop, right, cardTop + cardHeight)
+            if(palette.key=="water_cooling"&&visible.getOrNull(index)==null)return@repeat
             drawGlass(canvas, rect, palette, config, index, active = index == 0)
             val item = visible.getOrNull(index) ?: return@repeat
             val accentWidth = max(2.4f, 3f * scale)
@@ -98,7 +99,12 @@ internal object Widget2BitmapRenderer {
                 RectF(rect.left, rect.top + 2f * scale, rect.left + accentWidth,
                     rect.bottom - 2f * scale),
                 accentWidth, accentWidth,
-                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = accents[index] },
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = if (palette.key == "water_cooling")
+                        WaterWidgetRenderer.sample(config, rect.left / (width / .68f),
+                            rect.centerY() / height)
+                    else accents[index]
+                },
             )
             val textLeft = rect.left + 7f * scale
             val textWidth = rect.width() - 12f * scale
@@ -195,6 +201,8 @@ internal object Widget2BitmapRenderer {
         index: Int,
         active: Boolean,
     ) {
+        if(palette.key=="water_cooling"){canvas.drawRoundRect(rect,4f,4f,Paint(Paint.ANTI_ALIAS_FLAG).apply{color=0xB51C1029.toInt()});WaterWidgetRenderer.card(canvas,rect,config,canvas.height/150f);return;}
+
         val radius = rect.height() * .25f
         val alpha = (config.glassOpacity * 190).toInt().coerceIn(35, 220)
         val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {

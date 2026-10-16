@@ -158,6 +158,7 @@ internal fun renderWidgetSlide(
     paletteOverride: NativeWidgetPalette? = null,
     typefaceOverride: Typeface? = null,
     cornerRadiusDpOverride: Float? = null,
+    configOverride: WidgetThemeV14? = null,
 ): Bitmap {
     val density = context.resources.displayMetrics.density
     val widthDp = renderWidthDp.coerceAtLeast(1)
@@ -203,6 +204,7 @@ internal fun renderWidgetSlide(
         }
     }
     canvas.drawRect(0f, 0f, widthPx, heightPx, backgroundPaint)
+    if(theme.key=="water_cooling")WaterWidgetRenderer.background(canvas,width,height,configOverride ?: WidgetThemeV14.read(context))
     val left = widthPx * CONTENT_LEFT_FRACTION
     // The three actions form a narrow vertical rail at the right edge.
     val titleRight = minOf(widthPx * TITLE_RIGHT_FRACTION, widthPx - 50f * density)
@@ -321,6 +323,7 @@ internal fun renderWidgetStackCover(
     paletteOverride: NativeWidgetPalette? = null,
     typefaceOverride: Typeface? = null,
     cornerRadiusDpOverride: Float? = null,
+    configOverride: WidgetThemeV14? = null,
 ): Bitmap {
     val source = renderWidgetSlide(
         context,
@@ -331,6 +334,7 @@ internal fun renderWidgetStackCover(
         paletteOverride,
         typefaceOverride,
         cornerRadiusDpOverride,
+        configOverride,
     )
     val output = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
     val density = context.resources.displayMetrics.density
@@ -480,6 +484,7 @@ private fun widgetThemeForKey(context: Context, key: String): WidgetTheme {
     // previous missing case fell back to a `classic` token while the root was
     // jade, so StackView rear cards visibly leaked and theme handoff could wait
     // for the wrong ready-token.
+    "water_cooling" -> WidgetTheme(key,0xFF10091A.toInt(),0xFF462145.toInt(),0xFFF6EDFF.toInt(),0xFFC6B4D2.toInt())
     "tien_mon_premium" -> WidgetTheme(key, 0xFF082D2B.toInt(), 0xFF667E7B.toInt(), 0xFFFFD66B.toInt(), 0xFFFFE7A3.toInt())
     else -> WidgetTheme("classic", 0xFF173A8E.toInt(), 0xFF315AB5.toInt(), 0xFFFFFFFF.toInt(), 0xFFDDE8FF.toInt())
     }

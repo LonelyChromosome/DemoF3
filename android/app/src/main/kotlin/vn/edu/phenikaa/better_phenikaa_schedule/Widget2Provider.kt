@@ -153,7 +153,7 @@ class Widget2Provider : AppWidgetProvider() {
                 context, WidgetSurface.WIDGET2, widthPx, heightPx, config, palette,
             ),
         )
-        if (palette.key == "custom" && config.widget2Border.enabled) {
+        if (palette.key == "water_cooling" || (palette.key == "custom" && config.widget2Border.enabled)) {
             views.setImageViewBitmap(R.id.widget2_border_layer,
                 WidgetStaticLayerRenderer.renderBorderOverlay(context,
                     WidgetSurface.WIDGET2, widthPx, heightPx, config, palette))

@@ -18,10 +18,11 @@ void main() {
     expect(old.entries.join(' '), isNot(contains('Recap')));
     final future = NotificationChangelog.forInstalledVersion('cooc.1.8');
     expect(future.versionName, 'cooc.1.8');
+    expect(future.entries, ['Theme Premium 2: Water Cooling']);
     expect(future.entries.join(' '), isNot(contains('Recap')));
   });
 
-  test('app startup shows 1.7 instead of flashing stale 1.6', () {
-    expect(NotificationChangelog.forInstalledVersion('').versionName, 'cooc.1.7');
+  test('app startup shows the bundled 1.8 release log', () {
+    expect(NotificationChangelog.forInstalledVersion('').versionName, 'cooc.1.8');
   });
 }

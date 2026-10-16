@@ -19,6 +19,11 @@ final class AppFontChoice {
       (candidate) => candidate.name == kindName,
       orElse: () => AppFontKind.system,
     );
+    // Retired bundled face falls back safely; a user's imported file is theirs.
+    if (kind != AppFontKind.imported &&
+        (json['id'] == 'batman_forever' || json['family'] == 'BatmanForever')) {
+      return system;
+    }
     return AppFontChoice(
       id: json['id'] as String? ?? 'system',
       label: json['label'] as String? ?? 'Mặc định hệ thống',

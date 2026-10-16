@@ -17,12 +17,15 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
+    testImplementation("org.robolectric:robolectric:4.16.1")
 }
 
 android {
     namespace = "vn.edu.phenikaa.better_phenikaa_schedule"
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
+
+    testOptions { unitTests.isIncludeAndroidResources = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -42,7 +45,7 @@ android {
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
         // flag during build.
         versionCode = flutter.versionCode
-        versionName = System.getenv("COOC_VERSION_NAME") ?: "cooc.1.6"
+        versionName = System.getenv("COOC_VERSION_NAME") ?: "cooc.1.8"
     }
 
     signingConfigs {
@@ -57,6 +60,12 @@ android {
     }
 
     buildTypes {
+        configureEach {
+            if(name!="release" && providers.gradleProperty("bpaWaterRecovery").orNull=="true") {
+                applicationIdSuffix=".waterrecovery.test6r"
+                manifestPlaceholders["appLabel"]="BPA Water Cooling Test6R4"
+            }
+        }
         release {
             signingConfig = signingConfigs.findByName("coocRelease")
         }
@@ -84,4 +93,10 @@ gradle.taskGraph.whenReady {
                 "Better Phenikaa release APKs must use the fixed cooc key.",
         )
     }
+}
+
+// AGP host-test packaging reads the Flutter asset directory copied by this task.
+// Declare that producer explicitly for Gradle 9 validation and real-font QA.
+tasks.configureEach {
+    if (name == "packageDebugUnitTestForUnitTest") dependsOn("copyFlutterAssetsDebug")
 }
