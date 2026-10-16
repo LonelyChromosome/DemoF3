@@ -13,8 +13,15 @@ Tiếp tục nhánh `feature/1.8-water-cooling-test6r` từ `63d10d1`. Không đ
 - Regression dùng renderer lịch tuần thật và font Roboto thật, cuộn ngang qua 5 offset, đọc pixel vùng viền. Bản trước sửa có 9 pixel chữ sáng trong vùng viền ngay tại offset 0 và test thất bại; bản sửa không còn pixel chữ sáng tại vùng đó ở cả 5 offset, chữ bên trong vẫn hiển thị.
 - Kiểm tra font cũ fallback mà giữ mode/fill, và giữ font người dùng nhập ngay cả cùng family name. Kiểm layout/font với hệ thống và Minecraft, ngày/tuần, preview/theme/lifecycle hiện có.
 - Toàn bộ Flutter: **195 qua, 14 lỗi kế thừa**, tập lỗi giống Test6R3/Test5, không có lỗi mới. Suite không xanh hoàn toàn.
-- Native và APK sẽ được ghi kết quả sau khi chạy và xác minh artifact. Chưa kiểm tra máy thật.
+- Native chạy lại: **72/72 qua, 21 suites**, gồm widget renderer và fallback family cũ không tải asset đã gỡ. Chưa kiểm tra máy thật.
 
 ## Bản thử
 
-Test6R4, versionCode 69; giữ package `.waterrecovery.test6r` và khóa Test6R để cài cập nhật giữ dữ liệu. Kiểm APK phải xác nhận asset và family bundled SVN không còn đóng gói.
+Đã build profile arm64 Test6R4, versionCode 69, versionName `cooc.1.8-test6r4`; giữ package `.waterrecovery.test6r` và khóa Test6R để cài cập nhật giữ dữ liệu.
+
+- Runtime commit GitHub `c2772142550dcb60018af1f95da2b39f5ccf76dc`, tree `df09c38736a72a69d4a3bc99d29d1a546632c3d5`. Local build commit `f601b08` có cùng tree.
+- APK `BPA-1.8-Water-Cooling-Test6R4-arm64.apk`, 123,982,462 bytes.
+- SHA-256 `58bd97a90d9036ac81e2f3b910c8b1dc45d79db1231f6403dc85dc05cc740e47`.
+- Signer SHA-256 `f9e54276086c2920cfad8edb76498ca9bfae6fa658525cbce859b46aa96ba9a1`, khớp Test6R/6R2/6R3.
+- Đã kiểm CRC mọi entry, libapp/libflutter arm64, shader, chữ ký v2, zipalign 16 KB và package/version thực bằng aapt.
+- Kiểm trực tiếp ZIP APK: không có asset SVN Batman hoặc fixture WideDisplay; FontManifest không có family BatmanForever. Tên family chỉ còn dùng trong migration/fallback cấu hình cũ.
