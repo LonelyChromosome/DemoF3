@@ -52,10 +52,15 @@ jobs:
           python findbike_overrides/generate_blocked_mask.py
       - name: Apply v0.5 obstacle-aware walking and safe lane navigation
         run: python findbike_overrides/apply_v05.py
+      - name: Apply v0.6 obstacle-safe pedestrian routing
+        run: |
+          python findbike_overrides/apply_v06.py
+          echo "0124dd43a0f4d84e7b094e57dd9aa1d74f21f0317a403b1fd7175df47372b620  findbike-build/app/src/main/java/com/bpa/findbike/WalkRouter.java" | sha256sum -c -
+          echo "96b8ef4a8a0bfe1813c876bee1f77721717662ac0701bcdd4c6a6ee5bf2877d8  findbike-build/app/src/main/assets/road_painted.bin" | sha256sum -c -
       - name: Build debug APK
         run: gradle -p findbike-build --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: FindMyBike-v0.5-Debug-APK
+          name: FindMyBike-v0.6-Debug-APK
           path: findbike-build/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
