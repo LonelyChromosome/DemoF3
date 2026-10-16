@@ -14,18 +14,13 @@ def replace(old,new):
  s=s.replace(old,new)
 replace('title.setText(navigating ? (arrived ? "Đã tới lane gần xe nhất" : "Đang dẫn tới lane gần xe")',
         'title.setText(navigating ? (arrived ? "Đã tới vị trí xe / lối gần xe" : "Đang dẫn tới vị trí để xe")')
-replace('routeModeButton.setText("VÀNG: ĐƯỢC ĐI   •   XÁM: CẤM   •   LANE: ƯU TIÊN");',
+replace('routeModeButton.setText("QUA KHỐI VÀNG → RA LANE → TỚI GẦN XE");',
         'routeModeButton.setText("TRẮNG + VÀNG: ĐI ĐƯỢC  •  XÁM: CẤM  •  LANE: ƯU TIÊN");')
 replace('"✓ Đã tới lối đi gần xe · còn " + Math.round(map.bikeDistance()) + " đơn vị tới xe"',
         '"✓ Đã tới điểm gần xe · cách xe " + Math.round(map.bikeDistance()) + " đơn vị"')
 replace('if (dist(user,routing.laneTarget) < 9f || pathTotal < 9f) arrived = true;',
         'if (dist(user,routing.safeFinish) < 9f || pathTotal < 9f) arrived = true;')
-start=s.index('            // The bike itself is not a graph vertex. A subtle dotted connector makes the gap clear.')
-end=s.index('            paint.setStyle(Paint.Style.FILL);',start)
-s=s[:start]+s[end:]
-start=s.index('            paint.setStyle(Paint.Style.FILL);',start)
-end=s.index('            float spacing = dp(19) / zoom;',start)
-s=s[:start]+'            paint.setStyle(Paint.Style.FILL);\n'+s[end:]
+# v0.5 CI already removes its obsolete straight-line bike connector.
 replace('"• Track + bước chân  ·  Đã đi " + demoSteps + " bước thử  ·  Còn " + Math.round(map.remaining()) + " đơn vị"',
         '(map.hasRoute() ? "• Track + bước chân  ·  Đã đi " + demoSteps + " bước thử  ·  Còn " + Math.round(map.remaining()) + " đơn vị" : map.routeError())')
 replace('        float bikeDistance() { return routing == null ? 0f : routing.bikeGap; }',
