@@ -1,0 +1,49 @@
+{
+  "pass": 192,
+  "fail": [
+    "period status survives notification center and exam navigation",
+    "notification groups show only the changed schedule types",
+    "notification center has a nonblank empty state",
+    "notification center fits AppThemeId.classic",
+    "notification center fits AppThemeId.minecraft",
+    "manual update requires displayed name before hold",
+    "notification center fits AppThemeId.valorant",
+    "custom notification theme and font keep arrow card within screen",
+    "countdown fits and remains readable in AppThemeId.minecraft",
+    "countdown fits and remains readable in AppThemeId.valorant",
+    "custom palette and wide custom font keep the tag within card",
+    "app boots into the official QLDT login flow",
+    "restores subject database through the legacy view adapter",
+    "notification center replaces bell Snackbar and opens exam page"
+  ],
+  "done": true,
+  "new_failures": [],
+  "runtime_commit": "71b58437ebded28e6190dbfc16ab7e869bdf5d64",
+  "runtime_tree": "21169e26af6e3561b6b7d3e0089eb155f30b3fa6",
+  "apk": "BPA-1.8-Water-Cooling-Test6R3-arm64.apk",
+  "apk_bytes": 124013087,
+  "apk_sha256": "1cff3d16f61e2caaf536d0d41a600ebc8a667db9571986480f092d49e0b2de83",
+  "package": "vn.edu.phenikaa.better_phenikaa_schedule.waterrecovery.test6r",
+  "version_code": 68,
+  "signer_sha256": "f9e54276086c2920cfad8edb76498ca9bfae6fa658525cbce859b46aa96ba9a1",
+  "fonts_render_tested": [
+    "Roboto",
+    "BatmanForever"
+  ],
+  "text_scalers_tested": [
+    1,
+    1.4
+  ],
+  "sizes_tested": [
+    [
+      360,
+      800
+    ],
+    [
+      800,
+      360
+    ]
+  ],
+  "native_tests_rerun": false,
+  "on_device_tested": false
+}

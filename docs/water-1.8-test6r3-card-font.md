@@ -19,4 +19,10 @@ Toàn bộ Flutter: **192 qua, 14 lỗi kế thừa**, tập tên lỗi giống 
 
 ## APK thử nghiệm
 
-VersionCode 68, label `BPA Water Cooling Test6R3`; giữ package `.waterrecovery.test6r` và khóa Test6R để cài cập nhật giữ dữ liệu. Build/result được ghi sau khi artifact được xác minh.
+Đã build profile arm64, versionCode 68, versionName `cooc.1.8-test6r3`, label `BPA Water Cooling Test6R3`; giữ package `.waterrecovery.test6r` và khóa Test6R để cài cập nhật giữ dữ liệu.
+
+- Runtime commit GitHub `71b58437ebded28e6190dbfc16ab7e869bdf5d64`, tree `21169e26af6e3561b6b7d3e0089eb155f30b3fa6`. Local build commit `2bc8e83` có cùng tree.
+- APK `BPA-1.8-Water-Cooling-Test6R3-arm64.apk`, 124,013,087 bytes.
+- SHA-256 `1cff3d16f61e2caaf536d0d41a600ebc8a667db9571986480f092d49e0b2de83`.
+- Chữ ký SHA-256 `f9e54276086c2920cfad8edb76498ca9bfae6fa658525cbce859b46aa96ba9a1`, khớp Test6R/6R2.
+- Đã kiểm CRC mọi entry, arm64 AOT/shader, chữ ký v2, zipalign 16 KB và package/version thực bằng aapt. Không đổi production signing hoặc feed updater.
