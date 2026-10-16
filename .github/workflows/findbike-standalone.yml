@@ -46,10 +46,16 @@ jobs:
         run: python findbike_overrides/apply_v03.py
       - name: Apply v0.4 lane-first and animated steps
         run: python findbike_overrides/apply_v04.py
+      - name: Build grey-building obstacle mask
+        run: |
+          python -m pip install --quiet numpy opencv-python-headless
+          python findbike_overrides/generate_blocked_mask.py
+      - name: Apply v0.5 obstacle-aware walking and safe lane navigation
+        run: python findbike_overrides/apply_v05.py
       - name: Build debug APK
         run: gradle -p findbike-build --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: FindMyBike-v0.4-Debug-APK
+          name: FindMyBike-v0.5-Debug-APK
           path: findbike-build/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
