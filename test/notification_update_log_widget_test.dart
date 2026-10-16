@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('notification bell shows 1.7 release notes, never stale cooc1.6', (tester) async {
+  testWidgets('notification bell shows 1.8 Water Cooling release notes', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
     final now = DateTime.now();
@@ -35,9 +35,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Thông báo'), findsOneWidget);
     expect(find.text('Update log'), findsOneWidget);
-    expect(find.text('cooc.1.7'), findsOneWidget);
-    expect(find.text('Bổ sung Recap nhìn lại học kỳ.'), findsOneWidget);
-    expect(find.text('Sửa lỗi Pull Reload timeout và cải thiện khôi phục phiên QLĐT.'), findsOneWidget);
+    expect(find.text('cooc.1.8'), findsOneWidget);
+    expect(find.text('Theme Premium 2: Water Cooling'), findsOneWidget);
     expect(find.text('cooc1.6'), findsNothing);
     expect(find.text('Bổ sung VFX'), findsNothing);
     debugDefaultTargetPlatformOverride = null;
