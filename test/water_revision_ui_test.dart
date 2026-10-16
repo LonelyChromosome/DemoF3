@@ -51,12 +51,16 @@ void main() {
     },
   );
   testWidgets(
-    'real Batman font shrinks long subjects within their allocated region',
+    'real wide display font shrinks long subjects within their allocated region',
     (t) async {
       await t.runAsync(() async {
-        final f = FontLoader('BatmanForever')
+        final f = FontLoader('WideDisplayTest')
           ..addFont(
-            rootBundle.load('assets/fonts/SVN-Batman-Forever-Alternate.otf'),
+            Future.value(
+              ByteData.sublistView(
+                await File('test/fixtures/fonts/WideDisplay.otf').readAsBytes(),
+              ),
+            ),
           );
         await f.load();
       });
@@ -71,7 +75,7 @@ void main() {
                   child: WaterFitText(
                     'Lịch sử Đảng Cộng sản Việt Nam và Lập trình ứng dụng di động',
                     style: const TextStyle(
-                      fontFamily: 'BatmanForever',
+                      fontFamily: 'WideDisplayTest',
                       fontSize: 16,
                     ),
                   ),

@@ -25,9 +25,9 @@ void main() {
       addTearDown(t.view.resetPhysicalSize);
       addTearDown(t.view.resetDevicePixelRatio);
       await t.runAsync(() async {
-        final loader = FontLoader('BatmanForever')
+        final loader = FontLoader('MinecraftCustom')
           ..addFont(
-            rootBundle.load('assets/fonts/SVN-Batman-Forever-Alternate.otf'),
+            rootBundle.load('assets/fonts/minecraft.ttf'),
           );
         await loader.load();
         final roboto = FontLoader('Roboto')
@@ -69,7 +69,7 @@ void main() {
         ],
       );
       final config = const WaterConfig(tilt: false)
-          .patch({'fontId': 'batman_forever', 'mode': 'rainbowLine'});
+          .patch({'fontId': 'minecraft', 'mode': 'rainbowLine'});
       SharedPreferences.setMockInitialValues({
         'better_phenikaa_snapshot_v1': snapshot.encode(),
         'better_phenikaa_theme_v3': 'water_cooling',

@@ -292,7 +292,12 @@ class WeekTimetable extends StatelessWidget {
                 if (palette.id == AppThemeId.waterCooling)
                   return SizedBox(
                     height: rowHeight,
-                    child: WaterBlock(child: rowContent),
+                    child: WaterBlock(
+                      child: ClipRRect(
+                        clipper: const _WeekChamberContentClipper(),
+                        child: rowContent,
+                      ),
+                    ),
                   );
                 return Container(
                   height: rowHeight,
@@ -316,4 +321,17 @@ class WeekTimetable extends StatelessWidget {
 
   static String _time(DateTime date) =>
       '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+}
+
+// Keep the scrolling content behind the acrylic rim. Clipping the paint, rather
+// than adding layout padding, preserves date columns, card widths and scrolling.
+class _WeekChamberContentClipper extends CustomClipper<RRect> {
+  const _WeekChamberContentClipper();
+  @override
+  RRect getClip(Size size) => RRect.fromRectAndRadius(
+    (Offset.zero & size).deflate(4),
+    const Radius.circular(10),
+  );
+  @override
+  bool shouldReclip(_WeekChamberContentClipper oldClipper) => false;
 }

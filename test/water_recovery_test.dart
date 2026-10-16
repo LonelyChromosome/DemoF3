@@ -65,7 +65,7 @@ void main() {
   test('test2 configuration and photos roundtrip without halving quantity', () {
     final c = const WaterConfig().patch({
       'mode': 'rainbowLine',
-      'fontId': 'batman_forever',
+      'fontId': 'minecraft',
       'widgets': {'widget2ImagePath': '/private/user-photo.jpg'},
     });
     final result = WaterConfig.fromJson(Map<String, dynamic>.from(c.toJson()));

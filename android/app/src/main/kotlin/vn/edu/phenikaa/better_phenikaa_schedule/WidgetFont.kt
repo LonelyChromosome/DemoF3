@@ -57,7 +57,7 @@ internal object WidgetFont {
                 path.isNotBlank() && imported.canonicalFile.parentFile == importDir &&
                     imported.isFile -> Typeface.createFromFile(imported)
                 family == "MinecraftCustom" -> context.resources.getFont(R.font.minecraft_custom)
-                family == "BatmanForever" -> Typeface.createFromAsset(context.assets,"flutter_assets/assets/fonts/SVN-Batman-Forever-Alternate.otf")
+                family == "BatmanForever" -> Typeface.DEFAULT // Retired bundled font; old widget preferences remain safe.
                 family == "FzCoTrang" -> Typeface.createFromAsset(
                     context.assets,
                     "flutter_assets/assets/tien_mon_premium/fonts/FzCoTrang.ttf",

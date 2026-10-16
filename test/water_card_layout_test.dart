@@ -17,15 +17,15 @@ import 'package:better_phenikaa_schedule/features/lich_hoc/attendance_tag.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 
 void main() {
-  for (final fontId in ['system', 'batman_forever']) {
+  for (final fontId in ['system', 'minecraft']) {
     testWidgets(
       'selected $fontId font fits the original time-left card and inline badge without moving alarm',
       (t) async {
         debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
         await t.runAsync(() async {
-          final bat = FontLoader('BatmanForever')
+          final bat = FontLoader('MinecraftCustom')
             ..addFont(
-              rootBundle.load('assets/fonts/SVN-Batman-Forever-Alternate.otf'),
+              rootBundle.load('assets/fonts/minecraft.ttf'),
             );
           await bat.load();
           final font = FontLoader('Roboto')
@@ -122,7 +122,7 @@ void main() {
               '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
           final selectedFamily = fontId == 'system'
               ? 'Roboto'
-              : 'BatmanForever';
+              : 'MinecraftCustom';
           expect(
             t
                 .renderObject<RenderParagraph>(find.text(subject))

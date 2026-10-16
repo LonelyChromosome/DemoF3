@@ -19,8 +19,13 @@ void main() {
               ),
             ))
             .load();
-        await (FontLoader('BatmanForever')..addFont(
-              rootBundle.load('assets/fonts/SVN-Batman-Forever-Alternate.otf'),
+        await (FontLoader('WideDisplayTest')..addFont(
+              Future.value(
+                ByteData.sublistView(
+                  await File('test/fixtures/fonts/WideDisplay.otf')
+                      .readAsBytes(),
+                ),
+              ),
             ))
             .load();
       });
@@ -38,10 +43,10 @@ void main() {
       }
 
       final systemWidth = width('Roboto'),
-          displayWidth = width('BatmanForever');
+          displayWidth = width('WideDisplayTest');
       expect(displayWidth, greaterThan(systemWidth));
       final available = (systemWidth + displayWidth) / 2;
-      for (final family in ['Roboto', 'BatmanForever']) {
+      for (final family in ['Roboto', 'WideDisplayTest']) {
         for (final bound in [available, 700.0]) {
           await t.pumpWidget(
             MaterialApp(
@@ -55,7 +60,7 @@ void main() {
           );
           final text = t.widget<Text>(find.text(label));
           expect(text.style!.fontFamily, family);
-          if (family == 'BatmanForever' && bound == available) {
+          if (family == 'WideDisplayTest' && bound == available) {
             expect(text.style!.fontSize, lessThan(16));
           } else {
             expect(text.style!.fontSize, 16);
