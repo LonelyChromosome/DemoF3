@@ -15,21 +15,37 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Check Android SDK
-        run: ls -la "$ANDROID_HOME" && ls -la "$ANDROID_HOME/platforms" || true
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Assemble source ZIP
-        run: cat findbike_binary/part_*.txt | base64 -d > findbike-source.zip
-      - name: Verify ZIP
-        run: echo "937ee89c81db8f0dc3b54617391c5100a2fe0287f6d3c9616cdfe4803a75b8eb  findbike-source.zip" | sha256sum -c -
-      - name: Unpack standalone app
-        run: mkdir -p findbike-build && unzip -q findbike-source.zip -d findbike-build
+      - name: Restore baseline project
+        run: |
+          cat findbike_binary/part_*.txt | base64 -d > findbike-source.zip
+          echo "937ee89c81db8f0dc3b54617391c5100a2fe0287f6d3c9616cdfe4803a75b8eb  findbike-source.zip" | sha256sum -c -
+          mkdir -p findbike-build
+          unzip -q findbike-source.zip -d findbike-build
+      - name: Apply 0.2 navigation, graph, hi-res map
+        run: |
+          echo "7370507322a17693892417da2cfae182527b6393531c430381cb649724b25d9a  findbike_binary/v02_update.tar.gz" | sha256sum -c -
+          tar -xzf findbike_binary/v02_update.tar.gz -C findbike-build
+          python -m pip install --quiet Pillow
+          python - <<'PY'
+          from PIL import Image,ImageFilter
+          from pathlib import Path
+          assets=Path("findbike-build/app/src/main/assets")
+          path=assets/"map_native.webp"
+          original=Image.open(path).convert("RGB")
+          large=original.resize((original.width*3, original.height*3), Image.Resampling.LANCZOS)
+          large=large.filter(ImageFilter.UnsharpMask(radius=1.8,percent=115,threshold=3))
+          large.save(assets/"map_hires.webp",format="WEBP",lossless=True,method=6)
+          path.unlink()
+          (assets/"map.webp").unlink(missing_ok=True)
+          print("Generated", (assets/"map_hires.webp").stat().st_size,"bytes")
+          PY
       - name: Build debug APK
         run: gradle -p findbike-build --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: FindMyBike-Standalone-Debug-APK
+          name: FindMyBike-v0.2-Debug-APK
           path: findbike-build/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
