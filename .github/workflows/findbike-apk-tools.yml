@@ -20,6 +20,9 @@ jobs:
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/bike-tools/apksigner.jar || cp "$(find "$ANDROID_HOME/build-tools" -path '*/lib/apksigner.jar' | head -1)" /tmp/bike-tools/apksigner.jar
           cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" /tmp/bike-tools/zipalign || cp "$(find "$ANDROID_HOME/build-tools" -name 'zipalign' | head -1)" /tmp/bike-tools/zipalign
           chmod +x /tmp/bike-tools/zipalign
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libc++1 >/dev/null
+          cp "$(ldconfig -p | sed -nE 's@.*libc\\+\\+\\.so\\.1.* => (.*)@\\1@p' | head -1)" /tmp/bike-tools/libc++.so
           ls -lh /tmp/bike-tools
       - uses: actions/upload-artifact@v4
         with:
