@@ -29,7 +29,7 @@ public final class MainActivity extends Activity {
     private long firstRequestMs = 0L, previousRealSeenMs = 0L;
     private double velocityEast = 0.0, velocityNorth = 0.0;
     private double bikeLat = Double.NaN, bikeLon = Double.NaN;
-    private boolean activeGps = false, navigation = false, saveWhenFix = false;
+    private boolean activeGps = false, navigation = false, saveWhenFix = false, pendingArm = false;
     private String statusMessage = "Sẵn sàng";
     private TextView status;
     private LineView view;
@@ -88,7 +88,7 @@ public final class MainActivity extends Activity {
         LinearLayout controls = new LinearLayout(this);
         controls.setOrientation(LinearLayout.HORIZONTAL);
         controls.setGravity(Gravity.CENTER);
-        Button save = makeButton("LƯU XE",Color.rgb(230,239,246),Color.rgb(19,33,45));
+        Button save = makeButton("LƯU THỬ",Color.rgb(230,239,246),Color.rgb(19,33,45));
         Button find = makeButton("TÌM XE",Color.rgb(25,44,59),Color.WHITE);
         Button stop = makeButton("DỪNG",Color.rgb(245,246,248),Color.rgb(40,46,50));
         LinearLayout.LayoutParams weight = new LinearLayout.LayoutParams(0,dp(52),1);
@@ -109,6 +109,11 @@ public final class MainActivity extends Activity {
         root.addView(foot);
         setContentView(root);
         save.setOnClickListener(v -> saveBike());
+        Button auto = makeButton("BẬT TỰ ĐỘNG · GEOFENCE 100m",Color.rgb(225,236,241),Color.rgb(15,49,61));
+        LinearLayout.LayoutParams autoSize=new LinearLayout.LayoutParams(-1,dp(46));
+        autoSize.setMargins(dp(3),dp(7),dp(3),0);
+        root.addView(auto,root.indexOfChild(controls)+1,autoSize);
+        auto.setOnClickListener(v -> armAuto());
         save.setOnLongClickListener(v -> {
             bikeLat=Double.NaN;bikeLon=Double.NaN;
             getSharedPreferences("bike",MODE_PRIVATE).edit().clear().apply();
@@ -144,7 +149,7 @@ public final class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int requestCode,String[] perms,int[] grants){
         super.onRequestPermissionsResult(requestCode,perms,grants);
         if(requestCode==73) {
-            if(hasLocationPermission()) beginGps();
+            if(hasLocationPermission()) {if(pendingArm){pendingArm=false;armAuto();}else beginGps();}
             else {statusMessage="Cần cấp quyền vị trí để thử nghiệm GPS thật";refreshStatus();}
         }
     }
@@ -191,6 +196,46 @@ public final class MainActivity extends Activity {
         refreshStatus();
     }
 
+    private void armAuto(){
+        if(!hasLocationPermission()){pendingArm=true;requestPermission();return;}
+        if(android.os.Build.VERSION.SDK_INT>=29 &&
+          checkSelfPermission(android.Manifest.permission.ACCESS_BACKGROUND_LOCATION)!=PackageManager.PERMISSION_GRANTED){
+            statusMessage="Cho phép vị trí MỌI LÚC trong cài đặt ứng dụng, sau đó mở lại và bấm BẬT TỰ ĐỘNG";
+            refreshStatus();
+            startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.parse("package:"+getPackageName())));
+            return;
+        }
+        if(android.os.Build.VERSION.SDK_INT>=29 &&
+          checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION)!=PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.ACTIVITY_RECOGNITION},74);
+        }
+        getSharedPreferences("trip",MODE_PRIVATE).edit().putBoolean("armed",true).apply();
+        CampusFence.register(this);
+        statusMessage="Bật tự động: theo dõi 2 cổng 100m · lưu xe sau 10s đi bộ";
+        refreshStatus();
+    }
+    private void syncAutoBike(){
+        android.content.SharedPreferences saved=getSharedPreferences("bike",MODE_PRIVATE);
+        if(saved.contains("lat") && saved.contains("lon")){
+            double la=Double.longBitsToDouble(saved.getLong("lat",0));
+            double lo=Double.longBitsToDouble(saved.getLong("lon",0));
+            if(Double.isNaN(bikeLat)||la!=bikeLat||lo!=bikeLon){
+                bikeLat=la;bikeLon=lo;view.invalidate();
+            }
+        }
+    }
+    private final Runnable autoStatus=new Runnable(){
+        @Override public void run(){
+            syncAutoBike();
+            if(status!=null && !navigation){
+                String s=getSharedPreferences("trip",MODE_PRIVATE).getString("status","");
+                if(!s.isEmpty())statusMessage=s;
+                refreshStatus();
+            }
+            handler.postDelayed(this,1000);
+        }
+    };
     private void saveBike(){
         long now=SystemClock.elapsedRealtime();
         if(lastReal!=null && lastRealSeenMs>0 && now-lastRealSeenMs<6000
@@ -292,7 +337,8 @@ public final class MainActivity extends Activity {
         status.setText(s);
     }
 
-    @Override protected void onPause(){super.onPause();stopEverything();}
+    @Override protected void onResume(){super.onResume();handler.removeCallbacks(autoStatus);handler.post(autoStatus);}
+    @Override protected void onPause(){handler.removeCallbacks(autoStatus);super.onPause();stopEverything();}
     @Override protected void onDestroy(){handler.removeCallbacks(frame);super.onDestroy();}
 
     private final class LineView extends View {

@@ -1,0 +1,10 @@
+package com.lonelychromosome.findbikepollingtest;
+import android.content.*;
+public final class BootReceiver extends BroadcastReceiver {
+    @Override public void onReceive(Context context,Intent intent) {
+        if(Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())
+            && context.getSharedPreferences("trip",Context.MODE_PRIVATE).getBoolean("armed",false)) {
+            CampusFence.register(context);
+        }
+    }
+}
