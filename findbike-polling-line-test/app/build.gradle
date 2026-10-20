@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.lonelychromosome.findbikepollingtest'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.lonelychromosome.findbikepollingtest'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '1.5-polling-test'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
