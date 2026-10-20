@@ -21,8 +21,10 @@ jobs:
           cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" /tmp/bike-tools/zipalign || cp "$(find "$ANDROID_HOME/build-tools" -name 'zipalign' | head -1)" /tmp/bike-tools/zipalign
           chmod +x /tmp/bike-tools/zipalign
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libc++1 >/dev/null
+          sudo apt-get install -y -qq libc++1 libc++abi1 libunwind-18 >/dev/null
           cp "$(find /usr/lib /lib -name 'libc++.so.1*' -type f | head -1)" /tmp/bike-tools/libc++.so
+          cp "$(find /usr/lib /lib -name 'libc++abi.so.1*' -type f | head -1)" /tmp/bike-tools/libc++abi.so.1
+          cp "$(find /usr/lib /lib -name 'libunwind.so.1*' -type f | head -1)" /tmp/bike-tools/libunwind.so.1
           ls -lh /tmp/bike-tools
       - uses: actions/upload-artifact@v4
         with:
