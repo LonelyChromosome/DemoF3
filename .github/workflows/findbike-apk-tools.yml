@@ -1,0 +1,28 @@
+name: Export Android APK Patch Tools
+on:
+  push:
+    branches:
+      - find-bike/real-14-apk-patch
+    paths:
+      - '.github/workflows/findbike-apk-tools.yml'
+  workflow_dispatch:
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download apktool and Android signing tools
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/bike-tools
+          curl --retry 4 -fLsS -o /tmp/bike-tools/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.11.1/apktool_2.11.1.jar
+          java -jar /tmp/bike-tools/apktool.jar --version
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/bike-tools/apksigner.jar || cp "$(find "$ANDROID_HOME/build-tools" -path '*/lib/apksigner.jar' | head -1)" /tmp/bike-tools/apksigner.jar
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" /tmp/bike-tools/zipalign || cp "$(find "$ANDROID_HOME/build-tools" -name 'zipalign' | head -1)" /tmp/bike-tools/zipalign
+          chmod +x /tmp/bike-tools/zipalign
+          ls -lh /tmp/bike-tools
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apktool-and-sign-tools
+          path: /tmp/bike-tools/*
+          retention-days: 2
