@@ -1,0 +1,48 @@
+name: BPA Event Panel Repack Into One APK Download
+on:
+  push:
+    branches:
+      - feature/bpa19-vehicle-event-panel
+    paths:
+      - '.github/workflows/bpa-eventpanel-export-single.yml'
+  workflow_dispatch:
+permissions: {contents: read, actions: read}
+jobs:
+  repack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39641611725
+          repository: LonelyChromosome/DemoF3
+          github-token: ${{ github.token }}
+          name: BPA-EventPanel-APK-part00
+          path: parts/00
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39641611725
+          repository: LonelyChromosome/DemoF3
+          github-token: ${{ github.token }}
+          name: BPA-EventPanel-APK-part01
+          path: parts/01
+      - uses: actions/download-artifact@v4
+        with:
+          run-id: 39641611725
+          repository: LonelyChromosome/DemoF3
+          github-token: ${{ github.token }}
+          name: BPA-EventPanel-APK-checksums
+          path: checksums
+      - name: Rejoin, verify SHA256 and ZIP integrity
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          cat parts/00/part00 parts/01/part01 > output/BPA-1.9-Panel-Test-Su-Kien-arm64.apk
+          (cd output && sha256sum -c ../checksums/sha256.txt)
+          unzip -t output/BPA-1.9-Panel-Test-Su-Kien-arm64.apk | tail -n 2
+          ls -lh output/*
+      - name: Provide one-click whole APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BPA-1.9-Panel-Test-Su-Kien-arm64-APK
+          path: output/BPA-1.9-Panel-Test-Su-Kien-arm64.apk
+          retention-days: 20
