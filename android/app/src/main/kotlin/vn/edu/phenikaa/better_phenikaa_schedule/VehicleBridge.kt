@@ -19,6 +19,7 @@ import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.CancellationTokenSource
 import com.google.android.gms.location.Priority
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
@@ -125,7 +126,7 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
             navCallback=callback
             fused.requestLocationUpdates(request,callback,activity.mainLooper)
                 .addOnFailureListener {navCallback=null}
-            fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY,null)
+            fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY,CancellationTokenSource().token)
                 .addOnSuccessListener {acceptFix(it)}
         } catch(_:SecurityException){navCallback=null}
     }

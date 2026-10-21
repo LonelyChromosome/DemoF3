@@ -65,11 +65,11 @@ class _ScanLockPainter extends CustomPainter {
     if(time<3.08){
       final index=math.min(3,(time/.77).floor());
       final phase=(time-index*.77)/.77;
-      final opacity=math.sin(phase*math.pi).clamp(0.0,1.0);
+      final opacity=math.sin(phase*math.pi).clamp(0.0,1.0).toDouble();
       _box(canvas,targets[index],24+phase*7,
           const Color(0xFF00ADC1).withValues(alpha:opacity),2.0);
     }else{
-      final phase=((time-3.08)/.22).clamp(0.0,1.0);
+      final phase=((time-3.08)/.22).clamp(0.0,1.0).toDouble();
       _box(canvas,targets.last,30-6*phase,
           const Color(0xFF008DA8),3.1);
       if(phase>.94){
@@ -198,7 +198,7 @@ class _NorthUpPainter extends CustomPainter{
       final north=(bikeLat!-lat!)*111320;
       final sx=size.width*.39/math.max(1,east.abs());
       final sy=size.height*.38/math.max(1,north.abs());
-      final scale=math.min(10,math.min(sx,sy));
+      final scale=math.min(10.0,math.min(sx,sy));
       bike=me+Offset(east*scale,-north*scale);
       p..color=const Color(0xFF728B99)..style=PaintingStyle.stroke
         ..strokeWidth=2.6;
