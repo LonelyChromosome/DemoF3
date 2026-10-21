@@ -1,0 +1,88 @@
+name: BPA 1.9 Event Panel Demo (ARM64)
+on:
+  push:
+    branches:
+      - feature/bpa19-vehicle-event-panel
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - '.github/workflows/bpa-vehicle-event-panel.yml'
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  profile-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: '3.47.2', channel: stable, cache: true }
+      - name: Prepare Android tooling
+        run: bash tool/bootstrap.sh
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze changed Flutter code
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/features/phuong_tien/ lib/app/app.dart
+      - name: Build ARM64 profile demo APK
+        run: flutter build apk --profile --target-platform android-arm64 --split-per-abi --no-pub --dart-define=BPA_VEHICLE_TEST_PANEL=true
+      - name: Validate installed manifest and APK
+        run: |
+          APK=$(find build/app/outputs/flutter-apk -name '*arm64*profile.apk' | head -1)
+          test -n "$APK" && test -s "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" | grep 'vn.edu.phenikaa.better_phenikaa_schedule.vehicle.demo19.events'
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml | grep -E 'VehicleCaptureService|VehicleFenceReceiver'
+          unzip -t "$APK" | tail -n 2
+      - name: Split verified APK into reliable pieces
+        id: split
+        run: |
+          mkdir -p build/export
+          APK=$(find build/app/outputs/flutter-apk -name '*arm64*profile.apk' | head -1)
+          sha256sum "$APK" | sed 's@  .*@  BPA-1.9-Panel-Test-Su-Kien-arm64.apk@' > build/export/sha256.txt
+          stat -c '%s' "$APK" > build/export/size.txt
+          split -b 65000000 -d -a 2 "$APK" build/export/part
+          ls -lh build/export/
+          for i in 01 02 03; do
+            if test -f "build/export/part$i"; then
+              echo "p$i=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "p$i=false" >> "$GITHUB_OUTPUT"
+            fi
+          done
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: BPA-EventPanel-APK-checksums
+          path: |
+            build/export/sha256.txt
+            build/export/size.txt
+          retention-days: 20
+      - name: Upload APK part 00
+        uses: actions/upload-artifact@v4
+        with:
+          name: BPA-EventPanel-APK-part00
+          path: build/export/part00
+          retention-days: 20
+      - name: Upload APK part 01
+        if: steps.split.outputs.p01 == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BPA-EventPanel-APK-part01
+          path: build/export/part01
+          retention-days: 20
+      - name: Upload APK part 02
+        if: steps.split.outputs.p02 == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BPA-EventPanel-APK-part02
+          path: build/export/part02
+          retention-days: 20
+      - name: Upload APK part 03
+        if: steps.split.outputs.p03 == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: BPA-EventPanel-APK-part03
+          path: build/export/part03
+          retention-days: 20

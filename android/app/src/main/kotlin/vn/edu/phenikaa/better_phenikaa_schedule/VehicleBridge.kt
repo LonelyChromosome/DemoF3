@@ -57,6 +57,38 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
                     VehicleStore.setWindows(activity,windows)
                     result.success(null)
                 }
+                "testGate" -> {
+                    requireTestPanel()
+                    if(!VehicleStore.isEnabled(activity))throw IllegalStateException("Hãy bật Tìm xe trước")
+                    if(!hasFinePermission())throw IllegalStateException("Cần cấp quyền GPS chính xác")
+                    if(VehicleStore.hasParked(activity))throw IllegalStateException("Đã có vị trí xe. Hãy reset trước")
+                    if(VehicleStore.isTracking(activity))throw IllegalStateException("Đang ghi hành trình")
+                    startCaptureTest("start")
+                    result.success("Đã giả lập vào cổng. GPS đang ghi là GPS thật.")
+                }
+                "testWalk" -> {
+                    requireTestPanel()
+                    if(!VehicleStore.isTracking(activity))throw IllegalStateException("Hãy giả lập vào cổng trước")
+                    startCaptureTest("bpa.demo.walk")
+                    result.success("Giả lập 7 bước trong khoảng 8 giây; GPS vẫn lấy thật.")
+                }
+                "testPark" -> {
+                    requireTestPanel()
+                    if(!VehicleStore.isTracking(activity))throw IllegalStateException("Chưa ghi hành trình")
+                    val parked=VehicleStore.recentStableTestParking(activity)
+                        ?:throw IllegalStateException("Cần ít nhất 2 mẫu GPS thật gần nhau, còn mới (sai số tối đa 30m)")
+                    VehicleStore.saveParked(activity,parked.first,parked.second)
+                    activity.stopService(Intent(activity,VehicleCaptureService::class.java))
+                    VehicleStore.sendParkNotification(activity)
+                    result.success("Đã chốt xe bằng GPS thật. Đây là thao tác test thủ công.")
+                }
+                "testReset" -> {
+                    requireTestPanel()
+                    stopNavigation()
+                    activity.stopService(Intent(activity,VehicleCaptureService::class.java))
+                    VehicleStore.resetDemoSession(activity)
+                    result.success("Đã reset phiên test; BPA chính không bị ảnh hưởng.")
+                }
                 "startNav" -> { startNavigation(); result.success(null) }
                 "nav" -> { watchdog(); result.success(navSnapshot()) }
                 "stopNav" -> { stopNavigation(); result.success(null) }
@@ -65,6 +97,17 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
         } catch(error:Exception) {
             result.error("vehicle",error.message ?: "Không thể truy cập vị trí",null)
         }
+    }
+    private fun requireTestPanel(){
+        if(!activity.packageName.endsWith(".vehicle.demo19.events"))
+            throw SecurityException("Chỉ dùng được trong APK demo sự kiện")
+    }
+    private fun hasFinePermission():Boolean =
+        activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED
+    private fun startCaptureTest(action:String){
+        val intent=Intent(activity,VehicleCaptureService::class.java).setAction(action)
+        if(Build.VERSION.SDK_INT>=26)activity.startForegroundService(intent)
+        else activity.startService(intent)
     }
     private fun hasPermission():Boolean =
         activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==

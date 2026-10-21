@@ -88,6 +88,55 @@ object VehicleStore {
             .putLong("parkedAt",System.currentTimeMillis())
             .putBoolean("tracking",false).apply()
     }
+    @Synchronized fun recentStableTestParking(context:Context):Pair<Double,Double>? {
+        val source=file(context)
+        if(!source.isFile)return null
+        data class Gps(val lat:Double,val lon:Double,val at:Long,val accuracy:Float)
+        val points=source.readLines().takeLast(70).mapNotNull{ row ->
+            val v=row.split(",")
+            if(v.size<4)return@mapNotNull null
+            val lat=v[0].toDoubleOrNull()?:return@mapNotNull null
+            val lon=v[1].toDoubleOrNull()?:return@mapNotNull null
+            val time=v[2].toLongOrNull()?:return@mapNotNull null
+            val accuracy=v[3].toFloatOrNull()?:return@mapNotNull null
+            if(!lat.isFinite()||!lon.isFinite()||accuracy>30f||
+                Math.abs(lat)>90||Math.abs(lon)>180)return@mapNotNull null
+            Gps(lat,lon,time,accuracy)
+        }
+        if(points.size<2)return null
+        val last=points.last()
+        if(System.currentTimeMillis()-last.at !in 0L..30_000L)return null
+        val anchor=Location("demo-anchor").apply {latitude=last.lat;longitude=last.lon}
+        val stable=points.filter {point ->
+            if(last.at-point.at !in 0L..15_000L)return@filter false
+            val loc=Location("demo-sample").apply{latitude=point.lat;longitude=point.lon}
+            loc.distanceTo(anchor)<=12f
+        }
+        if(stable.size<2)return null
+        return stable.map{it.lat}.average() to stable.map{it.lon}.average()
+    }
+    @Synchronized fun resetDemoSession(context:Context){
+        file(context).delete()
+        pref(context).edit().remove("parkLat").remove("parkLon")
+            .remove("parkedAt").putBoolean("tracking",false).apply()
+    }
+    fun sendParkNotification(context:Context){
+        val manager=context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel="bpa_vehicle_parked"
+        if(Build.VERSION.SDK_INT>=26)
+            manager.createNotificationChannel(NotificationChannel(channel,
+                "Đã đỗ xe",NotificationManager.IMPORTANCE_DEFAULT))
+        if(Build.VERSION.SDK_INT>=33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+            return
+        val open=PendingIntent.getActivity(context,7791,
+            Intent(context,MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        manager.notify(8872,Notification.Builder(context,channel)
+            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentTitle("Đã xác định vị trí đỗ xe")
+            .setContentIntent(open).setAutoCancel(true).build())
+    }
     fun route(context: Context): List<List<Double>> {
         val route = ArrayList<List<Double>>()
         val csv = file(context)
@@ -165,6 +214,14 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
             .setOngoing(true).setContentIntent(open).build()
     }
     override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
+        if(intent?.action=="bpa.demo.walk"){
+            if(packageName.endsWith(".vehicle.demo19.events")&&VehicleStore.isTracking(this)){
+                for(i in 0..6)handler.postDelayed({
+                    if(VehicleStore.isTracking(this))onWalkingStep(SystemClock.elapsedRealtime())
+                },i*1280L)
+            }
+            return START_STICKY
+        }
         if (!VehicleStore.isEnabled(this) || VehicleStore.hasParked(this)) {
             stopSelf()
             return START_NOT_STICKY
@@ -205,7 +262,9 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
     }
     override fun onSensorChanged(event:SensorEvent) {
         if(event.sensor.type!=Sensor.TYPE_STEP_DETECTOR || !VehicleStore.isTracking(this))return
-        val now=SystemClock.elapsedRealtime()
+        onWalkingStep(SystemClock.elapsedRealtime())
+    }
+    private fun onWalkingStep(now:Long) {
         if(now-previousStepAt>4500) {
             firstStepAt=now
             firstWalkingPoint=lastGoodFix?.let(::Location)
@@ -233,13 +292,7 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
         val lon=cluster.map { it.longitude }.average()
         if(!lat.isFinite()||!lon.isFinite())return
         VehicleStore.saveParked(this,lat,lon)
-        val manager=getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        val intent=PendingIntent.getActivity(this,7791,Intent(this,MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        manager.notify(8872,Notification.Builder(this,successChannelId)
-            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle("Đã xác định vị trí đỗ xe")
-            .setContentIntent(intent).setAutoCancel(true).build())
+        VehicleStore.sendParkNotification(this)
         stopSelf()
     }
     override fun onAccuracyChanged(sensor:Sensor?,accuracy:Int){}

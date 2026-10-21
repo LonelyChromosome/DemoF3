@@ -19,6 +19,10 @@ class VehicleNative {
   static Future<void> schedule(List<Map<String, int>> windows) async {
     await channel.invokeMethod<dynamic>('schedule', <String, Object>{'windows': windows});
   }
+  static Future<String> testEvent(String method) async {
+    final value=await channel.invokeMethod<String>(method);
+    return value??'Đã gửi sự kiện';
+  }
   static Future<void> startNav() async { await channel.invokeMethod<dynamic>('startNav'); }
   static Future<void> stopNav() async { await channel.invokeMethod<dynamic>('stopNav'); }
   static Future<Map<String, dynamic>> nav() async {
@@ -37,6 +41,10 @@ class _VehiclePageState extends State<VehiclePage> {
   Map<String, dynamic> data = <String, dynamic>{'enabled': false};
   Timer? timer;
   bool busy = false;
+  bool testOpen = false;
+  String testResult = '';
+  static const eventPanelEnabled =
+      bool.fromEnvironment('BPA_VEHICLE_TEST_PANEL',defaultValue:kDebugMode);
   @override
   void initState() {
     super.initState();
@@ -79,6 +87,34 @@ class _VehiclePageState extends State<VehiclePage> {
     await Navigator.of(context).push<void>(MaterialPageRoute<void>(
       builder: (_) => const VehicleScanLockScreen()));
     if(mounted)unawaited(read());
+  }
+  Future<void> testEvent(String method) async {
+    if(busy)return;
+    if(method=='testReset'){
+      final allow=await showDialog<bool>(
+        context:context,builder:(ctx)=>AlertDialog(
+          title:const Text('Reset phiên kiểm thử?'),
+          content:const Text('Chỉ xóa hành trình và xe đỗ trong APK demo này. Dữ liệu BPA chính không bị ảnh hưởng.'),
+          actions:[
+            TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Hủy')),
+            FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Reset')),
+          ],
+        ),
+      );
+      if(allow!=true||!mounted)return;
+    }
+    setState(()=>busy=true);
+    try{
+      final message=await VehicleNative.testEvent(method);
+      if(mounted)setState(()=>testResult=message);
+    }on PlatformException catch(e){
+      if(mounted)setState(()=>testResult='Không thể thực hiện: ${e.message??e.code}');
+    }catch(e){
+      if(mounted)setState(()=>testResult='Không thể thực hiện: $e');
+    }finally{
+      await read();
+      if(mounted)setState(()=>busy=false);
+    }
   }
   List<Offset> get trace {
     final raw=data['route'];
@@ -221,6 +257,61 @@ class _VehiclePageState extends State<VehiclePage> {
                 const SizedBox(height:12),
                 line(Icons.location_on_outlined,'Vị trí đỗ xe của tôi','',
                     tap:parked?openNav:null),
+                if(eventPanelEnabled)...<Widget>[
+                  const SizedBox(height:18),
+                  card(Column(crossAxisAlignment:CrossAxisAlignment.start,
+                    children:<Widget>[
+                      InkWell(
+                        onTap:()=>setState(()=>testOpen=!testOpen),
+                        child:Row(children:<Widget>[
+                          Icon(Icons.science_outlined,color:primary),
+                          const SizedBox(width:9),
+                          Expanded(child:Text('PANEL TEST SỰ KIỆN',
+                            style:heading(14))),
+                          Text('DEMO',style:TextStyle(color:palette.textSecondary,
+                            fontWeight:FontWeight.w600,fontSize:10)),
+                          const SizedBox(width:4),
+                          Icon(testOpen?Icons.expand_less:Icons.expand_more,
+                              color:primary),
+                        ]),
+                      ),
+                      if(testOpen)...<Widget>[
+                        const SizedBox(height:10),
+                        Text('Giả lập tín hiệu vào cổng / bước chân. '
+                          'Tọa độ và lộ trình vẫn lấy từ GPS thật.',
+                          style:TextStyle(color:palette.textSecondary,fontSize:12)),
+                        const SizedBox(height:14),
+                        Wrap(spacing:9,runSpacing:9,children:<Widget>[
+                          OutlinedButton.icon(
+                            onPressed:busy||tracking||parked?null:()=>testEvent('testGate'),
+                            icon:const Icon(Icons.meeting_room_outlined,size:18),
+                            label:const Text('Vào cổng')),
+                          OutlinedButton.icon(
+                            onPressed:busy||!tracking?null:()=>testEvent('testWalk'),
+                            icon:const Icon(Icons.directions_walk,size:18),
+                            label:const Text('Bước chân')),
+                          OutlinedButton.icon(
+                            onPressed:busy||!tracking?null:()=>testEvent('testPark'),
+                            icon:const Icon(Icons.location_on_outlined,size:18),
+                            label:const Text('Chốt xe GPS')),
+                          OutlinedButton.icon(
+                            onPressed:busy?null:()=>testEvent('testReset'),
+                            icon:const Icon(Icons.restart_alt,size:18),
+                            label:const Text('Reset')),
+                        ]),
+                        const SizedBox(height:11),
+                        Text('Trạng thái: '+
+                          (tracking?'Đang ghi GPS':parked?'Đã đỗ xe':'Chưa ghi')+
+                          '  ·  '+trace.length.toString()+' điểm',
+                          style:TextStyle(color:palette.textSecondary,fontSize:12)),
+                        if(testResult.isNotEmpty)...<Widget>[
+                          const SizedBox(height:7),
+                          Text(testResult,style:TextStyle(color:primary,fontSize:12)),
+                        ],
+                      ],
+                    ],
+                  )),
+                ],
               ],
             )),
           ],
