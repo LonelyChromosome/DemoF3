@@ -45,25 +45,85 @@ object VehicleStore {
 
     fun setWindows(context: Context, windows: List<Map<String, Any>>) {
         val array = JSONArray()
-        for (window in windows.take(400)) {
-            val start = (window["start"] as? Number)?.toLong() ?: continue
-            val end = (window["end"] as? Number)?.toLong() ?: continue
-            if (end > start) array.put(JSONArray().put(start).put(end))
+        for(window in windows.take(400)){
+            val start=(window["start"] as? Number)?.toLong()?:continue
+            val end=(window["end"] as? Number)?.toLong()?:continue
+            if(end>start)array.put(org.json.JSONObject()
+                .put("start",start).put("end",end)
+                .put("name",(window["name"] as? String)?.take(120)?:"Môn học"))
         }
         pref(context).edit().putString("windows", array.toString()).apply()
     }
-    fun inClassWindow(context: Context): Boolean {
-        val raw = pref(context).getString("windows", "[]") ?: "[]"
-        val list = runCatching { JSONArray(raw) }.getOrElse { return true }
-        if (list.length() == 0) return true
-        val now = System.currentTimeMillis()
-        for (i in 0 until list.length()) {
-            val pair = list.optJSONArray(i) ?: continue
-            // University arrival can be substantially earlier than the first session.
-            if (now >= pair.optLong(0) - 120L * 60_000 &&
-                now <= pair.optLong(1) + 120L * 60_000) return true
+    fun activeWindows(context:Context,now:Long=System.currentTimeMillis()):Boolean{
+        val raw=pref(context).getString("windows","[]")?:"[]"
+        val array=runCatching{JSONArray(raw)}.getOrElse{return false}
+        val rearmAt=pref(context).getLong("rearmAt",0L)
+        for(i in 0 until array.length()){
+            val item=array.optJSONObject(i)?:continue
+            val start=item.optLong("start")
+            val end=item.optLong("end")
+            if(start>rearmAt&&now>=start-120L*60_000L&&now<=end+120L*60_000L)
+                return true
         }
         return false
+    }
+    fun inClassWindow(context:Context)=activeWindows(context)
+    fun scheduleRows(context:Context):List<Map<String,Any>>{
+        val raw=pref(context).getString("windows","[]")?:"[]"
+        val arr=runCatching{JSONArray(raw)}.getOrElse{return emptyList()}
+        val now=System.currentTimeMillis()
+        val locked=hasParked(context)
+        val rearmAt=pref(context).getLong("rearmAt",0L)
+        val rows=ArrayList<Map<String,Any>>()
+        for(i in 0 until arr.length()){
+            val o=arr.optJSONObject(i)?:continue
+            val start=o.optLong("start")
+            val end=o.optLong("end")
+            if(end<now-6*60L*60_000L||start>now+7*24L*60*60_000L)continue
+            val available=!locked&&start>rearmAt&&now>=start-120L*60_000L&&now<=end+120L*60_000L
+            rows.add(mapOf("name" to o.optString("name","Môn học"),
+                "start" to start,"end" to end,"available" to available,
+                "status" to if(locked)"Đã đỗ xe" else if(start<=rearmAt)"Đã khóa phiên cũ" else
+                    if(now<start-120L*60_000L)"Chưa đến giờ" else if(now>end+120L*60_000L)"Đã qua" else "Đang chờ"))
+        }
+        return rows.sortedBy{it["start"] as Long}.take(40)
+    }
+    fun nextWaitStart(context:Context,now:Long=System.currentTimeMillis()):Long?{
+        val raw=pref(context).getString("windows","[]")?:"[]"
+        val arr=runCatching{JSONArray(raw)}.getOrElse{return null}
+        val rearmAt=pref(context).getLong("rearmAt",0L)
+        var next:Long?=null
+        for(i in 0 until arr.length()){
+            val item=arr.optJSONObject(i)?:continue
+            val start=item.optLong("start")
+            if(start<=rearmAt)continue
+            val trigger=start-120L*60_000L
+            if(trigger>now&&(next==null||trigger<next))next=trigger
+        }
+        return next
+    }
+    @Synchronized fun rearmReal(context:Context){
+        pref(context).edit().remove("parkLat").remove("parkLon").remove("parkedAt")
+            .putBoolean("tracking",false)
+            .putLong("rearmAt",System.currentTimeMillis()).apply()
+    }
+    fun sendEnterNotification(context:Context,demo:Boolean=false){
+        val manager=context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel="bpa_vehicle_enter"
+        if(Build.VERSION.SDK_INT>=26)
+            manager.createNotificationChannel(NotificationChannel(channel,
+                "Xe vào phạm vi",NotificationManager.IMPORTANCE_DEFAULT))
+        if(Build.VERSION.SDK_INT>=33 &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
+            return
+        val open=PendingIntent.getActivity(context,8012,
+            Intent(context,MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        manager.notify(if(demo)8890 else 8870,Notification.Builder(context,channel)
+            .setSmallIcon(android.R.drawable.ic_menu_mylocation)
+            .setContentTitle(if(demo)"[TEST] Xe vào phạm vi" else "Xe đã vào phạm vi trường")
+            .setContentText("Find My Bike bắt đầu ghi hành trình")
+            .setAutoCancel(true).setContentIntent(open).build())
     }
     @Synchronized fun begin(context: Context,demo:Boolean=false) {
         file(context,demo).parentFile?.mkdirs()
@@ -174,7 +234,9 @@ object VehicleStore {
             "parkedAt" to p.getLong("parkedAt",0L),
             "location" to foregroundLocation,
             "background" to backgroundLocation,
-            "route" to route(context,demo)
+            "route" to route(context,demo),
+            "waitingSubjects" to if(demo)emptyList<Map<String,Any>>() else scheduleRows(context),
+            "nextWaitStart" to (if(demo)null else nextWaitStart(context))
         )
     }
 }
@@ -254,7 +316,7 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
                 sensorManager.registerListener(this,it,SensorManager.SENSOR_DELAY_NORMAL)
             }
         }
-        if(!demoMode) VehicleStore.sendEnterNotification(this)
+        VehicleStore.sendEnterNotification(this,demoMode)
         return START_STICKY
     }
     override fun onLocationChanged(location:Location) {

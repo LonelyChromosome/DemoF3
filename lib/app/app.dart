@@ -1877,7 +1877,8 @@ class _MainShellState extends State<_MainShell>
                     child: RepaintBoundary(
                       child: VehiclePage(
                         active: _displayPage == _AppPage.vehicle,
-                        windows: data.classes.map((record) => <String, int>{
+                        windows: data.classes.map((record) => <String, dynamic>{
+                          'name': record.subjectName,
                           'start': record.startAt.millisecondsSinceEpoch,
                           'end': record.endAt.millisecondsSinceEpoch,
                         }).toList(growable: false),

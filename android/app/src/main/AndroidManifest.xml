@@ -29,6 +29,8 @@
             android:stopWithTask="false"
             android:foregroundServiceType="location" />
         <receiver android:name=".VehicleFenceReceiver" android:exported="false" />
+        <receiver android:name=".VehicleScheduleReceiver" android:exported="false" />
+        <receiver android:name=".VehicleMotionReceiver" android:exported="false" />
         <receiver android:name=".VehicleBootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

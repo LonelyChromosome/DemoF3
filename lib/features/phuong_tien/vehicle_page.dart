@@ -16,8 +16,12 @@ class VehicleNative {
   static Future<void> enable() async { await channel.invokeMethod<dynamic>('enable'); }
   static Future<void> permissionSettings() async { await channel.invokeMethod<dynamic>('permissionSettings'); }
   static Future<void> permissions() async { await channel.invokeMethod<dynamic>('permissions'); }
-  static Future<void> schedule(List<Map<String, int>> windows) async {
+  static Future<void> schedule(List<Map<String, dynamic>> windows) async {
     await channel.invokeMethod<dynamic>('schedule', <String, Object>{'windows': windows});
+  }
+  static Future<Map<String, dynamic>> testState() async {
+    final value=await channel.invokeMethod<dynamic>('testState');
+    return Map<String, dynamic>.from(value as Map);
   }
   static Future<String> testEvent(String method) async {
     final value=await channel.invokeMethod<String>(method);
@@ -33,12 +37,13 @@ class VehicleNative {
 
 class VehiclePage extends StatefulWidget {
   const VehiclePage({super.key, required this.windows, required this.active});
-  final List<Map<String, int>> windows;
+  final List<Map<String, dynamic>> windows;
   final bool active;
   @override State<VehiclePage> createState() => _VehiclePageState();
 }
 class _VehiclePageState extends State<VehiclePage> {
   Map<String, dynamic> data = <String, dynamic>{'enabled': false};
+  Map<String, dynamic> testData = <String, dynamic>{'tracking':false,'parked':false};
   Timer? timer;
   bool busy = false;
   bool testOpen = false;
@@ -68,7 +73,14 @@ class _VehiclePageState extends State<VehiclePage> {
   Future<void> read() async {
     try {
       final value=await VehicleNative.state();
-      if(mounted)setState(()=>data=value);
+      Map<String,dynamic> test=<String,dynamic>{};
+      if(eventPanelEnabled) {
+        try {test=await VehicleNative.testState();}catch(_){}
+      }
+      if(mounted)setState((){
+        data=value;
+        if(test.isNotEmpty)testData=test;
+      });
     }catch(_){}
   }
   Future<void> enable() async {
@@ -77,15 +89,15 @@ class _VehiclePageState extends State<VehiclePage> {
     try { await VehicleNative.enable(); await read(); } catch (_) {}
     if(mounted)setState(()=>busy=false);
   }
-  Future<void> openNav() async {
-    if(busy || data['parked'] != true)return;
+  Future<void> openNav({bool testMode=false}) async {
+    if(busy || (testMode?testData['parked']:data['parked']) != true)return;
     setState(()=>busy=true);
     // The location request starts BEFORE the VFX animation starts.
     try { await VehicleNative.startNav(); } catch (_) {}
     if(!mounted)return;
     setState(()=>busy=false);
     await Navigator.of(context).push<void>(MaterialPageRoute<void>(
-      builder: (_) => const VehicleScanLockScreen()));
+      builder: (_) => VehicleScanLockScreen(testMode:testMode)));
     if(mounted)unawaited(read());
   }
   Future<void> testEvent(String method) async {
@@ -137,6 +149,10 @@ class _VehiclePageState extends State<VehiclePage> {
     final tracking=data['tracking']==true;
     final foreground=data['location']==true;
     final background=data['background']==true;
+    final testTracking=testData['tracking']==true;
+    final testParked=testData['parked']==true;
+    final rawWindows=data['waitingSubjects'];
+    final waiting=rawWindows is List?rawWindows:const <dynamic>[];
     Widget card(Widget child,{VoidCallback? tap})=>Material(
       color:palette.card.withValues(alpha:.9),
       borderRadius:BorderRadius.circular(20),
@@ -177,24 +193,52 @@ class _VehiclePageState extends State<VehiclePage> {
           children:<Widget>[
             Text('Phương Tiện',style:heading(27)),
             const SizedBox(height:24),
-            if(!enabled)
-              Expanded(child:Center(child:SizedBox(
-                width:double.infinity,height:58,
-                child:FilledButton.icon(
-                  onPressed:busy?null:enable,
-                  icon:const Icon(Icons.two_wheeler_rounded),
-                  label:const Text('Bật Tìm xe của bạn'),
-                  style:FilledButton.styleFrom(
-                    backgroundColor:primary,foregroundColor:Colors.white,
-                    shape:RoundedRectangleBorder(
-                      borderRadius:BorderRadius.circular(18))),
-                ),
-              )))
-            else Expanded(child:ListView(
+            Expanded(child:ListView(
               padding:EdgeInsets.zero,
               children:<Widget>[
                 line(Icons.radar_rounded,'Trạng thái',
-                    (!foreground||!background)?'Cần cấp quyền':tracking?'Đang ghi hành trình':parked?'Đã xác định vị trí xe':'Đang theo dõi'),
+                    (!enabled)?'Chờ dữ liệu lịch học':
+                    (!foreground||!background)?'Cần cấp quyền':
+                    tracking?'Đang ghi hành trình':
+                    parked?'Đã xác định vị trí xe':'Đang chờ lịch học'),
+                const SizedBox(height:12),
+                card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:<Widget>[
+                  Row(children:<Widget>[
+                    Icon(Icons.calendar_month_rounded,color:primary,size:23),
+                    const SizedBox(width:10),
+                    Expanded(child:Text('Các môn học đang được chờ',style:heading(15))),
+                  ]),
+                  const SizedBox(height:12),
+                  if(waiting.isEmpty)
+                    Text('Chưa có môn học sắp tới từ lịch BPA.',
+                      style:TextStyle(color:palette.textSecondary,fontSize:13)),
+                  for(final raw in waiting)
+                    if(raw is Map)...<Widget>[
+                      Builder(builder:(context){
+                        final row=Map<String,dynamic>.from(raw);
+                        final allowed=row['available']==true;
+                        final start=(row['start'] as num?)?.toInt()??0;
+                        final when=DateTime.fromMillisecondsSinceEpoch(start);
+                        final day='${when.day.toString().padLeft(2,'0')}/${when.month.toString().padLeft(2,'0')}';
+                        final hour='${when.hour.toString().padLeft(2,'0')}:${when.minute.toString().padLeft(2,'0')}';
+                        return Padding(padding:const EdgeInsets.only(bottom:10),
+                          child:Row(children:<Widget>[
+                            Icon(allowed?Icons.check_circle_rounded:Icons.cancel_rounded,
+                              size:22,color:allowed?const Color(0xFF39BD87):palette.textSecondary),
+                            const SizedBox(width:10),
+                            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
+                              children:<Widget>[
+                                Text(row['name']?.toString()??'Môn học',
+                                    maxLines:2,overflow:TextOverflow.ellipsis,
+                                    style:TextStyle(color:palette.textPrimary,
+                                      fontSize:13,fontWeight:FontWeight.w700)),
+                                Text('$day · $hour · ${row['status']??''}',
+                                  style:TextStyle(color:palette.textSecondary,fontSize:11)),
+                              ])),
+                          ]));
+                      }),
+                    ],
+                ])),
                 if(!foreground||!background)...<Widget>[
                   const SizedBox(height:12),
                   line(Icons.gps_fixed_rounded,'Cấp quyền định vị','',
@@ -256,7 +300,7 @@ class _VehiclePageState extends State<VehiclePage> {
                 ),
                 const SizedBox(height:12),
                 line(Icons.location_on_outlined,'Vị trí đỗ xe của tôi','',
-                    tap:parked?openNav:null),
+                    tap:parked?()=>openNav():null),
                 if(eventPanelEnabled)...<Widget>[
                   const SizedBox(height:18),
                   card(Column(crossAxisAlignment:CrossAxisAlignment.start,
@@ -283,15 +327,15 @@ class _VehiclePageState extends State<VehiclePage> {
                         const SizedBox(height:14),
                         Wrap(spacing:9,runSpacing:9,children:<Widget>[
                           OutlinedButton.icon(
-                            onPressed:busy||tracking||parked?null:()=>testEvent('testGate'),
+                            onPressed:busy||testTracking||testParked?null:()=>testEvent('testGate'),
                             icon:const Icon(Icons.meeting_room_outlined,size:18),
                             label:const Text('Vào cổng')),
                           OutlinedButton.icon(
-                            onPressed:busy||!tracking?null:()=>testEvent('testWalk'),
+                            onPressed:busy||!testTracking?null:()=>testEvent('testWalk'),
                             icon:const Icon(Icons.directions_walk,size:18),
                             label:const Text('Bước chân')),
                           OutlinedButton.icon(
-                            onPressed:busy||!tracking?null:()=>testEvent('testPark'),
+                            onPressed:busy||!testTracking?null:()=>testEvent('testPark'),
                             icon:const Icon(Icons.location_on_outlined,size:18),
                             label:const Text('Chốt xe GPS')),
                           OutlinedButton.icon(
@@ -300,10 +344,15 @@ class _VehiclePageState extends State<VehiclePage> {
                             label:const Text('Reset')),
                         ]),
                         const SizedBox(height:11),
-                        Text('Trạng thái: '+
-                          (tracking?'Đang ghi GPS':parked?'Đã đỗ xe':'Chưa ghi')+
-                          '  ·  '+trace.length.toString()+' điểm',
+                        Text('Phiên TEST: '+
+                          (testTracking?'Đang ghi GPS':testParked?'Đã đỗ xe':'Chưa ghi')+
+                          '  ·  '+((testData['route'] as List?)?.length??0).toString()+' điểm',
                           style:TextStyle(color:palette.textSecondary,fontSize:12)),
+                        if(testParked)
+                          OutlinedButton.icon(
+                            onPressed:busy?null:()=>openNav(testMode:true),
+                            icon:const Icon(Icons.navigation_outlined,size:18),
+                            label:const Text('Dẫn tới xe TEST')),
                         if(testResult.isNotEmpty)...<Widget>[
                           const SizedBox(height:7),
                           Text(testResult,style:TextStyle(color:primary,fontSize:12)),

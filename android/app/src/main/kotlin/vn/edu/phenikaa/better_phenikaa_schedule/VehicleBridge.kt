@@ -37,6 +37,10 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
         try {
             when(call.method) {
                 "state" -> result.success(VehicleStore.snapshot(activity))
+                "testState" -> {
+                    requireTestPanel()
+                    result.success(VehicleStore.snapshot(activity,true))
+                }
                 "enable" -> {
                     VehicleStore.enabled(activity,true)
                     requestPermissions()
@@ -55,42 +59,49 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
                 "schedule" -> {
                     val windows=call.argument<List<Map<String,Any>>>("windows") ?: emptyList()
                     VehicleStore.setWindows(activity,windows)
+                    if(windows.isNotEmpty()&&!VehicleStore.isEnabled(activity)){
+                        VehicleStore.enabled(activity,true)
+                        requestPermissions()
+                    }
+                    VehicleLifecycle.armNext(activity)
                     result.success(null)
                 }
                 "testGate" -> {
                     requireTestPanel()
                     if(!VehicleStore.isEnabled(activity))throw IllegalStateException("Hãy bật Tìm xe trước")
                     if(!hasFinePermission())throw IllegalStateException("Cần cấp quyền GPS chính xác")
-                    if(VehicleStore.hasParked(activity))throw IllegalStateException("Đã có vị trí xe. Hãy reset trước")
-                    if(VehicleStore.isTracking(activity))throw IllegalStateException("Đang ghi hành trình")
-                    startCaptureTest("start")
+                    if(VehicleStore.hasParked(activity,true))throw IllegalStateException("Phiên TEST đã có điểm đỗ; reset TEST trước")
+                    if(VehicleStore.isTracking(activity,true))throw IllegalStateException("TEST đang ghi hành trình")
+                    if(VehicleStore.isTracking(activity))throw IllegalStateException("Đang tracking THỰC TẾ; không thể chạy song song")
+                    startCaptureTest("bpa.demo.start")
                     result.success("Đã giả lập vào cổng. GPS đang ghi là GPS thật.")
                 }
                 "testWalk" -> {
                     requireTestPanel()
-                    if(!VehicleStore.isTracking(activity))throw IllegalStateException("Hãy giả lập vào cổng trước")
+                    if(!VehicleStore.isTracking(activity,true))throw IllegalStateException("Hãy giả lập vào cổng trước")
                     startCaptureTest("bpa.demo.walk")
                     result.success("Giả lập 7 bước trong khoảng 8 giây; GPS vẫn lấy thật.")
                 }
                 "testPark" -> {
                     requireTestPanel()
-                    if(!VehicleStore.isTracking(activity))throw IllegalStateException("Chưa ghi hành trình")
+                    if(!VehicleStore.isTracking(activity,true))throw IllegalStateException("Chưa ghi hành trình TEST")
                     val parked=VehicleStore.recentStableTestParking(activity)
                         ?:throw IllegalStateException("Cần ít nhất 2 mẫu GPS thật gần nhau, còn mới (sai số tối đa 30m)")
-                    VehicleStore.saveParked(activity,parked.first,parked.second)
+                    VehicleStore.saveParked(activity,parked.first,parked.second,true)
                     activity.stopService(Intent(activity,VehicleCaptureService::class.java))
-                    VehicleStore.sendParkNotification(activity)
+                    VehicleStore.sendParkNotification(activity,true)
                     result.success("Đã chốt xe bằng GPS thật. Đây là thao tác test thủ công.")
                 }
                 "testReset" -> {
                     requireTestPanel()
-                    stopNavigation()
-                    activity.stopService(Intent(activity,VehicleCaptureService::class.java))
+                    if(!VehicleStore.isTracking(activity))
+                        activity.stopService(Intent(activity,VehicleCaptureService::class.java))
                     VehicleStore.resetDemoSession(activity)
                     result.success("Đã reset phiên test; BPA chính không bị ảnh hưởng.")
                 }
                 "startNav" -> { startNavigation(); result.success(null) }
                 "nav" -> { watchdog(); result.success(navSnapshot()) }
+                "testNav" -> {requireTestPanel();watchdog();result.success(navSnapshot(true))}
                 "stopNav" -> { stopNavigation(); result.success(null) }
                 else -> result.notImplemented()
             }
@@ -130,7 +141,7 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
         if(missing.isNotEmpty())activity.requestPermissions(missing.toTypedArray(),7419)
     }
     fun permissionsUpdated(code:Int) {
-        if(code==7419 && VehicleStore.isEnabled(activity))registerFences(activity)
+        if(code==7419 && VehicleStore.isEnabled(activity))VehicleLifecycle.armNext(activity)
     }
     private fun acceptFix(loc:Location?,cached:Boolean=false) {
         if(loc==null || !loc.latitude.isFinite() || !loc.longitude.isFinite())return
@@ -140,11 +151,11 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
         if(navFix!=null && navFix!!.elapsedRealtimeNanos>loc.elapsedRealtimeNanos)return
         navFix=Location(loc)
     }
-    private fun navSnapshot():Map<String,Any?> {
+    private fun navSnapshot(demo:Boolean=false):Map<String,Any?> {
         val loc=navFix
         val snapshot=HashMap<String,Any?>()
-        snapshot["parkLat"]=VehicleStore.parkLat(activity)
-        snapshot["parkLon"]=VehicleStore.parkLon(activity)
+        snapshot["parkLat"]=VehicleStore.parkLat(activity,demo)
+        snapshot["parkLon"]=VehicleStore.parkLon(activity,demo)
         if(loc!=null){
             snapshot["lat"]=loc.latitude
             snapshot["lon"]=loc.longitude
@@ -190,17 +201,14 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
         channel.setMethodCallHandler(null)
     }
     companion object {
-        private val gates=arrayOf(
-            doubleArrayOf(20.962668790883644,105.74871859259113),
-            doubleArrayOf(20.959607109088672,105.74789745697416)
-        )
+        private val gates=VehicleLifecycle.gates
         fun registerFences(context:Context) {
             if(!VehicleStore.isEnabled(context) ||
                 context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)return
             val fences=gates.mapIndexed {i,gate ->
                 Geofence.Builder().setRequestId("bpa_vehicle_gate_"+i)
                     .setCircularRegion(gate[0],gate[1],100f)
-                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER)
+                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
                     .setExpirationDuration(Geofence.NEVER_EXPIRE)
                     .setNotificationResponsiveness(4000).build()
             }
@@ -221,21 +229,19 @@ class VehicleFenceReceiver:BroadcastReceiver(){
     override fun onReceive(context:Context,intent:Intent){
         if(!VehicleStore.isEnabled(context))return
         val event=GeofencingEvent.fromIntent(intent)?:return
-        if(event.hasError()||event.geofenceTransition!=Geofence.GEOFENCE_TRANSITION_ENTER)return
-        if(!VehicleStore.inClassWindow(context))return
-        // Protect a recently saved bike from duplicate ENTER events / GPS bouncing.
-        if(VehicleStore.hasParked(context) && VehicleStore.parkAgeMs(context)<60L*60_000L)return
-        try {
-            val service=Intent(context,VehicleCaptureService::class.java).setAction("start")
-            if(Build.VERSION.SDK_INT>=26)context.startForegroundService(service)
-            else context.startService(service)
-        }catch(_:Exception){}
+        if(event.hasError())return
+        if(event.geofenceTransition==Geofence.GEOFENCE_TRANSITION_EXIT){
+            VehicleLifecycle.maybeRearm(context,event.triggeringLocation)
+            return
+        }
+        if(event.geofenceTransition==Geofence.GEOFENCE_TRANSITION_ENTER)
+            VehicleLifecycle.enter(context)
     }
 }
 class VehicleBootReceiver:BroadcastReceiver(){
     override fun onReceive(context:Context,intent:Intent) {
         if(intent.action==Intent.ACTION_BOOT_COMPLETED ||
             intent.action==Intent.ACTION_MY_PACKAGE_REPLACED)
-            VehicleBridge.registerFences(context)
+            VehicleLifecycle.armNext(context)
     }
 }

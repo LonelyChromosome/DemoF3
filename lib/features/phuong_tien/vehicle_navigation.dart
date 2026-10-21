@@ -5,7 +5,8 @@ import 'package:better_phenikaa_schedule/features/phuong_tien/vehicle_page.dart'
 
 /// White cinematic loading screen. Each scan square fades out BEFORE the next.
 class VehicleScanLockScreen extends StatefulWidget {
-  const VehicleScanLockScreen({super.key});
+  const VehicleScanLockScreen({super.key,this.testMode=false});
+  final bool testMode;
   @override State<VehicleScanLockScreen> createState()=>_VehicleScanLockScreenState();
 }
 class _VehicleScanLockScreenState extends State<VehicleScanLockScreen>
@@ -19,7 +20,7 @@ class _VehicleScanLockScreenState extends State<VehicleScanLockScreen>
     controller.addStatusListener((s){
       if(s==AnimationStatus.completed&&mounted){
         Navigator.of(context).pushReplacement<void,void>(
-          MaterialPageRoute<void>(builder:(_)=>const VehicleGuidanceScreen()));
+          MaterialPageRoute<void>(builder:(_)=>VehicleGuidanceScreen(testMode:widget.testMode)));
       }
     });
   }
@@ -97,7 +98,8 @@ class _ScanLockPainter extends CustomPainter {
 }
 
 class VehicleGuidanceScreen extends StatefulWidget{
-  const VehicleGuidanceScreen({super.key});
+  const VehicleGuidanceScreen({super.key,this.testMode=false});
+  final bool testMode;
   @override State<VehicleGuidanceScreen> createState()=>_VehicleGuidanceScreenState();
 }
 class _VehicleGuidanceScreenState extends State<VehicleGuidanceScreen>
@@ -117,8 +119,10 @@ class _VehicleGuidanceScreenState extends State<VehicleGuidanceScreen>
   }
   Future<void> read() async {
     try {
-      final v=await VehicleNative.nav();
-      if(mounted)setState(()=>nav=v);
+      final v=widget.testMode
+          ?await VehicleNative.channel.invokeMethod<dynamic>('testNav')
+          :await VehicleNative.nav();
+      if(mounted)setState(()=>nav=Map<String,dynamic>.from(v as Map));
     }catch(_){}
   }
   @override
@@ -160,7 +164,7 @@ class _VehicleGuidanceScreenState extends State<VehicleGuidanceScreen>
               icon:const Icon(Icons.arrow_back_ios_new_rounded,
                 color:Color(0xFF1B3442),size:21)),
             const SizedBox(width:8),
-            const Text('Tìm xe',style:TextStyle(color:Color(0xFF1B3442),
+            Text(widget.testMode?'Tìm xe · TEST':'Tìm xe',style:const TextStyle(color:Color(0xFF1B3442),
               fontSize:22,fontWeight:FontWeight.w700)),
           ]),
           const SizedBox(height:25),
