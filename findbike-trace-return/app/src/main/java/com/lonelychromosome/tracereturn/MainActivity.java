@@ -26,6 +26,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     private static final double SCREENSHOT_PARK_LON=105.746592;
     private static final int REQUEST_GPX=40, REQUEST_GPS=41;
     private final Handler ui=new Handler(Looper.getMainLooper());
+    private final ArrayList<Point> importedRoute=new ArrayList<>();
     private FusedLocationProviderClient fused;
     private LocationCallback locationCallback;
     private SensorManager sensorManager;
@@ -65,6 +66,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
             loadedTrace=prefs.getString("filename","");
             traceCount=prefs.getInt("count",0);
         }
+        restoreTrace();
         LinearLayout root=new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.WHITE);
@@ -448,7 +450,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
                 .setNegativeButton("HỦY",null)
                 .setNeutralButton("CHỌN ĐIỂM KHÁC",(d,which)->pickTracePoint(track,filename));
             if(candidate!=null)dialog.setPositiveButton("DÙNG ĐIỂM NÀY",(d,which)->
-                setBike(candidate,filename,track.points.size()));
+                setBike(candidate,filename,track));
             else dialog.setPositiveButton("CHỌN ĐIỂM",(d,which)->pickTracePoint(track,filename));
             dialog.show();
         }catch(Exception e){
@@ -470,11 +472,13 @@ public final class MainActivity extends Activity implements SensorEventListener 
                     .setMessage(String.format(Locale.US,
                         "Điểm #%d\n%.6f, %.6f\n\nĐiểm này sẽ là đích dẫn về. Đúng vị trí xe chứ?",
                         which+1,p.lat,p.lon))
-                    .setPositiveButton("DÙNG ĐIỂM NÀY",(dd,w)->setBike(p,filename,track.points.size()))
+                    .setPositiveButton("DÙNG ĐIỂM NÀY",(dd,w)->setBike(p,filename,track))
                     .setNegativeButton("QUAY LẠI",(dd,w)->pickTracePoint(track,filename)).show();
             }).setNegativeButton("HỦY",null).show();
     }
-    private void setBike(Point p,String filename,int count){
+    private void setBike(Point p,String filename,Trace track){
+        int count=track.points.size();
+        saveTrace(track.points);
         bikeLat=p.lat;bikeLon=p.lon;
         bikeSource="Vị trí xe từ GPX · "+filename;
         loadedTrace=filename;traceCount=count;
@@ -485,6 +489,34 @@ public final class MainActivity extends Activity implements SensorEventListener 
             .putInt("count",count).apply();
         drawStatus();
         if(!navigating)startNav();
+    }
+
+
+    private void saveTrace(ArrayList<Point> pts){
+        importedRoute.clear();
+        File output=new File(getFilesDir(),"confirmed_route.csv");
+        try(BufferedWriter writer=new BufferedWriter(new OutputStreamWriter(new FileOutputStream(output),"UTF-8"))){
+            int count=0;
+            for(Point point:pts){
+                if(count++>=10000)break;
+                writer.write(String.format(Locale.US,"%.9f,%.9f",point.lat,point.lon));
+                writer.newLine();importedRoute.add(point);
+            }
+        }catch(Exception ignored){importedRoute.clear();}
+    }
+    private void restoreTrace(){
+        File source=new File(getFilesDir(),"confirmed_route.csv");
+        if(!source.isFile())return;
+        try(BufferedReader reader=new BufferedReader(new InputStreamReader(new FileInputStream(source),"UTF-8"))){
+            String row;
+            while((row=reader.readLine())!=null&&importedRoute.size()<10000){
+                String[] xy=row.split(",");
+                if(xy.length!=2)continue;
+                double lat=Double.parseDouble(xy[0]),lon=Double.parseDouble(xy[1]);
+                if(Double.isFinite(lat)&&Double.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180)
+                    importedRoute.add(new Point(lat,lon));
+            }
+        }catch(Exception ignored){importedRoute.clear();}
     }
 
     private final class CompassView extends View{
@@ -514,12 +546,31 @@ public final class MainActivity extends Activity implements SensorEventListener 
             dest.setLatitude(bikeLat);dest.setLongitude(bikeLon);
             float meters=from.distanceTo(dest),bearing=from.bearingTo(dest);
             float rel=(float)Math.toRadians(bearing); // NORTH-UP: position never rotates with phone
-            float radius=Math.min(w*.36f,h*.32f);
-            float distanceScale=meters<8 ? Math.max(.38f,meters/8f) : 1f;
-            float bx=ux+(float)Math.sin(rel)*radius*distanceScale;
-            float by=uy-(float)Math.cos(rel)*radius*distanceScale;
-            bx=Math.max(dp(44),Math.min(w-dp(44),bx));
-            by=Math.max(dp(65),Math.min(h-dp(62),by));
+            // Metric coordinates: east is right, north is up. Both points are independent of handset rotation.
+            double metersEast=(bikeLon-current[1])*111320.0*Math.cos(Math.toRadians(current[0]));
+            double metersNorth=(bikeLat-current[0])*111320.0;
+            float freeX=Math.max(dp(35),Math.min(ux-dp(44),w-ux-dp(44)));
+            float freeY=Math.max(dp(35),Math.min(uy-dp(65),h-uy-dp(65)));
+            float pxPerMeter=Math.min(freeX/(float)Math.max(8,Math.abs(metersEast)),
+                                      freeY/(float)Math.max(8,Math.abs(metersNorth)));
+            pxPerMeter=Math.min(pxPerMeter,dp(11));
+            float bx=ux+(float)metersEast*pxPerMeter;
+            float by=uy-(float)metersNorth*pxPerMeter;
+            // Draw confirmed GPX polyline in the SAME north-up coordinate frame.
+            if(importedRoute.size()>1){
+                Path route=new Path();
+                boolean isFirst=true;
+                for(Point point:importedRoute){
+                    float east=(float)((point.lon-current[1])*111320.0*Math.cos(Math.toRadians(current[0])));
+                    float north=(float)((point.lat-current[0])*111320.0);
+                    float x=ux+east*pxPerMeter,y=uy-north*pxPerMeter;
+                    if(isFirst){route.moveTo(x,y);isFirst=false;}else route.lineTo(x,y);
+                }
+                paint.reset();paint.setAntiAlias(true);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(dp(2));paint.setColor(Color.rgb(174,203,220));
+                canvas.drawPath(route,paint);
+            }
             paint.reset();paint.setAntiAlias(true);paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(dp(2.5f));paint.setColor(Color.rgb(79,100,115));
             paint.setPathEffect(new DashPathEffect(new float[]{dp(11),dp(9)},0));
@@ -551,8 +602,19 @@ public final class MainActivity extends Activity implements SensorEventListener 
                 canvas.drawLine(sx,sy,sx-(float)Math.sin(a+.55f)*dp(11),sy+(float)Math.cos(a+.55f)*dp(11),paint);
                 paint.setStyle(Paint.Style.FILL);
             }
-            if(!headingAvailable)label(canvas,"↑ BẮC",w*.5f,dp(24),11,Color.rgb(144,153,159));
-            else label(canvas,"↑ BẮC · BẢN ĐỒ CỐ ĐỊNH",w*.5f,dp(24),10,Color.rgb(144,153,159));
+            // Accurate metric scale derived from the same map projection.
+            float preferredMetres=(w*.27f)/Math.max(.001f,pxPerMeter),scaleMetres=1f;
+            for(float v:new float[]{1,2,5,10,20,50,100,200,500,1000,2000,5000})
+                if(v<=preferredMetres)scaleMetres=v;
+            float startX=dp(21),scaleY=h-dp(44),length=scaleMetres*pxPerMeter;
+            paint.reset();paint.setAntiAlias(true);
+            paint.setColor(Color.rgb(155,168,179));paint.setStrokeWidth(dp(2f));
+            canvas.drawLine(startX,scaleY,startX+length,scaleY,paint);
+            canvas.drawLine(startX,scaleY-dp(5),startX,scaleY+dp(5),paint);
+            canvas.drawLine(startX+length,scaleY-dp(5),startX+length,scaleY+dp(5),paint);
+            label(canvas,String.format(Locale.US,"%.0f m",scaleMetres),
+                startX+length*.5f,scaleY-dp(11),10,Color.rgb(139,155,167));
+            label(canvas,"↑ BẮC · BẢN ĐỒ CỐ ĐỊNH",w*.5f,dp(24),10,Color.rgb(144,153,159));
             if(age>3000)label(canvas,"VỊ TRÍ TẠM · MẤT GPS",w*.5f,h-dp(17),12,Color.rgb(160,112,42));
             else if(meters<5)label(canvas,"ĐANG Ở GẦN VỊ TRÍ XE",w*.5f,h-dp(17),12,Color.rgb(42,131,92));
         }
