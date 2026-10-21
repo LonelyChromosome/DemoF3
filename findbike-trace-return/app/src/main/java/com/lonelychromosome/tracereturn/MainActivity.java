@@ -30,12 +30,16 @@ public final class MainActivity extends Activity implements SensorEventListener 
     private FusedLocationProviderClient fused;
     private LocationCallback locationCallback;
     private SensorManager sensorManager;
-    private Sensor rotationSensor;
+    private Sensor rotationSensor, stepSensor;
+    private final StationaryGate stillGate=new StationaryGate();
     private TextView distanceView, information, fixInfo, subtitle, headingInfo;
     private Button navigationButton;
     private CompassView compass;
     private Location latestFix;
     private boolean navigating=false, requestedLocation=false;
+    private boolean gpsPermissionPrompted=false;
+    private int gpsSession=0;
+    private long lastGpsConnectMs=0;
     private boolean headingAvailable=false;
     private float azimuth=0f, velEast=0f, velNorth=0f;
     private double bikeLat=SCREENSHOT_PARK_LAT, bikeLon=SCREENSHOT_PARK_LON;
@@ -45,6 +49,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     private final Runnable animate=new Runnable(){
         @Override public void run(){
             if(!navigating)return;
+            retryGpsIfNeeded();
             drawStatus();
             ui.postDelayed(this,100);
         }
@@ -58,6 +63,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         fused=LocationServices.getFusedLocationProviderClient(this);
         sensorManager=(SensorManager)getSystemService(SENSOR_SERVICE);
         rotationSensor=sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+        stepSensor=sensorManager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR);
         android.content.SharedPreferences prefs=getSharedPreferences("dest",MODE_PRIVATE);
         if(prefs.contains("lat")&&prefs.contains("lon")){
             bikeLat=Double.longBitsToDouble(prefs.getLong("lat",0));
@@ -73,7 +79,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         root.setPadding(dp(20),dp(18),dp(20),dp(18));
 
         TextView kicker=new TextView(this);
-        kicker.setText("FIND MY BIKE   /   NORTH UP");
+        kicker.setText("FIND MY BIKE   /   NORTH UP 2.0.1");
         kicker.setTextSize(11);kicker.setLetterSpacing(.13f);
         kicker.setTextColor(Color.rgb(87,114,131));
         root.addView(kicker);
@@ -123,7 +129,10 @@ public final class MainActivity extends Activity implements SensorEventListener 
         navigationButton=button("BẮT ĐẦU DẪN VỀ",Color.rgb(24,49,67),Color.WHITE);
         root.addView(navigationButton,new LinearLayout.LayoutParams(-1,dp(54)));
         navigationButton.setOnClickListener(v->{
-            if(navigating)stopNav();else startNav();
+            if(navigating)stopNav(true);else {
+                gpsPermissionPrompted=false;
+                startNav();
+            }
         });
 
         Button importButton=button("NHẬP TRACE GPX · ĐỔI ĐIỂM ĐẾN",Color.rgb(232,241,246),Color.rgb(20,57,75));
@@ -132,7 +141,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         importButton.setOnClickListener(v->openTracePicker());
 
         TextView note=new TextView(this);
-        note.setText("BẮC luôn ở trên. Xoay điện thoại chỉ xoay mũi tên BẠN; XE ĐỖ và line không xoay. Đây là đường chim bay.");
+        note.setText("BẮC luôn ở trên. GPS tự dẫn khi mở app; không ngoại suy khi đứng yên. Xoay điện thoại không xoay bản đồ. Đây là đường chim bay.");
         note.setTextColor(Color.rgb(137,149,157));
         note.setTextSize(10);
         LinearLayout.LayoutParams noteLp=new LinearLayout.LayoutParams(-1,-2);
@@ -155,56 +164,127 @@ public final class MainActivity extends Activity implements SensorEventListener 
         return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED ||
             checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==PackageManager.PERMISSION_GRANTED;
     }
+    private android.content.SharedPreferences navigationPrefs(){
+        return getSharedPreferences("autonav",MODE_PRIVATE);
+    }
     private void startNav(){
+        navigationPrefs().edit().putBoolean("enabled",true).apply();
         if(!hasLocation()){
-            requestedLocation=true;
-            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION},REQUEST_GPS);
+            if(!requestedLocation && !gpsPermissionPrompted){
+                requestedLocation=true;
+                gpsPermissionPrompted=true;
+                requestPermissions(new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION},REQUEST_GPS);
+            }else if(fixInfo!=null)fixInfo.setText("Cần quyền GPS để tự dẫn đường");
             return;
         }
         if(navigating)return;
         navigating=true;
         navigationButton.setText("DỪNG DẪN ĐƯỜNG");
         headingAvailable=false;
-        if(rotationSensor!=null)sensorManager.registerListener(this,rotationSensor,SensorManager.SENSOR_DELAY_GAME);
-        // Cached fix is shown immediately if available, but always labeled with its true age.
+        stillGate.reset();
+        // Keep the 2.0 phone orientation arrow and north-up map intact.
+        if(rotationSensor!=null)
+            sensorManager.registerListener(this,rotationSensor,SensorManager.SENSOR_DELAY_GAME);
+        if(stepSensor!=null && (Build.VERSION.SDK_INT<29 ||
+                checkSelfPermission("android.permission.ACTIVITY_RECOGNITION")==PackageManager.PERMISSION_GRANTED)){
+            sensorManager.registerListener(this,stepSensor,SensorManager.SENSOR_DELAY_NORMAL);
+            stillGate.setStepSensorActive(true);
+        }else if(stepSensor!=null && Build.VERSION.SDK_INT>=29){
+            stillGate.setStepSensorActive(false);
+            requestPermissions(new String[]{"android.permission.ACTIVITY_RECOGNITION"},42);
+        }
+        ui.removeCallbacks(animate);
+        connectGps();
+        ui.post(animate);
+        drawStatus();
+    }
+    private void connectGps(){
+        if(!navigating||!hasLocation())return;
+        final int session=++gpsSession;
+        lastGpsConnectMs=SystemClock.elapsedRealtime();
+        if(locationCallback!=null){
+            fused.removeLocationUpdates(locationCallback);
+            locationCallback=null;
+        }
         try{
-            fused.getLastLocation().addOnSuccessListener(this,loc->{if(navigating)acceptFix(loc);});
             LocationRequest request=new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY,900L)
                 .setMinUpdateIntervalMillis(400L)
                 .setMinUpdateDistanceMeters(0f)
                 .setWaitForAccurateLocation(false).build();
             locationCallback=new LocationCallback(){
                 @Override public void onLocationResult(LocationResult r){
+                    if(!navigating||session!=gpsSession)return;
                     for(Location loc:r.getLocations())acceptFix(loc);
                 }
             };
             fused.requestLocationUpdates(request,locationCallback,Looper.getMainLooper())
-                .addOnFailureListener(e->{ fixInfo.setText("Không thể bật định vị: "+e.getMessage()); });
-            CancellationTokenSource c=new CancellationTokenSource();
-            fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY,c.getToken())
-                .addOnSuccessListener(this,loc->{if(navigating)acceptFix(loc);});
-        }catch(SecurityException e){fixInfo.setText("Thiếu quyền vị trí");}
-        ui.removeCallbacks(animate);ui.post(animate);
-        drawStatus();
+                .addOnFailureListener(e->{
+                    if(navigating && session==gpsSession)
+                        fixInfo.setText("Đang thử lại GPS: "+e.getClass().getSimpleName());
+                });
+            // Always request a fresh fix on resume/reconnection, not just a cached fix.
+            CancellationTokenSource cancellation=new CancellationTokenSource();
+            fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY,cancellation.getToken())
+                .addOnSuccessListener(this,loc->{
+                    if(navigating && session==gpsSession)acceptFix(loc);
+                });
+            fused.getLastLocation().addOnSuccessListener(this,loc->{
+                if(navigating && session==gpsSession)acceptFix(loc);
+            });
+        }catch(SecurityException e){
+            fixInfo.setText("Cần quyền vị trí để dẫn đường");
+        }
     }
-    private void stopNav(){
+    private void retryGpsIfNeeded(){
+        if(!navigating||!hasLocation())return;
+        long now=SystemClock.elapsedRealtime();
+        // If Android stops delivering fixes, re-register without user pressing START.
+        if(now-lastGpsConnectMs>=18000L &&
+           (latestFix==null || ageMs(latestFix)>12000L)){
+            connectGps();
+        }
+    }
+    private void stopNav(boolean userRequested){
+        if(userRequested)navigationPrefs().edit().putBoolean("enabled",false).apply();
         navigating=false;
+        ++gpsSession;
         ui.removeCallbacks(animate);
         if(locationCallback!=null){fused.removeLocationUpdates(locationCallback);locationCallback=null;}
         sensorManager.unregisterListener(this);
+        stillGate.reset();
         velNorth=0f;velEast=0f;
         navigationButton.setText("BẮT ĐẦU DẪN VỀ");
         drawStatus();
     }
-    @Override protected void onStop(){stopNav();super.onStop();}
-    @Override protected void onResume(){super.onResume();drawStatus();}
-    @Override protected void onDestroy(){ui.removeCallbacks(animate);stopNav();super.onDestroy();}
+    @Override protected void onStop(){
+        // Release GPS while app is hidden; retain user's desire to navigate.
+        stopNav(false);
+        super.onStop();
+    }
+    @Override protected void onResume(){
+        super.onResume();
+        // Includes return from home screen, screen lock, system file picker or process relaunch.
+        if(navigationPrefs().getBoolean("enabled",true))startNav();
+        else drawStatus();
+    }
+    @Override protected void onDestroy(){
+        ui.removeCallbacks(animate);
+        stopNav(false);
+        super.onDestroy();
+    }
     @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){
         super.onRequestPermissionsResult(code,permissions,results);
         if(code==REQUEST_GPS && requestedLocation){
             requestedLocation=false;
             if(hasLocation())startNav();
             else fixInfo.setText("Cần cấp quyền vị trí để dẫn về xe");
+        }else if(code==42 && navigating && stepSensor!=null &&
+            (Build.VERSION.SDK_INT<29 ||
+                checkSelfPermission("android.permission.ACTIVITY_RECOGNITION")==PackageManager.PERMISSION_GRANTED)){
+            sensorManager.registerListener(this,stepSensor,SensorManager.SENSOR_DELAY_NORMAL);
+            stillGate.setStepSensorActive(true);
         }
     }
     private long ageMs(Location loc){
@@ -224,27 +304,23 @@ public final class MainActivity extends Activity implements SensorEventListener 
             if(dt<=0)return;
             float accuracy=candidate.hasAccuracy()?candidate.getAccuracy():999f;
             float oldAccuracy=latestFix.hasAccuracy()?latestFix.getAccuracy():999f;
-            // Keep recent better fix over a suddenly much worse network fix.
             if(accuracy>oldAccuracy*3f && ageMs(latestFix)<3000)return;
             double secs=dt/1e9;
             if(secs>0.3&&secs<7){
                 float dx=latestFix.distanceTo(candidate);
                 float gate=Math.max(22f,Math.max(oldAccuracy,accuracy)*2.5f+(float)(6*secs));
                 if(dx>gate)return;
-                if(dx>1.7f && dx/secs<4.5f) {
-                    double north=(candidate.getLatitude()-latestFix.getLatitude())*111320.0/secs;
-                    double east=(candidate.getLongitude()-latestFix.getLongitude())*111320.0*
-                        Math.cos(Math.toRadians(candidate.getLatitude()))/secs;
-                    velNorth=.57f*velNorth+.43f*(float)north;
-                    velEast=.57f*velEast+.43f*(float)east;
-                } else {velNorth*=.65f;velEast*=.65f;}
             }
         }
-        if(candidate.hasSpeed() && candidate.hasBearing() &&
-            candidate.getSpeed()>.45f && candidate.getSpeed()<4.2f){
-            double rad=Math.toRadians(candidate.getBearing());
-            velEast=.6f*velEast+.4f*(float)(candidate.getSpeed()*Math.sin(rad));
-            velNorth=.6f*velNorth+.4f*(float)(candidate.getSpeed()*Math.cos(rad));
+        stillGate.observe(candidate);
+        // Unlike 2.0, velocity is *never* inferred unconditionally from GPS jitter.
+        if(stillGate.hasVerifiedWalkingMotion()){
+            float course=stillGate.getCourseDegrees(),speed=stillGate.getSpeedMetersPerSecond();
+            double angle=Math.toRadians(course);
+            velNorth=(float)(speed*Math.cos(angle));
+            velEast=(float)(speed*Math.sin(angle));
+        }else{
+            velNorth=0f;velEast=0f;
         }
         latestFix=new Location(candidate);
         drawStatus();
@@ -253,12 +329,15 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if(latestFix==null)return null;
         double lat=latestFix.getLatitude(),lon=latestFix.getLongitude();
         long age=ageMs(latestFix);
-        if(navigating && age<1200 && latestFix.hasAccuracy() && latestFix.getAccuracy()<35) {
-            double s=age/1000.0;
-            double velocity=Math.hypot(velNorth,velEast);
-            if(velocity>.25 && velocity<3.5){
-                lat+=velNorth*s/111320.0;
-                lon+=velEast*s/(111320.0*Math.max(.25,Math.cos(Math.toRadians(lat))));
+        // Only extrapolate if footsteps/repeated GPS fixes verify motion, then stop
+        // within ~2 seconds of stopping. No phone heading is used for extrapolation.
+        if(navigating && stillGate.hasVerifiedWalkingMotion() && age<1100L &&
+           latestFix.hasAccuracy() && latestFix.getAccuracy()<20f){
+            double secs=age/1000.0;
+            double speed=Math.hypot(velNorth,velEast);
+            if(speed>.6 && speed<3.5){
+                lat+=velNorth*secs/111320.0;
+                lon+=velEast*secs/(111320.0*Math.max(.25,Math.cos(Math.toRadians(lat))));
             }
         }
         return new double[]{lat,lon};
@@ -288,7 +367,8 @@ public final class MainActivity extends Activity implements SensorEventListener 
                 else if(delta>0)orient="Xe ở bên phải "+Math.round(Math.abs(delta))+"°";
                 else orient="Xe ở bên trái "+Math.round(Math.abs(delta))+"°";
             }else orient="Hướng xe: "+Math.round((bearing+360)%360)+"° từ Bắc";
-            headingInfo.setText(orient+" · đường chim bay");
+            headingInfo.setText(orient+" · "+(stillGate.hasVerifiedWalkingMotion()?
+                "ĐANG ĐI":"KHÔNG NGOẠI SUY")+" · đường chim bay");
             long age=ageMs(latestFix);
             String time=age>=60000 ? (age/60000)+" phút" : (age/1000)+" giây";
             String quality=latestFix.hasAccuracy()?"±"+Math.round(latestFix.getAccuracy())+" m":"chưa rõ sai số";
@@ -298,6 +378,10 @@ public final class MainActivity extends Activity implements SensorEventListener 
         compass.invalidate();
     }
     @Override public void onSensorChanged(SensorEvent e){
+        if(stepSensor!=null && e.sensor.getType()==Sensor.TYPE_STEP_DETECTOR){
+            stillGate.onStep(e.timestamp);
+            return;
+        }
         if(rotationSensor==null || e.sensor.getType()!=Sensor.TYPE_ROTATION_VECTOR)return;
         float[] rotation=new float[9],orientation=new float[3];
         SensorManager.getRotationMatrixFromVector(rotation,e.values);
@@ -591,7 +675,8 @@ public final class MainActivity extends Activity implements SensorEventListener 
             long age=ageMs(latestFix);
             double speed=Math.hypot(velEast,velNorth);
             if(headingAvailable){
-                // Only BẠN arrow follows the phone's rotation, not route or XE ĐỖ.
+                // This arrow shows PHONE orientation only. GPS velocity prediction is separate
+                // and disabled while stationary. North-up bike route is untouched.
                 double angle=Math.toRadians(azimuth);
                 float sx=ux+(float)Math.sin(angle)*dp(30),sy=uy-(float)Math.cos(angle)*dp(30);
                 paint.setColor(Color.rgb(34,166,180));paint.setStrokeWidth(dp(3));

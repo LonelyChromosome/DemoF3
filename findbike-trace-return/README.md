@@ -1,17 +1,13 @@
-# Find Bike — North Up, Oct 21
+# FindBike NorthUp 2.0.1 AutoNav
 
-This build is a separate Android application: com.lonelychromosome.tracereturn.northup. It does not uninstall or overwrite REAL 1.4, REAL 1.5 or Trace Return 1.0. Import GPX manually from the original app; the Oct 21 track with 73 points has not been provided as a file.
+**User validated NorthUp 2.0 parking position and orientation.** This is a minimally changed fork of *exactly that code*, not the separate Motion Fusion 2.1 implementation.
 
-Default bike coordinate: 20.959630, 105.746592, copied from the Oct 21 REAL 1.5 screenshot (not an independently verified parking location). The Oct 17 GPX with 22 points is historical and is NOT silently substituted for the Oct 21 parking point.
+Changes:
+- Start navigation automatically on first open and every subsequent \`onResume()\` while user enabled. \`onStop()\` releases location listeners without clearing persistent desire to navigate. Explicit STOP persists off; START persists on.
+- Foreground GPS subscription watchdog retries automatically when the last accepted fix is older than 12 s, throttled to once every 18 s. No fake GPS fix is invented.
+- Walking extrapolation requires multiple recent GPS points with displacement beyond accuracy plus steps (Android ACTIVITY_RECOGNITION) or stronger conservative GPS-only evidence if detector unavailable. It is disabled at rest or after 2.5 s with no confirmed motion. The original NorthUp 2.0 map/bike bearing and visual arrow (phone orientation, NOT walking direction) remain otherwise unchanged.
+- This app runs foreground-only; it **automatically starts on returning to the app**, but intentionally does not track background continuously.
+- The original saved bike destination, default \`20.959630,105.746592\`, comes from user screenshot. This APK has a different package ID \`com.lonelychromosome.tracereturn.northup.autofix\`, so it can be installed alongside existing NorthUp 2.0 without signature mismatch or data loss. It DOES NOT read/migrate the 2.0 private data or 73-point GPX. User can reimport GPX if needed.
+- Tests required on device: app auto starts at launch; goes home then returns and starts by itself; manual STOP stays stopped; standing still 15s never triggers extrapolation; walk outdoors 20m and check confirmed walking; block GPS 20s to see auto-retry.
 
-The North-up map always uses GPS bearings and geographic metre offsets. North is up, East is right, South is down and West is left. Bike position, GPS user point, line and confirmed imported GPX trace are entirely independent of handset rotation. Only the user-facing direction arrow rotates using TYPE_ROTATION_VECTOR with display axis remapping.
-
-GPS: high-accuracy location requested about every 900 ms (delivery subject to Android/location conditions); renderer runs every 100 ms; current GPS prediction capped at 1.2 seconds; cached position older than 30s is rejected on new fetch; an existing accepted GPS fix stays visible with its age when updates drop out. Reject untrusted incoming accuracy >80m. Distances shown are straight line, not routed pedestrian paths.
-
-GPX can be selected through system file picker, and suggested parking point (if any) must be confirmed; user may select another point. Accepted imported trace is stored in this new app private storage and shown north-up.
-
-Build: gradle -p findbike-trace-return --no-daemon :app:assembleDebug
-
-Field tests to complete: (1) rotate handset 90 and 180 degrees while standing still: BẠN arrow rotates, XE ĐỖ and line do not. (2) walk ~20m and check changes only when new GPS arrives. (3) compare displayed heading with real bearing outdoors. (4) open imported GPX and verify north-up polyline and selected parked coordinate.
-
-The APK is not proof that device sensors/GPS will work accurately at the parking site. Do not treat map as pedestrian routing.
+Build: \`gradle -p findbike-trace-return --no-daemon :app:assembleDebug\`
