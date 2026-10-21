@@ -28,18 +28,20 @@ import java.util.Locale
 
 /** All data is in a separate debug APK package. Never uses hardcoded test vehicle points. */
 object VehicleStore {
-    private fun pref(context: Context) = context.getSharedPreferences("bpa_vehicle_demo_v1", Context.MODE_PRIVATE)
-    private fun file(context: Context) = File(context.filesDir, "vehicle_trace.csv")
+    private fun pref(context: Context, demo:Boolean=false) =
+        context.getSharedPreferences(if(demo)"bpa_vehicle_TEST_v2" else "bpa_vehicle_demo_v1",Context.MODE_PRIVATE)
+    private fun file(context: Context, demo:Boolean=false) =
+        File(context.filesDir,if(demo)"vehicle_TEST_trace.csv" else "vehicle_trace.csv")
     fun isEnabled(context: Context) = pref(context).getBoolean("enabled", false)
     fun enabled(context: Context, value: Boolean) {
         pref(context).edit().putBoolean("enabled", value).apply()
     }
-    fun hasParked(context: Context): Boolean =
-        pref(context).contains("parkLat") && pref(context).contains("parkLon")
-    fun parkLat(context: Context): Double? =
-        if (hasParked(context)) java.lang.Double.longBitsToDouble(pref(context).getLong("parkLat", 0)) else null
-    fun parkLon(context: Context): Double? =
-        if (hasParked(context)) java.lang.Double.longBitsToDouble(pref(context).getLong("parkLon", 0)) else null
+    fun hasParked(context: Context,demo:Boolean=false): Boolean =
+        pref(context,demo).contains("parkLat") && pref(context,demo).contains("parkLon")
+    fun parkLat(context: Context,demo:Boolean=false): Double? =
+        if(hasParked(context,demo)) java.lang.Double.longBitsToDouble(pref(context,demo).getLong("parkLat",0)) else null
+    fun parkLon(context: Context,demo:Boolean=false): Double? =
+        if(hasParked(context,demo)) java.lang.Double.longBitsToDouble(pref(context,demo).getLong("parkLon",0)) else null
 
     fun setWindows(context: Context, windows: List<Map<String, Any>>) {
         val array = JSONArray()
@@ -63,10 +65,10 @@ object VehicleStore {
         }
         return false
     }
-    @Synchronized fun begin(context: Context) {
-        file(context).parentFile?.mkdirs()
-        file(context).writeText("")
-        pref(context).edit().remove("parkLat").remove("parkLon")
+    @Synchronized fun begin(context: Context,demo:Boolean=false) {
+        file(context,demo).parentFile?.mkdirs()
+        file(context,demo).writeText("")
+        pref(context,demo).edit().remove("parkLat").remove("parkLon")
             .putBoolean("tracking", true).putLong("parkedAt", 0).apply()
     }
     fun parkAgeMs(context: Context): Long {
@@ -74,22 +76,23 @@ object VehicleStore {
         return if(timestamp<=0)Long.MAX_VALUE else
             (System.currentTimeMillis()-timestamp).coerceAtLeast(0L)
     }
-    fun isTracking(context: Context): Boolean = pref(context).getBoolean("tracking", false)
-    @Synchronized fun append(context: Context, location: Location) {
-        if (!isTracking(context)) return
-        file(context).appendText(String.format(Locale.US,
+    fun isTracking(context: Context,demo:Boolean=false): Boolean =
+        pref(context,demo).getBoolean("tracking",false)
+    @Synchronized fun append(context: Context, location: Location,demo:Boolean=false) {
+        if (!isTracking(context,demo)) return
+        file(context,demo).appendText(String.format(Locale.US,
             "%.9f,%.9f,%d,%.1f\n", location.latitude,location.longitude,
             location.time,if(location.hasAccuracy())location.accuracy else 999f))
     }
-    @Synchronized fun saveParked(context: Context, lat: Double, lon: Double) {
-        pref(context).edit()
+    @Synchronized fun saveParked(context: Context, lat: Double, lon: Double,demo:Boolean=false) {
+        pref(context,demo).edit()
             .putLong("parkLat", java.lang.Double.doubleToRawLongBits(lat))
             .putLong("parkLon", java.lang.Double.doubleToRawLongBits(lon))
             .putLong("parkedAt",System.currentTimeMillis())
             .putBoolean("tracking",false).apply()
     }
     @Synchronized fun recentStableTestParking(context:Context):Pair<Double,Double>? {
-        val source=file(context)
+        val source=file(context,true)
         if(!source.isFile)return null
         data class Gps(val lat:Double,val lon:Double,val at:Long,val accuracy:Float)
         val points=source.readLines().takeLast(70).mapNotNull{ row ->
@@ -116,11 +119,11 @@ object VehicleStore {
         return stable.map{it.lat}.average() to stable.map{it.lon}.average()
     }
     @Synchronized fun resetDemoSession(context:Context){
-        file(context).delete()
-        pref(context).edit().remove("parkLat").remove("parkLon")
+        file(context,true).delete()
+        pref(context,true).edit().remove("parkLat").remove("parkLon")
             .remove("parkedAt").putBoolean("tracking",false).apply()
     }
-    fun sendParkNotification(context:Context){
+    fun sendParkNotification(context:Context,demo:Boolean=false){
         val manager=context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel="bpa_vehicle_parked"
         if(Build.VERSION.SDK_INT>=26)
@@ -132,14 +135,14 @@ object VehicleStore {
         val open=PendingIntent.getActivity(context,7791,
             Intent(context,MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        manager.notify(8872,Notification.Builder(context,channel)
+        manager.notify(if(demo)8892 else 8872,Notification.Builder(context,channel)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle("Đã xác định vị trí đỗ xe")
+            .setContentTitle(if(demo)"[TEST] Đã xác định vị trí đỗ xe" else "Đã xác định vị trí đỗ xe")
             .setContentIntent(open).setAutoCancel(true).build())
     }
-    fun route(context: Context): List<List<Double>> {
+    fun route(context: Context,demo:Boolean=false): List<List<Double>> {
         val route = ArrayList<List<Double>>()
-        val csv = file(context)
+        val csv = file(context,demo)
         if (!csv.isFile) return route
         csv.useLines { lines ->
             lines.take(4000).forEach { line ->
@@ -154,8 +157,8 @@ object VehicleStore {
         }
         return route
     }
-    fun snapshot(context: Context): Map<String, Any?> {
-        val p=pref(context)
+    fun snapshot(context: Context,demo:Boolean=false): Map<String, Any?> {
+        val p=pref(context,demo)
         val active=isEnabled(context)
         val foregroundLocation=context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==
             PackageManager.PERMISSION_GRANTED
@@ -164,14 +167,14 @@ object VehicleStore {
             PackageManager.PERMISSION_GRANTED
         return mapOf(
             "enabled" to active,
-            "tracking" to isTracking(context),
-            "parked" to hasParked(context),
-            "parkLat" to parkLat(context),
-            "parkLon" to parkLon(context),
+            "tracking" to isTracking(context,demo),
+            "parked" to hasParked(context,demo),
+            "parkLat" to parkLat(context,demo),
+            "parkLon" to parkLon(context,demo),
             "parkedAt" to p.getLong("parkedAt",0L),
             "location" to foregroundLocation,
             "background" to backgroundLocation,
-            "route" to route(context)
+            "route" to route(context,demo)
         )
     }
 }
@@ -189,6 +192,7 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
     private val handler=Handler(Looper.getMainLooper())
     private val channelId="bpa_vehicle_tracking"
     private val successChannelId="bpa_vehicle_parked"
+    private var demoMode=false
     override fun onBind(intent:Intent?):IBinder?=null
     override fun onCreate() {
         super.onCreate()
@@ -215,20 +219,26 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
     }
     override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
         if(intent?.action=="bpa.demo.walk"){
-            if(packageName.endsWith(".vehicle.demo19.events")&&VehicleStore.isTracking(this)){
+            if(packageName.endsWith(".vehicle.demo19.events")&&demoMode&&VehicleStore.isTracking(this,true)){
                 for(i in 0..6)handler.postDelayed({
-                    if(VehicleStore.isTracking(this))onWalkingStep(SystemClock.elapsedRealtime())
+                    if(VehicleStore.isTracking(this,true))onWalkingStep(SystemClock.elapsedRealtime())
                 },i*1280L)
             }
             return START_STICKY
         }
-        if (!VehicleStore.isEnabled(this) || VehicleStore.hasParked(this)) {
+        val requestDemo=intent?.action=="bpa.demo.start"
+        if(requestDemo && !packageName.endsWith(".vehicle.demo19.events"))return START_NOT_STICKY
+        if(!requestDemo && demoMode)return START_STICKY
+        if(requestDemo && !demoMode && (VehicleStore.isTracking(this) || VehicleStore.hasParked(this)))
+            return START_NOT_STICKY
+        demoMode=requestDemo
+        if (!VehicleStore.isEnabled(this) || VehicleStore.hasParked(this,demoMode)) {
             stopSelf()
             return START_NOT_STICKY
         }
         // The OS requires an ongoing notification while foreground location is in use.
         startForeground(8871,ongoing())
-        if (!VehicleStore.isTracking(this)) VehicleStore.begin(this)
+        if (!VehicleStore.isTracking(this,demoMode)) VehicleStore.begin(this,demoMode)
         try {
             if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
                 stopSelf()
@@ -244,24 +254,25 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
                 sensorManager.registerListener(this,it,SensorManager.SENSOR_DELAY_NORMAL)
             }
         }
+        if(!demoMode) VehicleStore.sendEnterNotification(this)
         return START_STICKY
     }
     override fun onLocationChanged(location:Location) {
-        if (!VehicleStore.isTracking(this)) return
+        if (!VehicleStore.isTracking(this,demoMode)) return
         if (location.hasAccuracy() && location.accuracy>45f) return
         if (location.time<=lastFixAt || !location.latitude.isFinite() || !location.longitude.isFinite()) return
         if (lastGoodFix!=null && location.distanceTo(lastGoodFix!!)>75f &&
             location.time-lastFixAt<4000) return
         lastFixAt=location.time
         lastGoodFix=Location(location)
-        VehicleStore.append(this,location)
+        VehicleStore.append(this,location,demoMode)
         recent.addLast(Location(location))
         while(recent.size>45 || (recent.isNotEmpty() && location.time-recent.first().time>60_000))
             recent.removeFirst()
         maybePark()
     }
     override fun onSensorChanged(event:SensorEvent) {
-        if(event.sensor.type!=Sensor.TYPE_STEP_DETECTOR || !VehicleStore.isTracking(this))return
+        if(event.sensor.type!=Sensor.TYPE_STEP_DETECTOR || !VehicleStore.isTracking(this,demoMode))return
         onWalkingStep(SystemClock.elapsedRealtime())
     }
     private fun onWalkingStep(now:Long) {
@@ -291,8 +302,9 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
         val lat=cluster.map { it.latitude }.average()
         val lon=cluster.map { it.longitude }.average()
         if(!lat.isFinite()||!lon.isFinite())return
-        VehicleStore.saveParked(this,lat,lon)
-        VehicleStore.sendParkNotification(this)
+        VehicleStore.saveParked(this,lat,lon,demoMode)
+        VehicleStore.sendParkNotification(this,demoMode)
+        if(!demoMode)VehicleLifecycle.armMotion(this)
         stopSelf()
     }
     override fun onAccuracyChanged(sensor:Sensor?,accuracy:Int){}
