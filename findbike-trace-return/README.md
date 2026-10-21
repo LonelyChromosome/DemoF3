@@ -1,17 +1,14 @@
-# Find Bike — North Up, Oct 21
+# Find Bike NorthUp 2.1 — Motion Fusion (experimental)
 
-This build is a separate Android application: com.lonelychromosome.tracereturn.northup. It does not uninstall or overwrite REAL 1.4, REAL 1.5 or Trace Return 1.0. Import GPX manually from the original app; the Oct 21 track with 73 points has not been provided as a file.
+Independent Android APK: \`com.lonelychromosome.tracereturn.motion21\`, NOT an update of REAL 1.5 or NorthUp 2.0; old on-device app data untouched. Does not automatically migrate imported GPX or personal trip states from old apps. Default bike coordinate **20.959630, 105.746592** came from a screenshot, not verified independently. The current user's 73-point track GPX was not supplied. Import GPX manually and confirm a point if needed.
 
-Default bike coordinate: 20.959630, 105.746592, copied from the Oct 21 REAL 1.5 screenshot (not an independently verified parking location). The Oct 17 GPX with 22 points is historical and is NOT silently substituted for the Oct 21 parking point.
-
-The North-up map always uses GPS bearings and geographic metre offsets. North is up, East is right, South is down and West is left. Bike position, GPS user point, line and confirmed imported GPX trace are entirely independent of handset rotation. Only the user-facing direction arrow rotates using TYPE_ROTATION_VECTOR with display axis remapping.
-
-GPS: high-accuracy location requested about every 900 ms (delivery subject to Android/location conditions); renderer runs every 100 ms; current GPS prediction capped at 1.2 seconds; cached position older than 30s is rejected on new fetch; an existing accepted GPS fix stays visible with its age when updates drop out. Reject untrusted incoming accuracy >80m. Distances shown are straight line, not routed pedestrian paths.
-
-GPX can be selected through system file picker, and suggested parking point (if any) must be confirmed; user may select another point. Accepted imported trace is stored in this new app private storage and shown north-up.
-
-Build: gradle -p findbike-trace-return --no-daemon :app:assembleDebug
-
-Field tests to complete: (1) rotate handset 90 and 180 degrees while standing still: BẠN arrow rotates, XE ĐỖ and line do not. (2) walk ~20m and check changes only when new GPS arrives. (3) compare displayed heading with real bearing outdoors. (4) open imported GPX and verify north-up polyline and selected parked coordinate.
-
-The APK is not proof that device sensors/GPS will work accurately at the parking site. Do not treat map as pedestrian routing.
+## Heading logic
+- The bike point/line is always **north-up** based on GPS coordinates. The orange parked marker does not rotate with the phone.
+- **NO heading when stationary.** Device orientation does not represent body-facing or walking heading. Rotation vector is acquired but not used to infer walking course.
+- Step detector (ACTIVITY_RECOGNITION permission) reports walking evidence, not heading; GPS remains usable if denied. Linear acceleration only flags device motion/shaking and NEVER assigns a direction.
+- Travel heading is derived from course over ground from multiple GPS fixes over 3.5–14s with displacement greater than the combined accuracy threshold; or from two consistent GPS speed/bearing readings with adequate uncertainties and speed.
+- The cyan arrow is only drawn while a recent, verified walking course exists. When standing or direction uncertain, show clear absence of a travel arrow instead of a false arrow.
+- While stationary, minor GPS scatter is suppressed; confidence and staleness remain explicit. Extrapolation stops when not moving; active reliable course only, max 1.1s and speed cap.
+- Target GUI refresh 10Hz; location requests 900ms but Android controls actual intervals.
+- App foreground only. Straight-line guidance, not an accessible pedestrian route.
+- Device field tests still required. It is not possible to know the direction a person faces while stationary using GPS displacement alone.
