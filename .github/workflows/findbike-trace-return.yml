@@ -1,8 +1,8 @@
-name: Find Bike Trace Return APK
+name: Find Bike North Up APK
 on:
   push:
     branches:
-      - find-bike/trace-return-21oct
+      - find-bike/north-up-21oct
     paths:
       - 'findbike-trace-return/**'
       - '.github/workflows/findbike-trace-return.yml'
@@ -21,6 +21,6 @@ jobs:
         run: gradle -p findbike-trace-return --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: FindBike-Trace-Return-21Oct-APK
+          name: FindBike-North-Up-21Oct-APK
           path: findbike-trace-return/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30

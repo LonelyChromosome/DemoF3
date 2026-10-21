@@ -3,7 +3,7 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-feature android:name="android.hardware.location.gps" android:required="false"/>
-    <application android:allowBackup="false" android:label="Find Bike · Trace Return"
+    <application android:allowBackup="false" android:label="Find Bike · North Up"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true">

@@ -3,11 +3,11 @@ android {
     namespace 'com.lonelychromosome.tracereturn'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.lonelychromosome.tracereturn'
+        applicationId 'com.lonelychromosome.tracereturn.northup'
         minSdk 26
         targetSdk 34
-        versionCode 1
-        versionName '1.0-trace-return'
+        versionCode 2
+        versionName '2.0-north-up'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
