@@ -1,0 +1,16 @@
+plugins { id 'com.android.application' }
+android {
+  namespace 'com.lonelychromosome.findbike.vfxdemo'
+  compileSdk 35
+  defaultConfig {
+    applicationId 'com.lonelychromosome.findbike.vfxdemo'
+    minSdk 26
+    targetSdk 34
+    versionCode 1
+    versionName '0.1-vfx-gridscan-demo'
+  }
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+}

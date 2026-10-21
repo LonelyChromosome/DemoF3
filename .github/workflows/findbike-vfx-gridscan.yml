@@ -1,0 +1,25 @@
+name: BPA Find Bike VFX APK
+on:
+  push:
+    branches: [find-bike/vfx-grid-scan-demo]
+    paths:
+      - 'findbike-vfx-demo/**'
+      - '.github/workflows/findbike-vfx-gridscan.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - uses: gradle/actions/setup-gradle@v4
+        with: {gradle-version: '8.9'}
+      - name: Build actual VFX APK
+        run: gradle -p findbike-vfx-demo --no-daemon :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BPA-FindBike-VFX-GridScan-Demo-APK
+          path: findbike-vfx-demo/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
