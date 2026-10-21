@@ -71,7 +71,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         root.setPadding(dp(20),dp(18),dp(20),dp(18));
 
         TextView kicker=new TextView(this);
-        kicker.setText("FIND MY BIKE   /   TRACE NAV");
+        kicker.setText("FIND MY BIKE   /   NORTH UP");
         kicker.setTextSize(11);kicker.setLetterSpacing(.13f);
         kicker.setTextColor(Color.rgb(87,114,131));
         root.addView(kicker);
@@ -130,7 +130,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         importButton.setOnClickListener(v->openTracePicker());
 
         TextView note=new TextView(this);
-        note.setText("Đường thẳng + hướng tới xe, không phải đường đi bộ trên bản đồ. GPS yếu vẫn giữ vị trí cuối và báo thời gian cập nhật.");
+        note.setText("BẮC luôn ở trên. Xoay điện thoại chỉ xoay mũi tên BẠN; XE ĐỖ và line không xoay. Đây là đường chim bay.");
         note.setTextColor(Color.rgb(137,149,157));
         note.setTextSize(10);
         LinearLayout.LayoutParams noteLp=new LinearLayout.LayoutParams(-1,-2);
@@ -162,7 +162,8 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if(navigating)return;
         navigating=true;
         navigationButton.setText("DỪNG DẪN ĐƯỜNG");
-        sensorManager.registerListener(this,rotationSensor==null?sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER):rotationSensor,SensorManager.SENSOR_DELAY_UI);
+        headingAvailable=false;
+        if(rotationSensor!=null)sensorManager.registerListener(this,rotationSensor,SensorManager.SENSOR_DELAY_GAME);
         // Cached fix is shown immediately if available, but always labeled with its true age.
         try{
             fused.getLastLocation().addOnSuccessListener(this,loc->{if(navigating)acceptFix(loc);});
@@ -214,7 +215,8 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if(candidate==null || !Double.isFinite(candidate.getLatitude()) ||
             !Double.isFinite(candidate.getLongitude()))return;
         if(Math.abs(candidate.getLatitude())>90||Math.abs(candidate.getLongitude())>180)return;
-        if(ageMs(candidate)>24*60*60*1000L)return;
+        if(ageMs(candidate)>30000L)return;
+        if(candidate.hasAccuracy() && candidate.getAccuracy()>80f)return;
         if(latestFix!=null){
             long dt=(candidate.getElapsedRealtimeNanos()-latestFix.getElapsedRealtimeNanos());
             if(dt<=0)return;
@@ -297,7 +299,15 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if(rotationSensor==null || e.sensor.getType()!=Sensor.TYPE_ROTATION_VECTOR)return;
         float[] rotation=new float[9],orientation=new float[3];
         SensorManager.getRotationMatrixFromVector(rotation,e.values);
-        SensorManager.getOrientation(rotation,orientation);
+        float[] displayMatrix=new float[9];
+        int xx=SensorManager.AXIS_X,yy=SensorManager.AXIS_Y;
+        switch(getWindowManager().getDefaultDisplay().getRotation()){
+            case Surface.ROTATION_90:xx=SensorManager.AXIS_Y;yy=SensorManager.AXIS_MINUS_X;break;
+            case Surface.ROTATION_180:xx=SensorManager.AXIS_MINUS_X;yy=SensorManager.AXIS_MINUS_Y;break;
+            case Surface.ROTATION_270:xx=SensorManager.AXIS_MINUS_Y;yy=SensorManager.AXIS_X;break;
+        }
+        if(!SensorManager.remapCoordinateSystem(rotation,xx,yy,displayMatrix))return;
+        SensorManager.getOrientation(displayMatrix,orientation);
         float next=(float)((Math.toDegrees(orientation[0])+360)%360);
         if(!headingAvailable){azimuth=next;headingAvailable=true;}
         else{
@@ -503,7 +513,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
             from.setLatitude(current[0]);from.setLongitude(current[1]);
             dest.setLatitude(bikeLat);dest.setLongitude(bikeLon);
             float meters=from.distanceTo(dest),bearing=from.bearingTo(dest);
-            float rel=(float)Math.toRadians(bearing-(headingAvailable?azimuth:0));
+            float rel=(float)Math.toRadians(bearing); // NORTH-UP: position never rotates with phone
             float radius=Math.min(w*.36f,h*.32f);
             float distanceScale=meters<8 ? Math.max(.38f,meters/8f) : 1f;
             float bx=ux+(float)Math.sin(rel)*radius*distanceScale;
@@ -529,9 +539,9 @@ public final class MainActivity extends Activity implements SensorEventListener 
             label(canvas,"BẠN",ux,uy+dp(35),12,navy);
             long age=ageMs(latestFix);
             double speed=Math.hypot(velEast,velNorth);
-            if(navigating&&age<=1200&&speed>.25){
-                double heading=(Math.atan2(velEast,velNorth) *180/Math.PI) - (headingAvailable?azimuth:0);
-                double angle=Math.toRadians(heading);
+            if(headingAvailable){
+                // Only BẠN arrow follows the phone's rotation, not route or XE ĐỖ.
+                double angle=Math.toRadians(azimuth);
                 float sx=ux+(float)Math.sin(angle)*dp(30),sy=uy-(float)Math.cos(angle)*dp(30);
                 paint.setColor(Color.rgb(34,166,180));paint.setStrokeWidth(dp(3));
                 paint.setStrokeCap(Paint.Cap.ROUND);paint.setStyle(Paint.Style.STROKE);
@@ -542,7 +552,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
                 paint.setStyle(Paint.Style.FILL);
             }
             if(!headingAvailable)label(canvas,"↑ BẮC",w*.5f,dp(24),11,Color.rgb(144,153,159));
-            else label(canvas,"↑ HƯỚNG ĐIỆN THOẠI",w*.5f,dp(24),10,Color.rgb(144,153,159));
+            else label(canvas,"↑ BẮC · BẢN ĐỒ CỐ ĐỊNH",w*.5f,dp(24),10,Color.rgb(144,153,159));
             if(age>3000)label(canvas,"VỊ TRÍ TẠM · MẤT GPS",w*.5f,h-dp(17),12,Color.rgb(160,112,42));
             else if(meters<5)label(canvas,"ĐANG Ở GẦN VỊ TRÍ XE",w*.5f,h-dp(17),12,Color.rgb(42,131,92));
         }
