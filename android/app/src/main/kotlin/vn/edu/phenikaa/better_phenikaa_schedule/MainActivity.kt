@@ -169,6 +169,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        VehicleLifecycle.armNext(this)
         waterGravity?.resume()
         UpdateConfirmation.visible = true
         UpdateConfirmation.take()?.let { startActivity(it) }

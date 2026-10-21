@@ -1,0 +1,59 @@
+name: BPA 1.9 Auto Find Bike - Real and Test
+on:
+  push:
+    branches:
+      - feature/bpa19-auto-schedule-live-test-v2
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - '.github/workflows/bpa19-auto-wait-panel.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-verified-arm64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - name: Prepare Android tooling
+        run: bash tool/bootstrap.sh
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Check Flutter schedule and vehicle UI
+        run: flutter analyze --no-fatal-warnings --no-fatal-infos lib/features/phuong_tien/ lib/app/app.dart
+      - name: Build real plus test APK (ARM64)
+        run: flutter build apk --profile --target-platform android-arm64 --split-per-abi --no-pub --dart-define=BPA_VEHICLE_TEST_PANEL=true
+      - name: Verify APK integrity, signing and package
+        run: |
+          set -euo pipefail
+          APK=$(find build/app/outputs/flutter-apk -name '*arm64*profile.apk' | head -1)
+          test -n "$APK" && test -s "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" | grep 'vn.edu.phenikaa.better_phenikaa_schedule.vehicle.demo19.events'
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml | grep -E 'VehicleCaptureService|VehicleScheduleReceiver|VehicleMotionReceiver|VehicleFenceReceiver'
+          "$APKSIGNER" verify --verbose "$APK"
+          unzip -t "$APK" | tail -n 2
+          mkdir -p build/verified
+          cp "$APK" build/verified/BPA-1.9-FindBike-Auto-TEST-REAL-arm64.apk
+          sha256sum build/verified/BPA-1.9-FindBike-Auto-TEST-REAL-arm64.apk > build/verified/SHA256.txt
+          ls -lah build/verified/
+      - name: Publish verified APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BPA-1.9-FindBike-AUTO-Test-Real-APK
+          path: |
+            build/verified/BPA-1.9-FindBike-Auto-TEST-REAL-arm64.apk
+            build/verified/SHA256.txt
+          compression-level: 0
+          retention-days: 30

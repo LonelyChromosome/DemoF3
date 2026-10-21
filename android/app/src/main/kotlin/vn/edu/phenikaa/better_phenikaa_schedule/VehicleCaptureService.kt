@@ -291,7 +291,7 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
         val requestDemo=intent?.action=="bpa.demo.start"
         if(requestDemo && !packageName.endsWith(".vehicle.demo19.events"))return START_NOT_STICKY
         if(!requestDemo && demoMode)return START_STICKY
-        if(requestDemo && !demoMode && (VehicleStore.isTracking(this) || VehicleStore.hasParked(this)))
+        if(requestDemo && !demoMode && VehicleStore.isTracking(this))
             return START_NOT_STICKY
         demoMode=requestDemo
         if (!VehicleStore.isEnabled(this) || VehicleStore.hasParked(this,demoMode)) {
@@ -300,7 +300,8 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
         }
         // The OS requires an ongoing notification while foreground location is in use.
         startForeground(8871,ongoing())
-        if (!VehicleStore.isTracking(this,demoMode)) VehicleStore.begin(this,demoMode)
+        val newTrip=!VehicleStore.isTracking(this,demoMode)
+        if (newTrip) VehicleStore.begin(this,demoMode)
         try {
             if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED) {
                 stopSelf()
@@ -316,7 +317,7 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
                 sensorManager.registerListener(this,it,SensorManager.SENSOR_DELAY_NORMAL)
             }
         }
-        VehicleStore.sendEnterNotification(this,demoMode)
+        if(newTrip)VehicleStore.sendEnterNotification(this,demoMode)
         return START_STICKY
     }
     override fun onLocationChanged(location:Location) {

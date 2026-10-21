@@ -95,6 +95,9 @@ object VehicleLifecycle {
             ActivityRecognition.getClient(context).removeActivityUpdates(pending)
         }catch(_:Exception){}
     }
+    fun clearVehicleMotion(context:Context){
+        preferences(context).edit().remove("vehicleSince").apply()
+    }
     fun recordVehicleMotion(context:Context,confidence:Int){
         if(!VehicleStore.hasParked(context)||confidence<70)return
         preferences(context).edit().putLong("vehicleSince",System.currentTimeMillis()).apply()
@@ -146,5 +149,11 @@ class VehicleMotionReceiver:BroadcastReceiver(){
         if(activity.type==DetectedActivity.IN_VEHICLE ||
             activity.type==DetectedActivity.ON_BICYCLE)
             VehicleLifecycle.recordVehicleMotion(context,activity.confidence)
+        else if(activity.confidence>=70 &&
+            (activity.type==DetectedActivity.WALKING||
+             activity.type==DetectedActivity.RUNNING||
+             activity.type==DetectedActivity.ON_FOOT||
+             activity.type==DetectedActivity.STILL))
+            VehicleLifecycle.clearVehicleMotion(context)
     }
 }
