@@ -121,7 +121,6 @@ public final class MainActivity extends Activity {
             p.reset();p.setAntiAlias(true);p.setColor(rgb(col,alpha));
             p.setTypeface(Typeface.create("sans-serif",bold?Typeface.BOLD:Typeface.NORMAL));
             p.setTextAlign(alignment);p.setTextSize(size);
-            p.setLetterSpacing(0f);
             c.drawText(message,x,y,p);
         }
         private void path(Canvas c,Path shape,int col,float alpha,float width){
