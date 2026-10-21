@@ -69,6 +69,11 @@ object VehicleStore {
         pref(context).edit().remove("parkLat").remove("parkLon")
             .putBoolean("tracking", true).putLong("parkedAt", 0).apply()
     }
+    fun parkAgeMs(context: Context): Long {
+        val timestamp = pref(context).getLong("parkedAt",0L)
+        return if(timestamp<=0)Long.MAX_VALUE else
+            (System.currentTimeMillis()-timestamp).coerceAtLeast(0L)
+    }
     fun isTracking(context: Context): Boolean = pref(context).getBoolean("tracking", false)
     @Synchronized fun append(context: Context, location: Location) {
         if (!isTracking(context)) return

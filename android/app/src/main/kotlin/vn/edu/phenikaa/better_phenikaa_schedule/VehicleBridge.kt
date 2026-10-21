@@ -179,7 +179,9 @@ class VehicleFenceReceiver:BroadcastReceiver(){
         if(!VehicleStore.isEnabled(context))return
         val event=GeofencingEvent.fromIntent(intent)?:return
         if(event.hasError()||event.geofenceTransition!=Geofence.GEOFENCE_TRANSITION_ENTER)return
-        if(!VehicleStore.inClassWindow(context)||VehicleStore.hasParked(context))return
+        if(!VehicleStore.inClassWindow(context))return
+        // Protect a recently saved bike from duplicate ENTER events / GPS bouncing.
+        if(VehicleStore.hasParked(context) && VehicleStore.parkAgeMs(context)<60L*60_000L)return
         try {
             val service=Intent(context,VehicleCaptureService::class.java).setAction("start")
             if(Build.VERSION.SDK_INT>=26)context.startForegroundService(service)

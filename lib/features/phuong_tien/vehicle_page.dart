@@ -158,7 +158,7 @@ class _VehiclePageState extends State<VehiclePage> {
               padding:EdgeInsets.zero,
               children:<Widget>[
                 line(Icons.radar_rounded,'Trạng thái',
-                    tracking?'Đang ghi hành trình':parked?'Đã xác định vị trí xe':'Đang theo dõi'),
+                    (!foreground||!background)?'Cần cấp quyền':tracking?'Đang ghi hành trình':parked?'Đã xác định vị trí xe':'Đang theo dõi'),
                 if(!foreground||!background)...<Widget>[
                   const SizedBox(height:12),
                   line(Icons.gps_fixed_rounded,'Cấp quyền định vị','',
