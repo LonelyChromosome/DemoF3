@@ -214,7 +214,7 @@ class _VehiclePageState extends State<VehiclePage> {
                                 child:const SizedBox.expand())),
                             ]),
                         )),
-                      )),
+                      ),
                     );
                   },
                 ),
