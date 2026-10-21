@@ -27,6 +27,16 @@ jobs:
           cache: true
       - name: Prepare Android build tooling
         run: bash tool/bootstrap.sh
+      - name: Set distinct demo launcher label
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('android/app/src/main/AndroidManifest.xml')
+          s=p.read_text()
+          s=s.replace('android:label="Better Phenikaa App"',
+                      'android:label="BPA Phương Tiện Demo"',1)
+          p.write_text(s)
+          PY
       - name: Resolve Flutter dependencies
         run: flutter pub get
       - name: Analyze vehicle integration
