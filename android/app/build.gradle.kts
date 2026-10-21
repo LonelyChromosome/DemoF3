@@ -15,6 +15,7 @@ if (keystorePropertiesFile.exists()) {
 
 dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
     testImplementation("org.robolectric:robolectric:4.16.1")
@@ -60,6 +61,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Never overwrite the installed BPA or access its original private data.
+            applicationIdSuffix = ".vehicle.demo19"
+            manifestPlaceholders["appLabel"] = "BPA Phương Tiện Demo"
+        }
         configureEach {
             if(name!="release" && providers.gradleProperty("bpaWaterRecovery").orNull=="true") {
                 applicationIdSuffix=".waterrecovery.test6r"

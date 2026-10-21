@@ -29,10 +29,12 @@ import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     private var updateBridge: UpdateBridge? = null
+    private var vehicleBridge: VehicleBridge? = null
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        vehicleBridge?.permissionsUpdated(requestCode)
         if (requestCode == 8421 &&
             grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             ExamChangeNotifier.publishPending(applicationContext)
@@ -53,6 +55,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        vehicleBridge = VehicleBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         waterGravity=WaterGravityBridge(this,flutterEngine.dartExecutor.binaryMessenger)
         updateBridge = UpdateBridge(this, flutterEngine)
         ExamChangeNotifier.recoverExisting(applicationContext)
@@ -187,6 +190,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        vehicleBridge?.close()
+        vehicleBridge = null
         waterGravity?.close()
         waterGravity=null
         updateBridge?.close()

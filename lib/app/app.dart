@@ -36,6 +36,7 @@ import 'package:better_phenikaa_schedule/features/lich_hoc/alarm_test_fixture.da
 import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
 import 'package:better_phenikaa_schedule/features/tro_li/assistant_text.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
+import 'package:better_phenikaa_schedule/features/phuong_tien/vehicle_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -90,7 +91,7 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
   }
 }
 
-enum _AppPage { timetable, exam, account, notifications }
+enum _AppPage { timetable, exam, account, notifications, vehicle }
 
 class _AppRoot extends StatefulWidget {
   const new();
@@ -1791,6 +1792,7 @@ class _MainShellState extends State<_MainShell>
       _AppPage.exam => 1,
       _AppPage.account => 2,
       _AppPage.notifications => 3,
+      _AppPage.vehicle => 4,
     };
 
     return _PhoneSurface(
@@ -1867,6 +1869,18 @@ class _MainShellState extends State<_MainShell>
                         assistantPack: assistantPack,
                         difference: latestDifference,
                         appVersionName: appVersionName,
+                      ),
+                    ),
+                  ),
+                  TickerMode(
+                    enabled: _displayPage == _AppPage.vehicle,
+                    child: RepaintBoundary(
+                      child: VehiclePage(
+                        active: _displayPage == _AppPage.vehicle,
+                        windows: data.classes.map((record) => <String, int>{
+                          'start': record.startAt.millisecondsSinceEpoch,
+                          'end': record.endAt.millisecondsSinceEpoch,
+                        }).toList(growable: false),
                       ),
                     ),
                   ),
@@ -5071,7 +5085,7 @@ class _ControlPanel extends StatelessWidget {
       builder: (context, progress, child) {
         return SizedBox(
           width: 300,
-          height: 344,
+          height: 408,
           child: Stack(
             clipBehavior: Clip.none,
             children: <Widget>[
@@ -5079,7 +5093,7 @@ class _ControlPanel extends StatelessWidget {
                 progress: progress,
                 start: 0,
                 right: 4,
-                bottom: 254,
+                bottom: 314,
                 originOffset: const Offset(20, 78),
                 child: _PanelAction(
                   label: 'Lịch học',
@@ -5093,7 +5107,7 @@ class _ControlPanel extends StatelessWidget {
                 progress: progress,
                 start: .08,
                 right: 42,
-                bottom: 196,
+                bottom: 256,
                 originOffset: const Offset(34, 62),
                 child: _PanelAction(
                   label: 'Lịch thi',
@@ -5108,7 +5122,7 @@ class _ControlPanel extends StatelessWidget {
                 progress: progress,
                 start: .16,
                 right: 72,
-                bottom: 138,
+                bottom: 198,
                 originOffset: const Offset(46, 46),
                 child: _PanelAction(
                   label: 'Đồng bộ',
@@ -5122,7 +5136,7 @@ class _ControlPanel extends StatelessWidget {
                 progress: progress,
                 start: .24,
                 right: 92,
-                bottom: 80,
+                bottom: 140,
                 originOffset: const Offset(54, 30),
                 child: _PanelAction(
                   label: 'Tài khoản',
@@ -5136,7 +5150,7 @@ class _ControlPanel extends StatelessWidget {
                 progress: progress,
                 start: .32,
                 right: 100,
-                bottom: 20,
+                bottom: 80,
                 originOffset: const Offset(58, 20),
                 child: _PanelAction(
                   label: 'Giao diện',
@@ -5144,6 +5158,20 @@ class _ControlPanel extends StatelessWidget {
                   color: _panelTertiaryColor(palette),
                   selected: false,
                   onTap: () => showAppThemePicker(context),
+                ),
+              ),
+              _ArcPanelAction(
+                progress: progress,
+                start: .40,
+                right: 104,
+                bottom: 20,
+                originOffset: const Offset(65, 16),
+                child: _PanelAction(
+                  label: 'Phương Tiện',
+                  icon: Icons.two_wheeler_rounded,
+                  color: palette.primary,
+                  selected: page == _AppPage.vehicle,
+                  onTap: () => onOpenPage(_AppPage.vehicle),
                 ),
               ),
             ],

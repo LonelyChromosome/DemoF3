@@ -1,0 +1,48 @@
+name: BPA Vehicle 1.9 Demo (not published)
+on:
+  push:
+    branches:
+      - feature/bpa-vehicle-demo-1.9
+    paths:
+      - 'lib/**'
+      - 'android/**'
+      - '.github/workflows/bpa-vehicle-demo.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - name: Prepare Android build tooling
+        run: bash tool/bootstrap.sh
+      - name: Resolve Flutter dependencies
+        run: flutter pub get
+      - name: Analyze vehicle integration
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/features/phuong_tien/ lib/app/app.dart
+      - name: Build isolated demo debug APK
+        run: flutter build apk --debug --no-pub
+      - name: Validate demo package and foreground service
+        run: |
+          APK=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$APK"
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt | sort -V | tail -1)
+          "$AAPT" dump badging "$APK" | grep 'vn.edu.phenikaa.better_phenikaa_schedule.vehicle.demo19'
+          "$AAPT" dump xmltree "$APK" AndroidManifest.xml | grep -E 'VehicleCaptureService|VehicleFenceReceiver'
+      - name: Attach APK (no release, no publishing)
+        uses: actions/upload-artifact@v4
+        with:
+          name: BPA-1.9-Phuong-Tien-DEMO-Debug
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 15
