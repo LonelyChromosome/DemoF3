@@ -27,7 +27,9 @@ void main(){
     await tester.drag(themeScroll,const Offset(0,-180));await wait(.4);
   }
   expect(tile.hitTestable(),findsOneWidget,reason:'KDA tile must be inside the actual scroll viewport');
-  await tester.tap(tile.hitTestable());await wait(.4);
+  await tester.tap(tile.hitTestable());
+  final fireDeadline=DateTime.now().add(const Duration(seconds:5));
+  while(find.byKey(const ValueKey('kda-approved-fire-vfx')).evaluate().isEmpty && DateTime.now().isBefore(fireDeadline)){await wait(.1);}
   expect(find.byKey(const ValueKey('kda-approved-fire-vfx')),findsOneWidget);
   final activationDeadline=DateTime.now().add(const Duration(seconds:35));
   while(tile.evaluate().isNotEmpty && DateTime.now().isBefore(activationDeadline)){await wait(.5);}
