@@ -269,7 +269,7 @@ internal object WidgetStaticLayerRenderer {
         canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
     }
 
-    private fun drawBlurredCover(canvas: Canvas, source: Bitmap, width: Int, height: Int) {
+    internal fun drawBlurredCover(canvas: Canvas, source: Bitmap, width: Int, height: Int) {
         // Blur at launcher resolution; scaling a smaller bitmap back up exposes pixels.
         val blurWidth = width
         val blurHeight = height

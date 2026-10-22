@@ -79,15 +79,15 @@ class _KdaSpectrumDockState extends State<KdaSpectrumDock> with SingleTickerProv
     repaint.value++;if(peak<.0005||!widget.runtime.foreground)ticker.stop();
   }
   @override void dispose(){widget.runtime.spectrum.removeListener(input);ticker.dispose();repaint.dispose();super.dispose();}
-  @override Widget build(BuildContext context)=>SizedBox(height:88,child:Column(children:[SizedBox(height:20,child:KdaMarquee(animated:widget.runtime.config.marquee)),SizedBox(height:50,width:double.infinity,child:RepaintBoundary(child:CustomPaint(painter:_SpectrumPainter(values,repaint,widget.runtime.config.intensity)))),if(!widget.runtime.permission)const Text('Quyền âm thanh: cài đặt theme',maxLines:1,style:TextStyle(fontSize:9,color:Color(0xBBDDCAEB)))]));
+  @override Widget build(BuildContext context)=>SizedBox(height:74,child:Column(children:[SizedBox(height:20,child:KdaMarquee(animated:widget.runtime.config.marquee)),SizedBox(height:50,width:double.infinity,child:RepaintBoundary(child:CustomPaint(painter:_SpectrumPainter(values,repaint,widget.runtime.config.intensity))))]));
 }
 class _SpectrumPainter extends CustomPainter {
   _SpectrumPainter(this.values,Listenable repaint,this.intensity):super(repaint:repaint);final List<double> values;final double intensity;
-  @override void paint(Canvas canvas,Size size){final shader=const LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Color(0xFF80F5FF),Color(0xFFBDA2FF),Color(0xFFFF76D3)]).createShader(Offset.zero&size);final center=size.height/2;
+  @override void paint(Canvas canvas,Size size){final shader=const LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Color(0xFF80F5FF),Color(0xFFBDA2FF),Color(0xFFFF76D3)]).createShader(Offset.zero&size);final center=size.height-5;
     final glow=Paint()..shader=shader..strokeWidth=3..strokeCap=StrokeCap.round..maskFilter=const MaskFilter.blur(BlurStyle.normal,5);
     final core=Paint()..shader=shader..strokeWidth=1.5..strokeCap=StrokeCap.round;
     canvas.drawLine(Offset(0,center),Offset(size.width,center),glow);canvas.drawLine(Offset(0,center),Offset(size.width,center),core);
-    for(var i=0;i<values.length;i++){final h=(values[i]*intensity).clamp(0,1)*(center-3);if(h<.1)continue;final x=(i+.5)*size.width/values.length;final a=Offset(x,center-h),b=Offset(x,center+h);canvas.drawLine(a,b,glow);canvas.drawLine(a,b,core);}
+    for(var i=0;i<values.length;i++){final h=(values[i]*intensity).clamp(0,1)*(center-3);if(h<.1)continue;final x=(i+.5)*size.width/values.length;final a=Offset(x,center-h),b=Offset(x,center);canvas.drawLine(a,b,glow);canvas.drawLine(a,b,core);}
   }
   @override bool shouldRepaint(covariant _SpectrumPainter old)=>true;
 }

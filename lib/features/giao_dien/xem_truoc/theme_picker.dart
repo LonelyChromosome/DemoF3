@@ -1,5 +1,6 @@
 import '../kda_firestarter/kda_fire_transition.dart';
 import '../kda_firestarter/kda_settings.dart';
+import '../kda_firestarter/kda_runtime.dart';
 import '../water_cooling/water_page.dart';
 
 import 'dart:async';
@@ -121,6 +122,18 @@ class _ThemePickerSheetState extends State<_ThemePickerSheet> {
                 label: const Text('Tạo theme từ ảnh hoặc phối màu'),
               ),
             ),
+            if (controller.theme == AppThemeId.kdaFirestarter) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  key: const ValueKey('kda-customize-theme'),
+                  onPressed: () => showKdaSettings(context),
+                  icon: const Icon(Icons.tune_rounded),
+                  label: const Text('Tùy chỉnh theme'),
+                ),
+              ),
+            ],
             if (controller.theme == AppThemeId.waterCooling) ...[
               const SizedBox(height: 8),
               _waterEditButton(context),
@@ -182,8 +195,18 @@ class _ThemePickerSheetState extends State<_ThemePickerSheet> {
                       ),
                     ),
                   ),
-                  SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.only(top: 10),child: SizedBox(height:142,child: _PresetCard(key: const ValueKey('kda-firestarter-theme-tile'),id:AppThemeId.kdaFirestarter,selected:controller.theme==AppThemeId.kdaFirestarter,onTap:()=>_selectPreset(context,AppThemeId.kdaFirestarter))))),
-                  if(controller.theme==AppThemeId.kdaFirestarter) const SliverToBoxAdapter(child:KdaSettings()),
+                  SliverToBoxAdapter(child: Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: LayoutBuilder(builder: (context, constraints) => SizedBox(
+                      height: (constraints.maxWidth - 20) * 9 / 16 + 64,
+                      child: _PresetCard(
+                        key: const ValueKey('kda-firestarter-theme-tile'),
+                        id: AppThemeId.kdaFirestarter,
+                        selected: controller.theme == AppThemeId.kdaFirestarter,
+                        onTap: () => _selectPreset(context, AppThemeId.kdaFirestarter),
+                      ),
+                    )),
+                  )),
                   if (controller.theme ==
                       AppThemeId.tienMonPremium) ...<Widget>[
                     SliverToBoxAdapter(
@@ -696,6 +719,8 @@ class _ThemePickerSheetState extends State<_ThemePickerSheet> {
     if (controller.theme == id) return;
     if(id==AppThemeId.kdaFirestarter){
       final navigator=Navigator.of(context);
+      await KdaRuntime.instance.prepareFirstEntry();
+      if(!context.mounted)return;
       await KdaFireTransition.run(context,() async {await controller.select(id);if(navigator.mounted&&navigator.canPop())navigator.pop();});
       return;
     }
@@ -1402,7 +1427,7 @@ class _PresetCard extends StatelessWidget {
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  image: id == AppThemeId.kdaFirestarter ? const DecorationImage(image: AssetImage('assets/kda/stacked.png'), fit: BoxFit.cover) : null,
+                  image: id == AppThemeId.kdaFirestarter ? const DecorationImage(image: AssetImage('assets/kda/preview.jpg'), fit: BoxFit.cover, alignment: Alignment.center) : null,
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,

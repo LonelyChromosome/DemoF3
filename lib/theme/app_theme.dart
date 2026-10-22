@@ -77,7 +77,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.steam => 'Store dark • xanh Steam',
     AppThemeId.tienMonPremium => 'Cổ trang • live wallpaper • kim ngọc',
     AppThemeId.waterCooling => 'Ống acrylic • Nước • Ánh sáng ARGB',
-    AppThemeId.kdaFirestarter => 'Premium 3 • Cinematic • Âm nhạc',
+    AppThemeId.kdaFirestarter => 'KDA, cinematic, Âm nhạc',
     AppThemeId.custom => 'Màu và font do bạn tạo',
   };
 

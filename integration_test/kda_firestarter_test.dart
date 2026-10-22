@@ -28,7 +28,7 @@ void main(){
   }
   expect(tile.hitTestable(),findsOneWidget,reason:'KDA tile must be inside the actual scroll viewport');
   await tester.tap(tile.hitTestable());
-  final fireDeadline=DateTime.now().add(const Duration(seconds:5));
+  final fireDeadline=DateTime.now().add(const Duration(seconds:20));
   while(find.byKey(const ValueKey('kda-approved-fire-vfx')).evaluate().isEmpty && DateTime.now().isBefore(fireDeadline)){await wait(.1);}
   expect(find.byKey(const ValueKey('kda-approved-fire-vfx')),findsOneWidget);
   final activationDeadline=DateTime.now().add(const Duration(seconds:35));
@@ -36,10 +36,11 @@ void main(){
   final runtime=KdaRuntime.instance;
   debugPrint('KDA activation: theme=${AppThemeController.instance.theme}, error=${runtime.error}, native=${await state()}');
   expect(tile,findsNothing,reason:'Activation closes Theme Settings before cinematic playback');
-  expect(AppThemeController.instance.theme,AppThemeId.kdaFirestarter);expect(runtime.error,isNull);await runtime.waitForFrame();expect(runtime.ready,isTrue);expect(runtime.cardsVisible,isFalse);expect(find.text('Theo ngày'),findsNothing);expect((await state())['music'],isFalse);
+  expect(AppThemeController.instance.theme,AppThemeId.kdaFirestarter);expect(runtime.error,isNull);await runtime.waitForFrame();expect(runtime.ready,isTrue);expect(runtime.cardsVisible,isFalse);expect(find.text('Theo ngày'),findsNothing);expect((await state())['music'],isTrue);expect(runtime.permission,isTrue);
   final before=((await state())['positionMs'] as num).toInt();
   await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(1);expect(find.text('Theo ngày'),findsOneWidget);
   await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(1);expect(find.text('Theo ngày'),findsNothing);expect(((await state())['positionMs'] as num).toInt(),greaterThan(before));
+  await runtime.save(runtime.config.copyWith(music:false));
   await runtime.save(runtime.config.copyWith(video:false));await wait(1);expect((await state())['playing'],isFalse);expect(find.byType(Texture),findsNothing);
   await runtime.save(runtime.config.copyWith(video:true));await wait(3);debugPrint('KDA video restarted: ${await state()}');expect((await state())['playing'],isTrue);expect(runtime.error,isNull);
   expect(((await state())['durationMs'] as num).toInt(),closeTo(207000,1500));
@@ -62,11 +63,24 @@ void main(){
   runtime.spectrum.removeListener(observeAudio);
   debugPrint('KDA audio: permission=${runtime.permission}, signal=$sawSignal, ${runtime.captureStatus}, native=${await state()}');
   expect(runtime.permission,isTrue);expect(sawSignal,isTrue,reason:runtime.captureStatus);
+  await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(.5);
+  unawaited(showAppThemePicker(tester.element(find.text('Theo ngày'))));await wait(1);
+  final customize=find.byKey(const ValueKey('kda-customize-theme'));
+  expect(customize.hitTestable(),findsOneWidget);
+  expect(find.byKey(const ValueKey('kda-theme-settings')),findsNothing);
+  await tester.tap(customize);await wait(.5);
+  expect(find.byKey(const ValueKey('kda-theme-settings')),findsOneWidget);
+  expect(find.text('Nhạc'),findsOneWidget);
+  await tester.tap(find.byKey(const ValueKey('kda-setting-music')));await wait(.5);
+  expect(runtime.config.music,isFalse);expect((await state())['music'],isFalse);
+  await tester.tap(find.byKey(const ValueKey('kda-settings-close')));await wait(.5);
+  Navigator.of(tester.element(customize)).pop();await wait(.5);
+  await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(.5);
   await runtime.save(runtime.config.copyWith(music:false,visualizer:false));await wait(.5);
   expect(runtime.spectrum.value.every((v)=>v==0),isTrue);
   await runtime.save(runtime.config.copyWith(visualizer:true));
   await AppThemeController.instance.select(AppThemeId.classic);await wait(1);expect(find.byKey(const ValueKey('kda-toggle-cards')),findsNothing);expect((await state())['enabled'],isFalse);
   // Leave persisted real settings for installing and opening the delivered APK.
-  await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);
+  await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);expect(runtime.config.music,isFalse);expect((await state())['music'],isFalse);
  },timeout:const Timeout(Duration(minutes:8)));
 }

@@ -5,8 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class KdaConfig {
-  const KdaConfig({this.video=true,this.music=false,this.visualizer=true,this.marquee=true,this.intensity=1});
-  factory KdaConfig.fromJson(Map<String,dynamic> j)=>KdaConfig(video:j['video'] as bool? ?? true,music:j['music'] as bool? ?? false,visualizer:j['visualizer'] as bool? ?? true,marquee:j['marquee'] as bool? ?? true,intensity:(j['intensity'] as num? ?? 1).toDouble().clamp(.35,1.5));
+  const KdaConfig({this.video=true,this.music=true,this.visualizer=true,this.marquee=true,this.intensity=1});
+  factory KdaConfig.fromJson(Map<String,dynamic> j)=>KdaConfig(video:j['video'] as bool? ?? true,music:j['music'] as bool? ?? true,visualizer:j['visualizer'] as bool? ?? true,marquee:j['marquee'] as bool? ?? true,intensity:(j['intensity'] as num? ?? 1).toDouble().clamp(.35,1.5));
   final bool video,music,visualizer,marquee;
   final double intensity;
   KdaConfig copyWith({bool? video,bool? music,bool? visualizer,bool? marquee,double? intensity})=>KdaConfig(video:video??this.video,music:music??this.music,visualizer:visualizer??this.visualizer,marquee:marquee??this.marquee,intensity:intensity??this.intensity);
@@ -18,6 +18,7 @@ class KdaRuntime extends ChangeNotifier {
   static const channel=MethodChannel('better_phenikaa/kda_media');
   static const events=EventChannel('better_phenikaa/kda_events');
   static const preferenceKey='bpa_kda_firestarter_v1';
+  static const firstEntryKey='bpa_kda_firestarter_first_entry_v2';
   KdaConfig config=const KdaConfig();
   bool enabled=false,cardsVisible=false,ready=false,permission=false,foreground=true;
   int? textureId;
@@ -27,6 +28,7 @@ class KdaRuntime extends ChangeNotifier {
   final spectrum=ValueNotifier<List<double>>(List.filled(48,0));
   StreamSubscription<dynamic>? subscription;
   Future<void>? loading;
+  Future<void>? firstEntry;
   Future<void> queue=Future.value();
   Completer<void>? frame;
   Future<void> load()=>loading??=_load();
@@ -35,12 +37,29 @@ class KdaRuntime extends ChangeNotifier {
     try {final raw=p.getString(preferenceKey);if(raw!=null)config=KdaConfig.fromJson(jsonDecode(raw) as Map<String,dynamic>);} on Object {config=const KdaConfig();}
     notifyListeners();
   }
+  /// Ask once on entry, before the burn starts; later entries respect saved music.
+  Future<void> prepareFirstEntry() async {
+    if(firstEntry!=null){await firstEntry;return;}
+    final pending=_prepareFirstEntry();firstEntry=pending;
+    try{await pending;}finally{firstEntry=null;}
+  }
+  Future<void> _prepareFirstEntry() async {
+    await load();
+    final p=await SharedPreferences.getInstance();
+    if(p.getBool(firstEntryKey)==true)return;
+    final initial=config.copyWith(music:true);
+    if(!await p.setString(preferenceKey,jsonEncode(initial.toJson())))throw StateError('Không lưu được thiết lập FIRESTARTER');
+    config=initial;
+    if(!await p.setBool(firstEntryKey,true))throw StateError('Không lưu được thiết lập FIRESTARTER');
+    notifyListeners();
+    await requestPermission();
+  }
   Future<void> activate(bool value) async {
     if(enabled==value)return;
     enabled=value;cardsVisible=false;ready=false;error=null;textureId=null;
     if(frame!=null&&!frame!.isCompleted)frame!.complete();
     frame=value?Completer<void>():null;
-    notifyListeners();await load();
+    notifyListeners();await load();if(value)await prepareFirstEntry();
     if(value&&enabled){subscription??=events.receiveBroadcastStream().listen(receive,onError:(Object e){error=e.toString();settle();});}
     await configure();
     if(!enabled){await subscription?.cancel();subscription=null;spectrum.value=List.filled(48,0);}

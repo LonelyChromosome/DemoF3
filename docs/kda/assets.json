@@ -39,5 +39,11 @@
     "bytes": 6434057,
     "sha256": "614b29866313235ecdc09bd05ce05e62ccbafc73079adbfc08aeb6363843beca",
     "source": "Lossless AAC stream copy from the approved FIRESTARTER MV"
+  },
+  {
+    "path": "assets/kda/preview.jpg",
+    "bytes": 511470,
+    "sha256": "88be69bde2f78532f7fd2ce5f9df55ebcb86eefc655b7b6b84596fc580976475",
+    "source": "User supplied KDA theme preview; original 2048x1152 JPEG"
   }
 ]

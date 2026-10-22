@@ -6,20 +6,7 @@ adb shell cmd media_session volume --stream 3 --set 10
 adb logcat -c
 adb logcat -v threadtime > build/kda-evidence/logcat.txt &
 log_pid=$!
-(
-  granted=false
-  for attempt in $(seq 1 720); do
-    if [[ "$granted" == false ]] && adb shell pm path vn.edu.phenikaa.better_phenikaa_schedule.kdatest | grep -q package:; then
-      adb shell pm grant vn.edu.phenikaa.better_phenikaa_schedule.kdatest android.permission.RECORD_AUDIO
-      granted=true
-    fi
-    if [[ -f build/kda-evidence/integration.txt ]] && grep -q 'KDA FFT started' build/kda-evidence/integration.txt; then
-      adb shell cmd media_session volume --stream 3 --set 10
-      break
-    fi
-    sleep 1
-  done
-) > build/kda-evidence/lifecycle.txt 2>&1 &
+python3 tool/kda_permission_prompt.py > build/kda-evidence/permission-monitor.txt 2>&1 &
 cycle_pid=$!
 (
   while true; do
@@ -34,6 +21,9 @@ finish() {
 }
 trap finish EXIT
 timeout --kill-after=15s 720s flutter test integration_test/kda_firestarter_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee build/kda-evidence/integration.txt
+# Require evidence that Android really prompted on entry; do not pre-grant.
+wait "$cycle_pid"
+test -s build/kda-evidence/permission-dialog.txt
 # Install the exact normal-entrypoint profile APK delivered to the user.
 mkdir -p build/kda-delivered-apk
 for attempt in $(seq 1 60); do
