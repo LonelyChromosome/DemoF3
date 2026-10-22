@@ -22,6 +22,7 @@ dependencies {
 
 android {
     namespace = "vn.edu.phenikaa.better_phenikaa_schedule"
+    androidResources { noCompress += listOf("mp4", "m4a") }
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
@@ -61,6 +62,11 @@ android {
 
     buildTypes {
         configureEach {
+            if (name != "release" && providers.gradleProperty("bpaKdaTest").orNull == "true") {
+                applicationIdSuffix = ".kdatest"
+                manifestPlaceholders["appLabel"] = "BPA KDA Test"
+                signingConfig = signingConfigs.getByName("debug")
+            }
             if(name!="release" && providers.gradleProperty("bpaWaterRecovery").orNull=="true") {
                 applicationIdSuffix=".waterrecovery.test6r"
                 manifestPlaceholders["appLabel"]="BPA Water Cooling Test6R4"

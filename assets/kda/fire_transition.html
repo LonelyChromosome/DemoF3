@@ -1,0 +1,147 @@
+<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>BPA · Burn VFX</title>
+<style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#070c11;color:#e6edf5;font:15px system-ui}#demo{position:absolute;inset:0;padding: max(34px,env(safe-area-inset-top)) 24px;background:radial-gradient(ellipse at 100% 80%,#14353866,transparent 60%),#0c141c}header{display:flex;justify-content:space-between;align-items:center;color:#77dfd0;font-size:11px;letter-spacing:2px}h1{font-size:29px;margin:32px 0 4px;letter-spacing:-1px}p{color:#91a3b1}.date{font-size:13px;margin:0 0 28px}.tabs{display:flex;gap:25px;border-bottom:1px solid #ffffff15;padding:12px 0 15px;color:#81949f}.tabs b{color:#aaf2e5}article{margin-top:17px;padding:19px 17px;border:1px solid #92dac127;border-left:3px solid #6bdcbd;border-radius:15px;background:linear-gradient(130deg,#283e4466,#12202c88);box-shadow:0 15px 35px #0003}article small{color:#8fcabb;letter-spacing:1px;font-size:10px}article h2{font-size:18px;margin:12px 0 10px}article p{font-size:12px;margin:4px 0}article:nth-of-type(2){border-left-color:#90bfff}article:nth-of-type(3){border-left-color:#d0b3ff}.pipe{position:absolute;bottom:45px;left:24px;right:24px;border:2px solid #66ccb744;border-radius:14px;height:37px;box-shadow:0 0 17px #50e5c918,inset 0 0 14px #69e4c512}.pipe:after{content:'';position:absolute;left:10px;right:10px;top:13px;height:5px;background:#77dac0;box-shadow:0 0 15px #6bffdd;border-radius:5px;opacity:.6}#fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}#controls{position:fixed;bottom:max(22px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:2}button{border:1px solid #fff4;border-radius:30px;padding:13px 25px;background:#1b242bf0;box-shadow:0 5px 40px #0008;color:white;font:600 14px system-ui;white-space:nowrap;cursor:pointer}body.playing #controls{opacity:0;pointer-events:none}body.overlay{background:transparent}body.overlay #demo,body.overlay #controls{display:none}@media(min-width:650px){#demo{padding:40px max(32px,calc((100vw - 480px)/2))}.pipe{left:calc(50% - 210px);right:calc(50% - 210px)}}
+</style><style>html,body{background:transparent!important}#demo,#controls{display:none!important}</style><div id="demo"><header><b>BETTER PHENIKAA APP</b><span>◉ &nbsp; ↻</span></header><h1>Lịch học của bạn</h1><p class="date">Thứ Năm · 22 tháng 10</p><div class="tabs"><b>Ngày</b><span>Tuần</span><span>Học kỳ</span></div><article><small>07:00 — 09:25 · CA 1</small><h2>Phân tích thiết kế phần mềm</h2><p>Phòng học · A2-504</p><p>Lịch học minh họa</p></article><article><small>09:35 — 12:00 · CA 2</small><h2>Lập trình ứng dụng Web</h2><p>Phòng thực hành · A9-402</p><p>Lịch học minh họa</p></article><article><small>13:00 — 15:25 · CA 3</small><h2>Phát triển ứng dụng di động</h2><p>Phòng học · A2-506</p><p>Lịch học minh họa</p></article><div class="pipe"></div></div><canvas id="fx"></canvas><div id="controls"><button id="play">Đốt giao diện</button></div>
+<script id="fragment" type="x-shader/x-fragment">precision highp float;
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uDuration;
+uniform sampler2D uNoise;
+varying vec2 vUv;
+float n(vec2 p){return texture2D(uNoise,p/256.).r;}
+float fb(vec2 p){return n(p)*.54+n(p*2.03+41.)*.27+n(p*4.09+17.)*.13+n(p*8.21)*.06;}
+uniform sampler2D uArrival;
+uniform sampler2D uTiming;
+float decode(vec4 c){return (c.r*65280.+c.g*255.)*(2./65535.);}
+float burnProgress(float phase){return decode(texture2D(uTiming,vec2((clamp(phase,0.,1.)*255.+.5)/256.,.5)));}
+void main(){
+ vec2 uv=vUv;
+ // Isotropic turbulence, independent from screen aspect.
+ vec2 p=uv;
+ vec2 iso=uv*vec2(uResolution.x/uResolution.y,1.);
+ float t=max(0.,uTime);
+ float phase=clamp(t/uDuration,0.,1.);
+ float grow=burnProgress(phase);
+ vec2 curl=vec2(fb(iso*16.+29.),fb(iso*16.+93.))-.5;
+ float arrival=decode(texture2D(uArrival,uv));
+ float d=grow-arrival;
+ float mask=smoothstep(-max(.002,1.8/uResolution.y),max(.002,1.8/uResolution.y),d);
+ if(t<=.001){gl_FragColor=vec4(0.);return;}
+ if(phase>=1.){gl_FragColor=vec4(0.,0.,0.,1.);return;}
+ // Flowing hot gas: two travelling noise layers distort each other.
+ vec2 flow=iso*70.+vec2(0.,-t*22.);
+ float gas=fb(flow+curl*15.);
+ float wisps=fb(iso*155.+vec2(t*9.,-t*38.)+gas*9.);
+ float hot=fb(iso*240.+vec2(t*16.,-t*48.));
+ float flutter=(gas-.46)*.014+(wisps-.5)*.008;
+ float tip=d+flutter;
+ float flame=exp(-abs(tip+.003)*165.)*smoothstep(.36,.72,gas)*1.15;
+ flame+=exp(-abs(d+.001)*320.)*(.03+.7*wisps)*smoothstep(.37,.66,gas);
+ flame*=smoothstep(-.075,-.017,d)*(1.-smoothstep(.012,.045,d));
+ flame*=1.-smoothstep(.96,1.,phase);
+ flame*=smoothstep(.30,.58,fb(iso*88.+vec2(t*3.,-t*8.)));
+ float core=clamp(flame*.94,0.,1.);
+ vec3 fire=vec3(1.,.17,.008)*min(flame*2.,1.);
+ fire=mix(fire,vec3(1.,.67,.09),smoothstep(.24,.68,core));
+ fire=mix(fire,vec3(1.,.97,.65),smoothstep(.86,1.,core));
+ // Red embers stay just inside the consumed edge, then turn to black.
+ float crack=smoothstep(.59,.78,fb(iso*300.+4.));
+ float ember=exp(-max(d,0.)*65.)*mask*crack*(.5+.5*sin(t*19.+gas*32.));
+ fire+=vec3(.55,.07,.003)*ember;
+ // Soot rolls ahead of the flame, with a soft translucent outer boundary.
+ float smokeBand=exp(-abs(d+.027)*26.)*(1.-mask);
+ float smokeNoise=fb(iso*52.+curl*8.+vec2(t*2.,-t*10.));
+ float smoke=smokeBand*smoothstep(.29,.72,smokeNoise)*.50;
+ smoke*=smoothstep(.03,.19,phase)*(1.-smoothstep(.96,1.,phase));
+ float glow=exp(-abs(d+.005)*95.)*.11*(.3+gas);
+ glow*=1.-smoothstep(.96,1.,phase);
+ // Sparse incandescent ash travels upward, rather than a screen of particles.
+ vec2 sp=iso*vec2(100.,140.)+vec2(0.,-t*13.);
+ vec2 cell=floor(sp);
+ vec2 sub=fract(sp)-.5;
+ float pick=n(cell*3.11+19.);
+ float spark=(1.-smoothstep(.015,.11,length(sub*vec2(1.,.65))))*step(.976,pick);
+ spark*=smoothstep(-.12,-.025,d)*(1.-smoothstep(-.025,.09,d));
+ spark*=1.-smoothstep(.96,1.,phase);
+ float fa=clamp(flame*1.35,0.,1.);
+ float alpha=mask+(1.-mask)*clamp(smoke+fa+glow+spark,0.,1.);
+ vec3 rgb=fire*fa+vec3(.08,.065,.055)*smoke*(1.-fa)+vec3(.6,.12,.006)*glow+vec3(1.,.56,.1)*spark;
+ gl_FragColor=vec4(clamp(rgb,0.,1.),alpha);
+}
+</script><script>
+// Generates a new, static burn-arrival map per play; never randomizes per frame.
+function buildBurnField(seed, aspect, width=128, height=224) {
+ let state=seed>>>0;
+ const rnd=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296;};
+ const sites=[];
+ for(let j=0;j<8;j++)for(let i=0;i<8;i++){
+  const x=(i+.08+rnd()*.84)/8,y=(j+.08+rnd()*.84)/8;
+  const size=rnd(),scale=size<.14?1.8+rnd()*1.5:size<.59?4+rnd()*3.5:8.5+rnd()*8;
+  const angle=rnd()*Math.PI*2;
+  sites.push([x,y,scale,.012+rnd()*.14,Math.cos(angle),Math.sin(angle),.6+rnd()*1.3,Math.floor(rnd()*4)]);
+ }
+ // Same noise bytes and bilinear filtering convention as the shader.
+ const noise=new Uint8Array(65536);let ns=134775813;
+ for(let i=0;i<noise.length;i++){ns=(Math.imul(ns,1664525)+1013904223)>>>0;noise[i]=ns>>>24;}
+ function n(x,y){x-=.5;y-=.5;const ix=Math.floor(x),iy=Math.floor(y),a=x-ix,b=y-iy;
+  const s=(i,j)=>noise[((j&255)<<8)+(i&255)]/255;
+  return (s(ix,iy)*(1-a)+s(ix+1,iy)*a)*(1-b)+(s(ix,iy+1)*(1-a)+s(ix+1,iy+1)*a)*b;
+ }
+ const fb=(x,y)=>n(x,y)*.54+n(x*2.03+41,y*2.03+41)*.27+n(x*4.09+17,y*4.09+17)*.13+n(x*8.21,y*8.21)*.06;
+ const ox=rnd()*150,oy=rnd()*150,values=new Float32Array(width*height);
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+  const u=(x+.5)/width,v=(y+.5)/height,ix=u*aspect,iy=v;
+  const px=u+(fb(ix*16+ox,iy*16+oy)-.5)*.075;
+  const py=v+(fb(ix*16+ox+83,iy*16+oy+83)-.5)*.075;
+  let nearest=2;
+  for(const s of sites){
+   const dx=(px-s[0])*aspect,dy=py-s[1];let qx=(dx*s[4]-dy*s[5])*s[6],qy=dx*s[5]+dy*s[4];
+   if(s[7]===1)qx*=Math.max(.4,1+qy*4.5); // asymmetric tear
+   else if(s[7]===2)qx+=Math.sin(qy*45)*.017; // bent, lobed patch
+   else if(s[7]===3)qx+=qy*qy*3.5; // bean-shaped patch
+   let dist=Math.hypot(qx,qy);
+   if(s[7]===2)dist=Math.min(dist,Math.hypot(qx-.012,qy+.016)*1.06);
+   nearest=Math.min(nearest,dist*s[2]+s[3]);
+  }
+  values[y*width+x]=Math.max(0,nearest+(fb(ix*34+ox,iy*34+oy)-.5)*.09+(fb(ix*115+oy,iy*115+ox)-.5)*.018);
+ }
+ const sorted=values.slice().sort(),q=[];
+ for(let i=0;i<=32;i++)q.push(sorted[Math.min(sorted.length-1,Math.round(i*(sorted.length-1)/32))]);
+ q[0]=Math.max(0,q[0]-.012);q[32]+=.008;
+ const delta=q.slice(1).map((x,i)=>x-q[i]),m=new Float64Array(33);
+ for(let i=1;i<32;i++)m[i]=2*delta[i-1]*delta[i]/Math.max(1e-12,delta[i-1]+delta[i]);
+ m[0]=Math.min(3*delta[0],Math.max(0,(3*delta[0]-delta[1])/2));
+ m[32]=Math.min(3*delta[31],Math.max(0,(3*delta[31]-delta[30])/2));
+ function pack(vals){const out=new Uint8Array(vals.length*4);for(let i=0;i<vals.length;i++){const a=Math.round(Math.max(0,Math.min(1,vals[i]/2))*65535);out[i*4]=a>>>8;out[i*4+1]=a&255;out[i*4+3]=255;}return out;}
+ const timing=new Float32Array(256);
+ for(let j=0;j<256;j++){const u=j/255*32,i=Math.min(31,Math.floor(u)),x=u-i;timing[j]=((2*q[i]-2*q[i+1]+m[i]+m[i+1])*x+(-3*q[i]+3*q[i+1]-2*m[i]-m[i+1]))*x*x+m[i]*x+q[i];}
+ return {width,height,arrival:pack(values),timing:pack(timing),seed};
+}
+
+(()=>{'use strict';const canvas=document.querySelector('#fx'),params=new URLSearchParams(location.search);if(params.has('overlay'))document.body.classList.add('overlay');
+const gl=canvas.getContext('webgl',{alpha:true,premultipliedAlpha:true,antialias:false,preserveDrawingBuffer:false});
+if(!gl){document.querySelector('#play').textContent='Thiết bị chưa hỗ trợ WebGL';return;}
+function shader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
+const prog=gl.createProgram();gl.attachShader(prog,shader(gl.VERTEX_SHADER,'attribute vec2 a;varying vec2 vUv;void main(){vUv=a*.5+.5;gl_Position=vec4(a,0.,1.);}'));gl.attachShader(prog,shader(gl.FRAGMENT_SHADER,document.querySelector('#fragment').textContent));gl.linkProgram(prog);if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(prog));gl.useProgram(prog);
+const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);const a=gl.getAttribLocation(prog,'a');gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);
+const noise=new Uint8Array(256*256);let seed=134775813;for(let i=0;i<noise.length;i++){seed=(Math.imul(seed,1664525)+1013904223)>>>0;noise[i]=seed>>>24;}const tx=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,tx);gl.texImage2D(gl.TEXTURE_2D,0,gl.LUMINANCE,256,256,0,gl.LUMINANCE,gl.UNSIGNED_BYTE,noise);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT);
+const uniforms={};for(const s of ['uResolution','uTime','uDuration','uNoise','uArrival','uTiming'])uniforms[s]=gl.getUniformLocation(prog,s);gl.uniform1i(uniforms.uNoise,0);let duration=1.5,raf=0,start=0,elapsed=0,running=false,done=false;
+let lastSeed=0;
+function prepareField(value){
+ lastSeed=Number.isFinite(value)?value>>>0:crypto.getRandomValues(new Uint32Array(1))[0];
+ const data=buildBurnField(lastSeed,innerWidth/innerHeight);
+ for(const [unit,name,w,h,bytes] of [[1,'uArrival',data.width,data.height,data.arrival],[2,'uTiming',256,1,data.timing]]){
+  gl.activeTexture(gl.TEXTURE0+unit);const texture=fieldTextures[unit]||(fieldTextures[unit]=gl.createTexture());gl.bindTexture(gl.TEXTURE_2D,texture);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,w,h,0,gl.RGBA,gl.UNSIGNED_BYTE,bytes);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.uniform1i(uniforms[name],unit);
+ }gl.activeTexture(gl.TEXTURE0);
+}
+const fieldTextures={};
+function resize(){const scale=Math.min(devicePixelRatio||1,1.5,900/innerHeight);canvas.width=Math.round(innerWidth*scale);canvas.height=Math.round(innerHeight*scale);gl.viewport(0,0,canvas.width,canvas.height);gl.uniform2f(uniforms.uResolution,canvas.width,canvas.height);draw(elapsed);}function draw(t){elapsed=t;gl.uniform1f(uniforms.uTime,t);gl.uniform1f(uniforms.uDuration,duration);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);}
+function notify(name){window.dispatchEvent(new CustomEvent('bpa-burn-'+name));if(window.BPABurnBridge&&typeof BPABurnBridge[name]==='function')BPABurnBridge[name]();}
+function tick(now){if(!running)return;const t=Math.min((now-start)/1000,duration);draw(t);if(t>=duration){running=false;done=true;document.body.classList.remove('playing');document.querySelector('#play').textContent='Xem lại';notify('onComplete');return;}raf=requestAnimationFrame(tick);}
+function play(opts={}){duration=Math.max(1,Number(opts.duration)||1.5);prepareField(opts.seed);cancelAnimationFrame(raf);done=false;running=true;elapsed=0;start=performance.now();document.body.classList.add('playing');draw(0);notify('onStart');raf=requestAnimationFrame(tick);}
+function reset(){cancelAnimationFrame(raf);running=false;done=false;draw(0);document.body.classList.remove('playing');document.querySelector('#play').textContent='Đốt giao diện';}
+window.BPABurn={play,reset,seek(t){cancelAnimationFrame(raf);running=false;draw(Math.max(0,Math.min(t,duration)));},setDuration(s){duration=Math.max(1,s);},get isComplete(){return done;},get seed(){return lastSeed;}};
+document.querySelector('#play').onclick=()=>{reset();play();};addEventListener('resize',resize);document.addEventListener('visibilitychange',()=>{if(running){if(document.hidden){elapsed=(performance.now()-start)/1000;cancelAnimationFrame(raf);}else{start=performance.now()-elapsed*1000;raf=requestAnimationFrame(tick);}}});canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();cancelAnimationFrame(raf);running=false;notify('onContextLost');});canvas.addEventListener('webglcontextrestored',()=>location.reload());resize();if(params.has('autoplay'))setTimeout(()=>play(),350);
+})();</script></html><script>window.BPABurnBridge={onComplete:()=>window.flutter_inappwebview.callHandler('KdaBurnComplete'),onContextLost:()=>window.flutter_inappwebview.callHandler('KdaBurnError')};</script>

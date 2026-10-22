@@ -1,3 +1,4 @@
+import '../features/giao_dien/kda_firestarter/kda_stage.dart';
 import '../features/giao_dien/water_cooling/water_surface.dart';
 import '../features/giao_dien/water_cooling/water_engine.dart';
 import '../features/giao_dien/water_cooling/water_routes.dart';
@@ -74,13 +75,16 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
             backgroundColor: _themes.waterVisible
                 ? const Color(0xFF08040D)
                 : Colors.white,
-            child: WaterStage(
+            child: KdaStage(
+              enabled: _themes.theme == AppThemeId.kdaFirestarter,
+              child: WaterStage(
               enabled: _themes.waterVisible,
               config: _themes.waterConfig,
               child: ThemeDustSurface(
                 key: ThemeDustSurface.surfaceKey,
                 child: child ?? const SizedBox.shrink(),
               ),
+            ),
             ),
           ),
           home: const _AppRoot(),
@@ -1304,7 +1308,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: AppThemeBackdrop(
-          child: SafeArea(
+          child: KdaContentGate(
+            enabled: palette.id == AppThemeId.kdaFirestarter,
+            builder: (context) => SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final desktop = constraints.maxWidth > 680;
@@ -1324,7 +1330,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                       decoration: BoxDecoration(
                         color:
                             (palette.id == AppThemeId.tienMonPremium ||
-                                palette.id == AppThemeId.waterCooling)
+                                palette.id == AppThemeId.waterCooling || palette.id == AppThemeId.kdaFirestarter)
                             ? Colors.transparent
                             : palette.surface.withValues(
                                 alpha: desktop ? .98 : .94,
@@ -1452,6 +1458,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                 );
               },
             ),
+          ),
           ),
         ),
       ),
@@ -5289,6 +5296,7 @@ Color _panelSecondaryColor(AppThemePalette palette) => switch (palette.id) {
   AppThemeId.steam => const Color(0xFFA4D007),
   AppThemeId.tienMonPremium => const Color(0xFF74D8B1),
   AppThemeId.waterCooling => palette.accent,
+  AppThemeId.kdaFirestarter => const Color(0xFF8EEFFF),
   AppThemeId.custom => palette.primary,
 };
 
@@ -5305,6 +5313,7 @@ Color _panelTertiaryColor(AppThemePalette palette) => switch (palette.id) {
   AppThemeId.steam => const Color(0xFF66C0F4),
   AppThemeId.tienMonPremium => const Color(0xFFFFD66B),
   AppThemeId.waterCooling => const Color(0xFFB580F4),
+  AppThemeId.kdaFirestarter => const Color(0xFFDD8DFF),
   AppThemeId.custom => palette.accent,
 };
 
@@ -5437,7 +5446,7 @@ class _PhoneSurface extends StatelessWidget {
     return ColoredBox(
       color:
           (palette.id == AppThemeId.tienMonPremium ||
-              palette.id == AppThemeId.waterCooling)
+              palette.id == AppThemeId.waterCooling || palette.id == AppThemeId.kdaFirestarter)
           ? Colors.transparent
           : palette.surface.withValues(alpha: palette.dark ? .94 : .985),
       child: SizedBox.expand(child: child),

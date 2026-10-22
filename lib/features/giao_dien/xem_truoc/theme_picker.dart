@@ -1,3 +1,5 @@
+import '../kda_firestarter/kda_fire_transition.dart';
+import '../kda_firestarter/kda_settings.dart';
 import '../water_cooling/water_page.dart';
 
 import 'dart:async';
@@ -180,6 +182,8 @@ class _ThemePickerSheetState extends State<_ThemePickerSheet> {
                       ),
                     ),
                   ),
+                  SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.only(top: 10),child: SizedBox(height:142,child: _PresetCard(key: const ValueKey('kda-firestarter-theme-tile'),id:AppThemeId.kdaFirestarter,selected:controller.theme==AppThemeId.kdaFirestarter,onTap:()=>_selectPreset(context,AppThemeId.kdaFirestarter))))),
+                  if(controller.theme==AppThemeId.kdaFirestarter) const SliverToBoxAdapter(child:KdaSettings()),
                   if (controller.theme ==
                       AppThemeId.tienMonPremium) ...<Widget>[
                     SliverToBoxAdapter(
@@ -689,6 +693,12 @@ class _ThemePickerSheetState extends State<_ThemePickerSheet> {
   }
 
   Future<void> _selectPreset(BuildContext context, AppThemeId id) async {
+    if(id==AppThemeId.kdaFirestarter){
+      final navigator=Navigator.of(context);
+      await KdaFireTransition.run(context,() async {await controller.select(id);if(navigator.mounted&&navigator.canPop())navigator.pop();});
+      return;
+    }
+
     if (controller.theme == id) return;
 
     if (controller.theme == AppThemeId.tienMonPremium &&

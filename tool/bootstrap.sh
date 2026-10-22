@@ -227,7 +227,7 @@ if '.WidgetDayChangeReceiver' not in text:
     text = text.replace('    </application>', day_receiver + '    </application>', 1)
 
 text = re.sub(
-    r'android:label="[^"]*"',
+    r'android:label="(?!\$\{appLabel\})[^"]*"',
     'android:label="Better Phenikaa App"',
     text,
     count=1,
@@ -260,6 +260,7 @@ manifest.write_text(text)
 PY
 fi
 
+python3 tool/assemble_kda_media.py
 flutter pub get
 
 # flutter_inappwebview_android 1.1.3 still references the legacy default

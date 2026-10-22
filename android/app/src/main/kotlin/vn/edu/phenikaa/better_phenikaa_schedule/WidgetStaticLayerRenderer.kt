@@ -67,6 +67,7 @@ internal data class NativeWidgetPalette(
                 Color.WHITE, 0xFFFF8A9F.toInt(), Color.WHITE)
             "steam" -> NativeWidgetPalette(key, 0xFF171D25.toInt(), 0xFF1B3D55.toInt(),
                 0xFFD6E9F8.toInt(), 0xFF66C0F4.toInt(), 0xFFD6E9F8.toInt())
+            "kda_firestarter" -> NativeWidgetPalette(key, 0xFF17091D.toInt(), 0xFF4A163C.toInt(), 0xFFFFF5FC.toInt(), 0xFFE3CDE3.toInt(), 0xFFF1A2CD.toInt())
             "water_cooling" -> NativeWidgetPalette(key,0xFF10091A.toInt(),0xFF462145.toInt(),0xFFF6EDFF.toInt(),0xFFC6B4D2.toInt(),0xFFF6EDFF.toInt())
             "tien_mon_premium" -> NativeWidgetPalette(key, 0xFF12372E.toInt(),
                 0xFF477B68.toInt(), 0xFFFFD66B.toInt(), 0xFFFFE7A6.toInt(),

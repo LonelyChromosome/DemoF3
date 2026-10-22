@@ -1,3 +1,4 @@
+import '../features/giao_dien/kda_firestarter/kda_runtime.dart';
 import '../features/giao_dien/water_cooling/water_config.dart';
 import '../features/giao_dien/water_cooling/water_engine.dart';
 import '../features/giao_dien/water_cooling/water_surface.dart';
@@ -31,6 +32,7 @@ enum AppThemeId {
   steam,
   tienMonPremium,
   waterCooling,
+  kdaFirestarter,
   custom,
 }
 
@@ -41,6 +43,8 @@ extension AppThemeIdUi on AppThemeId {
       ? 'tien_mon_premium'
       : this == AppThemeId.waterCooling
       ? 'water_cooling'
+      : this == AppThemeId.kdaFirestarter
+      ? 'kda_firestarter'
       : name;
 
   String get label => switch (this) {
@@ -56,6 +60,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.steam => 'Steam',
     AppThemeId.tienMonPremium => 'Tiên Môn Premium',
     AppThemeId.waterCooling => 'Water Cooling Premium',
+    AppThemeId.kdaFirestarter => 'K/DA FIRESTARTER',
     AppThemeId.custom => 'Tùy chỉnh',
   };
 
@@ -72,6 +77,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.steam => 'Store dark • xanh Steam',
     AppThemeId.tienMonPremium => 'Cổ trang • live wallpaper • kim ngọc',
     AppThemeId.waterCooling => 'Ống acrylic • Nước • Ánh sáng ARGB',
+    AppThemeId.kdaFirestarter => 'Premium 3 • Cinematic • Âm nhạc',
     AppThemeId.custom => 'Màu và font do bạn tạo',
   };
 
@@ -88,6 +94,7 @@ extension AppThemeIdUi on AppThemeId {
     AppThemeId.steam => Icons.sports_esports_rounded,
     AppThemeId.tienMonPremium => Icons.auto_awesome_rounded,
     AppThemeId.waterCooling => Icons.water_drop_outlined,
+    AppThemeId.kdaFirestarter => Icons.local_fire_department_outlined,
     AppThemeId.custom => Icons.tune_rounded,
   };
 }
@@ -456,6 +463,27 @@ const Map<AppThemeId, AppThemePalette> appThemePalettes =
         geometry: AppThemeGeometry.square,
         dark: true,
       ),
+      AppThemeId.kdaFirestarter: AppThemePalette(
+        id: AppThemeId.kdaFirestarter,
+        pageStart: Color(0xFF08040D),
+        pageEnd: Color(0xFF180A20),
+        surface: Color(0xC4140A20),
+        card: Color(0x990E0818),
+        cardAlt: Color(0xA5180B24),
+        primary: Color(0xFFF1A2CD),
+        accent: Color(0xFF8EEFFF),
+        textPrimary: Color(0xFFFFF5FC),
+        textSecondary: Color(0xFFE3CDE3),
+        border: Color(0x70DE8BBC),
+        shadow: Color(0x22000000),
+        widgetStart: Color(0xFF10091A),
+        widgetEnd: Color(0xFF462145),
+        widgetText: Color(0xFFFFF5FC),
+        widgetSubtext: Color(0xFFE3CDE3),
+        radius: 16,
+        geometry: AppThemeGeometry.rounded,
+        dark: true,
+      ),
       AppThemeId.waterCooling: AppThemePalette(
         id: AppThemeId.waterCooling,
         pageStart: Color(0xFF08040D),
@@ -648,6 +676,7 @@ class AppThemeController extends ChangeNotifier {
   Future<void> load() async {
     if (_loaded) return;
     _loaded = true;
+    await KdaRuntime.instance.load();
     final prefs = await SharedPreferences.getInstance();
     WaterConfig restoreWater(String key) {
       try {
@@ -898,6 +927,8 @@ class AppThemeController extends ChangeNotifier {
     final completion = Completer<void>();
     _transitionCompletion = completion;
     final premiumHandoff =
+        from.id == AppThemeId.kdaFirestarter ||
+        themeId == AppThemeId.kdaFirestarter ||
         from.id == AppThemeId.waterCooling ||
         themeId == AppThemeId.waterCooling ||
         from.id == AppThemeId.tienMonPremium ||
@@ -1329,7 +1360,7 @@ class _AppThemeBackdropState extends State<AppThemeBackdrop>
   @override
   Widget build(BuildContext context) {
     final content = KeyedSubtree(key: _contentKey, child: widget.child);
-    if (appThemePalette.id == AppThemeId.waterCooling)
+    if (appThemePalette.id == AppThemeId.waterCooling || appThemePalette.id == AppThemeId.kdaFirestarter)
       return SizedBox.expand(child: content);
     if (appThemePalette.id == AppThemeId.tienMonPremium) {
       return Stack(
@@ -1463,6 +1494,7 @@ class _ThemeBackdropPainter extends CustomPainter {
         );
       case AppThemeId.facebook:
       case AppThemeId.classic:
+      case AppThemeId.kdaFirestarter:
       case AppThemeId.waterCooling:
         break;
       case AppThemeId.tienMonPremium:

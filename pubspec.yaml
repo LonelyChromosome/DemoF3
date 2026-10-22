@@ -30,6 +30,7 @@ flutter:
     - shaders/water_argb.frag
 
   assets:
+    - assets/kda/
     - assets/card_vfx/
     - assets/tien_mon_premium/app_backgrounds/
     - assets/tien_mon_premium/widget_overview/

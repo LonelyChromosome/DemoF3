@@ -28,11 +28,13 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    private var kdaMedia: KdaMediaBridge? = null
     private var updateBridge: UpdateBridge? = null
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        kdaMedia?.permissionResult(requestCode)
         if (requestCode == 8421 &&
             grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             ExamChangeNotifier.publishPending(applicationContext)
@@ -53,6 +55,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        kdaMedia = KdaMediaBridge(this, flutterEngine)
         waterGravity=WaterGravityBridge(this,flutterEngine.dartExecutor.binaryMessenger)
         updateBridge = UpdateBridge(this, flutterEngine)
         ExamChangeNotifier.recoverExisting(applicationContext)
@@ -166,6 +169,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        kdaMedia?.resume()
         waterGravity?.resume()
         UpdateConfirmation.visible = true
         UpdateConfirmation.take()?.let { startActivity(it) }
@@ -180,6 +184,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onPause() {
+        kdaMedia?.pause()
         waterGravity?.pause()
         UpdateConfirmation.visible = false
         updateBridge?.onPause()
@@ -187,6 +192,8 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        kdaMedia?.close()
+        kdaMedia = null
         waterGravity?.close()
         waterGravity=null
         updateBridge?.close()

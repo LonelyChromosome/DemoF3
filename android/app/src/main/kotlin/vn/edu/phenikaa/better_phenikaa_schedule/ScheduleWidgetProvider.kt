@@ -65,6 +65,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val density = context.resources.displayMetrics.density
         val width = (34 * density).roundToInt().coerceAtLeast(1)
         val height = (28 * density).roundToInt().coerceAtLeast(1)
+        if (theme.key == KdaWidgetImages.THEME) return KdaWidgetImages.largeBitmap(context, width, height, kdaImageIndex)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val drawable = context.getDrawable(R.drawable.ic_widget_study)?.mutate() ?: return bitmap
@@ -97,7 +98,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             theme.textColor, theme.textColor, theme.key).timeText(index, active)
     }
 
-    internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int): Bitmap {
+    internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int, kdaImageIndex: Int = 0): Bitmap {
         val theme = readThemeColors(context)
         if (theme.key == "tien_mon_premium") {
             return WidgetStaticLayerRenderer.decorateLarge(
@@ -1126,6 +1127,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         "ben10" -> ThemeColors(key, 0xFF101510.toInt(), 0xFF1D5F22.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
         "youtube" -> ThemeColors(key, 0xFF181818.toInt(), 0xFF2B0E14.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
         "steam" -> ThemeColors(key, 0xFF171D25.toInt(), 0xFF1B3D55.toInt(), 0xFFD6E9F8.toInt(), 0xFFD6E9F8.toInt())
+        "kda_firestarter" -> ThemeColors(key, 0xFF17091D.toInt(), 0xFF4A163C.toInt(), 0xFFFFF5FC.toInt(), 0xFFFFF5FC.toInt())
         "water_cooling" -> ThemeColors(key,0xFF10091A.toInt(),0xFF462145.toInt(),0xFFF6EDFF.toInt(),0xFFF6EDFF.toInt())
         "tien_mon_premium" -> ThemeColors(key, 0xFF082D2B.toInt(), 0xFF667E7B.toInt(), 0xFFFFD66B.toInt(), 0xFFFFD66B.toInt())
         else -> ThemeColors("classic", 0xFF173A8E.toInt(), 0xFF315AB5.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())

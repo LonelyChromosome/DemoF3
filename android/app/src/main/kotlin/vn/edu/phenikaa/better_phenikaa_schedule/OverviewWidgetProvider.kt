@@ -115,6 +115,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
             val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,
                 AppWidgetManager.INVALID_APPWIDGET_ID)
             if (id != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                if (KdaWidgetImages.enabled(context)) KdaWidgetImages.advance(context, "large", id)
                 context.getSharedPreferences(ScheduleWidgetProvider.WIDGET_SELECTION_PREFS,
                     Context.MODE_PRIVATE).edit()
                     .remove(ScheduleWidgetProvider.selectedDateKey(id)).apply()
@@ -543,7 +544,7 @@ class OverviewWidgetProvider : HomeWidgetProvider() {
         views.setTextViewTextSize(R.id.overview_subtitle, TypedValue.COMPLEX_UNIT_SP,
             if (compact) 10f else 11f)
         views.setImageViewBitmap(R.id.overview_background,
-            ScheduleWidgetProvider().overviewBackground(context, width, panelHeight))
+            ScheduleWidgetProvider().overviewBackground(context, width, panelHeight, KdaWidgetImages.current(context, "large", id)))
         // The frame is drawn over the cards in the same bitmap bounds as the background.
         val frameConfig = WidgetThemeV14.read(context)
         val framePalette = NativeWidgetPalette.read(context)
