@@ -283,6 +283,6 @@ object VehicleStore {
             "notificationAccess" to VehicleExitNotificationListener.hasPermission(context),
             "waitingSubjects" to scheduleRows(context,demo),
             "nextWaitStart" to (if(demo)null else nextWaitStart(context))
-        )
+        ) + VehiclePermissions.snapshot(context)
     }
 }

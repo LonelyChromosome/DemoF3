@@ -20,37 +20,54 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
 /** Native bridge isolated from QLĐT, themes, widget renderers and updater. */
-class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) {
+class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger,
+    private val runtimeRequest: (Int, Array<String>, () -> Unit) -> Unit) {
     private val channel=MethodChannel(messenger,"better_phenikaa/vehicle")
     private val fused=LocationServices.getFusedLocationProviderClient(activity)
     private var navCallback:LocationCallback?=null
     private var navFix:Location?=null
     private var lastRequest=0L
+    private var permissionPending=false
     init { channel.setMethodCallHandler(::handle) }
     private fun handle(call:MethodCall,result:MethodChannel.Result) {
         try {
             when(call.method) {
-                "state" -> result.success(VehicleStore.snapshot(activity))
+                "state" -> result.success(snapshot())
                 "notificationAccess" ->
                     result.success(VehicleExitNotificationListener.hasPermission(activity))
                 "requestNotificationAccess" -> {
-                    activity.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    try { activity.startActivity(VehiclePermissions.notificationSettings(activity)) }
+                    catch (_: android.content.ActivityNotFoundException) {
+                        activity.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    }
                     result.success(null)
                 }
                 "enable" -> {
                     VehicleStore.enabled(activity,true)
-                    requestPermissions()
-                    VehicleLifecycle.armNext(activity)
-                    result.success(VehicleStore.snapshot(activity))
+                    VehiclePermissions.markSeen(activity)
+                    requestPermissions(result)
                 }
                 "permissions" -> {
-                    requestPermissions()
-                    result.success(VehicleStore.snapshot(activity))
+                    requestPermissions(result)
                 }
                 "permissionSettings" -> {
-                    activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:" + activity.packageName)))
+                    activity.startActivity(VehiclePermissions.appSettings(activity))
                     result.success(null)
+                }
+                "setupSeen" -> { VehiclePermissions.markSeen(activity); result.success(null) }
+                "backgroundPermission" -> {
+                    if (!hasPermission()) {
+                        result.error("foreground_required", "Hãy cấp quyền vị trí chính xác trước.", null)
+                    } else if (Build.VERSION.SDK_INT == 29) {
+                        runtimeRequest(7420, arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) {
+                            VehicleLifecycle.armNext(activity)
+                            result.success(snapshot())
+                        }
+                    } else {
+                        // Android 11+: the user must choose Allow all the time in Settings.
+                        activity.startActivity(VehiclePermissions.appSettings(activity))
+                        result.success(null)
+                    }
                 }
                 "schedule" -> {
                     val windows=call.argument<List<Map<String,Any>>>("windows") ?: emptyList()
@@ -66,7 +83,7 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
                     activity.stopService(Intent(activity,VehicleCaptureService::class.java))
                     VehicleStore.manualResetReal(activity)
                     VehicleLifecycle.armNext(activity)
-                    result.success(VehicleStore.snapshot(activity))
+                    result.success(snapshot())
                 }
                 "startNav" -> { startNavigation(); result.success(null) }
                 "nav" -> { watchdog(); result.success(navSnapshot()) }
@@ -82,23 +99,26 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
             PackageManager.PERMISSION_GRANTED ||
         activity.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)==
             PackageManager.PERMISSION_GRANTED
-    private fun requestPermissions() {
-        if(!VehicleStore.isEnabled(activity))return
-        val missing=ArrayList<String>()
-        if(!hasPermission()){
-            missing.add(Manifest.permission.ACCESS_FINE_LOCATION)
-            missing.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+    private fun snapshot(): Map<String, Any?> {
+        val prefs=activity.getSharedPreferences("bpa_vehicle_demo_v1", 0)
+        val blocked=VehiclePermissions.runtime(activity).filter {
+            prefs.getBoolean("asked_"+it, false) && !activity.shouldShowRequestPermissionRationale(it)
         }
-        if(Build.VERSION.SDK_INT>=29 &&
-            activity.checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION)!=PackageManager.PERMISSION_GRANTED)
-            missing.add(Manifest.permission.ACTIVITY_RECOGNITION)
-        if(Build.VERSION.SDK_INT>=33 &&
-            activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)
-            missing.add(Manifest.permission.POST_NOTIFICATIONS)
-        if(missing.isNotEmpty())activity.requestPermissions(missing.toTypedArray(),7419)
+        return VehicleStore.snapshot(activity) + mapOf("blockedPermissions" to blocked)
     }
-    fun permissionsUpdated(code:Int) {
-        if(code==7419 && VehicleStore.isEnabled(activity))VehicleLifecycle.armNext(activity)
+    private fun requestPermissions(result: MethodChannel.Result) {
+        // Never gate a permission request on enabled; this caused 2.0's dead end.
+        if (permissionPending) { result.error("permission_busy", "Đang xin quyền.", null); return }
+        permissionPending=true
+        val permissions=VehiclePermissions.runtime(activity)
+        runtimeRequest(7419, permissions) {
+            val editor=activity.getSharedPreferences("bpa_vehicle_demo_v1", 0).edit()
+            permissions.forEach { editor.putBoolean("asked_"+it, true) }
+            editor.apply()
+            permissionPending=false
+            if (VehicleStore.isEnabled(activity)) VehicleLifecycle.armNext(activity)
+            result.success(snapshot())
+        }
     }
     private fun acceptFix(loc:Location?,cached:Boolean=false) {
         if(loc==null || !loc.latitude.isFinite() || !loc.longitude.isFinite())return

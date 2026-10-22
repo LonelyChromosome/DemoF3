@@ -30,6 +30,7 @@ import vn.edu.phenikaa.better_phenikaa_schedule.findbike.VehicleLifecycle
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    private val runtimePermissions by lazy { RuntimePermissionQueue(this) }
     private var kdaMedia: KdaMediaBridge? = null
     private var updateBridge: UpdateBridge? = null
     private var vehicleBridge: VehicleBridge? = null
@@ -37,8 +38,7 @@ class MainActivity : FlutterActivity() {
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        kdaMedia?.permissionResult(requestCode)
-        vehicleBridge?.permissionsUpdated(requestCode)
+        runtimePermissions.result(requestCode)
         if (requestCode == 8421 &&
             grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             ExamChangeNotifier.publishPending(applicationContext)
@@ -59,8 +59,8 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        kdaMedia = KdaMediaBridge(this, flutterEngine)
-        vehicleBridge = VehicleBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        kdaMedia = KdaMediaBridge(this, flutterEngine, runtimePermissions)
+        vehicleBridge = VehicleBridge(this, flutterEngine.dartExecutor.binaryMessenger, runtimePermissions::request)
         waterGravity=WaterGravityBridge(this,flutterEngine.dartExecutor.binaryMessenger)
         updateBridge = UpdateBridge(this, flutterEngine)
         ExamChangeNotifier.recoverExisting(applicationContext)
@@ -198,6 +198,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        runtimePermissions.close()
         kdaMedia?.close()
         kdaMedia = null
         vehicleBridge?.close()
