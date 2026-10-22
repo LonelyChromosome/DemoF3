@@ -342,6 +342,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       await prefs.remove(_storageKey);
       await prefs.remove(SemesterRetention.currentStartKey);
       await prefs.remove(SemesterRetention.previousKey);
+      unawaited(publishVehicleSchedule(null));
       await WidgetPublisher.clear();
       _semesterExpiryTimer?.cancel();
       if (mounted)
@@ -356,6 +357,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     final data = SemesterRetention.combine(current, previous);
     if (prefs.getString(_storageKey) != data.encode()) {
       await prefs.setString(_storageKey, data.encode());
+      unawaited(publishVehicleSchedule(data));
       await WidgetPublisher.publish(data, resetToToday: false);
     }
     _scheduleSemesterExpiry(retained, previous);
@@ -600,7 +602,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         await prefs.remove(_storageKey);
         await prefs.remove(SemesterRetention.currentStartKey);
         await prefs.remove(SemesterRetention.previousKey);
-        await WidgetPublisher.clear();
+        unawaited(publishVehicleSchedule(null));
+      await WidgetPublisher.clear();
         semester = null;
         raw = null;
       }
@@ -626,6 +629,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
             previous,
           );
         }
+        unawaited(publishVehicleSchedule(data));
         await WidgetPublisher.publish(data, resetToToday: false);
         if (semester != null) {
           try {
@@ -777,6 +781,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
             ? previousSemester?.toImportedScheduleData()
             : ImportedScheduleData.decode(previousSnapshot);
         if (oldData != null) {
+          unawaited(publishVehicleSchedule(oldData));
           await WidgetPublisher.publish(oldData, resetToToday: false);
         }
       } on Object {
@@ -804,6 +809,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     ImportedScheduleData publishedData,
   ) async {
     try {
+      unawaited(publishVehicleSchedule(publishedData));
       await WidgetPublisher.publish(publishedData, resetToToday: true);
     } on Object {
       // The app snapshot is authoritative; the widget can repair on refresh.
@@ -1187,7 +1193,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     await prefs.remove(_routeKey);
     await CurrentSemesterStore().clear();
     await SemesterDifferenceStore().clear();
-    await WidgetPublisher.clear();
+    unawaited(publishVehicleSchedule(null));
+      await WidgetPublisher.clear();
     await prefs.clear();
     if (!kIsWeb) {
       await _widgetSessionChannel.invokeMethod<void>('clear');

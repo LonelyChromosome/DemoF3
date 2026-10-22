@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
@@ -12,7 +13,7 @@ class VehiclePage extends StatefulWidget {
   final bool active;
   @override State<VehiclePage> createState() => _VehiclePageState();
 }
-class _VehiclePageState extends State<VehiclePage> {
+class _VehiclePageState extends State<VehiclePage> with WidgetsBindingObserver {
   Map<String, dynamic> data = <String, dynamic>{'enabled': false};
   bool queueExpanded = false;
   Timer? timer;
@@ -20,10 +21,9 @@ class _VehiclePageState extends State<VehiclePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(initial());
-    timer = Timer.periodic(const Duration(seconds: 2), (_) {
-      if(widget.active && !busy) unawaited(read());
-    });
+    syncTimer();
   }
   Future<void> initial() async {
     try { await VehicleNative.schedule(widget.windows); } catch (_) {}
@@ -33,9 +33,22 @@ class _VehiclePageState extends State<VehiclePage> {
   void didUpdateWidget(covariant VehiclePage old) {
     super.didUpdateWidget(old);
     if(!old.active && widget.active) unawaited(read());
+    if(old.active != widget.active) syncTimer();
     if(old.windows != widget.windows) {
       unawaited(VehicleNative.schedule(widget.windows).catchError((Object _) {}));
     }
+  }
+  void syncTimer() {
+    timer?.cancel(); timer=null;
+    if(!widget.active || WidgetsBinding.instance.lifecycleState == AppLifecycleState.paused ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.hidden ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.detached) return;
+    timer=Timer.periodic(const Duration(seconds:2), (_) {
+      if(!busy) unawaited(read());
+    });
+  }
+  @override void didChangeAppLifecycleState(AppLifecycleState state) {
+    syncTimer();
   }
   Future<void> read() async {
     try {
@@ -101,7 +114,7 @@ class _VehiclePageState extends State<VehiclePage> {
     }
     return points;
   }
-  @override void dispose() { timer?.cancel(); super.dispose(); }
+  @override void dispose() { WidgetsBinding.instance.removeObserver(this); timer?.cancel(); super.dispose(); }
 
   @override Widget build(BuildContext context) {
     final palette=appThemePalette;

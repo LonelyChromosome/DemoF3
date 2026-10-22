@@ -5,7 +5,7 @@ Giao diện Xe cộ lấy từ commit `551d830cd5f19ff78d0e453c6d1dc2f4dfd1b46f`
 - `vehicle_page.dart`: trạng thái, hàng chờ thu gọn, reset có xác nhận, mở tìm xe.
 - `vehicle_navigation.dart`: scan-lock và chỉ đường theo GPS thật.
 - `vehicle_native.dart`: contract MethodChannel `better_phenikaa/vehicle`.
-- `vehicle_schedule.dart`: chỉ chiếu lịch học sang cửa sổ thời gian; không sửa dữ liệu nguồn.
+- `vehicle_schedule.dart`: chỉ chiếu lịch học sang cửa sổ thời gian; cập nhật cache độc lập khi restore/sync/logout kể cả đang ẩn card KDA; không sửa dữ liệu nguồn.
 - Android `:findbike` (`android/findbike/`): thư viện riêng chứa dữ liệu xe, vòng đời, geofence, GPS/step service, notification listener và manifest riêng. Không phụ thuộc `:app`, Flutter, QLĐT, attendance, widgets hay theme.
 - Adapter Flutter mỏng nằm ở `android/app/.../findbike/VehicleBridge.kt`; MainActivity chỉ nối khởi tạo/quyền/vòng đời.
 
