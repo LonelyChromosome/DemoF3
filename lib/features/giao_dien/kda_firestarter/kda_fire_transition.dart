@@ -62,7 +62,7 @@ class _ApprovedBurnState extends State<_ApprovedBurn> with SingleTickerProviderS
     super.initState();
     shader=widget.program.fragmentShader();
     for(var i=0;i<3;i++){shader.setImageSampler(i,widget.images[i]);}
-    controller=AnimationController(vsync:this,duration:const Duration(milliseconds:1500));
+    controller=AnimationController(vsync:this,duration:const Duration(milliseconds:1500),animationBehavior:AnimationBehavior.preserve);
     controller.addListener((){final frame=(controller.value*45).floor();if(frame!=painted){painted=frame;progress.value=controller.value;}});
     unawaited(controller.forward().then((_){progress.value=1;widget.onComplete();}));
   }
