@@ -130,8 +130,8 @@ internal class KdaMediaBridge(private val activity: Activity, private val engine
   try{val v=Visualizer(session);capture=v;v.captureSize=Visualizer.getCaptureSizeRange()[1].coerceAtMost(1024);v.scalingMode=Visualizer.SCALING_MODE_NORMALIZED
    v.setDataCaptureListener(object: Visualizer.OnDataCaptureListener{
     override fun onWaveFormDataCapture(v: Visualizer?,bytes: ByteArray?,rate: Int)=Unit
-    override fun onFftDataCapture(v: Visualizer?,fft: ByteArray?,rate: Int){if(fft==null)return;val bands=KdaPlaybackPolicy.fftBands(fft,rate/1000.0);handler.post{if(enabled&&foreground&&capture===v)sink?.success(mapOf("type" to "fft","bands" to bands))}}
-   },minOf(16000,Visualizer.getMaxCaptureRate()),false,true);v.enabled=true;captureSession=session
+    override fun onFftDataCapture(v: Visualizer?,fft: ByteArray?,rate: Int){if(fft==null)return;val capturedAt=SystemClock.elapsedRealtimeNanos()/1000;val bands=KdaPlaybackPolicy.fftBands(fft,rate/1000.0);handler.post{if(enabled&&foreground&&capture===v)sink?.success(mapOf("type" to "fft","bands" to bands,"captureTimeUs" to capturedAt))}}
+   },minOf(20000,Visualizer.getMaxCaptureRate()),false,true);v.enabled=true;captureSession=session
    captureStatus=if(session==0)"Nguồn ngoài phụ thuộc quyền và hỗ trợ của Android"else"Phổ âm thanh từ nhạc FIRESTARTER"
   }catch(_:Exception){releaseCapture();captureStatus="Android chưa cấp tín hiệu nguồn này; có thể bật nhạc FIRESTARTER để dùng nguồn trong app."}
  }

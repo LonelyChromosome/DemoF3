@@ -3,78 +3,89 @@ import 'package:better_phenikaa_schedule/features/giao_dien/kda_firestarter/kda_
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+List<double> voice(double value) => List.generate(48, (i) => i >= 14 && i < 37 ? value : .12);
+double peak(KdaLineMotion m) => List.generate(160, (i) => m.displacement(i / 160, 900, 1).abs()).reduce((a, b) => a > b ? a : b);
+
 void main() {
-  test('silence and noise floor remain a straight line without synthetic beats', () {
+  test('silence and noise do not invent musical events', () {
     final m = KdaLineMotion();
-    for (var i = 0; i < 150; i++) { m.input(List.filled(48, .02)); m.step(1 / 30); }
-    expect(m.pulses, isEmpty); expect(m.energy, 0);
-    expect(m.displacement(.3, 900, 1), 0);
-    m.dispose();
-  });
-  test('a real onset travels, splits, stays bounded and returns exactly flat', () {
-    final m = KdaLineMotion();
-    m.input(List.filled(48, .9)); m.step(.1);
-    expect(m.beatCount, 1);
-    final first = List.generate(120, (i) => m.displacement(i / 120, 900, 1));
-    expect(first.any((v) => v.abs() > .1), isTrue);
-    for (var i = 0; i < 4; i++) { m.step(1 / 30); }
-    final next = List.generate(120, (i) => m.displacement(i / 120, 900, 1));
-    expect(next, isNot(equals(first)));
-    for (var i = 0; i < 120; i++) { m.step(1 / 30); }
-    expect(m.moving, isFalse);
-    for (var i = 0; i < 100; i++) { expect(m.displacement(i / 100, 900, 1), 0); }
-    m.dispose();
-  });
-  test('kicks and sustained loud passages increase response without unbounded waves', () {
-    final m = KdaLineMotion();
-    for (var i = 0; i < 240; i++) {
-      final kick = i % 15 < 3;
-      m.input(List.generate(48, (b) => b < 14 && kick ? 1 : .65)); m.step(1 / 30);
-      expect(m.pulses.length, lessThanOrEqualTo(4));
-      for (var j = 0; j < 100; j++) { expect(m.displacement(j / 100, 700, 1.5).abs(), lessThanOrEqualTo(12)); }
+    for (var i = 0; i < 100; i++) {
+      m.input(List.filled(48, .02), timestampSeconds: i * .05); m.step(.05);
     }
-    expect(m.beatCount, greaterThan(5)); expect(m.climax, greaterThan(.7));
-    m.reset(); expect(m.moving, isFalse); expect(m.climax, 0);
+    expect(m.beatCount, 0); expect(m.moving, isFalse); expect(peak(m), 0);
     m.dispose();
   });
-  test('continuous music keeps a changing wave after the initial onset expires', () {
+  test('held sound has no free-running carrier, even while captures continue', () {
     final m = KdaLineMotion();
-    var activeFrames = 0;
-    for (var i = 0; i < 300; i++) {
-      m.input(List.filled(48, .65)); m.step(1 / 30);
-      if (i > 60 && m.hasFlow) activeFrames++;
-    }
-    expect(m.pulses, isEmpty, reason: 'A steady musical bed has no new bass onsets');
-    expect(activeFrames, greaterThan(230));
-    final first=List.generate(100,(i)=>m.displacement(i/100,900,1));
-    m.input(List.filled(48,.65));m.step(.1);
-    final next=List.generate(100,(i)=>m.displacement(i/100,900,1));
-    expect(next,isNot(equals(first)));expect(first.any((v)=>v.abs()>1),isTrue);
-    for(var i=0;i<60;i++){m.input(List.filled(48,0));m.step(1/30);}
-    expect(m.hasFlow,isFalse);expect(m.displacement(.2,900,1),0);
-    m.dispose();
+    m.input(List.filled(48, .08), timestampSeconds: 0);
+    m.input(voice(.7), timestampSeconds: .1); m.step(.03);
+    expect(m.beatCount, 1); expect(peak(m), greaterThan(.05));
+    for (var i = 1; i < 100; i++) { m.input(voice(.7), timestampSeconds: .1 + i * .05); m.step(.05); }
+    expect(m.beatCount, 1); expect(m.pulses, isEmpty);
+    expect(m.moving, isFalse); expect(peak(m), 0);
+    // Rendering more frames cannot advance a carrier or create another beat.
+    for (var i = 0; i < 100; i++) { m.step(.03); }
+    expect(m.beatCount, 1); expect(peak(m), 0); m.dispose();
   });
-  test('loud passages and dense percussion have distinct excursions and speed', () {
-    final gentle=KdaLineMotion(),hard=KdaLineMotion(),dense=KdaLineMotion();
-    for(var i=0;i<180;i++){
-      gentle.input(List.filled(48,.15));hard.input(List.filled(48,.85));
-      dense.input(List.filled(48,i % 8 < 2 ? .95 : .18));
-      for(final m in [gentle,hard,dense]){m.step(1/30);}
+  test('fast midrange syllable attacks create more packets with the same bass', () {
+    final fast = KdaLineMotion(), slow = KdaLineMotion();
+    for (var i = 0; i < 200; i++) {
+      final t = i * .05;
+      fast.input(voice(i % 4 == 1 ? .75 : .12), timestampSeconds: t);
+      slow.input(voice(i % 20 == 1 ? .75 : .12), timestampSeconds: t);
+      fast.step(.05); slow.step(.05);
     }
-    double peak(KdaLineMotion m)=>List.generate(120,(i)=>m.displacement(i/120,900,1).abs()).reduce((a,b)=>a>b?a:b);
-    expect(peak(hard),greaterThan(peak(gentle)*2));
-    expect(dense.density,greaterThan(gentle.density));
-    expect(hard.phase,greaterThan(gentle.phase));
-    for(final m in [gentle,hard,dense]){m.dispose();}
+    expect(fast.beatCount, greaterThan(slow.beatCount * 3));
+    expect(fast.density, greaterThan(slow.density));
+    expect(fast.pulses.every((p) => p.kind == KdaPulseKind.vocal), isTrue);
+    fast.dispose(); slow.dispose();
+  });
+  test('capture timing determines rhythm independently of display frame rate', () {
+    final a = KdaLineMotion(), b = KdaLineMotion();
+    for (var i = 0; i < 60; i++) {
+      final bands = voice([2, 7, 11, 23, 24, 35, 49].contains(i) ? .8 : .12);
+      a.input(bands, timestampSeconds: i * .1);
+      b.input(bands, timestampSeconds: i * .1);
+      for (var j = 0; j < 6; j++) { a.step(1 / 60); }
+      for (var j = 0; j < 3; j++) { b.step(1 / 30); }
+      expect(a.beatCount, b.beatCount); expect(a.density, b.density);
+    }
+    expect(a.beatCount, greaterThan(3)); a.dispose(); b.dispose();
+  });
+  test('a bass hit rings locally then damps without circulating around the border', () {
+    final m = KdaLineMotion();
+    m.input(List.filled(48, .05), timestampSeconds: 0);
+    m.input(List.generate(48, (i) => i < 14 ? .9 : .05), timestampSeconds: .1);
+    m.step(.025); expect(peak(m), greaterThan(.15));
+    expect(m.pulses.single.kind, KdaPulseKind.bass);
+    final first = m.pulses.single.response;
+    m.step(.075); expect(m.pulses.single.response.sign, isNot(first.sign));
+    for (var i = 0; i < 30; i++) { m.step(.05); }
+    expect(m.pulses, isEmpty); expect(peak(m), 0); m.dispose();
+  });
+  test('dense loud music never exceeds the reduced three dp excursion', () {
+    final m = KdaLineMotion();
+    for (var i = 0; i < 160; i++) {
+      m.input(List.filled(48, i % 3 == 0 ? .95 : .10), timestampSeconds: i * .05);
+      m.step(.05);
+      expect(m.pulses.length, lessThanOrEqualTo(6));
+      for (var j = 0; j < 120; j++) { expect(m.displacement(j / 120, 700, 1.5).abs(), lessThanOrEqualTo(3)); }
+    }
+    expect(m.beatCount, greaterThan(8)); m.reset(); expect(m.moving, isFalse); m.dispose();
+  });
+  test('small measured changes can move a held note gently without new bass beats', () {
+    final m = KdaLineMotion();
+    m.input(voice(.3), timestampSeconds: 0);
+    m.input(voice(.31), timestampSeconds: .05); m.step(.03);
+    expect(m.beatCount, 0); expect(peak(m), greaterThan(0)); expect(peak(m), lessThan(.1));
+    for (var i = 1; i < 80; i++) { m.input(voice(.31), timestampSeconds: .05 + i * .05); m.step(.05); }
+    expect(peak(m), 0); m.dispose();
   });
   test('invalid FFT values cannot produce invalid geometry', () {
-    final m = KdaLineMotion();
-    m.input([double.nan, double.infinity, -1, 2]); m.step(.03);
-    expect(m.energy.isFinite, isTrue);
-    expect(m.displacement(.5, 1, 1.5).isFinite, isTrue);
-    m.dispose();
+    final m = KdaLineMotion(); m.input([double.nan, double.infinity, -1, 2]); m.step(.03);
+    expect(m.energy.isFinite, isTrue); expect(m.displacement(.5, 1, 1.5).isFinite, isTrue); m.dispose();
   });
-  testWidgets('border repaints without rebuilding or intercepting card controls', (tester) async {
+  testWidgets('border repaint keeps card geometry, content and hitbox intact', (tester) async {
     final m = KdaLineMotion(); var builds = 0, taps = 0;
     await tester.pumpWidget(MaterialApp(home: Center(child: KdaLineScope(motion: m,
       child: KdaLineBorder(color: Colors.pink, radius: 18, child: Builder(builder: (_) {
@@ -82,10 +93,10 @@ void main() {
       })),
     ))));
     final size = tester.getSize(find.byType(KdaLineBorder));
-    m.input(List.filled(48, .9)); m.step(.1); await tester.pump();
-    expect(builds, 1); expect(tester.getSize(find.byType(KdaLineBorder)), size);
+    m.input(voice(.1), timestampSeconds: 0); m.input(voice(.9), timestampSeconds: .1); m.step(.025);
+    await tester.pump(); expect(builds, 1); expect(tester.getSize(find.byType(KdaLineBorder)), size);
     await tester.tap(find.text('Card')); expect(taps, 1);
-    for (var i = 0; i < 90; i++) { m.step(1 / 30); }
+    for (var i = 0; i < 60; i++) { m.step(.03); }
     await tester.pump(); expect(m.moving, isFalse); expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox()); m.dispose();
   });

@@ -25,8 +25,8 @@ class _KdaLineHostState extends State<KdaLineHost> with SingleTickerProviderStat
   }
   void input() {
     if (!active) return;
-    motion.input(runtime.spectrum.value);
-    if ((motion.pulses.isNotEmpty || runtime.spectrum.value.any((v) => v > .055)) && !ticker.isActive) {
+    motion.input(runtime.spectrum.value, timestampSeconds: runtime.captureTimeUs == null ? null : runtime.captureTimeUs! / 1000000);
+    if (motion.moving && !ticker.isActive) {
       last = Duration.zero; ticker.start();
     }
   }

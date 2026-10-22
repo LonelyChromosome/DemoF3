@@ -23,6 +23,7 @@ class KdaRuntime extends ChangeNotifier {
   KdaConfig config=const KdaConfig();
   bool enabled=false,cardsVisible=false,ready=false,permission=false,foreground=true;
   int? textureId;
+  int? captureTimeUs;
   int width=1440,height=2560;
   String? error;
   String captureStatus='Chưa có tín hiệu âm thanh';
@@ -98,7 +99,7 @@ class KdaRuntime extends ChangeNotifier {
   }
   void receive(dynamic s){
     if(s is! Map)return;
-    if(s['type']=='fft'){spectrum.value=(s['bands'] as List).whereType<num>().map((v)=>v.toDouble().clamp(0,1).toDouble()).toList();return;}
+    if(s['type']=='fft'){captureTimeUs=(s['captureTimeUs'] as num?)?.toInt();spectrum.value=(s['bands'] as List).whereType<num>().map((v)=>v.toDouble().clamp(0,1).toDouble()).toList();return;}
     textureId=(s['textureId'] as num?)?.toInt();width=(s['width'] as num?)?.toInt()??1440;height=(s['height'] as num?)?.toInt()??2560;
     ready=s['ready']==true;permission=s['permission']==true;error=s['error'] as String?;captureStatus=s['captureStatus'] as String? ?? captureStatus;foreground=s['foreground']!=false;settle();
   }
