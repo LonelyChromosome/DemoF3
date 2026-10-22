@@ -158,7 +158,7 @@ class _VehicleFakePanelState extends State<VehicleFakePanel> {
                             (item['status']?.toString() ?? ''),
                           style: TextStyle(color: muted, fontSize: 11)),
                       ]),
-                    )),
+                    ),
                   ]),
               );
             }),
