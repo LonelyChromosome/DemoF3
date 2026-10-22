@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p build/kda-evidence
+mkdir -p build/findbike-evidence
+adb logcat -c
+adb logcat -v threadtime > build/findbike-evidence/logcat.txt &
+fb_log_pid=$!
+python3 tool/findbike_permission_prompt.py > build/findbike-evidence/permission-monitor.txt 2>&1 &
+fb_monitor_pid=$!
+trap 'kill "$fb_log_pid" "$fb_monitor_pid" 2>/dev/null || true' EXIT
+if ! timeout --kill-after=15s 720s flutter test integration_test/vehicle_permissions_test.dart -d emulator-5554 --no-uninstall --reporter expanded 2>&1 | tee build/findbike-evidence/integration.txt; then
+  exit 1
+fi
+wait "$fb_monitor_pid"
+kill "$fb_log_pid" 2>/dev/null || true
+adb shell pm clear vn.edu.phenikaa.better_phenikaa_schedule.kdatest
+trap - EXIT
 # Give the real FFT test a known, non-muted media stream on this emulator only.
 adb shell cmd media_session volume --stream 3 --set 10
 adb logcat -c
@@ -20,11 +34,11 @@ finish() {
   kill "$log_pid" "$cycle_pid" "$screen_pid" 2>/dev/null || true
 }
 trap finish EXIT
-if ! timeout --kill-after=15s 720s flutter test integration_test/kda_firestarter_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee build/kda-evidence/integration.txt; then
+if ! timeout --kill-after=15s 720s flutter test integration_test/kda_firestarter_test.dart -d emulator-5554 --no-uninstall --reporter expanded 2>&1 | tee build/kda-evidence/integration.txt; then
   # Retry only a failed SDK download before tests ran, never a failed app test.
   if grep -Fq 'Error on ZipFile unknown archive' build/kda-evidence/integration.txt; then
     cp build/kda-evidence/integration.txt build/kda-evidence/sdk-download-failure.txt
-    timeout --kill-after=15s 720s flutter test integration_test/kda_firestarter_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee build/kda-evidence/integration.txt
+    timeout --kill-after=15s 720s flutter test integration_test/kda_firestarter_test.dart -d emulator-5554 --no-uninstall --reporter expanded 2>&1 | tee build/kda-evidence/integration.txt
   else
     exit 1
   fi

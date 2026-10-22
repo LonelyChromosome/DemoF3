@@ -1,7 +1,7 @@
 name: KDA FIRESTARTER Android verification
 on:
   push:
-    branches: [feature/kda-firestarter, release/kda-findbike-1.9]
+    branches: [feature/kda-firestarter, release/kda-findbike-1.9, fix/findbike-permission-setup]
   workflow_dispatch:
 permissions:
   contents: write
@@ -18,33 +18,71 @@ jobs:
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Reuse verified app only for permission-monitor-only fixes
+        id: reuse
+        shell: bash
+        run: |
+          set -euo pipefail
+          reuse=false
+          base=765c3a261951068253733391a17570319e927ba5
+          if [[ "$GITHUB_REF" == refs/heads/fix/findbike-permission-setup ]]; then
+            git fetch --depth=1 origin "$base"
+          fi
+          if [[ "$GITHUB_REF" == refs/heads/fix/findbike-permission-setup ]] &&
+             git cat-file -e "$base^{commit}" 2>/dev/null &&
+             git diff --quiet "$base" HEAD -- . ':!tool/findbike_permission_prompt.py' ':!tool/kda_emulator_check.sh' ':!.github/workflows/kda-firestarter.yml'; then
+            reuse=true
+          fi
+          echo "value=$reuse" >> "$GITHUB_OUTPUT"
+      - name: Recover immutable already-tested build for unchanged application inputs
+        if: steps.reuse.outputs.value == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh run view 39837492827 --json headSha --jq .headSha)" = 765c3a261951068253733391a17570319e927ba5
+          test "$(gh api repos/$GITHUB_REPOSITORY/actions/runs/39837492827/jobs --jq '.jobs[] | select(.name == "build") | .conclusion')" = success
+          gh run download 39837492827 --repo "$GITHUB_REPOSITORY" -n KDA-build-input -D .
+          test "$(cat dist/COMMIT_SHA)" = 765c3a261951068253733391a17570319e927ba5
+          (cd dist && sha256sum -c SHA256SUMS)
+          printf '%s\n' "$GITHUB_SHA" > dist/TEST_HARNESS_SHA
       - uses: actions/setup-java@v4
+        if: steps.reuse.outputs.value != 'true'
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
       - uses: subosito/flutter-action@v2
+        if: steps.reuse.outputs.value != 'true'
         with:
           flutter-version: '3.47.2'
           channel: stable
           cache: true
       - run: bash tool/bootstrap.sh
+        if: steps.reuse.outputs.value != 'true'
       - name: Verify exact supplied assets
+        if: steps.reuse.outputs.value != 'true'
         run: python3 tool/verify_kda_assets.py
       - name: Analyze full application
+        if: steps.reuse.outputs.value != 'true'
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Flutter regression tests
+        if: steps.reuse.outputs.value != 'true'
         run: flutter test --reporter expanded
       - name: Android unit and widget regression tests
+        if: steps.reuse.outputs.value != 'true'
         run: cd android && ./gradlew --no-daemon :app:testDebugUnitTest :findbike:testDebugUnitTest
       - name: Build signed ARM64 and x86_64 installable APK
+        if: steps.reuse.outputs.value != 'true'
         run: |
-          COOC_VERSION_NAME=cooc.2.0 flutter build apk --profile --target-platform android-arm64,android-x64 --build-number=80 --build-name=2.0.0
+          COOC_VERSION_NAME=cooc.2.0 flutter build apk --profile --target-platform android-arm64,android-x64 --build-number=81 --build-name=2.0.0
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-KDA-FIRESTARTER-Test.apk
           cd dist
           sha256sum BPA-KDA-FIRESTARTER-Test.apk > SHA256SUMS
       - name: Verify Android signature and isolated package
+        if: steps.reuse.outputs.value != 'true'
         run: |
           signer=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -1)
           aapt=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -1)
@@ -66,6 +104,9 @@ jobs:
           retention-days: 30
           overwrite: true
   emulator:
+    # The delivered-APK check consumes the build artifact; do not occupy the
+    # only available runner while its producer is still queued.
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
@@ -98,7 +139,9 @@ jobs:
         if: always()
         with:
           name: KDA-emulator-evidence
-          path: build/kda-evidence/
+          path: |
+            build/kda-evidence/
+            build/findbike-evidence/
           retention-days: 30
           overwrite: true
       - uses: actions/upload-artifact@v4

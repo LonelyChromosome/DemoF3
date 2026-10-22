@@ -14,7 +14,7 @@ import io.flutter.view.TextureRegistry
 import kotlin.math.*
 
 /** Exactly one lifecycle-owned decoder; never sends audio events to widgets. */
-internal class KdaMediaBridge(private val activity: Activity, private val engine: FlutterEngine): EventChannel.StreamHandler {
+internal class KdaMediaBridge(private val activity: Activity, private val engine: FlutterEngine, private val permissionQueue: RuntimePermissionQueue): EventChannel.StreamHandler {
  private val handler=Handler(Looper.getMainLooper())
  private val methods=MethodChannel(engine.dartExecutor.binaryMessenger,"better_phenikaa/kda_media")
  private val events=EventChannel(engine.dartExecutor.binaryMessenger,"better_phenikaa/kda_events")
@@ -59,7 +59,7 @@ internal class KdaMediaBridge(private val activity: Activity, private val engine
  private fun permitted()=Build.VERSION.SDK_INT<23||activity.checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED
  private fun method(call: MethodCall,result: MethodChannel.Result){when(call.method){
   "configure"->runCatching {configure(call.argument<Boolean>("enabled")==true,call.argument<Boolean>("video")!=false,call.argument<Boolean>("music")==true,call.argument<Boolean>("visualizer")!=false);result.success(snapshot())}.onFailure{error=it.message;state();result.error("kda_media",it.message,null)}
-  "permission"->{if(permitted())result.success(true)else if(permissionResult!=null)result.success(false)else{permissionResult=result;activity.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),PERMISSION)}}
+  "permission"->{if(permitted())result.success(true)else if(permissionResult!=null)result.success(false)else{permissionResult=result;permissionQueue.request(PERMISSION,arrayOf(Manifest.permission.RECORD_AUDIO)){permissionResult(PERMISSION)}}}
   "seek"->{if(!enabled||!prepared){result.error("not_ready","Video chưa sẵn sàng",null)}else{handler.removeCallbacks(loop);holding=false;remaining=KdaPlaybackPolicy.HOLD_MS;seeking=true;val position=(call.argument<Number>("positionMs")?.toLong()?:0L).coerceIn(0L,((player?.duration?:1)-1).coerceAtLeast(0).toLong());if(Build.VERSION.SDK_INT>=26)player?.seekTo(position,MediaPlayer.SEEK_CLOSEST)else player?.seekTo(position.toInt());result.success(snapshot())}}
   "state"->result.success(snapshot())
   else->result.notImplemented()

@@ -8,6 +8,8 @@ class VehicleNative {
     final value = await channel.invokeMethod<dynamic>('state');
     return Map<String, dynamic>.from(value as Map);
   }
+  static Future<void> setupSeen() async { await channel.invokeMethod<dynamic>('setupSeen'); }
+  static Future<void> backgroundPermission() async { await channel.invokeMethod<dynamic>('backgroundPermission'); }
   static Future<void> enable() async { await channel.invokeMethod<dynamic>('enable'); }
   static Future<void> permissionSettings() async { await channel.invokeMethod<dynamic>('permissionSettings'); }
   static Future<void> requestNotificationAccess() async {

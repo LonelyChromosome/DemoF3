@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'vehicle_navigation.dart';
 import 'vehicle_native.dart';
+import 'vehicle_permissions.dart';
 
 class VehiclePage extends StatefulWidget {
   const VehiclePage({super.key, required this.windows, required this.active});
@@ -18,6 +19,7 @@ class _VehiclePageState extends State<VehiclePage> with WidgetsBindingObserver {
   bool queueExpanded = false;
   Timer? timer;
   bool busy = false;
+  bool setupOpen = false;
   @override
   void initState() {
     super.initState();
@@ -49,18 +51,32 @@ class _VehiclePageState extends State<VehiclePage> with WidgetsBindingObserver {
   }
   @override void didChangeAppLifecycleState(AppLifecycleState state) {
     syncTimer();
+    if (state == AppLifecycleState.resumed && widget.active) unawaited(read());
   }
   Future<void> read() async {
     try {
       final value=await VehicleNative.state();
-      if(mounted)setState(()=>data=value);
+      if(mounted) {
+        setState(()=>data=value);
+        if(widget.active && value['setupSeen'] != true && !setupOpen &&
+            (!vehiclePermissionsReady(value) || value['enabled'] != true)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if(mounted && widget.active && !setupOpen) unawaited(setup());
+          });
+        }
+      }
     }catch(_){}
   }
-  Future<void> enable() async {
-    if(busy)return;
-    setState(()=>busy=true);
-    try { await VehicleNative.enable(); await read(); } catch (_) {}
-    if(mounted)setState(()=>busy=false);
+  Future<void> setup() async {
+    if(setupOpen)return;
+    setupOpen=true;
+    try {
+      await VehicleNative.setupSeen();
+      if(mounted)await showVehiclePermissions(context);
+    } finally {
+      setupOpen=false;
+      if(mounted)await read();
+    }
   }
   Future<void> openNav() async {
     if(busy || data['parked'] != true)return;
@@ -124,7 +140,7 @@ class _VehiclePageState extends State<VehiclePage> with WidgetsBindingObserver {
     final tracking=data['tracking']==true;
     final foreground=data['location']==true;
     final background=data['background']==true;
-    final exitAccess=data['notificationAccess']==true;
+    final ready=vehiclePermissionsReady(data);
     final rawWindows=data['waitingSubjects'];
     final waiting=rawWindows is List?rawWindows:const <dynamic>[];
     Widget card(Widget child,{VoidCallback? tap})=>Material(
@@ -178,7 +194,7 @@ class _VehiclePageState extends State<VehiclePage> with WidgetsBindingObserver {
               padding:EdgeInsets.zero,
               children:<Widget>[
                 line(Icons.radar_rounded,'Trạng thái',
-                    (!enabled)?'Chưa có lịch học':
+                    (!enabled)?'Chưa bật Find Bike':
                     (!foreground||!background)?'Cần cấp quyền định vị':
                     parked?'Đã đỗ xe · chờ thông báo ra cổng':
                     tracking?'Đang xác định vị trí đỗ':
@@ -248,27 +264,11 @@ class _VehiclePageState extends State<VehiclePage> with WidgetsBindingObserver {
                       ],
                   ],
                 ])),
-                if(!foreground||!background)...<Widget>[
-                  const SizedBox(height:12),
-                  line(Icons.gps_fixed_rounded,'Cấp quyền định vị','',
-                    tap:()async {
-                      try {
-                        if(!foreground) {
-                          await VehicleNative.permissions();
-                        } else {
-                          await VehicleNative.permissionSettings();
-                        }
-                      }catch(_){}
-                    }),
-                ],
                 const SizedBox(height:12),
-                if(!exitAccess)...<Widget>[
-                  const SizedBox(height:12),
-                  line(Icons.notifications_active_outlined,
-                    'Cấp quyền nhận thông báo Phenikaa Uni',
-                    'Cấp quyền Truy cập thông báo một lần để tự kết thúc lượt gửi xe.',
-                    tap:()=>VehicleNative.requestNotificationAccess()),
-                ],
+                line(Icons.admin_panel_settings_outlined, 'Thiết lập Find Bike',
+                    ready && enabled ? 'Đã cấp đủ quyền' : 'Bật tính năng và cấp quyền cần thiết',
+                    tap:()=>setup()),
+                const SizedBox(height:12),
                 line(Icons.two_wheeler_rounded,'Xe đã dừng',
                     parked?'Đã đỗ xe':'Chưa ghi nhận'),
                 const SizedBox(height:12),
