@@ -84,7 +84,7 @@ class KdaLineMotion extends ChangeNotifier {
     }
     for (final p in pulses) {
       final life = p.age / p.duration;
-      final amplitude = p.strength * math.sin(math.pi * .5 * math.min(1.0, life / .20)) * math.exp(-2.8 * life);
+      final amplitude = p.strength * math.sin(math.pi * .5 * math.min(1.0, life / .055)) * math.exp(-3.3 * life);
       // At higher energy split into counter-travelling, symmetric lobes.
       final split = (bass * .65 + climax * .65).clamp(0.0, 1.0);
       final travel = p.age * (.15 + .22 * climax);
