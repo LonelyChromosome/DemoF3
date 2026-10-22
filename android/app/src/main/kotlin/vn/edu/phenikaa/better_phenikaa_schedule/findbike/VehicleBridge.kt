@@ -5,7 +5,6 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
-import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
@@ -102,7 +101,8 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger,
     private fun snapshot(): Map<String, Any?> {
         val prefs=activity.getSharedPreferences("bpa_vehicle_demo_v1", 0)
         val blocked=VehiclePermissions.runtime(activity).filter {
-            prefs.getBoolean("asked_"+it, false) && !activity.shouldShowRequestPermissionRationale(it)
+            activity.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED &&
+                prefs.getBoolean("asked_"+it, false) && !activity.shouldShowRequestPermissionRationale(it)
         }
         return VehicleStore.snapshot(activity) + mapOf("blockedPermissions" to blocked)
     }

@@ -24,7 +24,7 @@ void main() {
     final next=find.byKey(const ValueKey('findbike-permission-next'));
     await tester.ensureVisible(next);await tick();
     debugPrint('FB_SETUP runtime start');
-    await tester.tap(next);
+    await tester.ensureVisible(next);await tester.tap(next);
     await until(() async {
       state=await VehicleNative.state();
       return state['enabled']==true && state['location']==true &&
@@ -34,14 +34,14 @@ void main() {
     expect(state['background'],isFalse);
     expect(state['notificationAccess'],isFalse);
     debugPrint('FB_SETUP runtime PASS; background start');
-    await tester.tap(next);
+    await tester.ensureVisible(next);await tester.tap(next);
     await until(() async => (await VehicleNative.state())['background']==true);
     await until(() async => find.text('Cho phép đọc thông báo').evaluate().isNotEmpty);
     debugPrint('FB_SETUP background PASS; listener start');
-    await tester.tap(next);
+    await tester.ensureVisible(next);await tester.tap(next);
     await until(() async => (await VehicleNative.state())['notificationAccess']==true);
     await until(() async => find.text('Hoàn tất').evaluate().isNotEmpty);
-    await tester.tap(next);await tick();
+    await tester.ensureVisible(next);await tester.tap(next);await tick();
     expect(find.byKey(const ValueKey('findbike-permission-setup')),findsNothing);
     state=await VehicleNative.state();expect(state['setupSeen'],isTrue);
     expect(state['tracking'],isFalse,reason:'No timetable means no tracking even after opt-in');

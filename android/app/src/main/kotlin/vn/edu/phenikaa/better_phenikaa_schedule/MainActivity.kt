@@ -39,13 +39,16 @@ class MainActivity : FlutterActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         runtimePermissions.result(requestCode)
-        if (requestCode == 8421 &&
-            grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            ExamChangeNotifier.publishPending(applicationContext)
-            val semester = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
-                .getString("flutter.better_phenikaa_current_semester_v1", null)
-            semester?.let { runCatching { ExamReminderScheduler.reconcile(applicationContext, it) } }
-        }
+
+    }
+
+    private fun notificationPermissionUpdated() {
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED) return
+        ExamChangeNotifier.publishPending(applicationContext)
+        val semester = getSharedPreferences(FLUTTER_PREFS, Context.MODE_PRIVATE)
+            .getString("flutter.better_phenikaa_current_semester_v1", null)
+        semester?.let { runCatching { ExamReminderScheduler.reconcile(applicationContext, it) } }
     }
 
     private val widgetHandler = Handler(Looper.getMainLooper())
@@ -502,7 +505,7 @@ class MainActivity : FlutterActivity() {
                                 if (Build.VERSION.SDK_INT >= 33 &&
                                     checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
                                     android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 8421)
+                                    runtimePermissions.request(8421, arrayOf(Manifest.permission.POST_NOTIFICATIONS), ::notificationPermissionUpdated)
                                 }
                                 result.success(null)
                             }
