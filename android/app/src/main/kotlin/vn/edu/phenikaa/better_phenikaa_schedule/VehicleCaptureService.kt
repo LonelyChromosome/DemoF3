@@ -102,6 +102,19 @@ object VehicleStore {
         }
         return next
     }
+    fun nextWindowExpiry(context:Context,now:Long=System.currentTimeMillis()):Long?{
+        val arr=scheduleData(context)
+        val rearmAt=pref(context).getLong("rearmAt",0L)
+        var expiry:Long?=null
+        for(i in 0 until arr.length()){
+            val item=arr.optJSONObject(i)?:continue
+            val start=item.optLong("start")
+            val end=item.optLong("end")
+            if(start<=rearmAt||now<start-120L*60_000L||now>end)continue
+            if(expiry==null||end<expiry)expiry=end
+        }
+        return expiry
+    }
     @Synchronized fun rearmReal(context:Context){
         pref(context).edit().remove("parkLat").remove("parkLon").remove("parkedAt")
             .putBoolean("tracking",false)
@@ -138,6 +151,11 @@ object VehicleStore {
     }
     fun isTracking(context: Context,demo:Boolean=false): Boolean =
         pref(context,demo).getBoolean("tracking",false)
+    @Synchronized fun expireUnparkedSession(context:Context){
+        if(hasParked(context))return
+        file(context).delete()
+        pref(context).edit().putBoolean("tracking",false).apply()
+    }
     @Synchronized fun append(context: Context, location: Location,demo:Boolean=false) {
         if (!isTracking(context,demo)) return
         file(context,demo).appendText(String.format(Locale.US,
@@ -236,7 +254,8 @@ object VehicleStore {
             "background" to backgroundLocation,
             "route" to route(context,demo),
             "waitingSubjects" to if(demo)emptyList<Map<String,Any>>() else scheduleRows(context),
-            "nextWaitStart" to (if(demo)null else nextWaitStart(context))
+            "nextWaitStart" to (if(demo)null else nextWaitStart(context)),
+            "notificationAccess" to VehicleExitNotificationListener.hasPermission(context)
         )
     }
 }
@@ -322,6 +341,14 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
     }
     override fun onLocationChanged(location:Location) {
         if (!VehicleStore.isTracking(this,demoMode)) return
+        // No bike detected by the end of its last eligible class:
+        // expire this *vehicle* tracking session, never edit attendance data.
+        if(!demoMode&&!VehicleStore.activeWindows(this)){
+            VehicleStore.expireUnparkedSession(this)
+            stopSelf()
+            VehicleLifecycle.armNext(this)
+            return
+        }
         if (location.hasAccuracy() && location.accuracy>45f) return
         if (location.time<=lastFixAt || !location.latitude.isFinite() || !location.longitude.isFinite()) return
         if (lastGoodFix!=null && location.distanceTo(lastGoodFix!!)>75f &&
@@ -336,6 +363,12 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
     }
     override fun onSensorChanged(event:SensorEvent) {
         if(event.sensor.type!=Sensor.TYPE_STEP_DETECTOR || !VehicleStore.isTracking(this,demoMode))return
+        if(!demoMode&&!VehicleStore.activeWindows(this)){
+            VehicleStore.expireUnparkedSession(this)
+            stopSelf()
+            VehicleLifecycle.armNext(this)
+            return
+        }
         onWalkingStep(SystemClock.elapsedRealtime())
     }
     private fun onWalkingStep(now:Long) {

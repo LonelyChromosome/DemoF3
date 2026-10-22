@@ -15,6 +15,9 @@ class VehicleNative {
   }
   static Future<void> enable() async { await channel.invokeMethod<dynamic>('enable'); }
   static Future<void> permissionSettings() async { await channel.invokeMethod<dynamic>('permissionSettings'); }
+  static Future<void> requestNotificationAccess() async {
+    await channel.invokeMethod<dynamic>('requestNotificationAccess');
+  }
   static Future<void> permissions() async { await channel.invokeMethod<dynamic>('permissions'); }
   static Future<void> schedule(List<Map<String, dynamic>> windows) async {
     await channel.invokeMethod<dynamic>('schedule', <String, Object>{'windows': windows});
@@ -149,6 +152,7 @@ class _VehiclePageState extends State<VehiclePage> {
     final tracking=data['tracking']==true;
     final foreground=data['location']==true;
     final background=data['background']==true;
+    final exitAccess=data['notificationAccess']==true;
     final testTracking=testData['tracking']==true;
     final testParked=testData['parked']==true;
     final rawWindows=data['waitingSubjects'];
@@ -253,6 +257,13 @@ class _VehiclePageState extends State<VehiclePage> {
                     }),
                 ],
                 const SizedBox(height:12),
+                if(!exitAccess)...<Widget>[
+                  const SizedBox(height:12),
+                  line(Icons.notifications_active_outlined,
+                    'Cấp quyền nhận thông báo Phenikaa Uni',
+                    'Cấp quyền Truy cập thông báo một lần để tự kết thúc lượt gửi xe.',
+                    tap:()=>VehicleNative.requestNotificationAccess()),
+                ],
                 line(Icons.two_wheeler_rounded,'Xe đã dừng',
                     parked?'Đã đỗ xe':'Chưa ghi nhận'),
                 const SizedBox(height:12),
@@ -338,6 +349,10 @@ class _VehiclePageState extends State<VehiclePage> {
                             onPressed:busy||!testTracking?null:()=>testEvent('testPark'),
                             icon:const Icon(Icons.location_on_outlined,size:18),
                             label:const Text('Chốt xe GPS')),
+                          OutlinedButton.icon(
+                            onPressed:busy||!testParked?null:()=>testEvent('testExit'),
+                            icon:const Icon(Icons.logout,size:18),
+                            label:const Text('Xe ra cổng [TEST]')),
                           OutlinedButton.icon(
                             onPressed:busy?null:()=>testEvent('testReset'),
                             icon:const Icon(Icons.restart_alt,size:18),

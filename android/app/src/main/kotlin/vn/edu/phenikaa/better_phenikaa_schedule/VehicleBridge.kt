@@ -37,6 +37,12 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
         try {
             when(call.method) {
                 "state" -> result.success(VehicleStore.snapshot(activity))
+                "notificationAccess" ->
+                    result.success(VehicleExitNotificationListener.hasPermission(activity))
+                "requestNotificationAccess" -> {
+                    activity.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    result.success(null)
+                }
                 "testState" -> {
                     requireTestPanel()
                     result.success(VehicleStore.snapshot(activity,true))
@@ -44,7 +50,7 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
                 "enable" -> {
                     VehicleStore.enabled(activity,true)
                     requestPermissions()
-                    registerFences(activity)
+                    VehicleLifecycle.armNext(activity)
                     result.success(VehicleStore.snapshot(activity))
                 }
                 "permissions" -> {
@@ -91,6 +97,13 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
                     activity.stopService(Intent(activity,VehicleCaptureService::class.java))
                     VehicleStore.sendParkNotification(activity,true)
                     result.success("Đã chốt xe bằng GPS thật. Đây là thao tác test thủ công.")
+                }
+                "testExit" -> {
+                    requireTestPanel()
+                    if(!VehicleStore.hasParked(activity,true))
+                        throw IllegalStateException("Phiên TEST chưa có xe đỗ")
+                    VehicleStore.rearmTest(activity)
+                    result.success("[TEST] Xe ra cổng: đã xóa lượt đỗ cũ, cập nhật hàng chờ TEST.")
                 }
                 "testReset" -> {
                     requireTestPanel()
@@ -208,7 +221,7 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
             val fences=gates.mapIndexed {i,gate ->
                 Geofence.Builder().setRequestId("bpa_vehicle_gate_"+i)
                     .setCircularRegion(gate[0],gate[1],100f)
-                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
+                    .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER)
                     .setExpirationDuration(Geofence.NEVER_EXPIRE)
                     .setNotificationResponsiveness(4000).build()
             }
@@ -230,10 +243,6 @@ class VehicleFenceReceiver:BroadcastReceiver(){
         if(!VehicleStore.isEnabled(context))return
         val event=GeofencingEvent.fromIntent(intent)?:return
         if(event.hasError())return
-        if(event.geofenceTransition==Geofence.GEOFENCE_TRANSITION_EXIT){
-            VehicleLifecycle.maybeRearm(context,event.triggeringLocation)
-            return
-        }
         if(event.geofenceTransition==Geofence.GEOFENCE_TRANSITION_ENTER)
             VehicleLifecycle.enter(context)
     }

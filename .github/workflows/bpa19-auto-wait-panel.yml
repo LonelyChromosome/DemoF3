@@ -1,8 +1,8 @@
-name: BPA 1.9 Auto Find Bike - Real and Test
+name: BPA 1.9 Notification Exit and Filtered Wait Queue
 on:
   push:
     branches:
-      - feature/bpa19-auto-schedule-live-test-v2
+      - feature/bpa19-notification-rearm-queue
     paths:
       - 'lib/**'
       - 'android/**'
@@ -45,13 +45,13 @@ jobs:
           "$APKSIGNER" verify --verbose "$APK"
           unzip -t "$APK" | tail -n 2
           mkdir -p build/verified
-          cp "$APK" build/verified/BPA-1.9-FindBike-Auto-TEST-REAL-arm64.apk
+          cp "$APK" build/verified/BPA-1.9-FindBike-Notify-Rearm-arm64.apk
           sha256sum build/verified/BPA-1.9-FindBike-Auto-TEST-REAL-arm64.apk > build/verified/SHA256.txt
           ls -lah build/verified/
       - name: Publish verified APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BPA-1.9-FindBike-AUTO-Test-Real-APK
+          name: BPA-1.9-Notify-Rearm-FilteredQueue-APK
           path: |
             build/verified/BPA-1.9-FindBike-Auto-TEST-REAL-arm64.apk
             build/verified/SHA256.txt

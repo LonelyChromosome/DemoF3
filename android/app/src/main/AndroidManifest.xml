@@ -30,7 +30,14 @@
             android:foregroundServiceType="location" />
         <receiver android:name=".VehicleFenceReceiver" android:exported="false" />
         <receiver android:name=".VehicleScheduleReceiver" android:exported="false" />
-        <receiver android:name=".VehicleMotionReceiver" android:exported="false" />
+        <service android:name=".VehicleExitNotificationListener"
+            android:exported="false"
+            android:label="BPA — Nhận xe ra cổng"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
         <receiver android:name=".VehicleBootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
