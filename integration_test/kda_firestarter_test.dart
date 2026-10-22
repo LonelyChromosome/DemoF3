@@ -22,9 +22,12 @@ void main(){
   await tester.pumpWidget(const BetterPhenikaaScheduleApp());await wait(4);
   expect(find.text('Theo ngày'),findsOneWidget);
   unawaited(showAppThemePicker(tester.element(find.text('Theo ngày'))));await wait(1);
-  final tile=find.byKey(const ValueKey('kda-firestarter-theme-tile'));await tester.ensureVisible(tile);await tester.tap(tile);await wait(.4);
+  final tile=find.byKey(const ValueKey('kda-firestarter-theme-tile'));
+  await tester.scrollUntilVisible(tile,250,scrollable:find.descendant(of:find.byType(CustomScrollView).last,matching:find.byType(Scrollable)).first,maxScrolls:20);
+  await tester.tap(tile);await wait(.4);
   expect(find.byKey(const ValueKey('kda-approved-fire-vfx')),findsOneWidget);
   await wait(14);final runtime=KdaRuntime.instance;
+  expect(tile,findsNothing,reason:'Activation closes Theme Settings before cinematic playback');
   expect(AppThemeController.instance.theme,AppThemeId.kdaFirestarter);expect(runtime.error,isNull);expect(runtime.ready,isTrue);expect(runtime.cardsVisible,isFalse);expect(find.text('Theo ngày'),findsNothing);expect((await state())['music'],isFalse);
   // Own-player FFT uses real decoded audio after adb grants the platform permission.
   var sawSignal=false;
