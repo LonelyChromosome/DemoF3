@@ -24,6 +24,13 @@ while time.monotonic() < end:
         if not log.exists() or 'act=android.content.pm.action.REQUEST_PERMISSIONS' not in log.read_text(errors='replace'):
             time.sleep(1)
             continue
+        if evidence.joinpath('permission-dialog.xml').exists():
+            package = adb('shell', 'dumpsys', 'package', 'vn.edu.phenikaa.better_phenikaa_schedule.kdatest').stdout
+            if 'android.permission.RECORD_AUDIO: granted=true' in package:
+                evidence.joinpath('permission-dialog.txt').write_text('Native first-entry audio dialog observed and actual RECORD_AUDIO grant confirmed after UI interaction.\n')
+                print('KDA native first-entry audio permission grant confirmed', flush=True)
+                accepted = True
+                break
         dump = adb('shell', 'uiautomator', 'dump', '/sdcard/kda-permission.xml')
         print('UI dump:', dump.returncode, dump.stdout.strip(), dump.stderr.strip(), flush=True)
         xml = adb('exec-out', 'cat', '/sdcard/kda-permission.xml').stdout
@@ -73,3 +80,4 @@ while time.monotonic() < end:
         raise SystemExit(0)
     time.sleep(.5)
 raise SystemExit('FFT probe did not start after permission dialog')
+
