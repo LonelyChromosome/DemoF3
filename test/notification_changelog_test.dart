@@ -22,9 +22,9 @@ void main() {
     expect(future.entries.join(' '), isNot(contains('Recap')));
   });
 
-  test('app startup shows the bundled 1.9 release log', () {
-    expect(NotificationChangelog.forInstalledVersion('').versionName, 'cooc.1.9');
-    expect(NotificationChangelog.forInstalledVersion('cooc.1.9').entries,
+  test('app startup shows the bundled 2.0 release log', () {
+    expect(NotificationChangelog.forInstalledVersion('').versionName, 'cooc.2.0');
+    expect(NotificationChangelog.forInstalledVersion('cooc.2.0').entries,
         ['KDA Starter prenium theme', 'Find Bike(beta)']);
   });
 }

@@ -343,7 +343,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       await prefs.remove(SemesterRetention.currentStartKey);
       await prefs.remove(SemesterRetention.previousKey);
       unawaited(publishVehicleSchedule(null));
-      await WidgetPublisher.clear();
+    await WidgetPublisher.clear();
       _semesterExpiryTimer?.cancel();
       if (mounted)
         setState(() {
@@ -603,7 +603,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         await prefs.remove(SemesterRetention.currentStartKey);
         await prefs.remove(SemesterRetention.previousKey);
         unawaited(publishVehicleSchedule(null));
-      await WidgetPublisher.clear();
+        await WidgetPublisher.clear();
         semester = null;
         raw = null;
       }
@@ -1194,7 +1194,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     await CurrentSemesterStore().clear();
     await SemesterDifferenceStore().clear();
     unawaited(publishVehicleSchedule(null));
-      await WidgetPublisher.clear();
+    await WidgetPublisher.clear();
     await prefs.clear();
     if (!kIsWeb) {
       await _widgetSessionChannel.invokeMethod<void>('clear');

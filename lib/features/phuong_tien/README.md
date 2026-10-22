@@ -1,4 +1,4 @@
-# Find Bike (beta) · BPA 1.9
+# Find Bike (beta) · BPA 2.0
 
 Giao diện Xe cộ lấy từ commit `551d830cd5f19ff78d0e453c6d1dc2f4dfd1b46f`. Không có panel giả lập trong app chính.
 

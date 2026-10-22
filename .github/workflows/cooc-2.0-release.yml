@@ -1,8 +1,8 @@
-name: BPA 1.9 - KDA and Find Bike production update
+name: BPA 2.0 - KDA and Find Bike production update
 on:
   push:
     branches: [main]
-    paths: [releases/cooc.1.9.json]
+    paths: [releases/cooc.2.0.json]
 permissions:
   contents: write
 jobs:
@@ -33,7 +33,7 @@ jobs:
     uses: ./.github/workflows/build-apk.yml
     secrets: inherit
     with:
-      version_name: cooc.1.9
+      version_name: cooc.2.0
       version_code: '80'
       notes: |-
         KDA Starter prenium theme

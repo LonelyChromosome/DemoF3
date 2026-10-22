@@ -12,9 +12,9 @@ final class NotificationChangelog {
 
   static NotificationChangelog forInstalledVersion(String installed) {
     final version = installed.trim();
-    if (version.isEmpty || version == 'cooc.1.9') {
+    if (version.isEmpty || version == 'cooc.2.0') {
       return const NotificationChangelog(
-        versionName: 'cooc.1.9',
+        versionName: 'cooc.2.0',
         entries: ['KDA Starter prenium theme', 'Find Bike(beta)'],
       );
     }

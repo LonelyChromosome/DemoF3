@@ -61,6 +61,8 @@ jobs:
             dist/
             build/app/reports/tests/
             build/app/test-results/
+            build/findbike/reports/tests/
+            build/findbike/test-results/
           retention-days: 30
           overwrite: true
   emulator:
