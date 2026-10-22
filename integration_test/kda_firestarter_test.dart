@@ -37,17 +37,6 @@ void main(){
   debugPrint('KDA activation: theme=${AppThemeController.instance.theme}, error=${runtime.error}, native=${await state()}');
   expect(tile,findsNothing,reason:'Activation closes Theme Settings before cinematic playback');
   expect(AppThemeController.instance.theme,AppThemeId.kdaFirestarter);expect(runtime.error,isNull);await runtime.waitForFrame();expect(runtime.ready,isTrue);expect(runtime.cardsVisible,isFalse);expect(find.text('Theo ngày'),findsNothing);expect((await state())['music'],isFalse);
-  // Own-player FFT uses real decoded audio after adb grants the platform permission.
-  var sawSignal=false;
-  void observeAudio(){if(runtime.spectrum.value.any((v)=>v>.001))sawSignal=true;}
-  runtime.spectrum.addListener(observeAudio);
-  await runtime.save(runtime.config.copyWith(music:true));await wait(3);
-  runtime.spectrum.removeListener(observeAudio);
-  debugPrint('KDA audio: permission=${runtime.permission}, signal=$sawSignal, ${runtime.captureStatus}');
-  expect(runtime.permission,isTrue);expect(sawSignal,isTrue,reason:runtime.captureStatus);
-  await runtime.save(runtime.config.copyWith(music:false,visualizer:false));await wait(.5);
-  expect(runtime.spectrum.value.every((v)=>v==0),isTrue);
-  await runtime.save(runtime.config.copyWith(visualizer:true));
   final before=((await state())['positionMs'] as num).toInt();
   await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(1);expect(find.text('Theo ngày'),findsOneWidget);
   await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(1);expect(find.text('Theo ngày'),findsNothing);expect(((await state())['positionMs'] as num).toInt(),greaterThan(before));
@@ -57,6 +46,19 @@ void main(){
   while(DateTime.now().isBefore(end)){final s=await state();if(s['holding']==true)held=true;if((s['loops'] as num).toInt()>=1)break;await wait(.5);}
   expect(held,isTrue);expect((await state())['loops'],greaterThanOrEqualTo(1));await wait(2);expect(((await state())['positionMs'] as num).toInt(),lessThan(15000));expect((await state())['playing'],isTrue);
   debugPrint('KDA full loop passed: ${await state()}');
+  // Own-player FFT uses real decoded audio after adb grants the platform permission.
+  var sawSignal=false;
+  void observeAudio(){if(runtime.spectrum.value.any((v)=>v>.001))sawSignal=true;}
+  await runtime.save(runtime.config.copyWith(music:true));
+  runtime.spectrum.addListener(observeAudio);
+  final signalDeadline=DateTime.now().add(const Duration(seconds:12));
+  while(!sawSignal && DateTime.now().isBefore(signalDeadline)){await wait(.2);}
+  runtime.spectrum.removeListener(observeAudio);
+  debugPrint('KDA audio: permission=${runtime.permission}, signal=$sawSignal, ${runtime.captureStatus}, native=${await state()}');
+  expect(runtime.permission,isTrue);expect(sawSignal,isTrue,reason:runtime.captureStatus);
+  await runtime.save(runtime.config.copyWith(music:false,visualizer:false));await wait(.5);
+  expect(runtime.spectrum.value.every((v)=>v==0),isTrue);
+  await runtime.save(runtime.config.copyWith(visualizer:true));
   await AppThemeController.instance.select(AppThemeId.classic);await wait(1);expect(find.byKey(const ValueKey('kda-toggle-cards')),findsNothing);expect((await state())['enabled'],isFalse);
   // Leave persisted real settings for installing and opening the delivered APK.
   await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);

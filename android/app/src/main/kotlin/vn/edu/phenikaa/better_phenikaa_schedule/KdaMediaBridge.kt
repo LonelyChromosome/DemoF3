@@ -116,7 +116,7 @@ internal class KdaMediaBridge(private val activity: Activity, private val engine
   val session=if(music&&prepared)player?.audioSessionId?:0 else 0
   if(capture!=null&&captureSession==session)return
   releaseCapture()
-  try{val v=Visualizer(session);capture=v;v.captureSize=Visualizer.getCaptureSizeRange()[1].coerceAtMost(1024);v.scalingMode=Visualizer.SCALING_MODE_AS_PLAYED
+  try{val v=Visualizer(session);capture=v;v.captureSize=Visualizer.getCaptureSizeRange()[1].coerceAtMost(1024);v.scalingMode=Visualizer.SCALING_MODE_NORMALIZED
    v.setDataCaptureListener(object: Visualizer.OnDataCaptureListener{
     override fun onWaveFormDataCapture(v: Visualizer?,bytes: ByteArray?,rate: Int)=Unit
     override fun onFftDataCapture(v: Visualizer?,fft: ByteArray?,rate: Int){if(fft==null)return;val bands=KdaPlaybackPolicy.fftBands(fft,rate/1000.0);handler.post{if(enabled&&foreground&&capture===v)sink?.success(mapOf("type" to "fft","bands" to bands))}}
@@ -125,7 +125,7 @@ internal class KdaMediaBridge(private val activity: Activity, private val engine
   }catch(_:Exception){releaseCapture();captureStatus="Android chưa cấp tín hiệu nguồn này; có thể bật nhạc FIRESTARTER để dùng nguồn trong app."}
  }
  private fun releaseCapture(){runCatching{capture?.enabled=false};runCatching{capture?.release()};capture=null;captureSession=null;sink?.success(mapOf("type" to "fft","bands" to List(48){0.0}))}
- private fun snapshot(): Map<String,Any?> = mapOf("type" to "state","textureId" to texture?.id(),"width" to width,"height" to height,"ready" to ready,"error" to error,"permission" to permitted(),"captureStatus" to captureStatus,"positionMs" to runCatching{if(prepared)player?.currentPosition?:savedPosition else savedPosition}.getOrDefault(savedPosition),"holding" to holding,"foreground" to foreground,"loops" to loops,"playing" to runCatching{prepared&&player?.isPlaying==true}.getOrDefault(false),"music" to music,"enabled" to enabled)
+ private fun snapshot(): Map<String,Any?> = mapOf("type" to "state","textureId" to texture?.id(),"width" to width,"height" to height,"ready" to ready,"error" to error,"permission" to permitted(),"captureStatus" to captureStatus,"positionMs" to runCatching{if(prepared)player?.currentPosition?:savedPosition else savedPosition}.getOrDefault(savedPosition),"holding" to holding,"foreground" to foreground,"loops" to loops,"playing" to runCatching{prepared&&player?.isPlaying==true}.getOrDefault(false),"music" to music,"enabled" to enabled,"audioFocus" to focusOwned,"musicVolume" to audio.getStreamVolume(AudioManager.STREAM_MUSIC))
  private fun state(){sink?.success(snapshot())}
  fun close(){enabled=false;serial++;handler.removeCallbacksAndMessages(null);releaseCapture();abandonFocus();player?.release();surface?.release();texture?.release();player=null;surface=null;texture=null;permissionResult?.success(false);permissionResult=null;methods.setMethodCallHandler(null);events.setStreamHandler(null);sink=null}
  companion object{const val PERMISSION=8463;private const val VIDEO="flutter_assets/assets/kda/firestarter.mp4";private const val AUDIO="flutter_assets/assets/kda/music.m4a"}

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p build/kda-evidence
+# Give the real FFT test a known, non-muted media stream on this emulator only.
+adb shell cmd media_session volume --stream 3 --set 10
 adb logcat -c
 adb logcat -v threadtime > build/kda-evidence/logcat.txt &
 log_pid=$!
