@@ -1402,6 +1402,7 @@ class _PresetCard extends StatelessWidget {
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
+                  image: id == AppThemeId.kdaFirestarter ? const DecorationImage(image: AssetImage('assets/kda/stacked.png'), fit: BoxFit.cover) : null,
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,

@@ -187,6 +187,16 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val radius = 12f * density
+        if (theme.key == KdaWidgetImages.THEME) {
+            val rect = RectF(.7f*density,.7f*density,width-.7f*density,height-.7f*density)
+            canvas.drawRoundRect(rect,radius,radius,Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader=LinearGradient(0f,0f,width.toFloat(),height.toFloat(),0xA0140A20.toInt(),0x8C1C0C28.toInt(),Shader.TileMode.CLAMP)
+            })
+            canvas.drawRoundRect(rect,radius,radius,Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color=0x90F1A2CD.toInt();style=Paint.Style.STROKE;strokeWidth=.7f*density
+            })
+            return bitmap
+        }
         if(theme.key=="water_cooling"){
             val rect=RectF(0f,0f,width.toFloat(),height.toFloat());canvas.drawRoundRect(rect,radius,radius,Paint(Paint.ANTI_ALIAS_FLAG).apply{shader=LinearGradient(0f,0f,width.toFloat(),height.toFloat(),0x843C2058.toInt(),0x783B1835,Shader.TileMode.CLAMP)})
             WaterWidgetRenderer.card(canvas,rect,configOverride ?: WidgetThemeV14.read(context),density,RectF(0f,0f,1f,1f));return bitmap
@@ -742,8 +752,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             DEFAULT_WIDGET_WIDTH_DP, DEFAULT_WIDGET_HEIGHT_DP)
         val width = size.width.roundToInt().coerceAtLeast(1)
         val height = size.height.roundToInt().coerceAtLeast(1)
-        val oldFrame = renderWidgetStackCover(context, before, width, height)
-        val nextFrame = renderWidgetStackCover(context, after, width, height)
+        val oldIndex = WidgetSnapshotStore.readOverview(context,id,!examMode).indexOfFirst { it.id == before.id }.coerceAtLeast(0)
+        val nextIndex = WidgetSnapshotStore.read(context,id).items.indexOfFirst { it.id == after.id }.coerceAtLeast(0)
+        val oldFrame = renderWidgetStackCover(context, before, width, height, photoIndex = oldIndex)
+        val nextFrame = renderWidgetStackCover(context, after, width, height, photoIndex = nextIndex)
         val count = 13
         repeat(count) { frame ->
             Handler(Looper.getMainLooper()).postDelayed({
