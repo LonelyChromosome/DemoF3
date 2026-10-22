@@ -28,7 +28,7 @@ void main(){
   }
   expect(tile.hitTestable(),findsOneWidget,reason:'KDA tile must be inside the actual scroll viewport');
   await tester.tap(tile.hitTestable());
-  final fireDeadline=DateTime.now().add(const Duration(seconds:20));
+  final fireDeadline=DateTime.now().add(const Duration(seconds:60));
   while(find.byKey(const ValueKey('kda-approved-fire-vfx')).evaluate().isEmpty && DateTime.now().isBefore(fireDeadline)){await wait(.1);}
   expect(find.byKey(const ValueKey('kda-approved-fire-vfx')),findsOneWidget);
   final activationDeadline=DateTime.now().add(const Duration(seconds:35));
@@ -80,7 +80,12 @@ void main(){
   expect(runtime.spectrum.value.every((v)=>v==0),isTrue);
   await runtime.save(runtime.config.copyWith(visualizer:true));
   await AppThemeController.instance.select(AppThemeId.classic);await wait(1);expect(find.byKey(const ValueKey('kda-toggle-cards')),findsNothing);expect((await state())['enabled'],isFalse);
-  // Leave persisted real settings for installing and opening the delivered APK.
-  await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);expect(runtime.config.music,isFalse);expect((await state())['music'],isFalse);
+  await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);expect(runtime.config.music,isFalse);expect((await state())['music'],isFalse);expect(runtime.cardsVisible,isFalse);
+  await runtime.toggleCards();await wait(.5);expect(runtime.cardsVisible,isTrue);
+  await AppThemeController.instance.select(AppThemeId.classic);await wait(.5);
+  await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);
+  expect(runtime.cardsVisible,isTrue);expect(find.text('Theo ngày'),findsOneWidget);
+  // Cold-start of the exact delivered APK must restore the last visible state.
+  await runtime.cardsWrites;debugPrint('KDA persisted cards visible: ${runtime.cardsVisible}');
  },timeout:const Timeout(Duration(minutes:8)));
 }

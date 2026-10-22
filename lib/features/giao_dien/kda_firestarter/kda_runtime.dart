@@ -19,6 +19,7 @@ class KdaRuntime extends ChangeNotifier {
   static const events=EventChannel('better_phenikaa/kda_events');
   static const preferenceKey='bpa_kda_firestarter_v1';
   static const firstEntryKey='bpa_kda_firestarter_first_entry_v2';
+  static const cardsPreferenceKey='bpa_kda_firestarter_cards_visible_v1';
   KdaConfig config=const KdaConfig();
   bool enabled=false,cardsVisible=false,ready=false,permission=false,foreground=true;
   int? textureId;
@@ -30,11 +31,13 @@ class KdaRuntime extends ChangeNotifier {
   Future<void>? loading;
   Future<void>? firstEntry;
   Future<void> queue=Future.value();
+  Future<void> cardsWrites=Future.value();
   Completer<void>? frame;
   Future<void> load()=>loading??=_load();
   Future<void> _load() async {
     final p=await SharedPreferences.getInstance();
     try {final raw=p.getString(preferenceKey);if(raw!=null)config=KdaConfig.fromJson(jsonDecode(raw) as Map<String,dynamic>);} on Object {config=const KdaConfig();}
+    cardsVisible=p.getBool(cardsPreferenceKey)??false;
     notifyListeners();
   }
   /// Ask once on entry, before the burn starts; later entries respect saved music.
@@ -56,7 +59,7 @@ class KdaRuntime extends ChangeNotifier {
   }
   Future<void> activate(bool value) async {
     if(enabled==value)return;
-    enabled=value;cardsVisible=false;ready=false;error=null;textureId=null;
+    enabled=value;ready=false;error=null;textureId=null;
     if(frame!=null&&!frame!.isCompleted)frame!.complete();
     frame=value?Completer<void>():null;
     notifyListeners();await load();if(value)await prepareFirstEntry();
@@ -88,6 +91,14 @@ class KdaRuntime extends ChangeNotifier {
   void settle(){if((ready||error!=null||!config.video)&&frame!=null&&!frame!.isCompleted)frame!.complete();notifyListeners();}
   Future<void> waitForFrame() async {if(ready||error!=null||!config.video)return;await (frame?.future??Future<void>.value()).timeout(const Duration(seconds:12),onTimeout:(){error='Video chưa sẵn sàng; đang dùng ảnh nền';notifyListeners();});}
   Future<bool> requestPermission() async {try {permission=await channel.invokeMethod<bool>('permission')??false;notifyListeners();return permission;}on PlatformException{return false;}on MissingPluginException{return false;}}
-  void toggleCards(){cardsVisible=!cardsVisible;notifyListeners();}
+  Future<void> toggleCards(){
+    cardsVisible=!cardsVisible;final visible=cardsVisible;notifyListeners();
+    // Serialize quick taps so the last choice is the last persisted value.
+    cardsWrites=cardsWrites.then((_) async {
+      final p=await SharedPreferences.getInstance();
+      if(!await p.setBool(cardsPreferenceKey,visible))debugPrint('Không lưu được trạng thái card KDA');
+    }).catchError((Object e){debugPrint('Không lưu được trạng thái card KDA: $e');});
+    return cardsWrites;
+  }
   void setForeground(bool value){foreground=value;if(!value)spectrum.value=List.filled(48,0);notifyListeners();}
 }

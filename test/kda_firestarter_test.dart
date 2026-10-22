@@ -6,6 +6,7 @@ import 'package:better_phenikaa_schedule/features/giao_dien/kda_firestarter/kda_
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 void main(){
+ setUp((){SharedPreferences.setMockInitialValues({});});
  testWidgets('cinematic control works outside the Navigator overlay',(tester) async {
   final r=KdaRuntime.instance;
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(KdaRuntime.channel,(_) async=>{'type':'state','ready':true});
@@ -36,6 +37,15 @@ void main(){
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(KdaRuntime.channel,null);
   r.loading=null;r.config=const KdaConfig();
  });
+ testWidgets('last card choice survives reload and rapid toggles',(tester) async {
+  final r=KdaRuntime.instance;r.loading=null;await r.load();expect(r.cardsVisible,isFalse);
+  await r.toggleCards();expect(r.cardsVisible,isTrue);
+  r.cardsVisible=false;r.loading=null;await r.load();expect(r.cardsVisible,isTrue);
+  await Future.wait([r.toggleCards(),r.toggleCards(),r.toggleCards()]);
+  expect(r.cardsVisible,isFalse);
+  r.cardsVisible=true;r.loading=null;await r.load();expect(r.cardsVisible,isFalse);
+  r.loading=null;r.ready=true;
+ });
  testWidgets('compact settings have controls without descriptive subtitles',(tester) async {
   final r=KdaRuntime.instance;r.enabled=false;r.config=const KdaConfig();r.permission=true;
   await tester.pumpWidget(const MaterialApp(home:Scaffold(body:KdaSettings())));
@@ -45,7 +55,7 @@ void main(){
   expect(find.textContaining('Android yêu cầu'),findsNothing);
   await tester.pumpWidget(const SizedBox());r.permission=false;
  });
- testWidgets('lazy cinematic gate retains opened schedule state',(t) async {final r=KdaRuntime.instance;r.cardsVisible=false;var builds=0;await t.pumpWidget(MaterialApp(home:Scaffold(body:KdaContentGate(enabled:true,builder:(_){builds++;return const _Counter();}))));expect(builds,0);r.toggleCards();await t.pumpAndSettle();await t.tap(find.text('count 0'));await t.pump();expect(find.text('count 1'),findsOneWidget);r.toggleCards();await t.pumpAndSettle();expect(find.text('count 1'),findsNothing);r.toggleCards();await t.pumpAndSettle();expect(find.text('count 1'),findsOneWidget);await t.pumpWidget(const SizedBox());r.cardsVisible=false;});
+ testWidgets('lazy cinematic gate retains opened schedule state',(t) async {final r=KdaRuntime.instance;r.cardsVisible=false;r.ready=true;var builds=0;await t.pumpWidget(MaterialApp(home:Scaffold(body:KdaContentGate(enabled:true,builder:(_){builds++;return const _Counter();}))));expect(builds,0);r.toggleCards();await t.pumpAndSettle();await t.tap(find.text('count 0'));await t.pump();expect(find.text('count 1'),findsOneWidget);r.toggleCards();await t.pumpAndSettle();expect(find.text('count 1'),findsNothing);r.toggleCards();await t.pumpAndSettle();expect(find.text('count 1'),findsOneWidget);await t.pumpWidget(const SizedBox());r.cardsVisible=false;});
 }
 class _Counter extends StatefulWidget {const _Counter();@override State<_Counter> createState()=>_CounterState();}
 class _CounterState extends State<_Counter>{int count=0;@override Widget build(BuildContext context)=>TextButton(onPressed:()=>setState(()=>count++),child:Text('count $count'));}

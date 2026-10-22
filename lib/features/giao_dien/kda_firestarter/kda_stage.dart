@@ -40,7 +40,7 @@ class _KdaContentGateState extends State<KdaContentGate> {
     if(!widget.enabled)return widget.builder(context);
     final r=KdaRuntime.instance;
     return AnimatedBuilder(animation:r,builder:(context,_){
-      final visible=r.cardsVisible;
+      final visible=r.cardsVisible&&(r.ready||!r.config.video||r.error!=null);
       if(visible){content=widget.builder(context);hidden=false;}
       if(content==null)return const SizedBox.expand();
       return Offstage(

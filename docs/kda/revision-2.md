@@ -2,6 +2,7 @@
 
 Changes requested after phone testing:
 
+- Last hidden/shown card choice is persisted across app restarts and theme changes; only first use defaults to hidden. Restored cards wait for the first video frame.
 - Spectrum has a single baseline at its bottom; all frequency bars extend upwards.
 - Theme Settings shows a `Tùy chỉnh theme` button immediately below the custom theme creation button while KDA is selected. The compact control sheet removes technical/descriptive subtitles.
 - First entry requests Android RECORD_AUDIO and enables music automatically. A persisted first-entry marker prevents repeat prompts and subsequent music choices are respected. This also initializes the first entry after upgrading from the previous test APK. Denying audio permission does not prevent media playback; a concise retry button remains in theme controls.
