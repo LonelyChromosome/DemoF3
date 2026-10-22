@@ -22,8 +22,7 @@ internal class KdaMediaBridge(private val activity: Activity, private val engine
  private val attributes=AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()
  private var sink: EventChannel.EventSink?=null
  private var player: MediaPlayer?=null
- private var texture: TextureRegistry.SurfaceTextureEntry?=null
- private var surface: Surface?=null
+ private var texture: TextureRegistry.SurfaceProducer?=null
  private var capture: Visualizer?=null
  private var captureSession: Int?=null
  private var permissionResult: MethodChannel.Result?=null
@@ -61,30 +60,42 @@ internal class KdaMediaBridge(private val activity: Activity, private val engine
  private fun method(call: MethodCall,result: MethodChannel.Result){when(call.method){
   "configure"->runCatching {configure(call.argument<Boolean>("enabled")==true,call.argument<Boolean>("video")!=false,call.argument<Boolean>("music")==true,call.argument<Boolean>("visualizer")!=false);result.success(snapshot())}.onFailure{error=it.message;state();result.error("kda_media",it.message,null)}
   "permission"->{if(permitted())result.success(true)else if(permissionResult!=null)result.success(false)else{permissionResult=result;activity.requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),PERMISSION)}}
+  "seek"->{if(!enabled||!prepared){result.error("not_ready","Video chưa sẵn sàng",null)}else{handler.removeCallbacks(loop);holding=false;remaining=KdaPlaybackPolicy.HOLD_MS;seeking=true;val position=(call.argument<Number>("positionMs")?.toLong()?:0L).coerceIn(0L,((player?.duration?:1)-1).coerceAtLeast(0).toLong());if(Build.VERSION.SDK_INT>=26)player?.seekTo(position,MediaPlayer.SEEK_CLOSEST)else player?.seekTo(position.toInt());result.success(snapshot())}}
   "state"->result.success(snapshot())
   else->result.notImplemented()
  }}
  fun permissionResult(code: Int){if(code!=PERMISSION)return;permissionResult?.success(permitted());permissionResult=null;refreshCapture();state()}
  private fun configure(active: Boolean,showVideo: Boolean,playMusic: Boolean,showSpectrum: Boolean){
   val entering=active&&!enabled;enabled=active;video=showVideo;music=playMusic;spectrum=showSpectrum
-  if(!enabled){serial++;reset();player?.release();player=null;surface?.release();surface=null;texture?.release();texture=null;savedPosition=0;abandonFocus();state();return}
+  if(!enabled){serial++;reset();player?.release();player=null;releaseVideoSurface();savedPosition=0;abandonFocus();state();return}
   if(entering){savedPosition=0;loops=0;error=null}
   val target=if(video)VIDEO else if(music)AUDIO else null
   if(source!=target||(target!=null&&player==null)){
    if(prepared)savedPosition=runCatching{player?.currentPosition?:savedPosition}.getOrDefault(savedPosition)
-   reset();source=target;if(target!=null)open(target)
+   reset();if(target!=VIDEO)releaseVideoSurface();source=target;if(target!=null)open(target)
   }
   volume();if(target==null){ready=true;abandonFocus()};start();refreshCapture();state()
  }
  private fun reset(){handler.removeCallbacks(loop);releaseCapture();runCatching{player?.reset()};prepared=false;ready=false;source=null;holding=false;seeking=false}
+ private fun releaseVideoSurface(){texture?.setCallback(null);texture?.release();texture=null}
+ private fun videoSurface(): Surface {
+  if(texture==null){
+   val output=engine.renderer.createSurfaceProducer();texture=output;output.setSize(width,height)
+   output.setCallback(object: TextureRegistry.SurfaceProducer.Callback {
+    override fun onSurfaceCleanup(){if(texture!==output)return;runCatching{if(prepared)player?.pause();player?.setSurface(null)};ready=false;releaseCapture();state()}
+    override fun onSurfaceAvailable(){if(texture===output&&enabled&&video){runCatching{player?.setSurface(output.surface)};start();state()}}
+   })
+  }
+  return texture!!.surface
+ }
  private fun open(asset: String){
   val generation=++serial;val p=player?:MediaPlayer().also{player=it};p.setAudioAttributes(attributes)
-  if(asset==VIDEO){if(texture==null){texture=engine.renderer.createSurfaceTexture();surface=Surface(texture!!.surfaceTexture())};p.setSurface(surface)}else p.setSurface(null)
+  if(asset==VIDEO){p.setSurface(videoSurface())}else p.setSurface(null)
   activity.assets.openFd(asset).use{p.setDataSource(it.fileDescriptor,it.startOffset,it.length)}
   p.setOnPreparedListener{
    if(generation!=serial||!enabled)return@setOnPreparedListener
    prepared=true;error=null;width=if(video)p.videoWidth.coerceAtLeast(1)else 1440;height=if(video)p.videoHeight.coerceAtLeast(1)else 2560
-   if(video)texture?.surfaceTexture()?.setDefaultBufferSize(width,height);ready=!video;volume()
+   if(video){texture?.let{output->if(output.width!=width||output.height!=height){output.setSize(width,height);p.setSurface(output.surface)}}};ready=!video;volume()
    if(savedPosition>0&&savedPosition<p.duration){seeking=true;p.seekTo(savedPosition)}else start()
    refreshCapture();state()
   }
@@ -125,9 +136,9 @@ internal class KdaMediaBridge(private val activity: Activity, private val engine
   }catch(_:Exception){releaseCapture();captureStatus="Android chưa cấp tín hiệu nguồn này; có thể bật nhạc FIRESTARTER để dùng nguồn trong app."}
  }
  private fun releaseCapture(){runCatching{capture?.enabled=false};runCatching{capture?.release()};capture=null;captureSession=null;sink?.success(mapOf("type" to "fft","bands" to List(48){0.0}))}
- private fun snapshot(): Map<String,Any?> = mapOf("type" to "state","textureId" to texture?.id(),"width" to width,"height" to height,"ready" to ready,"error" to error,"permission" to permitted(),"captureStatus" to captureStatus,"positionMs" to runCatching{if(prepared)player?.currentPosition?:savedPosition else savedPosition}.getOrDefault(savedPosition),"holding" to holding,"foreground" to foreground,"loops" to loops,"playing" to runCatching{prepared&&player?.isPlaying==true}.getOrDefault(false),"music" to music,"enabled" to enabled,"audioFocus" to focusOwned,"musicVolume" to audio.getStreamVolume(AudioManager.STREAM_MUSIC))
+ private fun snapshot(): Map<String,Any?> = mapOf("type" to "state","textureId" to texture?.id(),"width" to width,"height" to height,"ready" to ready,"error" to error,"permission" to permitted(),"captureStatus" to captureStatus,"prepared" to prepared,"video" to video,"seeking" to seeking,"durationMs" to runCatching{if(prepared)player?.duration?:0 else 0}.getOrDefault(0),"positionMs" to runCatching{if(prepared)player?.currentPosition?:savedPosition else savedPosition}.getOrDefault(savedPosition),"holding" to holding,"foreground" to foreground,"loops" to loops,"playing" to runCatching{prepared&&player?.isPlaying==true}.getOrDefault(false),"music" to music,"enabled" to enabled,"audioFocus" to focusOwned,"musicVolume" to audio.getStreamVolume(AudioManager.STREAM_MUSIC))
  private fun state(){sink?.success(snapshot())}
- fun close(){enabled=false;serial++;handler.removeCallbacksAndMessages(null);releaseCapture();abandonFocus();player?.release();surface?.release();texture?.release();player=null;surface=null;texture=null;permissionResult?.success(false);permissionResult=null;methods.setMethodCallHandler(null);events.setStreamHandler(null);sink=null}
+ fun close(){enabled=false;serial++;handler.removeCallbacksAndMessages(null);releaseCapture();abandonFocus();player?.release();releaseVideoSurface();player=null;permissionResult?.success(false);permissionResult=null;methods.setMethodCallHandler(null);events.setStreamHandler(null);sink=null}
  companion object{const val PERMISSION=8463;private const val VIDEO="flutter_assets/assets/kda/firestarter.mp4";private const val AUDIO="flutter_assets/assets/kda/music.m4a"}
 }
 internal object KdaPlaybackPolicy {

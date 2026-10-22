@@ -21,7 +21,7 @@ class _KdaStageState extends State<KdaStage> with WidgetsBindingObserver {
     return Stack(fit:StackFit.expand,children:[
       const ColoredBox(color:Color(0xFF08040D)),
       Positioned.fill(child:Image.asset('assets/kda/stacked.png',fit:BoxFit.cover,gaplessPlayback:true)),
-      if(runtime.config.video&&runtime.ready&&runtime.textureId!=null)Positioned.fill(child:IgnorePointer(child:ClipRect(child:FittedBox(fit:BoxFit.cover,child:SizedBox(width:runtime.width.toDouble(),height:runtime.height.toDouble(),child:Texture(textureId:runtime.textureId!)))))),
+      if(runtime.config.video&&runtime.textureId!=null)Positioned.fill(child:IgnorePointer(child:ClipRect(child:FittedBox(fit:BoxFit.cover,child:SizedBox(width:runtime.width.toDouble(),height:runtime.height.toDouble(),child:Opacity(opacity:runtime.ready?1:.001,child:Texture(textureId:runtime.textureId!))))))),
       widget.child,
       if(runtime.config.visualizer)Positioned(left:24,right:24,bottom:MediaQuery.paddingOf(context).bottom+12,child:IgnorePointer(child:TickerMode(enabled:runtime.foreground,child:Center(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:380),child:KdaSpectrumDock(runtime:runtime)))))),
       Positioned(right:12,top:MediaQuery.paddingOf(context).top+8,child:Material(color:const Color(0xA0180C22),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24),side:const BorderSide(color:Color(0x99E184BE),width:.7)),child:Semantics(label:runtime.cardsVisible?'Ẩn giao diện BPA':'Hiện giao diện BPA',button:true,child:IconButton(key:const ValueKey('kda-toggle-cards'),onPressed:runtime.toggleCards,color:const Color(0xFFF6DEEF),icon:Icon(runtime.cardsVisible?Icons.visibility_off_outlined:Icons.dashboard_outlined))))),

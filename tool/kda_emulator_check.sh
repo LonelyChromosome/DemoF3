@@ -7,12 +7,17 @@ adb logcat -c
 adb logcat -v threadtime > build/kda-evidence/logcat.txt &
 log_pid=$!
 (
-  for attempt in $(seq 1 360); do
-    if adb shell pm path vn.edu.phenikaa.better_phenikaa_schedule.kdatest | grep -q package:; then
+  granted=false
+  for attempt in $(seq 1 720); do
+    if [[ "$granted" == false ]] && adb shell pm path vn.edu.phenikaa.better_phenikaa_schedule.kdatest | grep -q package:; then
       adb shell pm grant vn.edu.phenikaa.better_phenikaa_schedule.kdatest android.permission.RECORD_AUDIO
+      granted=true
+    fi
+    if [[ -f build/kda-evidence/integration.txt ]] && grep -q 'KDA FFT started' build/kda-evidence/integration.txt; then
+      adb shell cmd media_session volume --stream 3 --set 10
       break
     fi
-    sleep 2
+    sleep 1
   done
 ) > build/kda-evidence/lifecycle.txt 2>&1 &
 cycle_pid=$!
