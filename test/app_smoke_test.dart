@@ -1,3 +1,4 @@
+import 'package:better_phenikaa_schedule/app/bpa_pen_trace_splash.dart';
 import 'package:better_phenikaa_schedule/app/app.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/semester_data.dart';
@@ -13,7 +14,7 @@ void main() {
 
     await tester.pumpWidget(const BetterPhenikaaScheduleApp());
 
-    expect(find.text('Better Phenikaa App'), findsOneWidget);
+    expect(find.byType(BpaPenTraceSplash), findsOneWidget);
     await tester.pump(const Duration(milliseconds: 700));
     await tester.pump(const Duration(seconds: 1));
 
@@ -126,7 +127,8 @@ void main() {
     });
     await tester.pumpWidget(const BetterPhenikaaScheduleApp());
     await tester.pump(const Duration(milliseconds: 700));
-    await tester.pumpAndSettle();
+    // The stale-sync hint can pulse continuously; wait for startup frames.
+    for (var frame=0;frame<20;frame++) { await tester.pump(const Duration(milliseconds:100)); }
     expect(find.text('Theo ngày'), findsOneWidget);
     expect(find.text('Thiết kế web nâng cao'), findsAtLeastNWidgets(1));
     debugDefaultTargetPlatformOverride = null;

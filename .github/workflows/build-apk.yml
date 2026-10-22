@@ -1,8 +1,35 @@
 name: Feature Updater - signed APK release
 
-# Manual only. A merge into main never publishes or changes update metadata.
+# Manual or explicit versioned release wrapper; protected production signing remains mandatory.
 on:
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Target version, e.g. cooc.1.2"
+        required: true
+        type: string
+        default: "cooc.1.2"
+      version_code:
+        description: "Android versionCode (1.1=30; 1.2=32; later versions higher)"
+        required: true
+        type: string
+        default: "32"
+      notes:
+        description: "Release notes (500 characters maximum)"
+        required: true
+        type: string
+        default: "Cập nhật Better Phenikaa cooc.1.2."
+      publish:
+        description: "Publish to updater channel after signed APK validation"
+        type: boolean
+        default: false
+      publish_confirmation:
+        description: "To publish, enter PUBLISH exactly. Otherwise leave empty."
+        type: string
+        required: false
+        default: ""
+
+  workflow_call:
     inputs:
       version_name:
         description: "Target version, e.g. cooc.1.2"
@@ -72,8 +99,8 @@ jobs:
               raise SystemExit("version_name must be cooc.N.N")
           if not re.fullmatch(r"[1-9][0-9]*", code) or int(code) <= 30:
               raise SystemExit("New versionCode must be > 30 (cooc.1.1 is 30)")
-          if not notes or len(notes) > 500 or "\n" in notes:
-              raise SystemExit("Notes must be one nonempty line, max 500 characters")
+          if not notes or len(notes) > 500:
+              raise SystemExit("Notes must be nonempty, max 500 characters")
           if os.environ["PUBLISH"] == "true" and os.environ["CONFIRM"] != "PUBLISH":
               raise SystemExit("Publishing requires publish_confirmation=PUBLISH")
           tag = name + "-build-" + os.environ["GITHUB_SHA"][:12]
@@ -218,9 +245,49 @@ jobs:
             dist/SHA256SUMS
           retention-days: 14
 
+  verify_install:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: dist
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        env:
+          APK_NAME: ${{ needs.build.outputs.apk_name }}
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash tool/verify_production_install.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-install-${{ inputs.version_name }}-${{ inputs.version_code }}
+          path: build/production-install/
+          retention-days: 14
+
   publish:
     if: ${{ inputs.publish == true }}
-    needs: build
+    needs: [build, verify_install]
     runs-on: ubuntu-latest
     environment: cooc-release
     permissions:

@@ -37,3 +37,7 @@ Thumbs.db
 # Temporary
 *.tmp
 *.bak
+
+# Reassembled lossless from media/kda at bootstrap
+assets/kda/firestarter.mp4
+

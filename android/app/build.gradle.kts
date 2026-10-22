@@ -15,6 +15,7 @@ if (keystorePropertiesFile.exists()) {
 
 dependencies {
     implementation("androidx.work:work-runtime-ktx:2.11.2")
+    implementation(project(":findbike"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20250517")
     testImplementation("org.robolectric:robolectric:4.16.1")
@@ -22,6 +23,7 @@ dependencies {
 
 android {
     namespace = "vn.edu.phenikaa.better_phenikaa_schedule"
+    androidResources { noCompress += listOf("mp4", "m4a") }
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
@@ -45,7 +47,7 @@ android {
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
         // flag during build.
         versionCode = flutter.versionCode
-        versionName = System.getenv("COOC_VERSION_NAME") ?: "cooc.1.8"
+        versionName = System.getenv("COOC_VERSION_NAME") ?: "cooc.1.9"
     }
 
     signingConfigs {
@@ -61,6 +63,11 @@ android {
 
     buildTypes {
         configureEach {
+            if (name != "release" && providers.gradleProperty("bpaKdaTest").orNull == "true") {
+                applicationIdSuffix = ".kdatest"
+                manifestPlaceholders["appLabel"] = "BPA KDA Test"
+                signingConfig = signingConfigs.getByName("debug")
+            }
             if(name!="release" && providers.gradleProperty("bpaWaterRecovery").orNull=="true") {
                 applicationIdSuffix=".waterrecovery.test6r"
                 manifestPlaceholders["appLabel"]="BPA Water Cooling Test6R4"
@@ -85,7 +92,7 @@ flutter {
 // Never fall back to a generated debug key for release builds.
 gradle.taskGraph.whenReady {
     val releaseRequested = allTasks.any { task ->
-        task.name.contains("Release", ignoreCase = true)
+        task.project == project && task.name.contains("Release", ignoreCase = true)
     }
     if (releaseRequested && !keystorePropertiesFile.exists()) {
         throw GradleException(

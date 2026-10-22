@@ -55,10 +55,13 @@ class Widget2Provider : AppWidgetProvider() {
         if (id == AppWidgetManager.INVALID_APPWIDGET_ID) return
         when (action) {
             ACTION_RELOAD -> {
-                // Reload uses the one shared unique WorkManager job and keeps the
-                // instance's selected day/photo untouched.
+                val kda = KdaWidgetImages.enabled(context)
+                if (kda) {
+                    KdaWidgetImages.advance(context, "widget2", id)
+                    renderFromDispatcher(context, AppWidgetManager.getInstance(context), id)
+                }
                 WidgetManualSync.request(context)
-                renderFromDispatcher(context, AppWidgetManager.getInstance(context), id,
+                if (!kda) renderFromDispatcher(context, AppWidgetManager.getInstance(context), id,
                     fadeContent = true)
             }
             ACTION_PREVIOUS, ACTION_NEXT -> {
@@ -149,7 +152,9 @@ class Widget2Provider : AppWidgetProvider() {
         // Always rebind a complete RemoteViews; the renderer caches its bitmap.
         views.setImageViewBitmap(
             R.id.widget2_static_layer,
-            WidgetStaticLayerRenderer.render(
+            if (palette.key == KdaWidgetImages.THEME) KdaWidgetImages.widget2Bitmap(
+                context, widthPx, heightPx, KdaWidgetImages.current(context, "widget2", id),
+            ) else WidgetStaticLayerRenderer.render(
                 context, WidgetSurface.WIDGET2, widthPx, heightPx, config, palette,
             ),
         )

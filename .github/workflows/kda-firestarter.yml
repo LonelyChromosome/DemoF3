@@ -1,0 +1,124 @@
+name: KDA FIRESTARTER Android verification
+on:
+  push:
+    branches: [feature/kda-firestarter, release/kda-findbike-1.9]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: kda-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  GH_TOKEN: ${{ github.token }}
+  ORG_GRADLE_PROJECT_bpaKdaTest: 'true'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: bash tool/bootstrap.sh
+      - name: Verify exact supplied assets
+        run: python3 tool/verify_kda_assets.py
+      - name: Analyze full application
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Flutter regression tests
+        run: flutter test --reporter expanded
+      - name: Android unit and widget regression tests
+        run: cd android && ./gradlew --no-daemon :app:testDebugUnitTest :findbike:testDebugUnitTest
+      - name: Build signed ARM64 and x86_64 installable APK
+        run: |
+          COOC_VERSION_NAME=kda.1.8.6 flutter build apk --profile --target-platform android-arm64,android-x64 --build-number=76 --build-name=1.8.6
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-KDA-FIRESTARTER-Test.apk
+          cd dist
+          sha256sum BPA-KDA-FIRESTARTER-Test.apk > SHA256SUMS
+      - name: Verify Android signature and isolated package
+        run: |
+          signer=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -1)
+          aapt=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt | sort -V | tail -1)
+          "$signer" verify --verbose dist/BPA-KDA-FIRESTARTER-Test.apk
+          "$aapt" dump badging dist/BPA-KDA-FIRESTARTER-Test.apk | tee dist/apk-badging.txt
+          grep -F "package: name='vn.edu.phenikaa.better_phenikaa_schedule.kdatest'" dist/apk-badging.txt
+          grep -F "application-label:'BPA KDA Test'" dist/apk-badging.txt
+          git rev-parse HEAD > dist/COMMIT_SHA
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: KDA-build-input
+          path: |
+            dist/
+            build/app/reports/tests/
+            build/app/test-results/
+          retention-days: 30
+          overwrite: true
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - run: bash tool/bootstrap.sh
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash tool/kda_emulator_check.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: KDA-emulator-evidence
+          path: build/kda-evidence/
+          retention-days: 30
+          overwrite: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KDA-FIRESTARTER-APK
+          path: dist/
+          retention-days: 30
+          overwrite: true
+  publish:
+    if: github.ref == 'refs/heads/feature/kda-firestarter'
+    needs: [build, emulator]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: KDA-FIRESTARTER-APK
+          path: verified
+      - name: Publish APK only after both verification jobs pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=$(find verified -name BPA-KDA-FIRESTARTER-Test.apk -type f | head -1)
+          dist=$(dirname "$apk")
+          tag="kda-firestarter-test-${GITHUB_SHA:0:12}"
+          gh release create "$tag" "$apk" "$dist/SHA256SUMS" "$dist/COMMIT_SHA" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "KDA FIRESTARTER test ${GITHUB_SHA:0:7}" --notes "Signed profile APK tested on Android 15 emulator, including installation and main-app launch. ARM64 and x86_64. Separate .kdatest package installs beside production BPA. Not a production update." --prerelease --latest=false

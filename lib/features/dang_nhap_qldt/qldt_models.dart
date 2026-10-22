@@ -66,9 +66,11 @@ final class ScheduleRecord {
     'examForm': examForm,
     'periodStart': periodStart,
     'periodEnd': periodEnd,
-    // Privacy + compatibility: optional per-lesson attendance stays in memory
-    // only. The legacy 1.6 timetable snapshot schema is unchanged; only
-    // validated subject-level totals go into the separate attendance cache.
+    // Preserve only the session MODE for Find My Bike's eLearning exclusion.
+    // Never persist personal attendance status or absence counts here.
+    if (lessonKind != null) 'lessonKind': lessonKind,
+    // Attendance status remains in memory only; subject-level absence totals
+    // are maintained in their separate validated cache.
   };
 }
 

@@ -103,7 +103,7 @@ internal object NativeWidgetPreviewRenderer {
         val panelHeight = (geometry.panelHeight * density).roundToInt().coerceAtMost(height)
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
-        val panel = WidgetStaticLayerRenderer.render(
+        val panel = if (palette.key == KdaWidgetImages.THEME) KdaWidgetImages.largeBitmap(context,width,panelHeight,0) else WidgetStaticLayerRenderer.render(
             context, WidgetSurface.LARGE, width, panelHeight, config, palette, useCache = false,
         )
         val panelTop = if (heightDp > geometry.panelHeight + 8) 0 else height - panelHeight
@@ -197,7 +197,7 @@ internal object NativeWidgetPreviewRenderer {
         palette: NativeWidgetPalette,
         previewTypeface: Typeface,
     ): Bitmap {
-        val result = WidgetStaticLayerRenderer.render(
+        val result = if (palette.key == KdaWidgetImages.THEME) KdaWidgetImages.widget2Bitmap(context,width,height,0) else WidgetStaticLayerRenderer.render(
             context, WidgetSurface.WIDGET2, width, height, config, palette, useCache = false,
         )
         val dynamicWidth = (width * .68f).roundToInt().coerceAtLeast(1)
