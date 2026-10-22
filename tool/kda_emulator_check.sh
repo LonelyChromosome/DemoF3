@@ -18,9 +18,16 @@ log_pid=$!
   done
 ) > build/kda-evidence/lifecycle.txt 2>&1 &
 cycle_pid=$!
+(
+  while true; do
+    sleep 30
+    timeout 10s adb exec-out screencap -p > build/kda-evidence/latest-screen.png 2>/dev/null || true
+  done
+) &
+screen_pid=$!
 finish() {
   timeout 10s adb exec-out screencap -p > build/kda-evidence/final-screen.png 2>/dev/null || true
-  kill "$log_pid" "$cycle_pid" 2>/dev/null || true
+  kill "$log_pid" "$cycle_pid" "$screen_pid" 2>/dev/null || true
 }
 trap finish EXIT
 timeout 720s flutter test integration_test/kda_firestarter_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee build/kda-evidence/integration.txt

@@ -11,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main(){
  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
  testWidgets('native cinematic video, approved fire, schedule visibility, image mode and full loop',(tester) async {
-  Future<void> wait(double seconds) async {final end=DateTime.now().add(Duration(milliseconds:(seconds*1000).round()));while(DateTime.now().isBefore(end)){await tester.runAsync(()=>Future<void>.delayed(const Duration(milliseconds:200)));await tester.pump();}}
+  Future<void> wait(double seconds) async {final end=DateTime.now().add(Duration(milliseconds:(seconds*1000).round()));while(DateTime.now().isBefore(end)){await tester.pump(const Duration(milliseconds:200));}}
   Future<Map<Object?,Object?>> state() async=>await KdaRuntime.channel.invokeMapMethod<Object?,Object?>('state')??{};
   final now=DateTime.now();
   final data=ImportedScheduleData(displayName:'KDA Android verification',records:[ScheduleRecord(id:'kda-test',isExam:false,subjectName:'FIRESTARTER timetable test',room:'A1',startAt:DateTime(now.year,now.month,now.day,7),endAt:DateTime(now.year,now.month,now.day,9))],syncedAt:now);
