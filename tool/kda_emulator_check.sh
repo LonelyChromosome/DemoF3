@@ -20,7 +20,15 @@ finish() {
   kill "$log_pid" "$cycle_pid" "$screen_pid" 2>/dev/null || true
 }
 trap finish EXIT
-timeout --kill-after=15s 720s flutter test integration_test/kda_firestarter_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee build/kda-evidence/integration.txt
+if ! timeout --kill-after=15s 720s flutter test integration_test/kda_firestarter_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee build/kda-evidence/integration.txt; then
+  # Retry only a failed SDK download before tests ran, never a failed app test.
+  if grep -Fq 'Error on ZipFile unknown archive' build/kda-evidence/integration.txt; then
+    cp build/kda-evidence/integration.txt build/kda-evidence/sdk-download-failure.txt
+    timeout --kill-after=15s 720s flutter test integration_test/kda_firestarter_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee build/kda-evidence/integration.txt
+  else
+    exit 1
+  fi
+fi
 # Require evidence that Android really prompted on entry; do not pre-grant.
 wait "$cycle_pid"
 test -s build/kda-evidence/permission-dialog.txt

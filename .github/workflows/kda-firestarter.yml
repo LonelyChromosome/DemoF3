@@ -62,6 +62,7 @@ jobs:
             build/app/reports/tests/
             build/app/test-results/
           retention-days: 30
+          overwrite: true
   emulator:
     runs-on: ubuntu-latest
     timeout-minutes: 55
@@ -97,11 +98,13 @@ jobs:
           name: KDA-emulator-evidence
           path: build/kda-evidence/
           retention-days: 30
+          overwrite: true
       - uses: actions/upload-artifact@v4
         with:
           name: KDA-FIRESTARTER-APK
           path: dist/
           retention-days: 30
+          overwrite: true
   publish:
     needs: [build, emulator]
     runs-on: ubuntu-latest
