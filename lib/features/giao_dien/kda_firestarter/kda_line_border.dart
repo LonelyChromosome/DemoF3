@@ -32,7 +32,7 @@ class _KdaLineHostState extends State<KdaLineHost> with SingleTickerProviderStat
   }
   void tick(Duration elapsed) {
     final dt = (elapsed - last).inMicroseconds / 1000000;
-    if (dt < 1 / 30) return;
+    if (dt < 1 / 32) return;
     last = elapsed;
     if (!active) { sync(); return; }
     motion.step(dt);
