@@ -12,8 +12,6 @@ class KdaLineMotion extends ChangeNotifier {
   int beatCount = 0;
   final List<KdaLinePulse> pulses = [];
   final List<double> _previous = List.filled(48, 0);
-  final List<double> _targetRipple = List.filled(3, 0);
-  final List<double> _ripple = List.filled(3, 0);
   final List<double> _eventTimes = [];
   double _clock = 0;
   double _age = 10;
@@ -27,8 +25,7 @@ class KdaLineMotion extends ChangeNotifier {
   double _targetTreble = 0;
   bool _primed = false;
 
-  bool get moving => pulses.isNotEmpty || _ripple.any((v) => v.abs() > .001) ||
-      _targetRipple.any((v) => v.abs() > .001);
+  bool get moving => pulses.isNotEmpty;
 
   void input(List<double> bands, {double? timestampSeconds}) {
     final sampleTime = timestampSeconds != null && timestampSeconds.isFinite
@@ -81,23 +78,15 @@ class KdaLineMotion extends ChangeNotifier {
         final level = kind == KdaPulseKind.bass ? _targetBass
             : kind == KdaPulseKind.vocal ? vocal : _targetTreble;
         final strength = (novelty * 2.0 + level * .35).clamp(.08, 1.0);
-        pulses.add(KdaLinePulse(kind, strength, density));
+        // The preceding real onset controls travel time, not a free-running
+        // beat clock. A single event owns both incoming wave fronts.
+        final interval = _lastEventTime < 0 ? .45 : sampleTime - _lastEventTime;
+        pulses.add(KdaLinePulse(kind, strength, interval));
         if (pulses.length > 6) pulses.removeAt(0);
         _lastEventTime = sampleTime;
         _eventTimes.add(sampleTime);
         beatCount++;
       }
-      // Continuous small detail comes from measured frame-to-frame changes,
-      // not a sine wave multiplied by loudness. Held tones settle in place.
-      for (var group = 0; group < 3; group++) {
-        final start = group == 0 ? 0 : group == 1 ? 14 : 37;
-        final end = group == 0 ? 14 : group == 1 ? 37 : 48;
-        var difference = 0.0;
-        for (var i = start; i < end; i++) { difference += values[i] - _previous[i]; }
-        _targetRipple[group] = (difference / (end - start) * 2.5).clamp(-.35, .35);
-      }
-    } else {
-      _targetRipple.fillRange(0, 3, 0);
     }
     final adaptation = 1 - math.exp(-dt / .65);
     _bassFluxMean += (bassFlux - _bassFluxMean) * adaptation;
@@ -121,43 +110,31 @@ class KdaLineMotion extends ChangeNotifier {
     energy = follow(energy, live && _targetEnergy > .055 ? _targetEnergy : 0, .08);
     bass = follow(bass, live ? _targetBass : 0, .06);
     treble = follow(treble, live ? _targetTreble : 0, .08);
-    for (var i = 0; i < 3; i++) {
-      _ripple[i] = follow(_ripple[i], live ? _targetRipple[i] : 0, .045);
-      if (_ripple[i].abs() < .001) _ripple[i] = 0;
-      if (!live) _targetRipple[i] = 0;
-    }
     for (final p in pulses) { p.advance(dt); }
     pulses.removeWhere((p) => p.age >= p.duration);
     if (energy < .001) energy = 0;
     if (repaint || moving) notifyListeners();
   }
 
-  double displacement(double u, double perimeter, double intensity) {
+  /// [x] is physical left-to-right position across the card, not path phase.
+  /// The painter uses identical x on top/bottom, preserving both symmetries
+  /// regardless of the rounded rectangle's path origin or aspect ratio.
+  double displacement(double x, double cardWidth, double intensity) {
     var value = 0.0;
-    final length = math.max(1.0, perimeter);
-    for (var i = 0; i < 3; i++) {
-      final center = const [.125, .625, .375][i];
-      final d = (u - center + .5) % 1 - .5;
-      final width = 65 / length;
-      if (d.abs() < width) {
-        value += _ripple[i] * (.5 + .5 * math.cos(math.pi * d / width));
-      }
-    }
+    final width = math.max(1.0, cardWidth);
     for (final p in pulses) {
-      // Each actual attack launches a small packet that travels at most 12px,
-      // then damps. No packet wraps around the perimeter or restarts itself.
-      final travel = math.min(12.0, p.age * 65) / length;
-      final width = p.width / length;
-      for (final side in const [-1.0, 1.0]) {
-        final center = (p.origin + side * travel) % 1;
-        final d = (u - center + .5) % 1 - .5;
-        if (d.abs() >= width) continue;
-        final envelope = .5 + .5 * math.cos(math.pi * d / width);
-        final shape = math.cos(math.pi * d / width * (p.kind == KdaPulseKind.vocal ? 1.35 : .65));
-        value += envelope * shape * p.response * (side > 0 ? 1 : .65);
+      final packetWidth = (p.width / width).clamp(.08, .24);
+      var pair = 0.0;
+      for (final center in [p.front, 1 - p.front]) {
+        final d = (x - center) / packetWidth;
+        if (d.abs() >= 1) continue;
+        final envelope = .5 + .5 * math.cos(math.pi * d);
+        pair += envelope * math.cos(math.pi * d * 1.5);
       }
+      // Merge the two fronts without doubling amplitude as they meet.
+      value += pair.clamp(-1.0, 1.0) * p.response;
     }
-    return (value * intensity).clamp(-3.0, 3.0);
+    return (value * intensity).clamp(-2.0, 2.0);
   }
 
   void reset() {
@@ -165,8 +142,6 @@ class KdaLineMotion extends ChangeNotifier {
     _targetEnergy = _targetBass = _targetTreble = 0;
     _bassFluxMean = _vocalFluxMean = _highFluxMean = 0;
     _previous.fillRange(0, 48, 0);
-    _targetRipple.fillRange(0, 3, 0);
-    _ripple.fillRange(0, 3, 0);
     pulses.clear(); _eventTimes.clear();
     _age = 10; _clock = 0; _lastSampleTime = null;
     _lastEventTime = -10; _primed = false;
@@ -178,23 +153,23 @@ class KdaLineMotion extends ChangeNotifier {
 enum KdaPulseKind { bass, vocal, percussion }
 
 class KdaLinePulse {
-  KdaLinePulse(this.kind, this.strength, double density)
-      : duration = (kind == KdaPulseKind.bass ? .42 : .28) + density * .06,
-        width = (kind == KdaPulseKind.bass ? 70.0 : 58.0) / (1 + density * .45);
+  KdaLinePulse(this.kind, this.strength, double interval)
+      : duration = (interval * .85).clamp(.24, .56),
+        width = kind == KdaPulseKind.bass ? 74 : 58;
   final KdaPulseKind kind;
   final double strength;
   final double duration;
   final double width;
   double age = 0;
   double response = 0;
-  double get origin => kind == KdaPulseKind.bass ? .125
-      : kind == KdaPulseKind.vocal ? .625 : .375;
+  // Travel once, from both sides to the centre; never wrap or bounce back.
+  double get progress => (age / duration).clamp(0.0, 1.0);
+  double get front => .04 + .46 * (progress / .8).clamp(0.0, 1.0);
   void advance(double dt) {
     age += dt;
-    final tau = kind == KdaPulseKind.bass ? .12 : .085;
-    final frequency = kind == KdaPulseKind.bass ? 4.0 : 3.0;
     final attack = (age / .018).clamp(0.0, 1.0);
-    final force = kind == KdaPulseKind.bass ? 2.0 : 1.25;
-    response = strength * force * attack * math.exp(-age / tau) * math.cos(age * math.pi * 2 * frequency);
+    final fade = ((1 - progress) / .26).clamp(0.0, 1.0);
+    final force = kind == KdaPulseKind.bass ? 2.2 : 1.8;
+    response = strength * force * attack * fade;
   }
 }
