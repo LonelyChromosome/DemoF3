@@ -16,7 +16,9 @@ void main(){
   Future<Map<Object?,Object?>> state() async=>await KdaRuntime.channel.invokeMapMethod<Object?,Object?>('state')??{};
   final now=DateTime.now();
   final data=ImportedScheduleData(displayName:'KDA Android verification',records:[ScheduleRecord(id:'kda-test',isExam:false,subjectName:'FIRESTARTER timetable test',room:'A1',startAt:DateTime(now.year,now.month,now.day,7),endAt:DateTime(now.year,now.month,now.day,9))],syncedAt:now);
-  SharedPreferences.setMockInitialValues({'better_phenikaa_snapshot_v1':data.encode()});
+  final preferences=await SharedPreferences.getInstance();
+  await preferences.clear();
+  await preferences.setString('better_phenikaa_snapshot_v1',data.encode());
   await tester.pumpWidget(const BetterPhenikaaScheduleApp());await wait(4);
   expect(find.text('Theo ngày'),findsOneWidget);
   unawaited(showAppThemePicker(tester.element(find.text('Theo ngày'))));await wait(1);
@@ -24,6 +26,16 @@ void main(){
   expect(find.byKey(const ValueKey('kda-approved-fire-vfx')),findsOneWidget);
   await wait(14);final runtime=KdaRuntime.instance;
   expect(AppThemeController.instance.theme,AppThemeId.kdaFirestarter);expect(runtime.error,isNull);expect(runtime.ready,isTrue);expect(runtime.cardsVisible,isFalse);expect(find.text('Theo ngày'),findsNothing);expect((await state())['music'],isFalse);
+  // Own-player FFT uses real decoded audio after adb grants the platform permission.
+  var sawSignal=false;
+  void observeAudio(){if(runtime.spectrum.value.any((v)=>v>.001))sawSignal=true;}
+  runtime.spectrum.addListener(observeAudio);
+  await runtime.save(runtime.config.copyWith(music:true));await wait(3);
+  runtime.spectrum.removeListener(observeAudio);
+  expect(runtime.permission,isTrue);expect(sawSignal,isTrue,reason:runtime.captureStatus);
+  await runtime.save(runtime.config.copyWith(music:false,visualizer:false));await wait(.5);
+  expect(runtime.spectrum.value.every((v)=>v==0),isTrue);
+  await runtime.save(runtime.config.copyWith(visualizer:true));
   final before=((await state())['positionMs'] as num).toInt();
   await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(1);expect(find.text('Theo ngày'),findsOneWidget);
   await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(1);expect(find.text('Theo ngày'),findsNothing);expect(((await state())['positionMs'] as num).toInt(),greaterThan(before));
@@ -34,5 +46,7 @@ void main(){
   expect(held,isTrue);expect((await state())['loops'],greaterThanOrEqualTo(1));await wait(2);expect(((await state())['positionMs'] as num).toInt(),lessThan(15000));expect((await state())['playing'],isTrue);
   final marker=File('/sdcard/Android/data/vn.edu.phenikaa.better_phenikaa_schedule.kdatest/files/kda-ready');marker.parent.createSync(recursive:true);marker.writeAsStringSync('ready');await wait(8);expect((await state())['playing'],isTrue);
   await AppThemeController.instance.select(AppThemeId.classic);await wait(1);expect(find.byKey(const ValueKey('kda-toggle-cards')),findsNothing);expect((await state())['enabled'],isFalse);
+  // Leave persisted real settings for installing and opening the delivered APK.
+  await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);
  },timeout:const Timeout(Duration(minutes:8)));
 }

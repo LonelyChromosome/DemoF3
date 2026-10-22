@@ -43,7 +43,25 @@ class _KdaContentGateState extends State<KdaContentGate> {
       final visible=r.cardsVisible;
       if(visible){content=widget.builder(context);hidden=false;}
       if(content==null)return const SizedBox.expand();
-      return Offstage(offstage:hidden&&!visible,child:IgnorePointer(ignoring:!visible,child:TickerMode(enabled:visible&&r.foreground,child:AnimatedOpacity(opacity:visible?1:0,duration:const Duration(milliseconds:240),onEnd:(){if(mounted&&!r.cardsVisible)setState(()=>hidden=true);},child:AnimatedSlide(offset:visible?Offset.zero:const Offset(0,.025),duration:const Duration(milliseconds:240),child:Padding(padding:EdgeInsets.only(top:56,bottom:r.config.visualizer?110:8),child:content))))));
+      return Offstage(
+        offstage: hidden && !visible,
+        child: IgnorePointer(
+          ignoring: !visible,
+          child: AnimatedOpacity(
+            opacity: visible ? 1 : 0,
+            duration: const Duration(milliseconds:240),
+            onEnd: () {if(mounted && !r.cardsVisible)setState(()=>hidden=true);},
+            child: AnimatedSlide(
+              offset: visible ? Offset.zero : const Offset(0,.025),
+              duration: const Duration(milliseconds:240),
+              child: Padding(
+                padding: EdgeInsets.only(top:56,bottom:r.config.visualizer?110:8),
+                child: TickerMode(enabled:visible&&r.foreground,child:content!),
+              ),
+            ),
+          ),
+        ),
+      );
     });
   }
 }

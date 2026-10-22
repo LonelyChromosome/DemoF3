@@ -5,10 +5,12 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: kda-${{ github.ref }}
   cancel-in-progress: true
 env:
+  GH_TOKEN: ${{ github.token }}
   ORG_GRADLE_PROJECT_bpaKdaTest: 'true'
 jobs:
   build:
@@ -36,9 +38,9 @@ jobs:
         run: flutter test --reporter expanded
       - name: Android unit and widget regression tests
         run: cd android && ./gradlew --no-daemon :app:testDebugUnitTest
-      - name: Build signed ARM64 installable APK
+      - name: Build signed ARM64 and x86_64 installable APK
         run: |
-          COOC_VERSION_NAME=kda.1.8.1 flutter build apk --profile --target-platform android-arm64 --build-number=71 --build-name=1.8.1
+          COOC_VERSION_NAME=kda.1.8.1 flutter build apk --profile --target-platform android-arm64,android-x64 --build-number=71 --build-name=1.8.1
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-KDA-FIRESTARTER-Test.apk
           cd dist
@@ -55,18 +57,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: KDA-build-and-tests
+          name: KDA-build-input
           path: |
             dist/
             build/app/reports/tests/
             build/app/test-results/
           retention-days: 30
-      - name: Publish separate downloadable test APK
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag="kda-firestarter-test-${GITHUB_SHA:0:12}"
-          gh release create "$tag" dist/BPA-KDA-FIRESTARTER-Test.apk dist/SHA256SUMS dist/COMMIT_SHA --target "$GITHUB_SHA" --title "KDA FIRESTARTER test ${GITHUB_SHA:0:7}" --notes "Signed profile test build. Separate .kdatest package; installs beside production BPA. ARM64. Not the production updater. Emulator results are reported separately in Actions." --prerelease --latest=false
   emulator:
     runs-on: ubuntu-latest
     timeout-minutes: 55
@@ -102,3 +98,24 @@ jobs:
           name: KDA-emulator-evidence
           path: build/kda-evidence/
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KDA-FIRESTARTER-APK
+          path: dist/
+          retention-days: 30
+  publish:
+    needs: [build, emulator]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: KDA-FIRESTARTER-APK
+          path: verified
+      - name: Publish APK only after both verification jobs pass
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=$(find verified -name BPA-KDA-FIRESTARTER-Test.apk -type f | head -1)
+          dist=$(dirname "$apk")
+          tag="kda-firestarter-test-${GITHUB_SHA:0:12}"
+          gh release create "$tag" "$apk" "$dist/SHA256SUMS" "$dist/COMMIT_SHA" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "KDA FIRESTARTER test ${GITHUB_SHA:0:7}" --notes "Signed profile APK tested on Android 15 emulator, including installation and main-app launch. ARM64 and x86_64. Separate .kdatest package installs beside production BPA. Not a production update." --prerelease --latest=false

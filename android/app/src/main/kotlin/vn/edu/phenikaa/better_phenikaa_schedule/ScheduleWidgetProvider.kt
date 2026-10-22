@@ -65,7 +65,6 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val density = context.resources.displayMetrics.density
         val width = (34 * density).roundToInt().coerceAtLeast(1)
         val height = (28 * density).roundToInt().coerceAtLeast(1)
-        if (theme.key == KdaWidgetImages.THEME) return KdaWidgetImages.largeBitmap(context, width, height, kdaImageIndex)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val drawable = context.getDrawable(R.drawable.ic_widget_study)?.mutate() ?: return bitmap
@@ -111,6 +110,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (heightDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
+        if (theme.key == KdaWidgetImages.THEME) return KdaWidgetImages.largeBitmap(context, width, height, kdaImageIndex)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             val start = if (theme.key == "classic") theme.startColor else palette.backgroundStart

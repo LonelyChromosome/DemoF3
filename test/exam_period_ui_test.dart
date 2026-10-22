@@ -192,8 +192,8 @@ void main() {
     await showApp(tester, <ScheduleRecord>[]);
     await tester.tap(find.byIcon(Icons.notifications_none_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('Không có thông báo mới.'), findsOneWidget);
-    expect(find.text('Các thông báo mới sẽ xuất hiện ở đây.'), findsOneWidget);
+    expect(find.text('Chưa có thông báo lịch mới'), findsOneWidget);
+    expect(find.text('Các thay đổi lịch học và lịch thi sẽ xuất hiện ở đây.'), findsOneWidget);
     debugDefaultTargetPlatformOverride = null;
   });
 

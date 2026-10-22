@@ -91,7 +91,7 @@ flutter {
 // Never fall back to a generated debug key for release builds.
 gradle.taskGraph.whenReady {
     val releaseRequested = allTasks.any { task ->
-        task.name.contains("Release", ignoreCase = true)
+        task.project == project && task.name.contains("Release", ignoreCase = true)
     }
     if (releaseRequested && !keystorePropertiesFile.exists()) {
         throw GradleException(
