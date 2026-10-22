@@ -22,13 +22,8 @@ class VehicleNative {
   static Future<void> schedule(List<Map<String, dynamic>> windows) async {
     await channel.invokeMethod<dynamic>('schedule', <String, Object>{'windows': windows});
   }
-  static Future<Map<String, dynamic>> testState() async {
-    final value=await channel.invokeMethod<dynamic>('testState');
-    return Map<String, dynamic>.from(value as Map);
-  }
-  static Future<String> testEvent(String method) async {
-    final value=await channel.invokeMethod<String>(method);
-    return value??'Đã gửi sự kiện';
+  static Future<void> manualReset() async {
+    await channel.invokeMethod<dynamic>('manualReset');
   }
   static Future<void> startNav() async { await channel.invokeMethod<dynamic>('startNav'); }
   static Future<void> stopNav() async { await channel.invokeMethod<dynamic>('stopNav'); }
@@ -46,13 +41,9 @@ class VehiclePage extends StatefulWidget {
 }
 class _VehiclePageState extends State<VehiclePage> {
   Map<String, dynamic> data = <String, dynamic>{'enabled': false};
-  Map<String, dynamic> testData = <String, dynamic>{'tracking':false,'parked':false};
+  bool queueExpanded = false;
   Timer? timer;
   bool busy = false;
-  bool testOpen = false;
-  String testResult = '';
-  static const eventPanelEnabled =
-      bool.fromEnvironment('BPA_VEHICLE_TEST_PANEL',defaultValue:kDebugMode);
   @override
   void initState() {
     super.initState();
@@ -76,14 +67,7 @@ class _VehiclePageState extends State<VehiclePage> {
   Future<void> read() async {
     try {
       final value=await VehicleNative.state();
-      Map<String,dynamic> test=<String,dynamic>{};
-      if(eventPanelEnabled) {
-        try {test=await VehicleNative.testState();}catch(_){}
-      }
-      if(mounted)setState((){
-        data=value;
-        if(test.isNotEmpty)testData=test;
-      });
+      if(mounted)setState(()=>data=value);
     }catch(_){}
   }
   Future<void> enable() async {
@@ -92,42 +76,44 @@ class _VehiclePageState extends State<VehiclePage> {
     try { await VehicleNative.enable(); await read(); } catch (_) {}
     if(mounted)setState(()=>busy=false);
   }
-  Future<void> openNav({bool testMode=false}) async {
-    if(busy || (testMode?testData['parked']:data['parked']) != true)return;
+  Future<void> openNav() async {
+    if(busy || data['parked'] != true)return;
     setState(()=>busy=true);
     // The location request starts BEFORE the VFX animation starts.
     try { await VehicleNative.startNav(); } catch (_) {}
     if(!mounted)return;
     setState(()=>busy=false);
     await Navigator.of(context).push<void>(MaterialPageRoute<void>(
-      builder: (_) => VehicleScanLockScreen(testMode:testMode)));
+      builder: (_) => const VehicleScanLockScreen()));
     if(mounted)unawaited(read());
   }
-  Future<void> testEvent(String method) async {
+  Future<void> manualReset() async {
     if(busy)return;
-    if(method=='testReset'){
-      final allow=await showDialog<bool>(
-        context:context,builder:(ctx)=>AlertDialog(
-          title:const Text('Reset phiên kiểm thử?'),
-          content:const Text('Chỉ xóa hành trình và xe đỗ trong APK demo này. Dữ liệu BPA chính không bị ảnh hưởng.'),
-          actions:[
-            TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Hủy')),
-            FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Reset')),
-          ],
-        ),
-      );
-      if(allow!=true||!mounted)return;
-    }
+    final confirm=await showDialog<bool>(
+      context:context,
+      builder:(ctx)=>AlertDialog(
+        title:const Text('Làm mới trạng thái xe?'),
+        content:const Text('Kết thúc lượt xe hiện tại, xóa vị trí đỗ đã lưu và tính lại hàng chờ từ lịch học BPA. Chỉ dùng khi trạng thái bị kẹt hoặc sai.'),
+        actions:<Widget>[
+          TextButton(onPressed:()=>Navigator.of(ctx).pop(false),
+            child:const Text('Hủy')),
+          FilledButton(onPressed:()=>Navigator.of(ctx).pop(true),
+            child:const Text('Làm mới')),
+        ],
+      ),
+    );
+    if(confirm!=true||!mounted)return;
     setState(()=>busy=true);
-    try{
-      final message=await VehicleNative.testEvent(method);
-      if(mounted)setState(()=>testResult=message);
-    }on PlatformException catch(e){
-      if(mounted)setState(()=>testResult='Không thể thực hiện: ${e.message??e.code}');
-    }catch(e){
-      if(mounted)setState(()=>testResult='Không thể thực hiện: $e');
-    }finally{
+    try {
+      await VehicleNative.manualReset();
       await read();
+    }on PlatformException catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content:Text('Không thể làm mới: ${e.message??e.code}')));
+    }catch(_){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content:Text('Làm mới chưa thành công.')));
+    }finally{
       if(mounted)setState(()=>busy=false);
     }
   }
@@ -153,8 +139,6 @@ class _VehiclePageState extends State<VehiclePage> {
     final foreground=data['location']==true;
     final background=data['background']==true;
     final exitAccess=data['notificationAccess']==true;
-    final testTracking=testData['tracking']==true;
-    final testParked=testData['parked']==true;
     final rawWindows=data['waitingSubjects'];
     final waiting=rawWindows is List?rawWindows:const <dynamic>[];
     Widget card(Widget child,{VoidCallback? tap})=>Material(
@@ -195,53 +179,88 @@ class _VehiclePageState extends State<VehiclePage> {
         padding:const EdgeInsets.fromLTRB(20,22,20,24),
         child:Column(crossAxisAlignment:CrossAxisAlignment.start,
           children:<Widget>[
-            Text('Phương Tiện',style:heading(27)),
+            Row(children:<Widget>[
+              Expanded(child:Text('Xe cộ',style:heading(27))),
+              IconButton(
+                tooltip:'Làm mới trạng thái xe',
+                onPressed:busy?null:manualReset,
+                icon:Icon(Icons.restart_alt_rounded,color:primary,size:25),
+              ),
+            ]),
             const SizedBox(height:24),
             Expanded(child:ListView(
               padding:EdgeInsets.zero,
               children:<Widget>[
                 line(Icons.radar_rounded,'Trạng thái',
-                    (!enabled)?'Chờ dữ liệu lịch học':
-                    (!foreground||!background)?'Cần cấp quyền':
-                    tracking?'Đang ghi hành trình':
-                    parked?'Đã xác định vị trí xe':'Đang chờ lịch học'),
+                    (!enabled)?'Chưa có lịch học':
+                    (!foreground||!background)?'Cần cấp quyền định vị':
+                    parked?'Đã đỗ xe · chờ thông báo ra cổng':
+                    tracking?'Đang xác định vị trí đỗ':
+                    waiting.isEmpty?'Không có môn cần chờ':
+                    waiting.any((w)=>w is Map && w['available']==true)
+                       ?'Đang chờ xe vào phạm vi'
+                       :'Chờ lịch học tiếp theo'),
                 const SizedBox(height:12),
                 card(Column(crossAxisAlignment:CrossAxisAlignment.start,children:<Widget>[
-                  Row(children:<Widget>[
-                    Icon(Icons.calendar_month_rounded,color:primary,size:23),
-                    const SizedBox(width:10),
-                    Expanded(child:Text('Các môn học đang được chờ',style:heading(15))),
-                  ]),
-                  const SizedBox(height:12),
-                  if(waiting.isEmpty)
-                    Text('Chưa có môn học sắp tới từ lịch BPA.',
-                      style:TextStyle(color:palette.textSecondary,fontSize:13)),
-                  for(final raw in waiting)
-                    if(raw is Map)...<Widget>[
-                      Builder(builder:(context){
-                        final row=Map<String,dynamic>.from(raw);
-                        final allowed=row['available']==true;
-                        final start=(row['start'] as num?)?.toInt()??0;
-                        final when=DateTime.fromMillisecondsSinceEpoch(start);
-                        final day='${when.day.toString().padLeft(2,'0')}/${when.month.toString().padLeft(2,'0')}';
-                        final hour='${when.hour.toString().padLeft(2,'0')}:${when.minute.toString().padLeft(2,'0')}';
-                        return Padding(padding:const EdgeInsets.only(bottom:10),
-                          child:Row(children:<Widget>[
-                            Icon(allowed?Icons.check_circle_rounded:Icons.cancel_rounded,
-                              size:22,color:allowed?const Color(0xFF39BD87):palette.textSecondary),
-                            const SizedBox(width:10),
-                            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,
-                              children:<Widget>[
-                                Text(row['name']?.toString()??'Môn học',
-                                    maxLines:2,overflow:TextOverflow.ellipsis,
+                  InkWell(
+                    onTap:()=>setState(()=>queueExpanded=!queueExpanded),
+                    borderRadius:BorderRadius.circular(12),
+                    child:Padding(
+                      padding:const EdgeInsets.symmetric(vertical:3),
+                      child:Row(children:<Widget>[
+                        Icon(Icons.calendar_month_rounded,color:primary,size:23),
+                        const SizedBox(width:12),
+                        Expanded(child:Column(
+                          crossAxisAlignment:CrossAxisAlignment.start,
+                          children:<Widget>[
+                            Text('Môn học đang chờ',style:heading(15)),
+                            const SizedBox(height:3),
+                            Text(waiting.isEmpty?'Không có môn khả dụng':
+                              '${waiting.length} buổi sắp tới',
+                              style:TextStyle(color:palette.textSecondary,fontSize:12)),
+                          ],
+                        )),
+                        Icon(queueExpanded?Icons.keyboard_arrow_up_rounded:
+                            Icons.keyboard_arrow_down_rounded,color:primary),
+                      ]),
+                    ),
+                  ),
+                  if(queueExpanded)...<Widget>[
+                    const SizedBox(height:12),
+                    if(waiting.isEmpty)
+                      Text('Hàng chờ trống. BPA sẽ tự cập nhật theo lịch học.',
+                        style:TextStyle(color:palette.textSecondary,fontSize:13)),
+                    for(final raw in waiting)
+                      if(raw is Map)...<Widget>[
+                        Builder(builder:(context){
+                          final row=Map<String,dynamic>.from(raw);
+                          final allowed=row['available']==true;
+                          final start=(row['start'] as num?)?.toInt()??0;
+                          final when=DateTime.fromMillisecondsSinceEpoch(start);
+                          final day='${when.day.toString().padLeft(2,'0')}/${when.month.toString().padLeft(2,'0')}';
+                          final hour='${when.hour.toString().padLeft(2,'0')}:${when.minute.toString().padLeft(2,'0')}';
+                          return Padding(
+                            padding:const EdgeInsets.only(bottom:9),
+                            child:Row(children:<Widget>[
+                              Icon(allowed?Icons.check_circle_rounded:Icons.cancel_rounded,
+                                color:allowed?const Color(0xFF39BD87):palette.textSecondary,size:20),
+                              const SizedBox(width:10),
+                              Expanded(child:Column(
+                                crossAxisAlignment:CrossAxisAlignment.start,
+                                children:<Widget>[
+                                  Text(row['name']?.toString()??'Môn học',maxLines:2,
+                                    overflow:TextOverflow.ellipsis,
                                     style:TextStyle(color:palette.textPrimary,
-                                      fontSize:13,fontWeight:FontWeight.w700)),
-                                Text('$day · $hour · ${row['status']??''}',
-                                  style:TextStyle(color:palette.textSecondary,fontSize:11)),
-                              ])),
-                          ]));
-                      }),
-                    ],
+                                      fontWeight:FontWeight.w700,fontSize:13)),
+                                  Text('$day · $hour · ${row['status']??''}',
+                                    style:TextStyle(color:palette.textSecondary,fontSize:11)),
+                                ],
+                              )),
+                            ]),
+                          );
+                        }),
+                      ],
+                  ],
                 ])),
                 if(!foreground||!background)...<Widget>[
                   const SizedBox(height:12),
@@ -312,70 +331,6 @@ class _VehiclePageState extends State<VehiclePage> {
                 const SizedBox(height:12),
                 line(Icons.location_on_outlined,'Vị trí đỗ xe của tôi','',
                     tap:parked?()=>openNav():null),
-                if(eventPanelEnabled)...<Widget>[
-                  const SizedBox(height:18),
-                  card(Column(crossAxisAlignment:CrossAxisAlignment.start,
-                    children:<Widget>[
-                      InkWell(
-                        onTap:()=>setState(()=>testOpen=!testOpen),
-                        child:Row(children:<Widget>[
-                          Icon(Icons.science_outlined,color:primary),
-                          const SizedBox(width:9),
-                          Expanded(child:Text('PANEL TEST SỰ KIỆN',
-                            style:heading(14))),
-                          Text('DEMO',style:TextStyle(color:palette.textSecondary,
-                            fontWeight:FontWeight.w600,fontSize:10)),
-                          const SizedBox(width:4),
-                          Icon(testOpen?Icons.expand_less:Icons.expand_more,
-                              color:primary),
-                        ]),
-                      ),
-                      if(testOpen)...<Widget>[
-                        const SizedBox(height:10),
-                        Text('Giả lập tín hiệu vào cổng / bước chân. '
-                          'Tọa độ và lộ trình vẫn lấy từ GPS thật.',
-                          style:TextStyle(color:palette.textSecondary,fontSize:12)),
-                        const SizedBox(height:14),
-                        Wrap(spacing:9,runSpacing:9,children:<Widget>[
-                          OutlinedButton.icon(
-                            onPressed:busy||testTracking||testParked?null:()=>testEvent('testGate'),
-                            icon:const Icon(Icons.meeting_room_outlined,size:18),
-                            label:const Text('Vào cổng')),
-                          OutlinedButton.icon(
-                            onPressed:busy||!testTracking?null:()=>testEvent('testWalk'),
-                            icon:const Icon(Icons.directions_walk,size:18),
-                            label:const Text('Bước chân')),
-                          OutlinedButton.icon(
-                            onPressed:busy||!testTracking?null:()=>testEvent('testPark'),
-                            icon:const Icon(Icons.location_on_outlined,size:18),
-                            label:const Text('Chốt xe GPS')),
-                          OutlinedButton.icon(
-                            onPressed:busy||!testParked?null:()=>testEvent('testExit'),
-                            icon:const Icon(Icons.logout,size:18),
-                            label:const Text('Xe ra cổng [TEST]')),
-                          OutlinedButton.icon(
-                            onPressed:busy?null:()=>testEvent('testReset'),
-                            icon:const Icon(Icons.restart_alt,size:18),
-                            label:const Text('Reset')),
-                        ]),
-                        const SizedBox(height:11),
-                        Text('Phiên TEST: '+
-                          (testTracking?'Đang ghi GPS':testParked?'Đã đỗ xe':'Chưa ghi')+
-                          '  ·  '+((testData['route'] as List?)?.length??0).toString()+' điểm',
-                          style:TextStyle(color:palette.textSecondary,fontSize:12)),
-                        if(testParked)
-                          OutlinedButton.icon(
-                            onPressed:busy?null:()=>openNav(testMode:true),
-                            icon:const Icon(Icons.navigation_outlined,size:18),
-                            label:const Text('Dẫn tới xe TEST')),
-                        if(testResult.isNotEmpty)...<Widget>[
-                          const SizedBox(height:7),
-                          Text(testResult,style:TextStyle(color:primary,fontSize:12)),
-                        ],
-                      ],
-                    ],
-                  )),
-                ],
               ],
             )),
           ],

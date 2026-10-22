@@ -62,14 +62,14 @@ android {
 
     buildTypes {
         debug {
-            // Never overwrite the installed BPA or access its original private data.
-            applicationIdSuffix = ".vehicle.demo19.events"
-            manifestPlaceholders["appLabel"] = "BPA Test Sự Kiện"
+            // Unsigned preview uses an isolated package; official release keeps BPA's original ID.
+            applicationIdSuffix = ".vehicle.preview19"
+            manifestPlaceholders["appLabel"] = "BPA Xe cộ 1.9"
         }
         configureEach {
             if (name=="profile") {
-                applicationIdSuffix = ".vehicle.demo19.events"
-                manifestPlaceholders["appLabel"] = "BPA Test Sự Kiện"
+                applicationIdSuffix = ".vehicle.preview19"
+                manifestPlaceholders["appLabel"] = "BPA Xe cộ 1.9"
             }
             if(name!="release" && providers.gradleProperty("bpaWaterRecovery").orNull=="true") {
                 applicationIdSuffix=".waterrecovery.test6r"

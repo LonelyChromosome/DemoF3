@@ -43,10 +43,6 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
                     activity.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     result.success(null)
                 }
-                "testState" -> {
-                    requireTestPanel()
-                    result.success(VehicleStore.snapshot(activity,true))
-                }
                 "enable" -> {
                     VehicleStore.enabled(activity,true)
                     requestPermissions()
@@ -72,66 +68,22 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
                     VehicleLifecycle.armNext(activity)
                     result.success(null)
                 }
-                "testGate" -> {
-                    requireTestPanel()
-                    if(!VehicleStore.isEnabled(activity))throw IllegalStateException("Hãy bật Tìm xe trước")
-                    if(!hasFinePermission())throw IllegalStateException("Cần cấp quyền GPS chính xác")
-                    if(VehicleStore.hasParked(activity,true))throw IllegalStateException("Phiên TEST đã có điểm đỗ; reset TEST trước")
-                    if(VehicleStore.isTracking(activity,true))throw IllegalStateException("TEST đang ghi hành trình")
-                    if(VehicleStore.isTracking(activity))throw IllegalStateException("Đang tracking THỰC TẾ; không thể chạy song song")
-                    startCaptureTest("bpa.demo.start")
-                    result.success("Đã giả lập vào cổng. GPS đang ghi là GPS thật.")
-                }
-                "testWalk" -> {
-                    requireTestPanel()
-                    if(!VehicleStore.isTracking(activity,true))throw IllegalStateException("Hãy giả lập vào cổng trước")
-                    startCaptureTest("bpa.demo.walk")
-                    result.success("Giả lập 7 bước trong khoảng 8 giây; GPS vẫn lấy thật.")
-                }
-                "testPark" -> {
-                    requireTestPanel()
-                    if(!VehicleStore.isTracking(activity,true))throw IllegalStateException("Chưa ghi hành trình TEST")
-                    val parked=VehicleStore.recentStableTestParking(activity)
-                        ?:throw IllegalStateException("Cần ít nhất 2 mẫu GPS thật gần nhau, còn mới (sai số tối đa 30m)")
-                    VehicleStore.saveParked(activity,parked.first,parked.second,true)
+                "manualReset" -> {
+                    // User-only recovery: stop a stuck live run, clear its old
+                    // position and reassess future timetable sessions.
                     activity.stopService(Intent(activity,VehicleCaptureService::class.java))
-                    VehicleStore.sendParkNotification(activity,true)
-                    result.success("Đã chốt xe bằng GPS thật. Đây là thao tác test thủ công.")
-                }
-                "testExit" -> {
-                    requireTestPanel()
-                    if(!VehicleStore.hasParked(activity,true))
-                        throw IllegalStateException("Phiên TEST chưa có xe đỗ")
-                    VehicleStore.rearmTest(activity)
-                    result.success("[TEST] Xe ra cổng: đã xóa lượt đỗ cũ, cập nhật hàng chờ TEST.")
-                }
-                "testReset" -> {
-                    requireTestPanel()
-                    if(!VehicleStore.isTracking(activity))
-                        activity.stopService(Intent(activity,VehicleCaptureService::class.java))
-                    VehicleStore.resetDemoSession(activity)
-                    result.success("Đã reset phiên test; BPA chính không bị ảnh hưởng.")
+                    VehicleStore.manualResetReal(activity)
+                    VehicleLifecycle.armNext(activity)
+                    result.success(VehicleStore.snapshot(activity))
                 }
                 "startNav" -> { startNavigation(); result.success(null) }
                 "nav" -> { watchdog(); result.success(navSnapshot()) }
-                "testNav" -> {requireTestPanel();watchdog();result.success(navSnapshot(true))}
                 "stopNav" -> { stopNavigation(); result.success(null) }
                 else -> result.notImplemented()
             }
         } catch(error:Exception) {
             result.error("vehicle",error.message ?: "Không thể truy cập vị trí",null)
         }
-    }
-    private fun requireTestPanel(){
-        if(!activity.packageName.endsWith(".vehicle.demo19.events"))
-            throw SecurityException("Chỉ dùng được trong APK demo sự kiện")
-    }
-    private fun hasFinePermission():Boolean =
-        activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED
-    private fun startCaptureTest(action:String){
-        val intent=Intent(activity,VehicleCaptureService::class.java).setAction(action)
-        if(Build.VERSION.SDK_INT>=26)activity.startForegroundService(intent)
-        else activity.startService(intent)
     }
     private fun hasPermission():Boolean =
         activity.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==

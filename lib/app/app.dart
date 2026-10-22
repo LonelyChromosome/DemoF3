@@ -5174,7 +5174,7 @@ class _ControlPanel extends StatelessWidget {
                 bottom: 20,
                 originOffset: const Offset(65, 16),
                 child: _PanelAction(
-                  label: 'Phương Tiện',
+                  label: 'Xe cộ',
                   icon: Icons.two_wheeler_rounded,
                   color: palette.primary,
                   selected: page == _AppPage.vehicle,

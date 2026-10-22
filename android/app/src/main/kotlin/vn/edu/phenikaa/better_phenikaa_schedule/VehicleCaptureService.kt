@@ -131,6 +131,17 @@ object VehicleStore {
             .putLong("rearmAt",System.currentTimeMillis()).apply()
         file(context,true).delete()
     }
+    @Synchronized fun manualResetReal(context:Context){
+        val prefs=pref(context)
+        val previous=prefs.getLong("rearmAt",0L)
+        val now=System.currentTimeMillis()
+        file(context).delete()
+        prefs.edit().remove("parkLat").remove("parkLon").remove("parkedAt")
+            .putBoolean("tracking",false)
+            .putLong("rearmAt",maxOf(previous,now)).commit()
+        // A manual reset is an explicit fallback and must not restore past
+        // parked routes or modify attendance or source timetable.
+    }
     @Synchronized fun rearmReal(context:Context){
         pref(context).edit().remove("parkLat").remove("parkLon").remove("parkedAt")
             .putBoolean("tracking",false)
@@ -271,8 +282,7 @@ object VehicleStore {
             "route" to route(context,demo),
             "notificationAccess" to VehicleExitNotificationListener.hasPermission(context),
             "waitingSubjects" to scheduleRows(context,demo),
-            "nextWaitStart" to (if(demo)null else nextWaitStart(context)),
-            "notificationAccess" to VehicleExitNotificationListener.hasPermission(context)
+            "nextWaitStart" to (if(demo)null else nextWaitStart(context))
         )
     }
 }
@@ -311,7 +321,7 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this,channelId)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
-            .setContentTitle("Phương Tiện")
+            .setContentTitle("Xe cộ")
             .setContentText("Đang ghi hành trình")
             .setOngoing(true).setContentIntent(open).build()
     }
@@ -353,7 +363,7 @@ class VehicleCaptureService : Service(), LocationListener, SensorEventListener {
                 sensorManager.registerListener(this,it,SensorManager.SENSOR_DELAY_NORMAL)
             }
         }
-        if(newTrip)VehicleStore.sendEnterNotification(this,demoMode)
+        // Only parking completion sends a user-facing alert.
         return START_STICKY
     }
     override fun onLocationChanged(location:Location) {
