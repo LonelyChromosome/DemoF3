@@ -17,6 +17,8 @@ while time.monotonic()<end:
         nodes=list(ET.fromstring(xml).iter('node'))
         packages={n.get('package','') for n in nodes}
         package=adb('shell','dumpsys','package','vn.edu.phenikaa.better_phenikaa_schedule.kdatest').stdout
+        # UI dumps take time: refresh the stage after capturing the current screen.
+        log=(out/'integration.txt').read_text(errors='replace') if (out/'integration.txt').exists() else ''
         # Android hosts both runtime dialogs AND App permissions/Location
         # settings inside PermissionController. Route by visible controls first.
         controller=bool(packages & {'com.google.android.permissioncontroller',
@@ -42,7 +44,10 @@ while time.monotonic()<end:
             elif 'FB_SETUP runtime PASS; background start' in log:
                 (out/'background-screen.xml').write_text(xml)
                 if 'android.permission.ACCESS_BACKGROUND_LOCATION: granted=true' in package:
-                    adb('shell','input','keyevent','KEYCODE_BACK')
+                    # Never send a stale Back to the next permission screen.
+                    labels={n.get('text','') for n in nodes}
+                    if labels & {'Permissions','Location','Allow all the time','App permissions','Location permission','App info'}:
+                        adb('shell','input','keyevent','KEYCODE_BACK')
                 else:
                     for label in ['Allow all the time','Location','Permissions']:
                         node=next((n for n in nodes if n.get('text','')==label),None)
