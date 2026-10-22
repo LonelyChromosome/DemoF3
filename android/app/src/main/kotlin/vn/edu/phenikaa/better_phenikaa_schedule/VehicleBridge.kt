@@ -47,6 +47,15 @@ class VehicleBridge(private val activity: Activity, messenger: BinaryMessenger) 
                     requireTestPanel()
                     result.success(VehicleStore.snapshot(activity,true))
                 }
+                "fakeState" -> {
+                    requireTestPanel()
+                    result.success(VehicleFakeScenario.state(activity))
+                }
+                "fakeAction" -> {
+                    requireTestPanel()
+                    val action=call.argument<String>("action") ?: ""
+                    result.success(VehicleFakeScenario.action(activity,action))
+                }
                 "enable" -> {
                     VehicleStore.enabled(activity,true)
                     requestPermissions()

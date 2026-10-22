@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'vehicle_navigation.dart';
+import 'vehicle_fake_panel.dart';
 
 class VehicleNative {
   static const channel = MethodChannel('better_phenikaa/vehicle');
@@ -332,6 +333,14 @@ class _VehiclePageState extends State<VehiclePage> {
                       ),
                       if(testOpen)...<Widget>[
                         const SizedBox(height:10),
+                        const VehicleFakePanel(),
+                        const SizedBox(height:16),
+                        Divider(color:palette.border),
+                        const SizedBox(height:8),
+                        Text('TEST CẢM BIẾN · GPS THẬT',
+                          style:TextStyle(color:palette.textPrimary,
+                            fontWeight:FontWeight.w800,fontSize:13)),
+                        const SizedBox(height:8),
                         Text('Giả lập tín hiệu vào cổng / bước chân. '
                           'Tọa độ và lộ trình vẫn lấy từ GPS thật.',
                           style:TextStyle(color:palette.textSecondary,fontSize:12)),
