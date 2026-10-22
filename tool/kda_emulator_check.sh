@@ -46,7 +46,10 @@ test -n "$apk"
 # delivered profile APK share one valid test certificate; no key is uploaded.
 signer=$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -1)
 mkdir -p dist
-"$signer" sign --ks "$HOME/.android/debug.keystore" --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out dist/BPA-KDA-FIRESTARTER-Test.apk "$apk"
+(cd android && ./gradlew --console=plain :app:signingReport) > build/kda-evidence/signing-report.txt
+debug_keystore=$(awk '/^Variant: debug$/ {debug_variant=1;next} debug_variant && /^Store:/ {sub(/^Store: */, ""); print; exit}' build/kda-evidence/signing-report.txt)
+test -f "$debug_keystore"
+"$signer" sign --ks "$debug_keystore" --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --out dist/BPA-KDA-FIRESTARTER-Test.apk "$apk"
 "$signer" verify --verbose --print-certs dist/BPA-KDA-FIRESTARTER-Test.apk > dist/signature.txt
 (cd dist && sha256sum BPA-KDA-FIRESTARTER-Test.apk > SHA256SUMS)
 printf '%s\n' "$GITHUB_SHA" > dist/COMMIT_SHA
