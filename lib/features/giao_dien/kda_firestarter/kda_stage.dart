@@ -57,7 +57,7 @@ class _KdaSpectrumDockState extends State<KdaSpectrumDock> with SingleTickerProv
   @override void initState(){super.initState();ticker=createTicker(tick);widget.runtime.spectrum.addListener(input);}
   void input(){target=widget.runtime.spectrum.value;lastInput=DateTime.now();if(widget.runtime.foreground&&target.any((v)=>v>.0001)&&!ticker.isActive){last=Duration.zero;ticker.start();}}
   void tick(Duration elapsed){final dt=(elapsed-last).inMicroseconds/1000000;if(dt<1/30)return;last=elapsed;final stale=DateTime.now().difference(lastInput).inMilliseconds>500;var peak=0.0;
-    for(var i=0;i<48;i++){final to=stale||!widget.runtime.foreground||i>=target.length?0.0:target[i];final tau=to>values[i]?.055:.22;values[i]+=(to-values[i])*(1-math.exp(-dt.clamp(0,.1)/tau));peak=math.max(peak,values[i]);}
+    for(var i=0;i<48;i++){final to=stale||!widget.runtime.foreground||i>=target.length?0.0:target[i];final tau=to > values[i] ? .055 : .22;values[i]+=(to-values[i])*(1-math.exp(-dt.clamp(0,.1)/tau));peak=math.max(peak,values[i]);}
     repaint.value++;if(peak<.0005||!widget.runtime.foreground)ticker.stop();
   }
   @override void dispose(){widget.runtime.spectrum.removeListener(input);ticker.dispose();repaint.dispose();super.dispose();}

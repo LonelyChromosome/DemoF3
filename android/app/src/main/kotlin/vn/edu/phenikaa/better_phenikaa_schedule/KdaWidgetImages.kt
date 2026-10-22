@@ -7,7 +7,7 @@ import kotlin.random.Random
 internal object KdaWidgetImages {
  const val THEME="kda_firestarter"
  private const val PREFS="bpa_kda_widget_images_v1"
- private val cache=object:LruCache<Int,Bitmap>(8*1024*1024){override fun sizeOf(key:Int,value:Bitmap)=value.byteCount}
+ private val cache=object:LruCache<Int,Bitmap>(16*1024*1024){override fun sizeOf(key:Int,value:Bitmap)=value.byteCount}
  fun enabled(c:Context)=NativeWidgetPalette.read(c).key==THEME
  fun smallIndex(position:Int)=Math.floorMod(position,4)
  fun nextIndex(current:Int,offset:Int)=(smallIndex(current)+1+Math.floorMod(offset,3))%4

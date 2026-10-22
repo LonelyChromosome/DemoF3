@@ -7,9 +7,15 @@ expected = '2d520a097dcbb7dfff112f87b9970e50d5841fe56b913c2010a2709ac49e303d'
 if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest() == expected:
     print('Approved 207s MV already verified')
 else:
-    assert len(parts)==3, 'Missing supplied FIRESTARTER video parts'
+    assert len(parts)==31, 'Missing supplied FIRESTARTER video parts'
     with target.open('wb') as f:
         for p in parts:
             f.write(p.read_bytes())
     assert hashlib.sha256(target.read_bytes()).hexdigest()==expected, 'FIRESTARTER media integrity failure'
     print('Approved 207s 1440x2560 MV reassembled byte-for-byte')
+
+# Lossless audio-only asset prevents decoding a hidden 2K video in image mode.
+audio = root/'assets/kda/music.m4a'
+if not audio.exists():
+    import subprocess
+    subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-i',str(target),'-vn','-c:a','copy',str(audio)],check=True)

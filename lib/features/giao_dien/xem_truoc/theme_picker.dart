@@ -693,6 +693,7 @@ class _ThemePickerSheetState extends State<_ThemePickerSheet> {
   }
 
   Future<void> _selectPreset(BuildContext context, AppThemeId id) async {
+    if (controller.theme == id) return;
     if(id==AppThemeId.kdaFirestarter){
       final navigator=Navigator.of(context);
       await KdaFireTransition.run(context,() async {await controller.select(id);if(navigator.mounted&&navigator.canPop())navigator.pop();});

@@ -98,8 +98,8 @@ internal class KdaMediaBridge(private val activity: Activity, private val engine
  private fun hold(){handler.removeCallbacks(loop);if(enabled&&foreground){deadline=SystemClock.elapsedRealtime()+remaining;handler.postDelayed(loop,remaining)}}
  fun pause(){foreground=false;if(holding)remaining=(deadline-SystemClock.elapsedRealtime()).coerceAtLeast(0);handler.removeCallbacks(loop);runCatching{if(prepared)player?.pause()};releaseCapture();abandonFocus();state()}
  fun resume(){foreground=true;if(enabled){start();refreshCapture();state()}}
- private fun volume(){if(music&&foreground&&!focusOwned)requestFocus();if(!music)abandonFocus();val v=if(music&&foreground&&focusOwned)1f else 0f;runCatching{player?.setVolume(v,v)}}
- private fun requestFocus(){if(!foreground||!music||focusOwned)return
+ private fun volume(){if(!enabled){abandonFocus();return};if(music&&foreground&&!focusOwned)requestFocus();if(!music)abandonFocus();val v=if(music&&foreground&&focusOwned)1f else 0f;runCatching{player?.setVolume(v,v)}}
+ private fun requestFocus(){if(!enabled||!foreground||!music||focusOwned)return
   val response=if(Build.VERSION.SDK_INT>=26){val req=focusRequest?:AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).setAudioAttributes(attributes).setOnAudioFocusChangeListener(focusListener).build().also{focusRequest=it};audio.requestAudioFocus(req)}else{
    @Suppress("DEPRECATION")
    audio.requestAudioFocus(focusListener,AudioManager.STREAM_MUSIC,AudioManager.AUDIOFOCUS_GAIN)

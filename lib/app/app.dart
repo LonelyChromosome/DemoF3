@@ -72,7 +72,7 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
           themeAnimationDuration: Duration.zero,
           theme: buildBetterTheme(palette),
           builder: (context, child) => BpaPenTraceSplash(
-            backgroundColor: _themes.waterVisible
+            backgroundColor: (_themes.waterVisible || _themes.theme == AppThemeId.kdaFirestarter)
                 ? const Color(0xFF08040D)
                 : Colors.white,
             child: KdaStage(
