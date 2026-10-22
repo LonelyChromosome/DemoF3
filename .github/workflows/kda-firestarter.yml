@@ -66,6 +66,9 @@ jobs:
           retention-days: 30
           overwrite: true
   emulator:
+    # The delivered-APK check consumes the build artifact; do not occupy the
+    # only available runner while its producer is still queued.
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
