@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:better_phenikaa_schedule/app/app.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/kda_firestarter/kda_runtime.dart';
+import 'package:better_phenikaa_schedule/features/giao_dien/kda_firestarter/kda_line_border.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/xem_truoc/theme_picker.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
 import 'package:flutter/material.dart';
@@ -67,6 +68,12 @@ void main(){
   debugPrint('KDA audio: permission=${runtime.permission}, signal=$sawSignal, ${runtime.captureStatus}, native=${await state()}');
   expect(runtime.permission,isTrue);expect(sawSignal,isTrue,reason:runtime.captureStatus);
   await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(.5);
+  final lineMotion=KdaLineScope.maybeOf(tester.element(find.byType(KdaLineBorder).first))!;
+  final lineDeadline=DateTime.now().add(const Duration(seconds:12));
+  while(lineMotion.beatCount==0&&DateTime.now().isBefore(lineDeadline)){await wait(.2);}
+  expect(lineMotion.beatCount,greaterThan(0),reason:'Visible card strings must respond to real decoded music');
+  debugPrint('KDA line motion verified: beats=${lineMotion.beatCount}, energy=${lineMotion.energy}');
+  await wait(2);
   unawaited(showAppThemePicker(tester.element(find.text('Theo ngày'))));await wait(1);
   final customize=find.byKey(const ValueKey('kda-customize-theme'));
   final settingsDeadline=DateTime.now().add(const Duration(seconds:15));
@@ -81,15 +88,16 @@ void main(){
   await tester.tap(find.byKey(const ValueKey('kda-settings-close')));await wait(.5);
   Navigator.of(tester.element(customize)).pop();await wait(.5);
   await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(.5);
-  await runtime.save(runtime.config.copyWith(music:false,visualizer:false));await wait(.5);
+  await runtime.save(runtime.config.copyWith(video:false,music:false,visualizer:false));await wait(.5);
   expect(runtime.spectrum.value.every((v)=>v==0),isTrue);
   await runtime.save(runtime.config.copyWith(visualizer:true));
   await AppThemeController.instance.select(AppThemeId.classic);await wait(1);expect(find.byKey(const ValueKey('kda-toggle-cards')),findsNothing);expect((await state())['enabled'],isFalse);
-  await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);expect(runtime.config.music,isFalse);expect((await state())['music'],isFalse);expect(runtime.cardsVisible,isFalse);
+  await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);expect(runtime.config.music,isTrue);expect((await state())['music'],isTrue);expect(runtime.config.video,isTrue);expect(runtime.cardsVisible,isFalse);expect(((await state())['positionMs'] as num).toInt(),lessThan(20000));
   await runtime.toggleCards();await wait(.5);expect(runtime.cardsVisible,isTrue);
   await AppThemeController.instance.select(AppThemeId.classic);await wait(.5);
   await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);
-  expect(runtime.cardsVisible,isTrue);expect(find.text('Theo ngày'),findsOneWidget);
+  expect(runtime.cardsVisible,isFalse);expect(find.text('Theo ngày'),findsNothing);
+  await runtime.toggleCards();await wait(.5);expect(runtime.cardsVisible,isTrue);
   // Cold-start of the exact delivered APK must restore the last visible state.
   await runtime.cardsWrites;debugPrint('KDA persisted cards visible: ${runtime.cardsVisible}');
  },timeout:const Timeout(Duration(minutes:8)));

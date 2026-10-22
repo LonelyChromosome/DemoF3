@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'kda_runtime.dart';
+import 'kda_line_border.dart';
 
 class KdaStage extends StatefulWidget {
   const KdaStage({required this.enabled,required this.child,super.key});
@@ -16,7 +17,7 @@ class _KdaStageState extends State<KdaStage> with WidgetsBindingObserver {
   @override void didUpdateWidget(covariant KdaStage old){super.didUpdateWidget(old);if(old.enabled!=widget.enabled)sync();}
   @override void didChangeAppLifecycleState(AppLifecycleState state)=>runtime.setForeground(state==AppLifecycleState.resumed);
   @override void dispose(){WidgetsBinding.instance.removeObserver(this);unawaited(runtime.activate(false));super.dispose();}
-  @override Widget build(BuildContext context)=>AnimatedBuilder(animation:runtime,builder:(context,_){
+  @override Widget build(BuildContext context)=>KdaLineHost(child:AnimatedBuilder(animation:runtime,builder:(context,_){
     if(!widget.enabled)return widget.child;
     return Stack(fit:StackFit.expand,children:[
       const ColoredBox(color:Color(0xFF08040D)),
@@ -26,7 +27,7 @@ class _KdaStageState extends State<KdaStage> with WidgetsBindingObserver {
       if(runtime.config.visualizer)Positioned(left:24,right:24,bottom:MediaQuery.paddingOf(context).bottom+12,child:IgnorePointer(child:TickerMode(enabled:runtime.foreground,child:Center(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:380),child:KdaSpectrumDock(runtime:runtime)))))),
       Positioned(right:12,top:MediaQuery.paddingOf(context).top+8,child:Material(color:const Color(0xA0180C22),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24),side:const BorderSide(color:Color(0x99E184BE),width:.7)),child:Semantics(label:runtime.cardsVisible?'Ẩn giao diện BPA':'Hiện giao diện BPA',button:true,child:IconButton(key:const ValueKey('kda-toggle-cards'),onPressed:runtime.toggleCards,color:const Color(0xFFF6DEEF),icon:Icon(runtime.cardsVisible?Icons.visibility_off_outlined:Icons.dashboard_outlined))))),
     ]);
-  });
+  }));
 }
 /// Lazy on entry; once opened, retain UI state offstage without painting it.
 class KdaContentGate extends StatefulWidget {

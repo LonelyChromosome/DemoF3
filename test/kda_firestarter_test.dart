@@ -46,6 +46,20 @@ void main(){
   r.cardsVisible=true;r.loading=null;await r.load();expect(r.cardsVisible,isFalse);
   r.loading=null;r.ready=true;
  });
+ test('new theme entry resets session while cold reload preserves it',() async {
+  final r=KdaRuntime.instance;r.enabled=false;
+  await r.load();
+  await r.save(const KdaConfig(video:false,music:false,visualizer:false,marquee:false,intensity:.6));
+  final pending=r.toggleCards();
+  await r.startNewSession();await pending;
+  expect(r.cardsVisible,isFalse);expect(r.config.video,isTrue);expect(r.config.music,isTrue);
+  expect(r.config.visualizer,isFalse);expect(r.config.marquee,isFalse);expect(r.config.intensity,.6);
+  r.loading=null;await r.load();expect(r.cardsVisible,isFalse);
+  await r.toggleCards();await r.save(r.config.copyWith(video:false,music:false));
+  r.cardsVisible=false;r.loading=null;await r.load();
+  expect(r.cardsVisible,isTrue);expect(r.config.video,isFalse);expect(r.config.music,isFalse);
+  r.cardsVisible=false;r.config=const KdaConfig();r.loading=null;
+ });
  testWidgets('compact settings have controls without descriptive subtitles',(tester) async {
   final r=KdaRuntime.instance;r.enabled=false;r.config=const KdaConfig();r.permission=true;
   await tester.pumpWidget(const MaterialApp(home:Scaffold(body:KdaSettings())));

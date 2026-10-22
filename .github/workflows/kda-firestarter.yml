@@ -39,7 +39,7 @@ jobs:
         run: cd android && ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Build signed ARM64 and x86_64 installable APK
         run: |
-          COOC_VERSION_NAME=kda.1.8.2 flutter build apk --profile --target-platform android-arm64,android-x64 --build-number=72 --build-name=1.8.1
+          COOC_VERSION_NAME=kda.1.8.3 flutter build apk --profile --target-platform android-arm64,android-x64 --build-number=73 --build-name=1.8.3
           mkdir -p dist
           cp build/app/outputs/flutter-apk/app-profile.apk dist/BPA-KDA-FIRESTARTER-Test.apk
           cd dist

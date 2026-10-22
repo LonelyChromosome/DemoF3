@@ -1,4 +1,5 @@
 import '../features/giao_dien/kda_firestarter/kda_runtime.dart';
+import '../features/giao_dien/kda_firestarter/kda_line_border.dart';
 import '../features/giao_dien/water_cooling/water_config.dart';
 import '../features/giao_dien/water_cooling/water_engine.dart';
 import '../features/giao_dien/water_cooling/water_surface.dart';
@@ -828,6 +829,9 @@ class AppThemeController extends ChangeNotifier {
         (_theme == value && _activeCustomTheme == null)) {
       return;
     }
+    if (value == AppThemeId.kdaFirestarter) {
+      await KdaRuntime.instance.startNewSession();
+    }
     await _transitionTo(themeId: value);
   }
 
@@ -1543,7 +1547,7 @@ class AppThemePanel extends StatelessWidget {
     final decoration = BoxDecoration(
       color: alt ? palette.cardAlt : palette.card,
       border: Border.all(
-        color: palette.border,
+        color: palette.id == AppThemeId.kdaFirestarter ? Colors.transparent : palette.border,
         width: palette.geometry == AppThemeGeometry.pixel ? 3 : 1,
       ),
       borderRadius: palette.geometry == AppThemeGeometry.rounded
@@ -1568,6 +1572,9 @@ class AppThemePanel extends StatelessWidget {
       decoration: decoration,
       child: child,
     );
+    if (palette.id == AppThemeId.kdaFirestarter) {
+      return KdaLineBorder(color: palette.border, radius: palette.radius, child: box);
+    }
     return switch (palette.geometry) {
       AppThemeGeometry.valorant => ClipPath(
         clipper: const _ValorantClipper(),

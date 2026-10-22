@@ -57,6 +57,20 @@ class KdaRuntime extends ChangeNotifier {
     notifyListeners();
     await requestPermission();
   }
+  /// Only a deliberate switch from another theme starts a fresh session.
+  /// Cold starts and lifecycle resume keep the user's current session.
+  Future<void> startNewSession() async {
+    await load();
+    await cardsWrites;
+    final initial=config.copyWith(video:true,music:true);
+    final p=await SharedPreferences.getInstance();
+    if(!await p.setString(preferenceKey,jsonEncode(initial.toJson())))throw StateError('Không lưu được thiết lập FIRESTARTER');
+    if(!await p.setBool(cardsPreferenceKey,false))throw StateError('Không lưu được trạng thái card KDA');
+    config=initial;cardsVisible=false;ready=false;
+    // Serialize the native disable before activation, even for rapid re-entry.
+    if(enabled){enabled=false;await configure();}
+    notifyListeners();
+  }
   Future<void> activate(bool value) async {
     if(enabled==value)return;
     enabled=value;ready=false;error=null;textureId=null;
