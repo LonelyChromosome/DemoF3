@@ -90,7 +90,9 @@ void main() {
     expect(withSuffix.subjectName, withoutSuffix.subjectName);
     expect(withSuffix.lessonKind, 'LT');
     expect(withoutSuffix.lessonKind, 'LT');
-    expect(withSuffix.toJson().containsKey('lessonKind'), false);
+    // Non-personal session mode survives cold start for Find Bike eLearning exclusion.
+    expect(withSuffix.toJson()['lessonKind'], 'LT');
+    expect(ScheduleRecord.fromJson(withSuffix.toJson()).lessonKind, 'LT');
     expect(withSuffix.toJson().containsKey('attendanceStatus'), false);
   });
 }

@@ -25,7 +25,7 @@ void main() {
     await tester.pump();
 
     FilledButton holdButton() => tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Giữ để tiếp tục'),
+      find.widgetWithText(FilledButton, 'Giữ để tiếp tục · 2 giây'),
     );
     expect(holdButton().onPressed, isNull);
 

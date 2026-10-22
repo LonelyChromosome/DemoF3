@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('notification bell shows 1.8 Water Cooling release notes', (tester) async {
+  testWidgets('notification bell shows 2.0 KDA and Find Bike release notes', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
 
     final now = DateTime.now();
@@ -35,8 +35,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Thông báo'), findsOneWidget);
     expect(find.text('Update log'), findsOneWidget);
-    expect(find.text('cooc.1.8'), findsOneWidget);
-    expect(find.text('Theme Premium 2: Water Cooling'), findsOneWidget);
+    expect(find.text('cooc.2.0'), findsOneWidget);
+    expect(find.text('KDA Starter prenium theme'), findsOneWidget);
+    expect(find.text('Find Bike(beta)'), findsOneWidget);
     expect(find.text('cooc1.6'), findsNothing);
     expect(find.text('Bổ sung VFX'), findsNothing);
     debugDefaultTargetPlatformOverride = null;

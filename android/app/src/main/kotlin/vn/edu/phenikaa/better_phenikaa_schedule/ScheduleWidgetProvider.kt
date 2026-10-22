@@ -97,7 +97,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             theme.textColor, theme.textColor, theme.key).timeText(index, active)
     }
 
-    internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int): Bitmap {
+    internal fun overviewBackground(context: Context, widthDp: Int, heightDp: Int, kdaImageIndex: Int = 0): Bitmap {
         val theme = readThemeColors(context)
         if (theme.key == "tien_mon_premium") {
             return WidgetStaticLayerRenderer.decorateLarge(
@@ -110,6 +110,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val density = context.resources.displayMetrics.density
         val width = (widthDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
         val height = (heightDp.coerceAtLeast(1) * density).roundToInt().coerceAtLeast(1)
+        if (theme.key == KdaWidgetImages.THEME) return KdaWidgetImages.largeBitmap(context, width, height, kdaImageIndex)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             val start = if (theme.key == "classic") theme.startColor else palette.backgroundStart
@@ -186,6 +187,16 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         val radius = 12f * density
+        if (theme.key == KdaWidgetImages.THEME) {
+            val rect = RectF(.7f*density,.7f*density,width-.7f*density,height-.7f*density)
+            canvas.drawRoundRect(rect,radius,radius,Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                shader=LinearGradient(0f,0f,width.toFloat(),height.toFloat(),0xA0140A20.toInt(),0x8C1C0C28.toInt(),Shader.TileMode.CLAMP)
+            })
+            canvas.drawRoundRect(rect,radius,radius,Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color=0x90F1A2CD.toInt();style=Paint.Style.STROKE;strokeWidth=.7f*density
+            })
+            return bitmap
+        }
         if(theme.key=="water_cooling"){
             val rect=RectF(0f,0f,width.toFloat(),height.toFloat());canvas.drawRoundRect(rect,radius,radius,Paint(Paint.ANTI_ALIAS_FLAG).apply{shader=LinearGradient(0f,0f,width.toFloat(),height.toFloat(),0x843C2058.toInt(),0x783B1835,Shader.TileMode.CLAMP)})
             WaterWidgetRenderer.card(canvas,rect,configOverride ?: WidgetThemeV14.read(context),density,RectF(0f,0f,1f,1f));return bitmap
@@ -741,8 +752,10 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
             DEFAULT_WIDGET_WIDTH_DP, DEFAULT_WIDGET_HEIGHT_DP)
         val width = size.width.roundToInt().coerceAtLeast(1)
         val height = size.height.roundToInt().coerceAtLeast(1)
-        val oldFrame = renderWidgetStackCover(context, before, width, height)
-        val nextFrame = renderWidgetStackCover(context, after, width, height)
+        val oldIndex = WidgetSnapshotStore.readOverview(context,id,!examMode).indexOfFirst { it.id == before.id }.coerceAtLeast(0)
+        val nextIndex = WidgetSnapshotStore.read(context,id).items.indexOfFirst { it.id == after.id }.coerceAtLeast(0)
+        val oldFrame = renderWidgetStackCover(context, before, width, height, photoIndex = oldIndex)
+        val nextFrame = renderWidgetStackCover(context, after, width, height, photoIndex = nextIndex)
         val count = 13
         repeat(count) { frame ->
             Handler(Looper.getMainLooper()).postDelayed({
@@ -1126,6 +1139,7 @@ class ScheduleWidgetProvider : HomeWidgetProvider() {
         "ben10" -> ThemeColors(key, 0xFF101510.toInt(), 0xFF1D5F22.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
         "youtube" -> ThemeColors(key, 0xFF181818.toInt(), 0xFF2B0E14.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())
         "steam" -> ThemeColors(key, 0xFF171D25.toInt(), 0xFF1B3D55.toInt(), 0xFFD6E9F8.toInt(), 0xFFD6E9F8.toInt())
+        "kda_firestarter" -> ThemeColors(key, 0xFF17091D.toInt(), 0xFF4A163C.toInt(), 0xFFFFF5FC.toInt(), 0xFFFFF5FC.toInt())
         "water_cooling" -> ThemeColors(key,0xFF10091A.toInt(),0xFF462145.toInt(),0xFFF6EDFF.toInt(),0xFFF6EDFF.toInt())
         "tien_mon_premium" -> ThemeColors(key, 0xFF082D2B.toInt(), 0xFF667E7B.toInt(), 0xFFFFD66B.toInt(), 0xFFFFD66B.toInt())
         else -> ThemeColors("classic", 0xFF173A8E.toInt(), 0xFF315AB5.toInt(), 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt())

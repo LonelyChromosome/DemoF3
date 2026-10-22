@@ -1,0 +1,49 @@
+[
+  {
+    "path": "assets/kda/character_2.jpg",
+    "sha256": "30a9cb567fba7ce3a19caa699ad77abebafbb3f56e8bd452a02ecef1da6b7ca6",
+    "bytes": 111113
+  },
+  {
+    "path": "assets/kda/firestarter.mp4",
+    "sha256": "2d520a097dcbb7dfff112f87b9970e50d5841fe56b913c2010a2709ac49e303d",
+    "bytes": 96939922
+  },
+  {
+    "path": "assets/kda/character_1.jpg",
+    "sha256": "bac73a71e545f75c7042d2f34ea30a116e98ef67326a4a0708872c2caea4cc8d",
+    "bytes": 133481
+  },
+  {
+    "path": "assets/kda/stacked.png",
+    "sha256": "3f910615825297a1e82d0beebb2442bc4c08b57470500089c5879c891f7976be",
+    "bytes": 206918
+  },
+  {
+    "path": "assets/kda/character_3.jpg",
+    "sha256": "3b8e6227f7027912df877375443cc49d9e7b489c019ca828105342824697853a",
+    "bytes": 91259
+  },
+  {
+    "path": "assets/kda/fire_transition.html",
+    "sha256": "a7fd8d4b4880f9bec3b91f5f180cd1e374919fafe1c8d1ee346ecb7e2ba72ae9",
+    "bytes": 14617
+  },
+  {
+    "path": "assets/kda/character_4.jpg",
+    "sha256": "d26a2be753adbb849c62f164b7e5e8775b308c14dabf1c7f3a6fcf2b93c1ed6f",
+    "bytes": 93413
+  },
+  {
+    "path": "assets/kda/music.m4a",
+    "bytes": 6434057,
+    "sha256": "614b29866313235ecdc09bd05ce05e62ccbafc73079adbfc08aeb6363843beca",
+    "source": "Lossless AAC stream copy from the approved FIRESTARTER MV"
+  },
+  {
+    "path": "assets/kda/preview.jpg",
+    "bytes": 511470,
+    "sha256": "88be69bde2f78532f7fd2ce5f9df55ebcb86eefc655b7b6b84596fc580976475",
+    "source": "User supplied KDA theme preview; original 2048x1152 JPEG"
+  }
+]

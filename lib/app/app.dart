@@ -1,3 +1,4 @@
+import '../features/giao_dien/kda_firestarter/kda_stage.dart';
 import '../features/giao_dien/water_cooling/water_surface.dart';
 import '../features/giao_dien/water_cooling/water_engine.dart';
 import '../features/giao_dien/water_cooling/water_routes.dart';
@@ -36,6 +37,8 @@ import 'package:better_phenikaa_schedule/features/lich_hoc/alarm_test_fixture.da
 import 'package:better_phenikaa_schedule/features/tien_ich_lich_hoc/widget_publisher.dart';
 import 'package:better_phenikaa_schedule/features/tro_li/assistant_text.dart';
 import 'package:better_phenikaa_schedule/theme/app_theme.dart';
+import 'package:better_phenikaa_schedule/features/phuong_tien/vehicle_page.dart';
+import 'package:better_phenikaa_schedule/features/phuong_tien/vehicle_schedule.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -71,16 +74,19 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
           themeAnimationDuration: Duration.zero,
           theme: buildBetterTheme(palette),
           builder: (context, child) => BpaPenTraceSplash(
-            backgroundColor: _themes.waterVisible
+            backgroundColor: (_themes.waterVisible || _themes.theme == AppThemeId.kdaFirestarter)
                 ? const Color(0xFF08040D)
                 : Colors.white,
-            child: WaterStage(
+            child: KdaStage(
+              enabled: _themes.theme == AppThemeId.kdaFirestarter,
+              child: WaterStage(
               enabled: _themes.waterVisible,
               config: _themes.waterConfig,
               child: ThemeDustSurface(
                 key: ThemeDustSurface.surfaceKey,
                 child: child ?? const SizedBox.shrink(),
               ),
+            ),
             ),
           ),
           home: const _AppRoot(),
@@ -90,7 +96,7 @@ class _BetterPhenikaaScheduleAppState extends State<BetterPhenikaaScheduleApp> {
   }
 }
 
-enum _AppPage { timetable, exam, account, notifications }
+enum _AppPage { timetable, exam, account, notifications, vehicle }
 
 class _AppRoot extends StatefulWidget {
   const new();
@@ -336,7 +342,8 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       await prefs.remove(_storageKey);
       await prefs.remove(SemesterRetention.currentStartKey);
       await prefs.remove(SemesterRetention.previousKey);
-      await WidgetPublisher.clear();
+      unawaited(publishVehicleSchedule(null));
+    await WidgetPublisher.clear();
       _semesterExpiryTimer?.cancel();
       if (mounted)
         setState(() {
@@ -350,6 +357,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     final data = SemesterRetention.combine(current, previous);
     if (prefs.getString(_storageKey) != data.encode()) {
       await prefs.setString(_storageKey, data.encode());
+      unawaited(publishVehicleSchedule(data));
       await WidgetPublisher.publish(data, resetToToday: false);
     }
     _scheduleSemesterExpiry(retained, previous);
@@ -594,6 +602,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
         await prefs.remove(_storageKey);
         await prefs.remove(SemesterRetention.currentStartKey);
         await prefs.remove(SemesterRetention.previousKey);
+        unawaited(publishVehicleSchedule(null));
         await WidgetPublisher.clear();
         semester = null;
         raw = null;
@@ -620,6 +629,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
             previous,
           );
         }
+        unawaited(publishVehicleSchedule(data));
         await WidgetPublisher.publish(data, resetToToday: false);
         if (semester != null) {
           try {
@@ -771,6 +781,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
             ? previousSemester?.toImportedScheduleData()
             : ImportedScheduleData.decode(previousSnapshot);
         if (oldData != null) {
+          unawaited(publishVehicleSchedule(oldData));
           await WidgetPublisher.publish(oldData, resetToToday: false);
         }
       } on Object {
@@ -798,6 +809,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     ImportedScheduleData publishedData,
   ) async {
     try {
+      unawaited(publishVehicleSchedule(publishedData));
       await WidgetPublisher.publish(publishedData, resetToToday: true);
     } on Object {
       // The app snapshot is authoritative; the widget can repair on refresh.
@@ -1181,6 +1193,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
     await prefs.remove(_routeKey);
     await CurrentSemesterStore().clear();
     await SemesterDifferenceStore().clear();
+    unawaited(publishVehicleSchedule(null));
     await WidgetPublisher.clear();
     await prefs.clear();
     if (!kIsWeb) {
@@ -1304,7 +1317,9 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: AppThemeBackdrop(
-          child: SafeArea(
+          child: KdaContentGate(
+            enabled: palette.id == AppThemeId.kdaFirestarter,
+            builder: (context) => SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final desktop = constraints.maxWidth > 680;
@@ -1324,7 +1339,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                       decoration: BoxDecoration(
                         color:
                             (palette.id == AppThemeId.tienMonPremium ||
-                                palette.id == AppThemeId.waterCooling)
+                                palette.id == AppThemeId.waterCooling || palette.id == AppThemeId.kdaFirestarter)
                             ? Colors.transparent
                             : palette.surface.withValues(
                                 alpha: desktop ? .98 : .94,
@@ -1452,6 +1467,7 @@ class _AppRootState extends State<_AppRoot> with WidgetsBindingObserver {
                 );
               },
             ),
+          ),
           ),
         ),
       ),
@@ -1791,6 +1807,7 @@ class _MainShellState extends State<_MainShell>
       _AppPage.exam => 1,
       _AppPage.account => 2,
       _AppPage.notifications => 3,
+      _AppPage.vehicle => 4,
     };
 
     return _PhoneSurface(
@@ -1867,6 +1884,15 @@ class _MainShellState extends State<_MainShell>
                         assistantPack: assistantPack,
                         difference: latestDifference,
                         appVersionName: appVersionName,
+                      ),
+                    ),
+                  ),
+                  TickerMode(
+                    enabled: _displayPage == _AppPage.vehicle,
+                    child: RepaintBoundary(
+                      child: VehiclePage(
+                        active: _displayPage == _AppPage.vehicle,
+                        windows: vehicleScheduleWindows(data.classes),
                       ),
                     ),
                   ),
@@ -3541,14 +3567,14 @@ class _TimetableModeSelector extends StatelessWidget {
           weekly: weekly,
           premium: premium,
           primary: palette.primary,
-          radius: radius - 3,
+          radius: (radius - 3).clamp(0.0,24.0).toDouble(),
         ),
         child: Row(
           children: <Widget>[
             for (final value in <bool>[false, true])
               Expanded(
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(radius - 3),
+                  borderRadius: BorderRadius.circular((radius - 3).clamp(0.0,24.0).toDouble()),
                   onTap: () => onChanged(value),
                   child: Center(
                     child: Text(
@@ -5071,7 +5097,7 @@ class _ControlPanel extends StatelessWidget {
       builder: (context, progress, child) {
         return SizedBox(
           width: 300,
-          height: 344,
+          height: 408,
           child: Stack(
             clipBehavior: Clip.none,
             children: <Widget>[
@@ -5079,7 +5105,7 @@ class _ControlPanel extends StatelessWidget {
                 progress: progress,
                 start: 0,
                 right: 4,
-                bottom: 254,
+                bottom: 314,
                 originOffset: const Offset(20, 78),
                 child: _PanelAction(
                   label: 'Lịch học',
@@ -5093,7 +5119,7 @@ class _ControlPanel extends StatelessWidget {
                 progress: progress,
                 start: .08,
                 right: 42,
-                bottom: 196,
+                bottom: 256,
                 originOffset: const Offset(34, 62),
                 child: _PanelAction(
                   label: 'Lịch thi',
@@ -5108,7 +5134,7 @@ class _ControlPanel extends StatelessWidget {
                 progress: progress,
                 start: .16,
                 right: 72,
-                bottom: 138,
+                bottom: 198,
                 originOffset: const Offset(46, 46),
                 child: _PanelAction(
                   label: 'Đồng bộ',
@@ -5122,7 +5148,7 @@ class _ControlPanel extends StatelessWidget {
                 progress: progress,
                 start: .24,
                 right: 92,
-                bottom: 80,
+                bottom: 140,
                 originOffset: const Offset(54, 30),
                 child: _PanelAction(
                   label: 'Tài khoản',
@@ -5136,7 +5162,7 @@ class _ControlPanel extends StatelessWidget {
                 progress: progress,
                 start: .32,
                 right: 100,
-                bottom: 20,
+                bottom: 80,
                 originOffset: const Offset(58, 20),
                 child: _PanelAction(
                   label: 'Giao diện',
@@ -5144,6 +5170,20 @@ class _ControlPanel extends StatelessWidget {
                   color: _panelTertiaryColor(palette),
                   selected: false,
                   onTap: () => showAppThemePicker(context),
+                ),
+              ),
+              _ArcPanelAction(
+                progress: progress,
+                start: .40,
+                right: 104,
+                bottom: 20,
+                originOffset: const Offset(65, 16),
+                child: _PanelAction(
+                  label: 'Xe cộ',
+                  icon: Icons.two_wheeler_rounded,
+                  color: palette.primary,
+                  selected: page == _AppPage.vehicle,
+                  onTap: () => onOpenPage(_AppPage.vehicle),
                 ),
               ),
             ],
@@ -5289,6 +5329,7 @@ Color _panelSecondaryColor(AppThemePalette palette) => switch (palette.id) {
   AppThemeId.steam => const Color(0xFFA4D007),
   AppThemeId.tienMonPremium => const Color(0xFF74D8B1),
   AppThemeId.waterCooling => palette.accent,
+  AppThemeId.kdaFirestarter => const Color(0xFF8EEFFF),
   AppThemeId.custom => palette.primary,
 };
 
@@ -5305,6 +5346,7 @@ Color _panelTertiaryColor(AppThemePalette palette) => switch (palette.id) {
   AppThemeId.steam => const Color(0xFF66C0F4),
   AppThemeId.tienMonPremium => const Color(0xFFFFD66B),
   AppThemeId.waterCooling => const Color(0xFFB580F4),
+  AppThemeId.kdaFirestarter => const Color(0xFFDD8DFF),
   AppThemeId.custom => palette.accent,
 };
 
@@ -5437,7 +5479,7 @@ class _PhoneSurface extends StatelessWidget {
     return ColoredBox(
       color:
           (palette.id == AppThemeId.tienMonPremium ||
-              palette.id == AppThemeId.waterCooling)
+              palette.id == AppThemeId.waterCooling || palette.id == AppThemeId.kdaFirestarter)
           ? Colors.transparent
           : palette.surface.withValues(alpha: palette.dark ? .94 : .985),
       child: SizedBox.expand(child: child),

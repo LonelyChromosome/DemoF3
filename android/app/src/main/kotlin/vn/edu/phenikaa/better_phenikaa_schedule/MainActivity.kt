@@ -25,14 +25,20 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.util.UUID
 import java.util.concurrent.ExecutorService
+import vn.edu.phenikaa.better_phenikaa_schedule.findbike.VehicleBridge
+import vn.edu.phenikaa.better_phenikaa_schedule.findbike.VehicleLifecycle
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
+    private var kdaMedia: KdaMediaBridge? = null
     private var updateBridge: UpdateBridge? = null
+    private var vehicleBridge: VehicleBridge? = null
     override fun onRequestPermissionsResult(
         requestCode: Int, permissions: Array<out String>, grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        kdaMedia?.permissionResult(requestCode)
+        vehicleBridge?.permissionsUpdated(requestCode)
         if (requestCode == 8421 &&
             grantResults.firstOrNull() == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             ExamChangeNotifier.publishPending(applicationContext)
@@ -53,6 +59,8 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        kdaMedia = KdaMediaBridge(this, flutterEngine)
+        vehicleBridge = VehicleBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         waterGravity=WaterGravityBridge(this,flutterEngine.dartExecutor.binaryMessenger)
         updateBridge = UpdateBridge(this, flutterEngine)
         ExamChangeNotifier.recoverExisting(applicationContext)
@@ -166,6 +174,8 @@ class MainActivity : FlutterActivity() {
 
     override fun onResume() {
         super.onResume()
+        kdaMedia?.resume()
+        VehicleLifecycle.armNext(this)
         waterGravity?.resume()
         UpdateConfirmation.visible = true
         UpdateConfirmation.take()?.let { startActivity(it) }
@@ -180,6 +190,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onPause() {
+        kdaMedia?.pause()
         waterGravity?.pause()
         UpdateConfirmation.visible = false
         updateBridge?.onPause()
@@ -187,6 +198,10 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        kdaMedia?.close()
+        kdaMedia = null
+        vehicleBridge?.close()
+        vehicleBridge = null
         waterGravity?.close()
         waterGravity=null
         updateBridge?.close()
