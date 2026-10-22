@@ -36,12 +36,20 @@ class KdaContentGate extends StatefulWidget {
 }
 class _KdaContentGateState extends State<KdaContentGate> {
   Widget? content;bool hidden=true;
+  Timer? hideTimer;
+  @override void dispose(){hideTimer?.cancel();super.dispose();}
   @override Widget build(BuildContext context){
     if(!widget.enabled)return widget.builder(context);
     final r=KdaRuntime.instance;
     return AnimatedBuilder(animation:r,builder:(context,_){
       final visible=r.cardsVisible&&(r.ready||!r.config.video||r.error!=null);
-      if(visible){content=widget.builder(context);hidden=false;}
+      if(visible){hideTimer?.cancel();hideTimer=null;content=widget.builder(context);hidden=false;}
+      else if(!hidden&&hideTimer==null){
+        hideTimer=Timer(const Duration(milliseconds:240),(){
+          hideTimer=null;
+          if(mounted&&!r.cardsVisible)setState(()=>hidden=true);
+        });
+      }
       if(content==null)return const SizedBox.expand();
       return Offstage(
         offstage: hidden && !visible,

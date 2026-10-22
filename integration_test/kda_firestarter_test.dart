@@ -39,7 +39,10 @@ void main(){
   expect(AppThemeController.instance.theme,AppThemeId.kdaFirestarter);expect(runtime.error,isNull);await runtime.waitForFrame();expect(runtime.ready,isTrue);expect(runtime.cardsVisible,isFalse);expect(find.text('Theo ngày'),findsNothing);expect((await state())['music'],isTrue);expect(runtime.permission,isTrue);
   final before=((await state())['positionMs'] as num).toInt();
   await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(1);expect(find.text('Theo ngày'),findsOneWidget);
-  await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(1);expect(find.text('Theo ngày'),findsNothing);expect(((await state())['positionMs'] as num).toInt(),greaterThan(before));
+  await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));expect(runtime.cardsVisible,isFalse);
+  final hideDeadline=DateTime.now().add(const Duration(seconds:5));
+  while(find.text('Theo ngày').evaluate().isNotEmpty&&DateTime.now().isBefore(hideDeadline)){await wait(.25);}
+  expect(find.text('Theo ngày'),findsNothing);expect(((await state())['positionMs'] as num).toInt(),greaterThan(before));
   await runtime.save(runtime.config.copyWith(music:false));
   await runtime.save(runtime.config.copyWith(video:false));await wait(1);expect((await state())['playing'],isFalse);expect(find.byType(Texture),findsNothing);
   await runtime.save(runtime.config.copyWith(video:true));await wait(3);debugPrint('KDA video restarted: ${await state()}');expect((await state())['playing'],isTrue);expect(runtime.error,isNull);

@@ -6,7 +6,7 @@ import 'package:better_phenikaa_schedule/features/giao_dien/kda_firestarter/kda_
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 void main(){
- setUp((){SharedPreferences.setMockInitialValues({});});
+ setUp((){SharedPreferences.setMockInitialValues({});final r=KdaRuntime.instance;r.cardsWrites=Future.value();r.loading=null;});
  testWidgets('cinematic control works outside the Navigator overlay',(tester) async {
   final r=KdaRuntime.instance;
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(KdaRuntime.channel,(_) async=>{'type':'state','ready':true});
@@ -37,7 +37,7 @@ void main(){
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(KdaRuntime.channel,null);
   r.loading=null;r.config=const KdaConfig();
  });
- testWidgets('last card choice survives reload and rapid toggles',(tester) async {
+ test('last card choice survives reload and rapid toggles',() async {
   final r=KdaRuntime.instance;r.loading=null;await r.load();expect(r.cardsVisible,isFalse);
   await r.toggleCards();expect(r.cardsVisible,isTrue);
   r.cardsVisible=false;r.loading=null;await r.load();expect(r.cardsVisible,isTrue);
