@@ -46,8 +46,11 @@ class KdaLineMotion extends ChangeNotifier {
     }
     double flux(int start, int end) {
       var sum = 0.0;
-      for (var i = start; i < end; i++) { sum += math.max(0.0, values[i] - _previous[i]); }
-      return sum / (end - start);
+      for (var i = start; i < end; i++) {
+        final rise = math.max(0.0, values[i] - _previous[i]);
+        sum += rise * rise;
+      }
+      return math.sqrt(sum / (end - start));
     }
     _targetEnergy = rms(0, 44);
     _targetBass = rms(0, 14);
@@ -107,7 +110,8 @@ class KdaLineMotion extends ChangeNotifier {
   }
 
   void step(double elapsedSeconds) {
-    final dt = elapsedSeconds.clamp(0.0, .10);
+    // Analytic damping can use real elapsed time, including a delayed frame.
+    final dt = elapsedSeconds.isFinite ? elapsedSeconds.clamp(0.0, 2.0) : 0.0;
     _clock += dt;
     _age += dt;
     final live = _age < .25;

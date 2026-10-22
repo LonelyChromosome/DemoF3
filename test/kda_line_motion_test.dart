@@ -81,6 +81,18 @@ void main() {
     for (var i = 1; i < 80; i++) { m.input(voice(.31), timestampSeconds: .05 + i * .05); m.step(.05); }
     expect(peak(m), 0); m.dispose();
   });
+  test('changes in a few vocal harmonics are not lost in a band average', () {
+    final m=KdaLineMotion();final before=voice(.12),after=voice(.12);
+    for(final i in [17,23,29]){after[i]=.20;}
+    m.input(before,timestampSeconds:0);m.input(after,timestampSeconds:.1);m.step(.02);
+    expect(m.beatCount,1);expect(m.pulses.single.kind,KdaPulseKind.vocal);m.dispose();
+  });
+  test('a delayed render frame does not slow musical time or keep a hit alive', () {
+    final m=KdaLineMotion();
+    m.input(voice(.12),timestampSeconds:0);m.input(voice(.8),timestampSeconds:.1);m.step(.02);
+    expect(m.pulses,isNotEmpty);m.step(1);
+    expect(m.pulses,isEmpty);expect(m.moving,isFalse);expect(peak(m),0);m.dispose();
+  });
   test('invalid FFT values cannot produce invalid geometry', () {
     final m = KdaLineMotion(); m.input([double.nan, double.infinity, -1, 2]); m.step(.03);
     expect(m.energy.isFinite, isTrue); expect(m.displacement(.5, 1, 1.5).isFinite, isTrue); m.dispose();
