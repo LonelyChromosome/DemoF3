@@ -11,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main(){
  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
  testWidgets('native cinematic video, approved fire, schedule visibility, image mode and end-of-stream loop',(tester) async {
-  Future<void> wait(double seconds) async {final end=DateTime.now().add(Duration(milliseconds:(seconds*1000).round()));while(DateTime.now().isBefore(end)){await tester.pump(const Duration(milliseconds:200));}}
+  Future<void> wait(double seconds) async {final end=DateTime.now().add(Duration(milliseconds:(seconds*1000).round()));var frames=0;final minimum=seconds>=.5?3:1;while(frames<minimum||DateTime.now().isBefore(end)){await tester.pump(const Duration(milliseconds:200));frames++;}}
   Future<Map<Object?,Object?>> state() async=>await KdaRuntime.channel.invokeMapMethod<Object?,Object?>('state')??{};
   final now=DateTime.now();
   final data=ImportedScheduleData(displayName:'KDA Android verification',records:[ScheduleRecord(id:'kda-test',isExam:false,subjectName:'FIRESTARTER timetable test',room:'A1',startAt:DateTime(now.year,now.month,now.day,7),endAt:DateTime(now.year,now.month,now.day,9))],syncedAt:now);
@@ -69,6 +69,8 @@ void main(){
   await tester.tap(find.byKey(const ValueKey('kda-toggle-cards')));await wait(.5);
   unawaited(showAppThemePicker(tester.element(find.text('Theo ngày'))));await wait(1);
   final customize=find.byKey(const ValueKey('kda-customize-theme'));
+  final settingsDeadline=DateTime.now().add(const Duration(seconds:15));
+  while(customize.hitTestable().evaluate().isEmpty&&DateTime.now().isBefore(settingsDeadline)){await wait(.5);}
   expect(customize.hitTestable(),findsOneWidget);
   expect(find.byKey(const ValueKey('kda-theme-settings')),findsNothing);
   await tester.tap(customize);await wait(.5);
