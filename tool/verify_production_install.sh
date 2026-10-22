@@ -75,7 +75,7 @@ manifest=json.loads(newbytes)
 assert manifest['versionName']==os.environ['VERSION_NAME']
 assert manifest['versionCode']==int(os.environ['VERSION_CODE'])
 assert 0<manifest['apkSize']<=300_000_000
-assert manifest['notes'].splitlines()==['KDA Starter prenium theme','Find Bike(beta)']
+assert manifest['notes']==os.environ['NOTES']
 (p/'feed-compatibility.txt').write_text('PASS: new Ed25519 feed verifies with public key embedded in production 1.8; public key retained in 2.0; manifest fits existing client limits.\n')
 print((p/'feed-compatibility.txt').read_text())
 PY_VERIFY

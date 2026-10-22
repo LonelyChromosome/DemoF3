@@ -271,6 +271,7 @@ jobs:
           APK_NAME: ${{ needs.build.outputs.apk_name }}
           VERSION_NAME: ${{ inputs.version_name }}
           VERSION_CODE: ${{ inputs.version_code }}
+          NOTES: ${{ inputs.notes }}
         with:
           api-level: 35
           arch: x86_64
