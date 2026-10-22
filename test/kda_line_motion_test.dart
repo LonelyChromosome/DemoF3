@@ -31,11 +31,41 @@ void main() {
       final kick = i % 15 < 3;
       m.input(List.generate(48, (b) => b < 14 && kick ? 1 : .65)); m.step(1 / 30);
       expect(m.pulses.length, lessThanOrEqualTo(4));
-      for (var j = 0; j < 100; j++) { expect(m.displacement(j / 100, 700, 1.5).abs(), lessThanOrEqualTo(6)); }
+      for (var j = 0; j < 100; j++) { expect(m.displacement(j / 100, 700, 1.5).abs(), lessThanOrEqualTo(12)); }
     }
     expect(m.beatCount, greaterThan(5)); expect(m.climax, greaterThan(.7));
     m.reset(); expect(m.moving, isFalse); expect(m.climax, 0);
     m.dispose();
+  });
+  test('continuous music keeps a changing wave after the initial onset expires', () {
+    final m = KdaLineMotion();
+    var activeFrames = 0;
+    for (var i = 0; i < 300; i++) {
+      m.input(List.filled(48, .65)); m.step(1 / 30);
+      if (i > 60 && m.hasFlow) activeFrames++;
+    }
+    expect(m.pulses, isEmpty, reason: 'A steady musical bed has no new bass onsets');
+    expect(activeFrames, greaterThan(230));
+    final first=List.generate(100,(i)=>m.displacement(i/100,900,1));
+    m.input(List.filled(48,.65));m.step(.1);
+    final next=List.generate(100,(i)=>m.displacement(i/100,900,1));
+    expect(next,isNot(equals(first)));expect(first.any((v)=>v.abs()>1),isTrue);
+    for(var i=0;i<60;i++){m.input(List.filled(48,0));m.step(1/30);}
+    expect(m.hasFlow,isFalse);expect(m.displacement(.2,900,1),0);
+    m.dispose();
+  });
+  test('loud passages and dense percussion have distinct excursions and speed', () {
+    final gentle=KdaLineMotion(),hard=KdaLineMotion(),dense=KdaLineMotion();
+    for(var i=0;i<180;i++){
+      gentle.input(List.filled(48,.15));hard.input(List.filled(48,.85));
+      dense.input(List.filled(48,i%8<2?.95:.18));
+      for(final m in [gentle,hard,dense]){m.step(1/30);}
+    }
+    double peak(KdaLineMotion m)=>List.generate(120,(i)=>m.displacement(i/120,900,1).abs()).reduce((a,b)=>a>b?a:b);
+    expect(peak(hard),greaterThan(peak(gentle)*2));
+    expect(dense.density,greaterThan(gentle.density));
+    expect(hard.phase,greaterThan(gentle.phase));
+    for(final m in [gentle,hard,dense]){m.dispose();}
   });
   test('invalid FFT values cannot produce invalid geometry', () {
     final m = KdaLineMotion();

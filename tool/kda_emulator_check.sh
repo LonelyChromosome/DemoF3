@@ -66,6 +66,7 @@ sleep 3
 adb exec-out screencap -p > build/kda-evidence/delivered-apk-resumed.png
 adb shell pidof vn.edu.phenikaa.better_phenikaa_schedule.kdatest > build/kda-evidence/delivered-apk-pid.txt
 adb shell dumpsys meminfo vn.edu.phenikaa.better_phenikaa_schedule.kdatest > build/kda-evidence/meminfo.txt
+adb shell dumpsys gfxinfo vn.edu.phenikaa.better_phenikaa_schedule.kdatest > build/kda-evidence/gfxinfo.txt
 adb shell dumpsys package vn.edu.phenikaa.better_phenikaa_schedule.kdatest > build/kda-evidence/package.txt
 python3 - <<'PY'
 from pathlib import Path

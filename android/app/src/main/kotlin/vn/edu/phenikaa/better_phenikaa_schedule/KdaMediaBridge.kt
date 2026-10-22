@@ -136,7 +136,18 @@ internal class KdaMediaBridge(private val activity: Activity, private val engine
   }catch(_:Exception){releaseCapture();captureStatus="Android chưa cấp tín hiệu nguồn này; có thể bật nhạc FIRESTARTER để dùng nguồn trong app."}
  }
  private fun releaseCapture(){runCatching{capture?.enabled=false};runCatching{capture?.release()};capture=null;captureSession=null;sink?.success(mapOf("type" to "fft","bands" to List(48){0.0}))}
- private fun snapshot(): Map<String,Any?> = mapOf("type" to "state","textureId" to texture?.id(),"width" to width,"height" to height,"ready" to ready,"error" to error,"permission" to permitted(),"captureStatus" to captureStatus,"prepared" to prepared,"video" to video,"seeking" to seeking,"durationMs" to runCatching{if(prepared)player?.duration?:0 else 0}.getOrDefault(0),"positionMs" to runCatching{if(prepared)player?.currentPosition?:savedPosition else savedPosition}.getOrDefault(savedPosition),"holding" to holding,"foreground" to foreground,"loops" to loops,"playing" to runCatching{prepared&&player?.isPlaying==true}.getOrDefault(false),"music" to music,"enabled" to enabled,"audioFocus" to focusOwned,"musicVolume" to audio.getStreamVolume(AudioManager.STREAM_MUSIC))
+ // Optional platform metrics distinguish decoder drops from Flutter overlay cost.
+ private fun videoMetrics(): Map<String,Any?> {
+  if(Build.VERSION.SDK_INT<26||!prepared||!video)return emptyMap()
+  return runCatching {
+   val metrics=player?.metrics
+   mapOf<String,Any?>(
+    "videoCodec" to metrics?.getString(MediaPlayer.MetricsConstants.CODEC_VIDEO),
+    "videoFrames" to metrics?.getInt(MediaPlayer.MetricsConstants.FRAMES,-1),
+    "videoDroppedFrames" to metrics?.getInt(MediaPlayer.MetricsConstants.FRAMES_DROPPED,-1))
+  }.getOrDefault(emptyMap())
+ }
+ private fun snapshot(): Map<String,Any?> = mapOf("type" to "state","textureId" to texture?.id(),"width" to width,"height" to height,"ready" to ready,"error" to error,"permission" to permitted(),"captureStatus" to captureStatus,"prepared" to prepared,"video" to video,"seeking" to seeking,"durationMs" to runCatching{if(prepared)player?.duration?:0 else 0}.getOrDefault(0),"positionMs" to runCatching{if(prepared)player?.currentPosition?:savedPosition else savedPosition}.getOrDefault(savedPosition),"holding" to holding,"foreground" to foreground,"loops" to loops,"playing" to runCatching{prepared&&player?.isPlaying==true}.getOrDefault(false),"music" to music,"enabled" to enabled,"audioFocus" to focusOwned,"musicVolume" to audio.getStreamVolume(AudioManager.STREAM_MUSIC)) + videoMetrics()
  private fun state(){sink?.success(snapshot())}
  fun close(){enabled=false;serial++;handler.removeCallbacksAndMessages(null);releaseCapture();abandonFocus();player?.release();releaseVideoSurface();player=null;permissionResult?.success(false);permissionResult=null;methods.setMethodCallHandler(null);events.setStreamHandler(null);sink=null}
  companion object{const val PERMISSION=8463;private const val VIDEO="flutter_assets/assets/kda/firestarter.mp4";private const val AUDIO="flutter_assets/assets/kda/music.m4a"}

@@ -82,7 +82,7 @@ class KdaLinePainter extends CustomPainter {
     _base = Path()..addRRect(RRect.fromRectAndRadius((Offset.zero & size).deflate(.6), Radius.circular(radius)));
     final metric = _base!.computeMetrics().first;
     perimeter = metric.length;
-    final count = (perimeter / 5).ceil().clamp(48, 240);
+    final count = (perimeter / 7).ceil().clamp(48, 160);
     for (var i = 0; i <= count; i++) {
       final tangent = metric.getTangentForOffset(math.min(perimeter - .001, (i % count) * perimeter / count))!;
       _points.add(tangent.position); _normals.add(Offset(-tangent.vector.dy, tangent.vector.dx));
@@ -93,22 +93,25 @@ class KdaLinePainter extends CustomPainter {
     _geometry(size);
     final m = motion;
     final core = Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = .9..strokeJoin = StrokeJoin.round;
-    if (m == null || !m.moving || m.pulses.isEmpty) { canvas.drawPath(_base!, core); return; }
+    if (m == null || !m.moving) { canvas.drawPath(_base!, core); return; }
     // A quiet centre string anchors the original geometry. Two displaced strings
     // share exactly opposite offsets, merging back into this line after a kick.
     canvas.drawPath(_base!, core..color = color.withValues(alpha: .28));
+    // Evaluate displacement once; reuse it for both symmetric strands. One
+    // combined path and translucent strokes avoid per-card blur-mask passes.
+    final offsets = List<double>.generate(_points.length, (i) =>
+        m.displacement(i / (_points.length - 1), perimeter, intensity), growable: false);
+    final path = Path();
     for (final sign in const [-1.0, 1.0]) {
-      final path = Path();
       for (var i = 0; i < _points.length; i++) {
-        final amount = m.displacement(i / (_points.length - 1), perimeter, intensity) * sign;
-        final p = _points[i] + _normals[i] * amount;
+        final p = _points[i] + _normals[i] * offsets[i] * sign;
         if (i == 0) { path.moveTo(p.dx, p.dy); } else { path.lineTo(p.dx, p.dy); }
       }
       path.close();
-      canvas.drawPath(path, Paint()..color = color.withValues(alpha: .18 + m.energy * .18)
-        ..style = PaintingStyle.stroke..strokeWidth = 2.2..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.2));
-      canvas.drawPath(path, core..color = color.withValues(alpha: .65 + .25 * m.energy));
     }
+    canvas.drawPath(path, core..strokeWidth = 5..color = color.withValues(alpha: .055 + m.energy * .035));
+    canvas.drawPath(path, core..strokeWidth = 2.5..color = color.withValues(alpha: .12 + m.energy * .10));
+    canvas.drawPath(path, core..strokeWidth = 1..color = color.withValues(alpha: .72 + .25 * m.energy));
   }
   @override bool shouldRepaint(KdaLinePainter oldDelegate) => oldDelegate.motion != motion || oldDelegate.color != color || oldDelegate.radius != radius || oldDelegate.intensity != intensity;
 }

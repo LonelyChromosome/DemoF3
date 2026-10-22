@@ -73,7 +73,10 @@ void main(){
   while(lineMotion.beatCount==0&&DateTime.now().isBefore(lineDeadline)){await wait(.2);}
   expect(lineMotion.beatCount,greaterThan(0),reason:'Visible card strings must respond to real decoded music');
   debugPrint('KDA line motion verified: beats=${lineMotion.beatCount}, energy=${lineMotion.energy}');
-  await wait(2);
+  var flowing=0;
+  for(var i=0;i<8;i++){await wait(.25);if(lineMotion.hasFlow)flowing++;}
+  expect(flowing,greaterThanOrEqualTo(4),reason:'Music must continuously feed the border between bass onsets');
+  debugPrint('KDA continuous line flow: $flowing/8, phase=${lineMotion.phase}, density=${lineMotion.density}, native=${await state()}');
   unawaited(showAppThemePicker(tester.element(find.text('Theo ngày'))));await wait(1);
   final customize=find.byKey(const ValueKey('kda-customize-theme'));
   final settingsDeadline=DateTime.now().add(const Duration(seconds:15));
