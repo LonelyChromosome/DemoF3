@@ -23,8 +23,12 @@ void main(){
   expect(find.text('Theo ngày'),findsOneWidget);
   unawaited(showAppThemePicker(tester.element(find.text('Theo ngày'))));await wait(1);
   final tile=find.byKey(const ValueKey('kda-firestarter-theme-tile'));
-  await tester.scrollUntilVisible(tile,250,scrollable:find.descendant(of:find.byType(CustomScrollView).last,matching:find.byType(Scrollable)).first,maxScrolls:20);
-  await tester.tap(tile);await wait(.4);
+  final themeScroll=find.descendant(of:find.byType(CustomScrollView).last,matching:find.byType(Scrollable)).first;
+  for(var attempt=0;attempt<18 && tile.hitTestable().evaluate().isEmpty;attempt++){
+    await tester.drag(themeScroll,const Offset(0,-180));await wait(.4);
+  }
+  expect(tile.hitTestable(),findsOneWidget,reason:'KDA tile must be inside the actual scroll viewport');
+  await tester.tap(tile.hitTestable());await wait(.4);
   expect(find.byKey(const ValueKey('kda-approved-fire-vfx')),findsOneWidget);
   await wait(14);final runtime=KdaRuntime.instance;
   expect(tile,findsNothing,reason:'Activation closes Theme Settings before cinematic playback');

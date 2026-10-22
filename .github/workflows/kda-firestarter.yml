@@ -22,13 +22,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
           channel: stable
           cache: true
-      - name: Audio packaging tool
-        run: command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
       - run: bash tool/bootstrap.sh
       - name: Verify exact supplied assets
         run: python3 tool/verify_kda_assets.py
@@ -72,13 +71,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.47.2'
           channel: stable
           cache: true
-      - name: Audio packaging tool
-        run: command -v ffmpeg || (sudo apt-get update && sudo apt-get install -y ffmpeg)
       - run: bash tool/bootstrap.sh
       - name: Enable KVM
         run: |

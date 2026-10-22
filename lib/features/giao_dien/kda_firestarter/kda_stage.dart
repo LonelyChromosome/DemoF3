@@ -83,7 +83,7 @@ class _KdaSpectrumDockState extends State<KdaSpectrumDock> with SingleTickerProv
 }
 class _SpectrumPainter extends CustomPainter {
   _SpectrumPainter(this.values,Listenable repaint,this.intensity):super(repaint:repaint);final List<double> values;final double intensity;
-  @override void paint(Canvas canvas,Size size){final shader=const LinearGradient(colors:[Color(0xFF80F5FF),Color(0xFFBDA2FF),Color(0xFFFF76D3)]).createShader(Offset.zero&size);final center=size.height/2;
+  @override void paint(Canvas canvas,Size size){final shader=const LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Color(0xFF80F5FF),Color(0xFFBDA2FF),Color(0xFFFF76D3)]).createShader(Offset.zero&size);final center=size.height/2;
     final glow=Paint()..shader=shader..strokeWidth=3..strokeCap=StrokeCap.round..maskFilter=const MaskFilter.blur(BlurStyle.normal,5);
     final core=Paint()..shader=shader..strokeWidth=1.5..strokeCap=StrokeCap.round;
     canvas.drawLine(Offset(0,center),Offset(size.width,center),glow);canvas.drawLine(Offset(0,center),Offset(size.width,center),core);
