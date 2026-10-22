@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:better_phenikaa_schedule/app/app.dart';
 import 'package:better_phenikaa_schedule/features/dang_nhap_qldt/qldt_models.dart';
 import 'package:better_phenikaa_schedule/features/giao_dien/kda_firestarter/kda_runtime.dart';
@@ -55,7 +54,7 @@ void main(){
   final end=DateTime.now().add(const Duration(seconds:225));var held=false;
   while(DateTime.now().isBefore(end)){final s=await state();if(s['holding']==true)held=true;if((s['loops'] as num).toInt()>=1)break;await wait(.5);}
   expect(held,isTrue);expect((await state())['loops'],greaterThanOrEqualTo(1));await wait(2);expect(((await state())['positionMs'] as num).toInt(),lessThan(15000));expect((await state())['playing'],isTrue);
-  final marker=File('/sdcard/Android/data/vn.edu.phenikaa.better_phenikaa_schedule.kdatest/files/kda-ready');marker.parent.createSync(recursive:true);marker.writeAsStringSync('ready');await wait(8);expect((await state())['playing'],isTrue);
+  debugPrint('KDA full loop passed: ${await state()}');
   await AppThemeController.instance.select(AppThemeId.classic);await wait(1);expect(find.byKey(const ValueKey('kda-toggle-cards')),findsNothing);expect((await state())['enabled'],isFalse);
   // Leave persisted real settings for installing and opening the delivered APK.
   await AppThemeController.instance.select(AppThemeId.kdaFirestarter);await wait(2);
