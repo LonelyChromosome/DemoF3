@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p build/kda-evidence
+# The CI software GPU is blocklisted by stock WebView. Enable WebGL only on
+# this disposable userdebug emulator; no production-device flags are changed.
+adb shell getprop ro.build.type
+adb shell "echo '_ --ignore-gpu-blocklist --enable-webgl --webview-verbose-logging' > /data/local/tmp/webview-command-line"
 adb logcat -c
 adb logcat -v threadtime > build/kda-evidence/logcat.txt &
 log_pid=$!
@@ -22,7 +26,11 @@ log_pid=$!
   done
 ) > build/kda-evidence/lifecycle.txt 2>&1 &
 cycle_pid=$!
-trap 'kill "$log_pid" "$cycle_pid" 2>/dev/null || true' EXIT
+finish() {
+  adb exec-out screencap -p > build/kda-evidence/final-screen.png 2>/dev/null || true
+  kill "$log_pid" "$cycle_pid" 2>/dev/null || true
+}
+trap finish EXIT
 flutter test integration_test/kda_firestarter_test.dart -d emulator-5554 --reporter expanded 2>&1 | tee build/kda-evidence/integration.txt
 # Install the exact normal-entrypoint profile APK delivered to the user.
 mkdir -p build/kda-delivered-apk

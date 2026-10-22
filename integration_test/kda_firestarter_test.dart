@@ -30,15 +30,19 @@ void main(){
   expect(tile.hitTestable(),findsOneWidget,reason:'KDA tile must be inside the actual scroll viewport');
   await tester.tap(tile.hitTestable());await wait(.4);
   expect(find.byKey(const ValueKey('kda-approved-fire-vfx')),findsOneWidget);
-  await wait(14);final runtime=KdaRuntime.instance;
+  final activationDeadline=DateTime.now().add(const Duration(seconds:35));
+  while(tile.evaluate().isNotEmpty && DateTime.now().isBefore(activationDeadline)){await wait(.5);}
+  final runtime=KdaRuntime.instance;
+  debugPrint('KDA activation: theme=${AppThemeController.instance.theme}, error=${runtime.error}, native=${await state()}');
   expect(tile,findsNothing,reason:'Activation closes Theme Settings before cinematic playback');
-  expect(AppThemeController.instance.theme,AppThemeId.kdaFirestarter);expect(runtime.error,isNull);expect(runtime.ready,isTrue);expect(runtime.cardsVisible,isFalse);expect(find.text('Theo ngày'),findsNothing);expect((await state())['music'],isFalse);
+  expect(AppThemeController.instance.theme,AppThemeId.kdaFirestarter);expect(runtime.error,isNull);await runtime.waitForFrame();expect(runtime.ready,isTrue);expect(runtime.cardsVisible,isFalse);expect(find.text('Theo ngày'),findsNothing);expect((await state())['music'],isFalse);
   // Own-player FFT uses real decoded audio after adb grants the platform permission.
   var sawSignal=false;
   void observeAudio(){if(runtime.spectrum.value.any((v)=>v>.001))sawSignal=true;}
   runtime.spectrum.addListener(observeAudio);
   await runtime.save(runtime.config.copyWith(music:true));await wait(3);
   runtime.spectrum.removeListener(observeAudio);
+  debugPrint('KDA audio: permission=${runtime.permission}, signal=$sawSignal, ${runtime.captureStatus}');
   expect(runtime.permission,isTrue);expect(sawSignal,isTrue,reason:runtime.captureStatus);
   await runtime.save(runtime.config.copyWith(music:false,visualizer:false));await wait(.5);
   expect(runtime.spectrum.value.every((v)=>v==0),isTrue);
