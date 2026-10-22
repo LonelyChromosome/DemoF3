@@ -58,7 +58,7 @@ void main() {
     final gentle=KdaLineMotion(),hard=KdaLineMotion(),dense=KdaLineMotion();
     for(var i=0;i<180;i++){
       gentle.input(List.filled(48,.15));hard.input(List.filled(48,.85));
-      dense.input(List.filled(48,i%8<2?.95:.18));
+      dense.input(List.filled(48,i % 8 < 2 ? .95 : .18));
       for(final m in [gentle,hard,dense]){m.step(1/30);}
     }
     double peak(KdaLineMotion m)=>List.generate(120,(i)=>m.displacement(i/120,900,1).abs()).reduce((a,b)=>a>b?a:b);
