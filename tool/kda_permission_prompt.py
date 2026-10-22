@@ -16,6 +16,7 @@ def tap(node):
 evidence = Path('build/kda-evidence')
 end = time.monotonic() + 720
 accepted = False
+attempts = 0
 while time.monotonic() < end:
     try:
         log = evidence / 'logcat.txt'
@@ -40,7 +41,20 @@ while time.monotonic() < end:
             resource = node.get('resource-id', '')
             if resource.endswith((':id/permission_allow_foreground_only_button', ':id/permission_allow_button')):
                 evidence.joinpath('permission-dialog.xml').write_text(xml)
+                # Let Android finish attaching the dialog input window.
+                time.sleep(1)
                 tap(node)
+                time.sleep(1)
+                package = adb('shell', 'dumpsys', 'package', 'vn.edu.phenikaa.better_phenikaa_schedule.kdatest').stdout
+                if 'android.permission.RECORD_AUDIO: granted=true' not in package:
+                    attempts += 1
+                    print('Permission tap not confirmed; retry', attempts, flush=True)
+                    if attempts >= 2:
+                        # Keyboard focus activates the same native allow button
+                        # if a pointer was swallowed during the window transition.
+                        adb('shell', 'input', 'keyevent', 'KEYCODE_TAB')
+                        adb('shell', 'input', 'keyevent', 'KEYCODE_ENTER')
+                    break
                 evidence.joinpath('permission-dialog.txt').write_text('First KDA entry displayed native RECORD_AUDIO dialog; accepted using Android permission button.\n')
                 print('KDA native first-entry audio permission dialog accepted', flush=True)
                 accepted = True
