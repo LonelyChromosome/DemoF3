@@ -17,23 +17,25 @@ while time.monotonic()<end:
         nodes=list(ET.fromstring(xml).iter('node'))
         packages={n.get('package','') for n in nodes}
         package=adb('shell','dumpsys','package','vn.edu.phenikaa.better_phenikaa_schedule.kdatest').stdout
-        if 'com.google.android.permissioncontroller' in packages or 'com.android.permissioncontroller' in packages:
-            for n in nodes:
-                if n.get('resource-id','').endswith((':id/permission_allow_foreground_only_button',':id/permission_allow_button')):
-                    # Save the real dialog for every runtime group before granting.
-                    index=len(seen);title=' '.join(n.get('text','') for n in nodes)
-                    if title not in seen:
-                        seen.add(title);(out/f'runtime-{index}.xml').write_text(xml)
-                    tap(n);break
-        elif 'com.android.settings' in packages:
+        # Android hosts both runtime dialogs AND App permissions/Location
+        # settings inside PermissionController. Route by visible controls first.
+        controller=bool(packages & {'com.google.android.permissioncontroller',
+                                    'com.android.permissioncontroller','com.android.settings'})
+        allow_runtime=next((n for n in nodes if n.get('resource-id','').endswith(
+            (':id/permission_allow_foreground_only_button',':id/permission_allow_button'))),None)
+        if allow_runtime is not None:
+            index=len(seen);title=' '.join(n.get('text','') for n in nodes)
+            if title not in seen:
+                seen.add(title);(out/f'runtime-{index}.xml').write_text(xml)
+            tap(allow_runtime)
+        elif controller:
             if 'FB_SETUP background PASS; listener start' in log:
                 (out/'listener-screen.xml').write_text(xml)
                 if 'notificationAccess' not in seen:
-                    switch=next((n for n in nodes if n.get('checkable')=='true' and n.get('checked')=='false'),None)
+                    switch=next((n for n in nodes if n.get('checkable')=='true' and n.get('checked')=='false' and n.get('enabled')=='true'),None)
                     allow=next((n for n in nodes if n.get('text','').lower()=='allow' and n.get('clickable')=='true'),None)
                     if allow is not None: tap(allow)
                     elif switch is not None: tap(switch)
-                # Verify actual access via system settings, not a fake MethodChannel response.
                 listeners=adb('shell','settings','get','secure','enabled_notification_listeners').stdout
                 if 'VehicleExitNotificationListener' in listeners:
                     seen.add('notificationAccess');adb('shell','input','keyevent','KEYCODE_BACK')
